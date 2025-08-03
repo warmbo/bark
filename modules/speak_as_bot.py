@@ -43,7 +43,12 @@ class SpeakAsBotModule:
             // Load servers when the module is opened
             function loadServers() {
                 fetch('/api/speak_as_bot/get_servers')
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to load servers');
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         const serverSelect = document.getElementById('server-select');
                         serverSelect.innerHTML = '<option value="">Select a server</option>';
@@ -53,6 +58,11 @@ class SpeakAsBotModule:
                             option.textContent = server.name;
                             serverSelect.appendChild(option);
                         });
+                    })
+                    .catch(error => {
+                        console.error('Error loading servers:', error);
+                        const serverSelect = document.getElementById('server-select');
+                        serverSelect.innerHTML = '<option value="">Error loading servers</option>';
                     });
             }
             
@@ -68,7 +78,12 @@ class SpeakAsBotModule:
                 }
                 
                 fetch(`/api/speak_as_bot/get_channels?server_id=${serverId}`)
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to load channels');
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         channelSelect.disabled = false;
                         channelSelect.innerHTML = '<option value="">Select a channel</option>';
@@ -78,6 +93,11 @@ class SpeakAsBotModule:
                             option.textContent = '#' + channel.name;
                             channelSelect.appendChild(option);
                         });
+                    })
+                    .catch(error => {
+                        console.error('Error loading channels:', error);
+                        channelSelect.disabled = false;
+                        channelSelect.innerHTML = '<option value="">Error loading channels</option>';
                     });
             });
             
@@ -104,7 +124,12 @@ class SpeakAsBotModule:
                         message: message
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     statusDiv.style.display = 'block';
                     if (data.success) {
@@ -115,22 +140,26 @@ class SpeakAsBotModule:
                         statusDiv.style.backgroundColor = '#f04747';
                         statusDiv.textContent = 'Error: ' + data.error;
                     }
+                })
+                .catch(error => {
+                    console.error('Error sending message:', error);
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.backgroundColor = '#f04747';
+                    statusDiv.textContent = 'Failed to send message. Please try again.';
                 });
             }
             
-            // Load servers when this module view becomes active
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.target.classList.contains('active')) {
-                        loadServers();
-                    }
-                });
+            // Load servers when the page loads
+            document.addEventListener('DOMContentLoaded', function() {
+                loadServers();
             });
             
-            observer.observe(document.getElementById('speak_as_bot'), {
-                attributes: true,
-                attributeFilter: ['class']
-            });
+            // Also load servers immediately if DOM is already loaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', loadServers);
+            } else {
+                loadServers();
+            }
         </script>
         '''
     
@@ -171,27 +200,36 @@ class SpeakAsBotModule:
             if not channel_id or not message:
                 return jsonify({"error": "Missing channel ID or message"}), 400
             
-            # Send the message asynchronously
-            async def send_msg():
-                try:
-                    channel = self.bot.get_channel(int(channel_id))
-                    if channel:
-                        await channel.send(message)
-                        return True
-                    return False
-                except Exception as e:
-                    print(f"Error sending message: {e}")
-                    return False
-            
-            # Run the async function
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            success = loop.run_until_complete(send_msg())
-            
-            if success:
+            # Send the message using the bot's event loop
+            try:
+                # Check if bot is ready and has a running loop
+                if not hasattr(self.bot, 'loop') or self.bot.loop is None:
+                    return jsonify({"success": False, "error": "Bot is not ready"}), 503
+                
+                if self.bot.loop.is_closed():
+                    return jsonify({"success": False, "error": "Bot event loop is closed"}), 503
+                
+                channel = self.bot.get_channel(int(channel_id))
+                if not channel:
+                    return jsonify({"success": False, "error": "Channel not found"}), 404
+                
+                # Create a future to handle the async operation
+                future = asyncio.run_coroutine_threadsafe(
+                    channel.send(message),
+                    self.bot.loop
+                )
+                
+                # Wait for the result with a timeout
+                future.result(timeout=10)
                 return jsonify({"success": True})
-            else:
-                return jsonify({"success": False, "error": "Failed to send message"}), 500
+                
+            except asyncio.TimeoutError:
+                return jsonify({"success": False, "error": "Message send timeout"}), 504
+            except ValueError as e:
+                return jsonify({"success": False, "error": "Invalid channel ID"}), 400
+            except Exception as e:
+                print(f"Error sending message: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
         
         return jsonify({"error": "Unknown action"}), 404
 

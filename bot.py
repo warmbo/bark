@@ -7,15 +7,28 @@ import asyncio
 from flask import Flask, render_template_string, request, jsonify
 import threading
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Bot configuration
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
-WEB_PORT = 5000
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+WEB_PORT = int(os.getenv('WEB_PORT', 5000))
+BOT_PREFIX = os.getenv('BOT_PREFIX', '!')
+
+# Validate required configuration
+if not BOT_TOKEN:
+    print("ERROR: BOT_TOKEN not found in .env file!")
+    print("Please create a .env file with your bot token.")
+    sys.exit(1)
 
 # Initialize bot
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+intents.members = True  # Enable member intent for accurate member data
+intents.presences = True  # Enable presence intent for online status
+bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 
 # Flask app for web dashboard
 app = Flask(__name__)
