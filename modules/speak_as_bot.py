@@ -8,157 +8,67 @@ class SpeakAsBotModule:
         self.app = app
         self.name = "Speak As Bot"
         self.description = "Send messages as the bot through a web interface"
+        self.icon = "message-circle"
         self.html = self.get_html()
     
     def get_html(self):
         """Return the HTML for this module's interface"""
         return '''
-        <h2>Speak As Bot</h2>
-        <p>Send a message as the bot to any channel in any server.</p>
-        
-        <div style="margin-top: 20px;">
-            <label for="server-select">Select Server:</label><br>
-            <select id="server-select" style="width: 300px; padding: 5px; margin: 10px 0;">
-                <option value="">Loading servers...</option>
-            </select>
+        <div class="module-header">
+            <h2><i data-lucide="message-circle"></i> Speak As Bot</h2>
+            <p>Send messages as the bot to any channel in any server.</p>
         </div>
         
-        <div style="margin-top: 10px;">
-            <label for="channel-select">Select Channel:</label><br>
-            <select id="channel-select" style="width: 300px; padding: 5px; margin: 10px 0;" disabled>
-                <option value="">Select a server first</option>
-            </select>
+        <div class="form-container">
+            <div class="form-group">
+                <label for="server-select">Select Server</label>
+                <select id="server-select" onchange="loadChannels(this.value)">
+                    <option value="">Loading servers...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="channel-select">Select Channel</label>
+                <select id="channel-select" disabled>
+                    <option value="">Select a server first</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="message-input">Message</label>
+                <textarea 
+                    id="message-input" 
+                    placeholder="Enter your message here..." 
+                    rows="4"
+                ></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="sendMessage()">
+                    <i data-lucide="send"></i>
+                    Send Message
+                </button>
+            </div>
         </div>
-        
-        <div style="margin-top: 10px;">
-            <label for="message-input">Message:</label><br>
-            <textarea id="message-input" style="width: 500px; height: 100px; padding: 5px; margin: 10px 0;" placeholder="Enter your message here..."></textarea>
-        </div>
-        
-        <button onclick="sendMessage()" style="background-color: #43b581; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px;">Send Message</button>
-        
-        <div id="status-message" style="margin-top: 20px; padding: 10px; display: none;"></div>
         
         <script>
-            // Load servers when the module is opened
-            function loadServers() {
-                fetch('/api/speak_as_bot/get_servers')
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Failed to load servers');
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        const serverSelect = document.getElementById('server-select');
-                        serverSelect.innerHTML = '<option value="">Select a server</option>';
-                        data.servers.forEach(server => {
-                            const option = document.createElement('option');
-                            option.value = server.id;
-                            option.textContent = server.name;
-                            serverSelect.appendChild(option);
-                        });
-                    })
-                    .catch(error => {
-                        console.error('Error loading servers:', error);
-                        const serverSelect = document.getElementById('server-select');
-                        serverSelect.innerHTML = '<option value="">Error loading servers</option>';
-                    });
-            }
-            
-            // Load channels when a server is selected
-            document.getElementById('server-select').addEventListener('change', function() {
-                const serverId = this.value;
-                const channelSelect = document.getElementById('channel-select');
-                
-                if (!serverId) {
-                    channelSelect.disabled = true;
-                    channelSelect.innerHTML = '<option value="">Select a server first</option>';
-                    return;
-                }
-                
-                fetch(`/api/speak_as_bot/get_channels?server_id=${serverId}`)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Failed to load channels');
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        channelSelect.disabled = false;
-                        channelSelect.innerHTML = '<option value="">Select a channel</option>';
-                        data.channels.forEach(channel => {
-                            const option = document.createElement('option');
-                            option.value = channel.id;
-                            option.textContent = '#' + channel.name;
-                            channelSelect.appendChild(option);
-                        });
-                    })
-                    .catch(error => {
-                        console.error('Error loading channels:', error);
-                        channelSelect.disabled = false;
-                        channelSelect.innerHTML = '<option value="">Error loading channels</option>';
-                    });
-            });
-            
-            // Send message function
-            function sendMessage() {
-                const channelId = document.getElementById('channel-select').value;
-                const message = document.getElementById('message-input').value;
-                const statusDiv = document.getElementById('status-message');
-                
-                if (!channelId || !message) {
-                    statusDiv.style.display = 'block';
-                    statusDiv.style.backgroundColor = '#f04747';
-                    statusDiv.textContent = 'Please select a channel and enter a message.';
-                    return;
-                }
-                
-                fetch('/api/speak_as_bot/send_message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        channel_id: channelId,
-                        message: message
-                    })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
+            // Auto-load servers when module becomes active
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.target.id === 'speak_as_bot' && 
+                        mutation.target.classList.contains('active')) {
+                        loadServers();
+                        lucide.createIcons();
                     }
-                    return response.json();
-                })
-                .then(data => {
-                    statusDiv.style.display = 'block';
-                    if (data.success) {
-                        statusDiv.style.backgroundColor = '#43b581';
-                        statusDiv.textContent = 'Message sent successfully!';
-                        document.getElementById('message-input').value = '';
-                    } else {
-                        statusDiv.style.backgroundColor = '#f04747';
-                        statusDiv.textContent = 'Error: ' + data.error;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error sending message:', error);
-                    statusDiv.style.display = 'block';
-                    statusDiv.style.backgroundColor = '#f04747';
-                    statusDiv.textContent = 'Failed to send message. Please try again.';
                 });
-            }
-            
-            // Load servers when the page loads
-            document.addEventListener('DOMContentLoaded', function() {
-                loadServers();
             });
             
-            // Also load servers immediately if DOM is already loaded
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', loadServers);
-            } else {
-                loadServers();
+            const speakAsBotModule = document.getElementById('speak_as_bot');
+            if (speakAsBotModule) {
+                observer.observe(speakAsBotModule, {
+                    attributes: true,
+                    attributeFilter: ['class']
+                });
             }
         </script>
         '''
@@ -200,9 +110,7 @@ class SpeakAsBotModule:
             if not channel_id or not message:
                 return jsonify({"error": "Missing channel ID or message"}), 400
             
-            # Send the message using the bot's event loop
             try:
-                # Check if bot is ready and has a running loop
                 if not hasattr(self.bot, 'loop') or self.bot.loop is None:
                     return jsonify({"success": False, "error": "Bot is not ready"}), 503
                 
@@ -213,13 +121,11 @@ class SpeakAsBotModule:
                 if not channel:
                     return jsonify({"success": False, "error": "Channel not found"}), 404
                 
-                # Create a future to handle the async operation
                 future = asyncio.run_coroutine_threadsafe(
                     channel.send(message),
                     self.bot.loop
                 )
                 
-                # Wait for the result with a timeout
                 future.result(timeout=10)
                 return jsonify({"success": True})
                 

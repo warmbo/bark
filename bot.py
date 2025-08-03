@@ -4,7 +4,7 @@ import importlib
 import os
 import sys
 import asyncio
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import threading
 import json
 from dotenv import load_dotenv
@@ -26,94 +26,25 @@ if not BOT_TOKEN:
 # Initialize bot
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # Enable member intent for accurate member data
-intents.presences = True  # Enable presence intent for online status
+intents.members = True
+intents.presences = True
 bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 
 # Flask app for web dashboard
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', template_folder='templates')
 
 # Store loaded modules
 loaded_modules = {}
 
-# Dashboard HTML template
-DASHBOARD_TEMPLATE = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Discord Bot Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #2c2f33;
-            color: white;
-        }
-        .navbar {
-            background-color: #23272a;
-            padding: 1rem;
-            display: flex;
-            gap: 1rem;
-        }
-        .nav-button {
-            background-color: #7289da;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            text-decoration: none;
-            border-radius: 4px;
-        }
-        .nav-button:hover {
-            background-color: #5b6eae;
-        }
-        .content {
-            padding: 2rem;
-        }
-        .module-content {
-            display: none;
-        }
-        .module-content.active {
-            display: block;
-        }
-    </style>
-</head>
-<body>
-    <div class="navbar">
-        <button class="nav-button" onclick="showModule('home')">Home</button>
-        {% for module_name in modules %}
-        <button class="nav-button" onclick="showModule('{{ module_name }}')">{{ modules[module_name].name }}</button>
-        {% endfor %}
-    </div>
-    <div class="content">
-        <div id="home" class="module-content active">
-            <h1>Discord Bot Dashboard</h1>
-            <p>Select a module from the navigation bar to get started.</p>
-            <h3>Loaded Modules:</h3>
-            <ul>
-            {% for module_name in modules %}
-                <li>{{ modules[module_name].name }} - {{ modules[module_name].description }}</li>
-            {% endfor %}
-            </ul>
-        </div>
-        {% for module_name in modules %}
-        <div id="{{ module_name }}" class="module-content">
-            {{ modules[module_name].html|safe }}
-        </div>
-        {% endfor %}
-    </div>
-    <script>
-        function showModule(moduleName) {
-            document.querySelectorAll('.module-content').forEach(el => {
-                el.classList.remove('active');
-            });
-            document.getElementById(moduleName).classList.add('active');
-        }
-    </script>
-</body>
-</html>
-'''
+# Default theme settings
+DEFAULT_THEME = {
+    'primary': '#3b82f6',
+    'secondary': '#64748b',
+    'accent': '#06b6d4',
+    'background': '#0f172a',
+    'surface': '#1e293b',
+    'text': '#f1f5f9'
+}
 
 def load_modules():
     """Load all modules from the modules directory"""
@@ -126,7 +57,6 @@ def load_modules():
         if filename.endswith(".py") and filename != "__init__.py":
             module_name = filename[:-3]
             try:
-                # Import the module
                 spec = importlib.util.spec_from_file_location(
                     module_name, 
                     os.path.join(modules_dir, filename)
@@ -135,7 +65,6 @@ def load_modules():
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
                 
-                # Initialize the module
                 if hasattr(module, 'setup'):
                     module_instance = module.setup(bot, app)
                     loaded_modules[module_name] = module_instance
@@ -145,7 +74,35 @@ def load_modules():
 
 @app.route('/')
 def dashboard():
-    return render_template_string(DASHBOARD_TEMPLATE, modules=loaded_modules)
+    return render_template('dashboard.html', modules=loaded_modules, theme=DEFAULT_THEME)
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
+
+@app.route('/api/theme', methods=['POST'])
+def update_theme():
+    """Update theme colors"""
+    data = request.get_json()
+    # In a real app, you'd save this to a database or config file
+    # For now, we'll just return success
+    return jsonify({"success": True})
+
+@app.route('/api/dashboard/stats')
+def dashboard_stats():
+    """Get basic dashboard statistics"""
+    total_servers = len(bot.guilds)
+    total_members = sum(guild.member_count for guild in bot.guilds)
+    online_members = sum(
+        sum(1 for member in guild.members if member.status != discord.Status.offline)
+        for guild in bot.guilds
+    )
+    
+    return jsonify({
+        "servers": total_servers,
+        "members": total_members,
+        "online": online_members
+    })
 
 @app.route('/api/<module_name>/<action>', methods=['GET', 'POST'])
 def module_api(module_name, action):
@@ -166,6 +123,11 @@ def run_flask():
     app.run(host='0.0.0.0', port=WEB_PORT, debug=False)
 
 def main():
+    # Create directories
+    os.makedirs('templates', exist_ok=True)
+    os.makedirs('static/css', exist_ok=True)
+    os.makedirs('static/js', exist_ok=True)
+    
     # Load modules
     load_modules()
     
