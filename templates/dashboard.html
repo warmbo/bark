@@ -4,142 +4,98 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bark Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar -->
+    <div class="layout">
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo">
-                    <i data-lucide="bot" class="logo-icon"></i>
-                    <span class="logo-text">Bark</span>
-                </div>
+            <div class="logo">
+                <span>🤖 Bark</span>
             </div>
             
-            <nav class="sidebar-nav">
+            <nav>
                 <button class="nav-item active" onclick="showModule('home')">
-                    <i data-lucide="home"></i>
-                    <span>Dashboard</span>
+                    🏠 Dashboard
                 </button>
                 
                 {% for module_name in modules %}
                 <button class="nav-item" onclick="showModule('{{ module_name }}')">
-                    <i data-lucide="{{ modules[module_name].icon or 'puzzle' }}"></i>
-                    <span>{{ modules[module_name].name }}</span>
+                    🧩 {{ modules[module_name].name }}
                 </button>
                 {% endfor %}
                 
+                <button class="nav-item" onclick="showModule('about')">
+                    ℹ️ About
+                </button>
+                
                 <button class="nav-item" onclick="showModule('settings')">
-                    <i data-lucide="settings"></i>
-                    <span>Settings</span>
+                    ⚙️ Settings
                 </button>
             </nav>
         </aside>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <header class="header">
-                <div class="header-left">
-                    <h1 id="page-title">Dashboard</h1>
-                </div>
-                <div class="header-right">
-                    <button class="theme-toggle" onclick="toggleTheme()">
-                        <i data-lucide="palette"></i>
-                    </button>
-                </div>
+        <main class="content">
+            <header>
+                <h1 id="page-title">Dashboard</h1>
             </header>
 
-            <div class="content-area">
-                <!-- Home Module -->
-                <div id="home" class="module-content active">
-                    <div class="stats-grid">
+            <div class="modules">
+                <!-- Home -->
+                <div id="home" class="module active">
+                    <div class="stats">
                         <div class="stat-card">
-                            <div class="stat-icon">
-                                <i data-lucide="server"></i>
-                            </div>
-                            <div class="stat-info">
-                                <span class="stat-label">Servers</span>
-                                <span class="stat-value" id="server-count">-</span>
-                            </div>
+                            <span class="stat-label">Servers</span>
+                            <span class="stat-value" id="server-count">-</span>
                         </div>
-                        
                         <div class="stat-card">
-                            <div class="stat-icon">
-                                <i data-lucide="users"></i>
-                            </div>
-                            <div class="stat-info">
-                                <span class="stat-label">Total Members</span>
-                                <span class="stat-value" id="member-count">-</span>
-                            </div>
+                            <span class="stat-label">Members</span>
+                            <span class="stat-value" id="member-count">-</span>
                         </div>
-                        
                         <div class="stat-card">
-                            <div class="stat-icon">
-                                <i data-lucide="activity"></i>
-                            </div>
-                            <div class="stat-info">
-                                <span class="stat-label">Online</span>
-                                <span class="stat-value" id="online-count">-</span>
-                            </div>
+                            <span class="stat-label">Online</span>
+                            <span class="stat-value" id="online-count">-</span>
                         </div>
                     </div>
 
-                    <div class="modules-overview">
-                        <h2>Available Modules</h2>
-                        <div class="modules-grid">
-                            {% for module_name in modules %}
-                            <div class="module-card" onclick="showModule('{{ module_name }}')">
-                                <div class="module-icon">
-                                    <i data-lucide="{{ modules[module_name].icon or 'puzzle' }}"></i>
-                                </div>
-                                <h3>{{ modules[module_name].name }}</h3>
-                                <p>{{ modules[module_name].description }}</p>
-                            </div>
-                            {% endfor %}
+                    <h2>Modules</h2>
+                    <div class="module-grid">
+                        {% for module_name in modules %}
+                        <div class="module-card" onclick="showModule('{{ module_name }}')">
+                            <h3>{{ modules[module_name].name }}</h3>
+                            <p>{{ modules[module_name].description }}</p>
                         </div>
+                        {% endfor %}
                     </div>
                 </div>
 
-                <!-- Module Content Areas -->
+                <!-- Module Content -->
                 {% for module_name in modules %}
-                <div id="{{ module_name }}" class="module-content">
+                <div id="{{ module_name }}" class="module">
                     {{ modules[module_name].html|safe }}
                 </div>
                 {% endfor %}
 
-                <!-- Settings Module -->
-                <div id="settings" class="module-content">
-                    <div class="settings-section">
-                        <h2>Theme Customization</h2>
-                        <div class="theme-controls">
-                            <div class="color-picker-group">
-                                <label for="primary-color">Primary Color</label>
-                                <input type="color" id="primary-color" value="{{ theme.primary }}">
-                            </div>
-                            <div class="color-picker-group">
-                                <label for="accent-color">Accent Color</label>
-                                <input type="color" id="accent-color" value="{{ theme.accent }}">
-                            </div>
-                            <div class="color-picker-group">
-                                <label for="background-color">Background</label>
-                                <input type="color" id="background-color" value="{{ theme.background }}">
-                            </div>
-                            <div class="color-picker-group">
-                                <label for="surface-color">Surface</label>
-                                <input type="color" id="surface-color" value="{{ theme.surface }}">
-                            </div>
-                            <button class="btn btn-primary" onclick="saveTheme()">Save Theme</button>
-                            <button class="btn btn-secondary" onclick="resetTheme()">Reset to Default</button>
-                        </div>
+                <!-- About -->
+                <div id="about" class="module">
+                    <h2>About Bark</h2>
+                    <p>A modular Discord bot with web dashboard.</p>
+                    <a href="https://github.com/your-username/bark" target="_blank">View on GitHub</a>
+                </div>
+
+                <!-- Settings -->
+                <div id="settings" class="module">
+                    <h2>Settings</h2>
+                    <div class="form-group">
+                        <label>Primary Color</label>
+                        <input type="color" id="primary-color" value="#3b82f6">
                     </div>
+                    <button onclick="saveTheme()">Save Theme</button>
                 </div>
             </div>
         </main>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
     <script src="/static/js/dashboard.js"></script>
 </body>
 </html>

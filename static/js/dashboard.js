@@ -1,648 +1,201 @@
-// Dashboard functionality
-class Dashboard {
-    constructor() {
-        this.currentModule = 'home';
-        this.init();
-    }
+// Simple Dashboard
+let currentModule = 'home';
 
-    init() {
-        this.initLucideIcons();
-        this.loadDashboardStats();
-        this.setupThemeControls();
-        this.loadSavedTheme();
-    }
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboardStats();
+    loadSavedTheme();
+});
 
-    initLucideIcons() {
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
-
-    showModule(moduleId) {
-        // Hide all modules
-        document.querySelectorAll('.module-content').forEach(el => {
-            el.classList.remove('active');
-        });
-
-        // Remove active class from nav items
-        document.querySelectorAll('.nav-item').forEach(el => {
-            el.classList.remove('active');
-        });
-
-        // Show selected module
-        const moduleEl = document.getElementById(moduleId);
-        if (moduleEl) {
-            moduleEl.classList.add('active');
-        }
-
-        // Update nav item
-        const navItem = document.querySelector(`[onclick="showModule('${moduleId}')"]`);
-        if (navItem) {
-            navItem.classList.add('active');
-        }
-
-        // Update page title
-        const pageTitle = document.getElementById('page-title');
-        if (pageTitle) {
-            if (moduleId === 'home') {
-                pageTitle.textContent = 'Dashboard';
-            } else if (moduleId === 'settings') {
-                pageTitle.textContent = 'Settings';
-            } else {
-                // Get module name from nav item
-                const moduleNameEl = navItem?.querySelector('span');
-                pageTitle.textContent = moduleNameEl?.textContent || 'Module';
-            }
-        }
-
-        this.currentModule = moduleId;
-
-        // Trigger module-specific initialization if needed
-        this.initializeModule(moduleId);
-    }
-
-    initializeModule(moduleId) {
-        switch (moduleId) {
-            case 'speak_as_bot':
-                this.initSpeakAsBotModule();
-                break;
-            case 'server_stats':
-                this.initServerStatsModule();
-                break;
-            case 'bot_commander':
-                this.initBotCommanderModule();
-                break;
-        }
-    }
-
-    async loadDashboardStats() {
-        try {
-            // Load basic stats for the home dashboard
-            const response = await fetch('/api/dashboard/stats');
-            if (response.ok) {
-                const data = await response.json();
-                this.updateDashboardStats(data);
-            }
-        } catch (error) {
-            console.error('Failed to load dashboard stats:', error);
-        }
-    }
-
-    updateDashboardStats(stats) {
-        const serverCount = document.getElementById('server-count');
-        const memberCount = document.getElementById('member-count');
-        const onlineCount = document.getElementById('online-count');
-
-        if (serverCount) serverCount.textContent = stats.servers || '0';
-        if (memberCount) memberCount.textContent = stats.members || '0';
-        if (onlineCount) onlineCount.textContent = stats.online || '0';
-    }
-
-    // Theme Management
-    setupThemeControls() {
-        const colorInputs = document.querySelectorAll('input[type="color"]');
-        colorInputs.forEach(input => {
-            input.addEventListener('change', this.previewTheme.bind(this));
-        });
-    }
-
-    previewTheme() {
-        const primary = document.getElementById('primary-color')?.value;
-        const accent = document.getElementById('accent-color')?.value;
-        const background = document.getElementById('background-color')?.value;
-        const surface = document.getElementById('surface-color')?.value;
-
-        if (primary) document.documentElement.style.setProperty('--primary', primary);
-        if (accent) document.documentElement.style.setProperty('--accent', accent);
-        if (background) document.documentElement.style.setProperty('--background', background);
-        if (surface) document.documentElement.style.setProperty('--surface', surface);
-    }
-
-    async saveTheme() {
-        const theme = {
-            primary: document.getElementById('primary-color')?.value,
-            accent: document.getElementById('accent-color')?.value,
-            background: document.getElementById('background-color')?.value,
-            surface: document.getElementById('surface-color')?.value
-        };
-
-        try {
-            const response = await fetch('/api/theme', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(theme)
-            });
-
-            if (response.ok) {
-                localStorage.setItem('dashboard-theme', JSON.stringify(theme));
-                this.showNotification('Theme saved successfully!', 'success');
-            }
-        } catch (error) {
-            this.showNotification('Failed to save theme', 'error');
-        }
-    }
-
-    resetTheme() {
-        const defaultTheme = {
-            primary: '#3b82f6',
-            accent: '#06b6d4',
-            background: '#0f172a',
-            surface: '#1e293b'
-        };
-
-        // Update inputs
-        Object.entries(defaultTheme).forEach(([key, value]) => {
-            const input = document.getElementById(`${key}-color`);
-            if (input) input.value = value;
-        });
-
-        // Apply theme
-        Object.entries(defaultTheme).forEach(([key, value]) => {
-            document.documentElement.style.setProperty(`--${key}`, value);
-        });
-
-        localStorage.removeItem('dashboard-theme');
-        this.showNotification('Theme reset to default', 'success');
-    }
-
-    loadSavedTheme() {
-        const savedTheme = localStorage.getItem('dashboard-theme');
-        if (savedTheme) {
-            try {
-                const theme = JSON.parse(savedTheme);
-                Object.entries(theme).forEach(([key, value]) => {
-                    document.documentElement.style.setProperty(`--${key}`, value);
-                    const input = document.getElementById(`${key}-color`);
-                    if (input) input.value = value;
-                });
-            } catch (error) {
-                console.error('Failed to load saved theme:', error);
-            }
-        }
-    }
-
-    showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `status-message status-${type}`;
-        notification.textContent = message;
-        notification.style.position = 'fixed';
-        notification.style.top = '20px';
-        notification.style.right = '20px';
-        notification.style.zIndex = '1000';
-        notification.style.animation = 'fadeIn 0.3s ease';
-
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.style.animation = 'fadeOut 0.3s ease';
-            setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 300);
-        }, 3000);
-    }
-
-    // Module-specific initialization
-    async initSpeakAsBotModule() {
-        try {
-            const response = await fetch('/api/speak_as_bot/get_servers');
-            if (response.ok) {
-                const data = await response.json();
-                this.populateServerSelect('server-select', data.servers);
-            }
-        } catch (error) {
-            console.error('Failed to load servers for speak as bot module:', error);
-        }
-    }
-
-    async initServerStatsModule() {
-        try {
-            const response = await fetch('/api/server_stats/get_servers');
-            if (response.ok) {
-                const data = await response.json();
-                this.populateServerSelect('stats-server-select', data.servers);
-            }
-        } catch (error) {
-            console.error('Failed to load servers for stats module:', error);
-        }
-    }
-
-    async initBotCommanderModule() {
-        try {
-            const response = await fetch('/api/bot_commander/get_servers');
-            if (response.ok) {
-                const data = await response.json();
-                this.populateServerSelect('cmd-server-select', data.servers);
-            }
-            // Load initial data
-            refreshHistory();
-            refreshResponses();
-        } catch (error) {
-            console.error('Failed to load servers for bot commander module:', error);
-        }
-    }
-
-    populateServerSelect(selectId, servers) {
-        const select = document.getElementById(selectId);
-        if (!select) return;
-
-        select.innerHTML = '<option value="">Select a server</option>';
-        servers.forEach(server => {
-            const option = document.createElement('option');
-            option.value = server.id;
-            option.textContent = server.name;
-            select.appendChild(option);
-        });
-    }
-
-    // Utility methods for modules
-    async sendMessage(channelId, message) {
-        try {
-            const response = await fetch('/api/speak_as_bot/send_message', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ channel_id: channelId, message })
-            });
-            
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('Failed to send message:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    async loadChannels(serverId, selectId) {
-        try {
-            const response = await fetch(`/api/speak_as_bot/get_channels?server_id=${serverId}`);
-            if (response.ok) {
-                const data = await response.json();
-                const select = document.getElementById(selectId);
-                if (select) {
-                    select.innerHTML = '<option value="">Select a channel</option>';
-                    data.channels.forEach(channel => {
-                        const option = document.createElement('option');
-                        option.value = channel.id;
-                        option.textContent = '#' + channel.name;
-                        select.appendChild(option);
-                    });
-                    select.disabled = false;
-                }
-            }
-        } catch (error) {
-            console.error('Failed to load channels:', error);
-        }
-    }
-}
-
-// Global dashboard instance
-const dashboard = new Dashboard();
-
-// Global functions for HTML onclick handlers
+// Module Navigation
 function showModule(moduleId) {
-    dashboard.showModule(moduleId);
+    // Hide all modules
+    document.querySelectorAll('.module').forEach(el => {
+        el.classList.remove('active');
+    });
+    
+    // Remove active from nav items
+    document.querySelectorAll('.nav-item').forEach(el => {
+        el.classList.remove('active');
+    });
+    
+    // Show selected module
+    const moduleEl = document.getElementById(moduleId);
+    if (moduleEl) {
+        moduleEl.classList.add('active');
+    }
+    
+    // Update nav
+    const navItem = document.querySelector(`[onclick="showModule('${moduleId}')"]`);
+    if (navItem) {
+        navItem.classList.add('active');
+    }
+    
+    // Update title
+    const titles = {
+        home: 'Dashboard',
+        about: 'About',
+        settings: 'Settings'
+    };
+    
+    document.getElementById('page-title').textContent = titles[moduleId] || 'Module';
+    currentModule = moduleId;
+    
+    // Initialize module if needed
+    if (moduleId === 'speak_as_bot') {
+        loadServers();
+    } else if (moduleId === 'server_stats') {
+        loadStatsServers();
+    }
 }
 
-function toggleTheme() {
-    // Could implement theme toggle between light/dark modes
-    dashboard.showModule('settings');
+// Dashboard Stats
+async function loadDashboardStats() {
+    try {
+        const response = await fetch('/api/dashboard/stats');
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('server-count').textContent = data.servers || '0';
+            document.getElementById('member-count').textContent = data.members || '0';
+            document.getElementById('online-count').textContent = data.online || '0';
+        }
+    } catch (error) {
+        console.error('Failed to load stats:', error);
+    }
 }
 
+// Theme
 function saveTheme() {
-    dashboard.saveTheme();
+    const primary = document.getElementById('primary-color').value;
+    document.documentElement.style.setProperty('--primary', primary);
+    localStorage.setItem('theme-primary', primary);
+    alert('Theme saved!');
 }
 
-function resetTheme() {
-    dashboard.resetTheme();
+function loadSavedTheme() {
+    const saved = localStorage.getItem('theme-primary');
+    if (saved) {
+        document.documentElement.style.setProperty('--primary', saved);
+        const input = document.getElementById('primary-color');
+        if (input) input.value = saved;
+    }
 }
 
-// Speak as Bot Module Functions
-function loadServers() {
-    dashboard.initSpeakAsBotModule();
+// Speak as Bot Module
+async function loadServers() {
+    try {
+        const response = await fetch('/api/speak_as_bot/get_servers');
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('server-select');
+            if (select) {
+                select.innerHTML = '<option value="">Select server</option>';
+                data.servers.forEach(server => {
+                    const option = document.createElement('option');
+                    option.value = server.id;
+                    option.textContent = server.name;
+                    select.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load servers:', error);
+    }
 }
 
-function loadChannels(serverId) {
-    dashboard.loadChannels(serverId, 'channel-select');
+async function loadChannels(serverId) {
+    try {
+        const response = await fetch(`/api/speak_as_bot/get_channels?server_id=${serverId}`);
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('channel-select');
+            if (select) {
+                select.innerHTML = '<option value="">Select channel</option>';
+                data.channels.forEach(channel => {
+                    const option = document.createElement('option');
+                    option.value = channel.id;
+                    option.textContent = '#' + channel.name;
+                    select.appendChild(option);
+                });
+                select.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load channels:', error);
+    }
 }
 
 async function sendMessage() {
     const channelId = document.getElementById('channel-select')?.value;
     const message = document.getElementById('message-input')?.value;
-    const statusDiv = document.getElementById('status-message');
-
+    
     if (!channelId || !message) {
-        dashboard.showNotification('Please select a channel and enter a message.', 'error');
+        alert('Please select a channel and enter a message');
         return;
     }
-
-    const result = await dashboard.sendMessage(channelId, message);
     
-    if (result.success) {
-        dashboard.showNotification('Message sent successfully!', 'success');
-        document.getElementById('message-input').value = '';
-    } else {
-        dashboard.showNotification('Error: ' + result.error, 'error');
+    try {
+        const response = await fetch('/api/speak_as_bot/send_message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel_id: channelId, message })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert('Message sent!');
+            document.getElementById('message-input').value = '';
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Failed to send message');
     }
 }
 
-// Server Stats Module Functions
-function loadStatsServers() {
-    dashboard.initServerStatsModule();
+// Server Stats Module
+async function loadStatsServers() {
+    try {
+        const response = await fetch('/api/server_stats/get_servers');
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('stats-server-select');
+            if (select) {
+                select.innerHTML = '<option value="">Select server</option>';
+                data.servers.forEach(server => {
+                    const option = document.createElement('option');
+                    option.value = server.id;
+                    option.textContent = server.name;
+                    select.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load servers:', error);
+    }
 }
 
 async function loadServerStats() {
     const serverId = document.getElementById('stats-server-select')?.value;
-    if (!serverId) {
-        document.getElementById('stats-container').style.display = 'none';
-        return;
-    }
-
+    if (!serverId) return;
+    
     try {
         const response = await fetch(`/api/server_stats/get_stats?server_id=${serverId}`);
         const data = await response.json();
         
-        if (data.error) {
-            dashboard.showNotification(data.error, 'error');
-            return;
-        }
-
-        displayStats(data.stats);
-        loadChannelsForStats(serverId);
-    } catch (error) {
-        dashboard.showNotification('Failed to load server stats', 'error');
-    }
-}
-
-function displayStats(stats) {
-    document.getElementById('stats-container').style.display = 'block';
-    document.getElementById('server-name').textContent = stats.server.name;
-
-    // Update stats display
-    const memberStats = document.getElementById('member-stats');
-    if (memberStats) {
-        memberStats.innerHTML = `
-            <p>Total Members: <strong>${stats.members.total}</strong></p>
-            <p>Humans: <strong>${stats.members.humans}</strong></p>
-            <p>Bots: <strong>${stats.members.bots}</strong></p>
-            <p>Online: <strong>${stats.members.online}</strong></p>
-        `;
-    }
-
-    const channelStats = document.getElementById('channel-stats');
-    if (channelStats) {
-        channelStats.innerHTML = `
-            <p>Text Channels: <strong>${stats.channels.text}</strong></p>
-            <p>Voice Channels: <strong>${stats.channels.voice}</strong></p>
-            <p>Categories: <strong>${stats.channels.categories}</strong></p>
-            <p>Total: <strong>${stats.channels.total}</strong></p>
-        `;
-    }
-
-    const serverInfo = document.getElementById('server-info');
-    if (serverInfo) {
-        serverInfo.innerHTML = `
-            <p>Owner: <strong>${stats.server.owner}</strong></p>
-            <p>Created: <strong>${stats.server.age_days}</strong> days ago</p>
-            <p>Roles: <strong>${stats.roles}</strong></p>
-            <p>Boosts: <strong>${stats.boosts.count}</strong> (Level ${stats.boosts.level})</p>
-        `;
-    }
-}
-
-function loadChannelsForStats(serverId) {
-    dashboard.loadChannels(serverId, 'stats-channel-select');
-}
-
-async function sendStatsToChannel() {
-    const serverId = document.getElementById('stats-server-select')?.value;
-    const channelId = document.getElementById('stats-channel-select')?.value;
-
-    if (!channelId) {
-        dashboard.showNotification('Please select a channel', 'error');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/server_stats/send_stats', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ server_id: serverId, channel_id: channelId })
-        });
-
-        const data = await response.json();
-        
-        if (data.success) {
-            dashboard.showNotification('Stats sent successfully!', 'success');
-        } else {
-            dashboard.showNotification('Error: ' + data.error, 'error');
+        if (data.stats) {
+            const container = document.getElementById('stats-container');
+            if (container) {
+                container.style.display = 'block';
+                container.innerHTML = `
+                    <h3>${data.stats.server.name}</h3>
+                    <p>Members: ${data.stats.members.total}</p>
+                    <p>Channels: ${data.stats.channels.total}</p>
+                    <p>Created: ${data.stats.server.age_days} days ago</p>
+                `;
+            }
         }
     } catch (error) {
-        dashboard.showNotification('Failed to send stats', 'error');
+        console.error('Failed to load stats:', error);
     }
 }
-
-// Bot Commander Module Functions
-async function loadBotsAndChannels() {
-    const serverId = document.getElementById('cmd-server-select')?.value;
-    const botSelect = document.getElementById('target-bot-select');
-    const channelSelect = document.getElementById('cmd-channel-select');
-    
-    if (!serverId) {
-        botSelect.innerHTML = '<option value="">Select a server first</option>';
-        channelSelect.innerHTML = '<option value="">Select a server first</option>';
-        botSelect.disabled = true;
-        channelSelect.disabled = true;
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/bot_commander/get_bots_and_channels?server_id=${serverId}`);
-        if (response.ok) {
-            const data = await response.json();
-            
-            // Populate bots
-            botSelect.innerHTML = '<option value="">Select a bot</option>';
-            data.bots.forEach(bot => {
-                const option = document.createElement('option');
-                option.value = bot.id;
-                option.textContent = `${getStatusEmoji(bot.status)} ${bot.name}`;
-                botSelect.appendChild(option);
-            });
-            botSelect.disabled = false;
-            
-            // Populate channels
-            channelSelect.innerHTML = '<option value="">Select a channel</option>';
-            data.channels.forEach(channel => {
-                const option = document.createElement('option');
-                option.value = channel.id;
-                option.textContent = '#' + channel.name;
-                channelSelect.appendChild(option);
-            });
-            channelSelect.disabled = false;
-        }
-    } catch (error) {
-        console.error('Failed to load bots and channels:', error);
-        dashboard.showNotification('Failed to load bots and channels', 'error');
-    }
-}
-
-async function sendBotCommand() {
-    const channelId = document.getElementById('cmd-channel-select')?.value;
-    const targetBotId = document.getElementById('target-bot-select')?.value;
-    const command = document.getElementById('bot-command-input')?.value.trim();
-    
-    if (!channelId) {
-        dashboard.showNotification('Please select a channel', 'error');
-        return;
-    }
-    
-    if (!command) {
-        dashboard.showNotification('Please enter a command', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/bot_commander/send_command', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                channel_id: channelId,
-                target_bot_id: targetBotId,
-                command: command
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            dashboard.showNotification('Command sent successfully!', 'success');
-            document.getElementById('bot-command-input').value = '';
-            
-            // Refresh history after a short delay
-            setTimeout(() => {
-                refreshHistory();
-                refreshResponses();
-            }, 1000);
-        } else {
-            dashboard.showNotification('Error: ' + data.error, 'error');
-        }
-    } catch (error) {
-        dashboard.showNotification('Failed to send command: ' + error.message, 'error');
-    }
-}
-
-async function refreshHistory() {
-    const historyDiv = document.getElementById('command-history');
-    if (!historyDiv) return;
-    
-    historyDiv.innerHTML = '<p class="loading">Loading command history...</p>';
-    
-    try {
-        const response = await fetch('/api/bot_commander/get_history?limit=20');
-        if (response.ok) {
-            const data = await response.json();
-            displayHistory(data.history);
-        } else {
-            historyDiv.innerHTML = '<p class="error">Failed to load command history</p>';
-        }
-    } catch (error) {
-        console.error('Failed to load command history:', error);
-        historyDiv.innerHTML = '<p class="error">Error loading command history</p>';
-    }
-}
-
-async function refreshResponses() {
-    const responsesDiv = document.getElementById('bot-responses');
-    if (!responsesDiv) return;
-    
-    responsesDiv.innerHTML = '<p class="loading">Loading bot responses...</p>';
-    
-    try {
-        const response = await fetch('/api/bot_commander/get_responses?limit=20');
-        if (response.ok) {
-            const data = await response.json();
-            displayResponses(data.responses);
-        } else {
-            responsesDiv.innerHTML = '<p class="error">Failed to load bot responses</p>';
-        }
-    } catch (error) {
-        console.error('Failed to load bot responses:', error);
-        responsesDiv.innerHTML = '<p class="error">Error loading bot responses</p>';
-    }
-}
-
-function displayHistory(history) {
-    const historyDiv = document.getElementById('command-history');
-    
-    if (!history || history.length === 0) {
-        historyDiv.innerHTML = '<p class="loading">No command history available</p>';
-        return;
-    }
-    
-    const historyHtml = history.map(cmd => `
-        <div class="history-item">
-            <div class="item-header">
-                <span class="item-title">${escapeHtml(cmd.user)} → ${escapeHtml(cmd.target_bot)}</span>
-                <span class="item-time">${formatTimestamp(cmd.timestamp)}</span>
-            </div>
-            <div class="item-content">${escapeHtml(cmd.command)}</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
-                #${escapeHtml(cmd.channel)} in ${escapeHtml(cmd.guild)}
-            </div>
-        </div>
-    `).join('');
-    
-    historyDiv.innerHTML = historyHtml;
-}
-
-function displayResponses(responses) {
-    const responsesDiv = document.getElementById('bot-responses');
-    
-    if (!responses || responses.length === 0) {
-        responsesDiv.innerHTML = '<p class="loading">No bot responses recorded</p>';
-        return;
-    }
-    
-    const responsesHtml = responses.map(resp => `
-        <div class="response-item">
-            <div class="item-header">
-                <span class="item-title">🤖 ${escapeHtml(resp.bot_name)}</span>
-                <span class="item-time">${formatTimestamp(resp.timestamp)}</span>
-            </div>
-            ${resp.content ? `<div class="item-content">${escapeHtml(resp.content.substring(0, 200))}${resp.content.length > 200 ? '...' : ''}</div>` : ''}
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
-                #${escapeHtml(resp.channel)} in ${escapeHtml(resp.guild)}
-                ${resp.embeds > 0 ? ` • ${resp.embeds} embed${resp.embeds > 1 ? 's' : ''}` : ''}
-                ${resp.attachments > 0 ? ` • ${resp.attachments} attachment${resp.attachments > 1 ? 's' : ''}` : ''}
-            </div>
-        </div>
-    `).join('');
-    
-    responsesDiv.innerHTML = responsesHtml;
-}
-
-// Utility functions for Bot Commander
-function getStatusEmoji(status) {
-    const statusMap = {
-        'online': '🟢',
-        'idle': '🟡',
-        'dnd': '🔴',
-        'offline': '⚫'
-    };
-    return statusMap[status] || '❓';
-}
-
-function formatTimestamp(timestamp) {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Initialize dashboard when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    dashboard.init();
-});
