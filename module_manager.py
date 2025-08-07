@@ -80,9 +80,12 @@ class ModuleManager:
             
             # Setup module if it has a setup function
             if hasattr(module, 'setup'):
-                module_instance = module.setup(self.bot, self.app)
+                try:
+                    module_instance = module.setup(self.bot, self.app, self)
+                except TypeError:
+                    module_instance = module.setup(self.bot, self.app)
                 self.loaded_modules[module_name] = module_instance
-                
+
                 # Initialize module config if not exists
                 if module_name not in self.module_configs:
                     self.module_configs[module_name] = {
@@ -90,10 +93,10 @@ class ModuleManager:
                         'loaded_at': datetime.now().isoformat(),
                         'version': getattr(module_instance, 'version', '1.0.0')
                     }
-                
+
                 self.module_configs[module_name]['loaded_at'] = datetime.now().isoformat()
                 self.save_module_configs()
-                
+
                 print(f"✓ Loaded module: {module_name}")
                 return True
             else:

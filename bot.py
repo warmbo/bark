@@ -96,6 +96,9 @@ def main():
     
     # Initialize module manager
     module_manager = ModuleManager(bot, app)
+    # Attach module_manager to bot and app for module access
+    bot.module_manager = module_manager
+    app.module_manager = module_manager
     module_manager.load_all_modules()
     
     # Start Flask
