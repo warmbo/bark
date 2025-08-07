@@ -16,12 +16,12 @@
   },
   "hello-test": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:06:26.620831",
+    "loaded_at": "2025-08-07T18:22:50.395360",
     "version": "1.0.0"
   },
   "bite": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:06:26.615883",
+    "loaded_at": "2025-08-07T18:23:31.885429",
     "version": "1.0.0"
   },
   "weather": {
@@ -52,6 +52,11 @@
   "github": {
     "enabled": true,
     "loaded_at": "2025-08-07T18:06:26.619337",
+    "version": "1.0.0"
+  },
+  "settings": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T18:29:38.404993",
     "version": "1.0.0"
   }
 }
