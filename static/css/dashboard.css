@@ -1,3 +1,32 @@
+/* Dropdown Styles */
+/* Ensure no background appears in the modules dropdown */
+
+.dropdown-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    margin-top: 0.5rem;
+    border-left: none;
+    padding-left: 0;
+    background: none !important;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: none !important;
+    border: none;
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    margin-left: 1rem;
+    border-radius: 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    font-size: 0.85rem;
+    width: calc(100% - 1rem);
+}
 :root {
     --primary: #3b82f6;
     --bg: #0a0a0a;
@@ -78,16 +107,23 @@ nav {
     transition: all 0.2s;
     text-align: left;
     font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .nav-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text);
+    color: var(--primary);
 }
 
 .nav-item.active {
-    background: var(--primary);
-    color: white;
+    color: var(--primary);
+}
+
+.nav-item i {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
 }
 
 /* Main Content */
