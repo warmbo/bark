@@ -6,31 +6,33 @@
     <title>Bark Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <!-- Tabler Icons CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 </head>
 <body>
     <div class="layout">
         <aside class="sidebar">
             <div class="logo">
-                <span>🤖 Bark</span>
+                <span>Bark</span>
             </div>
             
             <nav>
                 <button class="nav-item active" onclick="showModule('home')">
-                    🏠 Dashboard
+                    <i class="ti ti-home"></i> Dashboard
                 </button>
-                
+
                 {% for module_name in modules %}
                 <button class="nav-item" onclick="showModule('{{ module_name }}')">
-                    🧩 {{ modules[module_name].name }}
+                    <i class="ti ti-puzzle"></i> {{ modules[module_name].name }}
                 </button>
                 {% endfor %}
-                
+
                 <button class="nav-item" onclick="showModule('about')">
-                    ℹ️ About
+                    <i class="ti ti-info-circle"></i> About
                 </button>
-                
+
                 <button class="nav-item" onclick="showModule('settings')">
-                    ⚙️ Settings
+                    <i class="ti ti-settings"></i> Settings
                 </button>
             </nav>
         </aside>

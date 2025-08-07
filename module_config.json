@@ -1,12 +1,12 @@
 {
   "server_stats": {
     "enabled": true,
-    "loaded_at": "2025-08-07T16:40:56.580834",
+    "loaded_at": "2025-08-07T17:34:31.460120",
     "version": "1.0.0"
   },
   "speak_as_bot": {
     "enabled": true,
-    "loaded_at": "2025-08-07T16:40:56.581989",
+    "loaded_at": "2025-08-07T17:34:31.461633",
     "version": "1.0.0"
   },
   "test": {
@@ -16,17 +16,17 @@
   },
   "hello-test": {
     "enabled": true,
-    "loaded_at": "2025-08-07T16:40:56.579431",
+    "loaded_at": "2025-08-07T17:34:31.455259",
     "version": "1.0.0"
   },
   "bite": {
     "enabled": true,
-    "loaded_at": "2025-08-07T16:40:56.577818",
+    "loaded_at": "2025-08-07T17:34:31.450953",
     "version": "1.0.0"
   },
   "weather": {
     "enabled": true,
-    "loaded_at": "2025-08-07T16:50:38.241259",
+    "loaded_at": "2025-08-07T17:34:31.464072",
     "version": "1.0.0"
   },
   "weather2": {
@@ -37,6 +37,16 @@
   "commander": {
     "enabled": true,
     "loaded_at": "2025-08-07T16:12:06.778316",
+    "version": "1.0.0"
+  },
+  "member_info": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T17:34:31.458209",
+    "version": "1.0.0"
+  },
+  "channel_manager": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T17:34:31.452777",
     "version": "1.0.0"
   }
 }
