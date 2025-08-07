@@ -83,6 +83,95 @@ async def help_command(ctx):
     embed.add_field(name="Commands", value="\n".join(commands_list), inline=False)
     await ctx.send(embed=embed)
 
+@bot.command(name='modules')
+async def modules_command(ctx):
+    """List all currently loaded Bark modules"""
+    if not module_manager:
+        embed = discord.Embed(
+            title="❌ Module Manager Not Available",
+            description="Module manager is not initialized.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    loaded_modules = module_manager.loaded_modules
+    
+    embed = discord.Embed(
+        title="🔧 Loaded Bark Modules",
+        color=discord.Color.blue()
+    )
+    
+    if loaded_modules:
+        module_list = []
+        for module_name, module_instance in loaded_modules.items():
+            # Get display name and version if available
+            display_name = getattr(module_instance, 'name', module_name)
+            version = getattr(module_instance, 'version', '1.0.0')
+            module_list.append(f"• **{display_name}** (`{module_name}`) - v{version}")
+        
+        embed.description = "\n".join(module_list)
+        embed.set_footer(text=f"Total: {len(loaded_modules)} modules loaded")
+    else:
+        embed.description = "No modules are currently loaded."
+        embed.color = discord.Color.orange()
+    
+    await ctx.send(embed=embed)
+
+@bot.command(name='reload')
+@commands.has_permissions(administrator=True)
+async def reload_command(ctx, module_name: str = None):
+    """Reload a specific module (Admin only)"""
+    if not module_manager:
+        embed = discord.Embed(
+            title="❌ Module Manager Not Available",
+            description="Module manager is not initialized.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    if not module_name:
+        embed = discord.Embed(
+            title="❌ Module Name Required",
+            description="Please specify a module to reload.\nExample: `!reload weather`",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    if module_name not in module_manager.loaded_modules:
+        embed = discord.Embed(
+            title="❌ Module Not Found",
+            description=f"Module `{module_name}` is not currently loaded.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    try:
+        success = module_manager.reload_module(module_name)
+        if success:
+            embed = discord.Embed(
+                title="✅ Module Reloaded",
+                description=f"Successfully reloaded module `{module_name}`.",
+                color=discord.Color.green()
+            )
+        else:
+            embed = discord.Embed(
+                title="❌ Reload Failed",
+                description=f"Failed to reload module `{module_name}`. Check console for details.",
+                color=discord.Color.red()
+            )
+    except Exception as e:
+        embed = discord.Embed(
+            title="❌ Reload Error",
+            description=f"Error reloading module `{module_name}`: {str(e)}",
+            color=discord.Color.red()
+        )
+    
+    await ctx.send(embed=embed)
+
 def run_flask():
     app.run(host='0.0.0.0', port=WEB_PORT, debug=False, use_reloader=False)
 

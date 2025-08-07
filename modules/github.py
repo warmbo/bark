@@ -7,18 +7,19 @@ REPO_DESC = "A modular Discord bot with a modern web dashboard."
 REPO_ICON = "https://github.com/warmbo/bark/raw/main/bark.png"  # Optional: repo logo
 
 class GithubModule:
-    name = "GitHub"
-    description = "Show info and link to the Bark GitHub repository."
-    version = "1.0.0"
-    icon = "brand-github"
-    commands = ["github", "modules"]
-
     def __init__(self, bot, app):
         self.bot = bot
         self.app = app
-        self.register_commands()
+        self.name = "GitHub"
+        self.description = "Show info and link to the Bark GitHub repository."
+        self.icon = "brand-github"
+        self.version = "1.0.0"
+        self.commands = []
+        self.html = self.get_html()
+        
+        self._register_commands()
 
-    def register_commands(self):
+    def _register_commands(self):
         @self.bot.command(name="github", help="Show the GitHub repository info.")
         async def github_cmd(ctx):
             embed = discord.Embed(
@@ -30,60 +31,124 @@ class GithubModule:
             embed.set_thumbnail(url=REPO_ICON)
             await ctx.send(embed=embed)
 
-        @self.bot.command(name="modules", help="List all currently loaded Bark modules.")
-        async def modules_cmd(ctx):
-            # Try to get loaded modules from the module manager
-            module_manager = None
-            # Search for module_manager in bot globals
-            for cog in self.bot.cogs.values():
-                if hasattr(cog, 'loaded_modules'):
-                    module_manager = cog
-                    break
-            # Fallback: try to get from bot attributes
-            if not module_manager and hasattr(self.bot, 'module_manager'):
-                module_manager = getattr(self.bot, 'module_manager')
-            # If not found, try to get from global
-            if not module_manager:
-                try:
-                    import sys
-                    module_manager = sys.modules.get('module_manager', None)
-                except Exception:
-                    module_manager = None
-
-            # If still not found, try to get from app context
-            loaded = []
-            if hasattr(self.app, 'module_manager'):
-                loaded = list(getattr(self.app, 'module_manager').loaded_modules.keys())
-            elif module_manager and hasattr(module_manager, 'loaded_modules'):
-                loaded = list(module_manager.loaded_modules.keys())
-            else:
-                # Fallback: try to get from bot attribute
-                loaded = getattr(self.bot, 'loaded_modules', [])
-
-            embed = discord.Embed(
-                title="Loaded Bark Modules",
-                color=discord.Color.blue()
-            )
-            if loaded:
-                embed.description = "\n".join(f"• {name}" for name in loaded)
-            else:
-                embed.description = "No modules are currently loaded."
-            await ctx.send(embed=embed)
-
-    def cleanup(self):
-        # Remove commands when module is unloaded
-        self.bot.remove_command("github")
-        self.bot.remove_command("modules")
+        # Track the commands we added
+        self.commands = ['github']
 
     def get_html(self):
-        # Simple dashboard card for this module
-        return f"""
-        <div class='github-module'>
-            <h2><i class='ti ti-brand-github'></i> GitHub</h2>
+        return f'''
+        <div class="module-header">
+            <h2><i data-lucide="github"></i> GitHub</h2>
             <p>Show info and link to the Bark GitHub repository.</p>
-            <a href='{REPO_URL}' target='_blank'>View on GitHub</a>
         </div>
-        """
+        
+        <div class="github-container">
+            <div class="info-section">
+                <h3>📋 Commands</h3>
+                <div class="command-list">
+                    <div class="command-item">
+                        <code>bark-github</code>
+                        <span>Show GitHub repository information</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="repo-section">
+                <h3>🔗 Repository</h3>
+                <p><strong>Name:</strong> {REPO_NAME}</p>
+                <p><strong>Description:</strong> {REPO_DESC}</p>
+                <p><strong>URL:</strong> <a href="{REPO_URL}" target="_blank">{REPO_URL}</a></p>
+            </div>
+        </div>
+        
+        <style>
+        .github-container {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }}
+        
+        .info-section, .repo-section {{
+            background: var(--glass-bg);
+            backdrop-filter: var(--blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }}
+        
+        .info-section h3, .repo-section h3 {{
+            margin-bottom: 1rem;
+            color: var(--text);
+        }}
+        
+        .command-list {{
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }}
+        
+        .command-item {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }}
+        
+        .command-item code {{
+            background: var(--background);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: var(--primary);
+            font-weight: bold;
+        }}
+        
+        .command-item span {{
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }}
+        
+        .repo-section p {{
+            margin: 0.5rem 0;
+            color: var(--text-muted);
+        }}
+        
+        .repo-section p strong {{
+            color: var(--text);
+        }}
+        
+        .repo-section a {{
+            color: var(--primary);
+            text-decoration: none;
+        }}
+        
+        .repo-section a:hover {{
+            text-decoration: underline;
+        }}
+        </style>
+        '''
+
+    def handle_api(self, action, request):
+        """Handle API requests for this module"""
+        if action == "get_repo_info":
+            return {
+                "repo": {
+                    "name": REPO_NAME,
+                    "description": REPO_DESC,
+                    "url": REPO_URL,
+                    "icon": REPO_ICON
+                }
+            }
+        
+        return {"error": "Unknown action"}, 404
+
+    def cleanup(self):
+        for cmd_name in self.commands:
+            if cmd_name in self.bot.all_commands:
+                self.bot.remove_command(cmd_name)
+        print(f"🧹 Cleaned up {len(self.commands)} commands from {self.name}")
 
 def setup(bot, app):
     return GithubModule(bot, app)

@@ -1,12 +1,12 @@
 {
   "server_stats": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.112246",
+    "loaded_at": "2025-08-07T18:06:26.627481",
     "version": "1.0.0"
   },
   "speak_as_bot": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.113787",
+    "loaded_at": "2025-08-07T18:06:26.628848",
     "version": "1.0.0"
   },
   "test": {
@@ -16,17 +16,17 @@
   },
   "hello-test": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.103709",
+    "loaded_at": "2025-08-07T18:06:26.620831",
     "version": "1.0.0"
   },
   "bite": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.098819",
+    "loaded_at": "2025-08-07T18:06:26.615883",
     "version": "1.0.0"
   },
   "weather": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.116117",
+    "loaded_at": "2025-08-07T18:06:26.630667",
     "version": "1.0.0"
   },
   "weather2": {
@@ -41,17 +41,17 @@
   },
   "member_info": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.105156",
+    "loaded_at": "2025-08-07T18:06:26.622129",
     "version": "1.0.0"
   },
   "channel_manager": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.100590",
+    "loaded_at": "2025-08-07T18:06:26.617950",
     "version": "1.0.0"
   },
   "github": {
     "enabled": true,
-    "loaded_at": "2025-08-07T18:01:08.102175",
+    "loaded_at": "2025-08-07T18:06:26.619337",
     "version": "1.0.0"
   }
 }
