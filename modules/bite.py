@@ -9,10 +9,10 @@ class BiteModule:
     def __init__(self, bot, app):
         self.bot = bot
         self.app = app
-        self.name = "Bite (Insult Generator)"
+        self.name = "Bite"
         self.description = "Generate playful insults using the Evil Insult Generator API"
         self.icon = "zap"
-        self.version = "1.0.0"
+        self.version = "1.0.1"
         self.commands = []
         self.html = self.get_html()
         

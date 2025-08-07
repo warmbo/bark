@@ -69,6 +69,9 @@ class Dashboard {
             case 'server_stats':
                 this.initServerStatsModule();
                 break;
+            case 'bot_commander':
+                this.initBotCommanderModule();
+                break;
         }
     }
 
@@ -220,6 +223,21 @@ class Dashboard {
             }
         } catch (error) {
             console.error('Failed to load servers for stats module:', error);
+        }
+    }
+
+    async initBotCommanderModule() {
+        try {
+            const response = await fetch('/api/bot_commander/get_servers');
+            if (response.ok) {
+                const data = await response.json();
+                this.populateServerSelect('cmd-server-select', data.servers);
+            }
+            // Load initial data
+            refreshHistory();
+            refreshResponses();
+        } catch (error) {
+            console.error('Failed to load servers for bot commander module:', error);
         }
     }
 
@@ -420,6 +438,208 @@ async function sendStatsToChannel() {
     } catch (error) {
         dashboard.showNotification('Failed to send stats', 'error');
     }
+}
+
+// Bot Commander Module Functions
+async function loadBotsAndChannels() {
+    const serverId = document.getElementById('cmd-server-select')?.value;
+    const botSelect = document.getElementById('target-bot-select');
+    const channelSelect = document.getElementById('cmd-channel-select');
+    
+    if (!serverId) {
+        botSelect.innerHTML = '<option value="">Select a server first</option>';
+        channelSelect.innerHTML = '<option value="">Select a server first</option>';
+        botSelect.disabled = true;
+        channelSelect.disabled = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/bot_commander/get_bots_and_channels?server_id=${serverId}`);
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Populate bots
+            botSelect.innerHTML = '<option value="">Select a bot</option>';
+            data.bots.forEach(bot => {
+                const option = document.createElement('option');
+                option.value = bot.id;
+                option.textContent = `${getStatusEmoji(bot.status)} ${bot.name}`;
+                botSelect.appendChild(option);
+            });
+            botSelect.disabled = false;
+            
+            // Populate channels
+            channelSelect.innerHTML = '<option value="">Select a channel</option>';
+            data.channels.forEach(channel => {
+                const option = document.createElement('option');
+                option.value = channel.id;
+                option.textContent = '#' + channel.name;
+                channelSelect.appendChild(option);
+            });
+            channelSelect.disabled = false;
+        }
+    } catch (error) {
+        console.error('Failed to load bots and channels:', error);
+        dashboard.showNotification('Failed to load bots and channels', 'error');
+    }
+}
+
+async function sendBotCommand() {
+    const channelId = document.getElementById('cmd-channel-select')?.value;
+    const targetBotId = document.getElementById('target-bot-select')?.value;
+    const command = document.getElementById('bot-command-input')?.value.trim();
+    
+    if (!channelId) {
+        dashboard.showNotification('Please select a channel', 'error');
+        return;
+    }
+    
+    if (!command) {
+        dashboard.showNotification('Please enter a command', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/bot_commander/send_command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                channel_id: channelId,
+                target_bot_id: targetBotId,
+                command: command
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            dashboard.showNotification('Command sent successfully!', 'success');
+            document.getElementById('bot-command-input').value = '';
+            
+            // Refresh history after a short delay
+            setTimeout(() => {
+                refreshHistory();
+                refreshResponses();
+            }, 1000);
+        } else {
+            dashboard.showNotification('Error: ' + data.error, 'error');
+        }
+    } catch (error) {
+        dashboard.showNotification('Failed to send command: ' + error.message, 'error');
+    }
+}
+
+async function refreshHistory() {
+    const historyDiv = document.getElementById('command-history');
+    if (!historyDiv) return;
+    
+    historyDiv.innerHTML = '<p class="loading">Loading command history...</p>';
+    
+    try {
+        const response = await fetch('/api/bot_commander/get_history?limit=20');
+        if (response.ok) {
+            const data = await response.json();
+            displayHistory(data.history);
+        } else {
+            historyDiv.innerHTML = '<p class="error">Failed to load command history</p>';
+        }
+    } catch (error) {
+        console.error('Failed to load command history:', error);
+        historyDiv.innerHTML = '<p class="error">Error loading command history</p>';
+    }
+}
+
+async function refreshResponses() {
+    const responsesDiv = document.getElementById('bot-responses');
+    if (!responsesDiv) return;
+    
+    responsesDiv.innerHTML = '<p class="loading">Loading bot responses...</p>';
+    
+    try {
+        const response = await fetch('/api/bot_commander/get_responses?limit=20');
+        if (response.ok) {
+            const data = await response.json();
+            displayResponses(data.responses);
+        } else {
+            responsesDiv.innerHTML = '<p class="error">Failed to load bot responses</p>';
+        }
+    } catch (error) {
+        console.error('Failed to load bot responses:', error);
+        responsesDiv.innerHTML = '<p class="error">Error loading bot responses</p>';
+    }
+}
+
+function displayHistory(history) {
+    const historyDiv = document.getElementById('command-history');
+    
+    if (!history || history.length === 0) {
+        historyDiv.innerHTML = '<p class="loading">No command history available</p>';
+        return;
+    }
+    
+    const historyHtml = history.map(cmd => `
+        <div class="history-item">
+            <div class="item-header">
+                <span class="item-title">${escapeHtml(cmd.user)} → ${escapeHtml(cmd.target_bot)}</span>
+                <span class="item-time">${formatTimestamp(cmd.timestamp)}</span>
+            </div>
+            <div class="item-content">${escapeHtml(cmd.command)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
+                #${escapeHtml(cmd.channel)} in ${escapeHtml(cmd.guild)}
+            </div>
+        </div>
+    `).join('');
+    
+    historyDiv.innerHTML = historyHtml;
+}
+
+function displayResponses(responses) {
+    const responsesDiv = document.getElementById('bot-responses');
+    
+    if (!responses || responses.length === 0) {
+        responsesDiv.innerHTML = '<p class="loading">No bot responses recorded</p>';
+        return;
+    }
+    
+    const responsesHtml = responses.map(resp => `
+        <div class="response-item">
+            <div class="item-header">
+                <span class="item-title">🤖 ${escapeHtml(resp.bot_name)}</span>
+                <span class="item-time">${formatTimestamp(resp.timestamp)}</span>
+            </div>
+            ${resp.content ? `<div class="item-content">${escapeHtml(resp.content.substring(0, 200))}${resp.content.length > 200 ? '...' : ''}</div>` : ''}
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
+                #${escapeHtml(resp.channel)} in ${escapeHtml(resp.guild)}
+                ${resp.embeds > 0 ? ` • ${resp.embeds} embed${resp.embeds > 1 ? 's' : ''}` : ''}
+                ${resp.attachments > 0 ? ` • ${resp.attachments} attachment${resp.attachments > 1 ? 's' : ''}` : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    responsesDiv.innerHTML = responsesHtml;
+}
+
+// Utility functions for Bot Commander
+function getStatusEmoji(status) {
+    const statusMap = {
+        'online': '🟢',
+        'idle': '🟡',
+        'dnd': '🔴',
+        'offline': '⚫'
+    };
+    return statusMap[status] || '❓';
+}
+
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Initialize dashboard when DOM is loaded
