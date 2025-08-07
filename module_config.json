@@ -1,12 +1,12 @@
 {
   "server_stats": {
     "enabled": true,
-    "loaded_at": "2025-08-07T15:38:17.357119",
+    "loaded_at": "2025-08-07T15:49:50.594857",
     "version": "1.0.0"
   },
   "speak_as_bot": {
     "enabled": true,
-    "loaded_at": "2025-08-07T15:38:17.360222",
+    "loaded_at": "2025-08-07T15:49:50.599688",
     "version": "1.0.0"
   },
   "test": {
@@ -16,17 +16,22 @@
   },
   "hello-test": {
     "enabled": true,
-    "loaded_at": "2025-08-07T15:38:17.354875",
+    "loaded_at": "2025-08-07T15:49:50.593005",
     "version": "1.0.0"
   },
   "bite": {
     "enabled": true,
-    "loaded_at": "2025-08-07T15:38:17.352226",
+    "loaded_at": "2025-08-07T15:49:50.591114",
     "version": "1.0.0"
   },
   "weather": {
     "enabled": true,
     "loaded_at": "2025-08-07T15:38:17.364421",
+    "version": "1.0.0"
+  },
+  "weather2": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T15:53:50.978203",
     "version": "1.0.0"
   }
 }
