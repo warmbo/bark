@@ -1,0 +1,32 @@
+{
+  "server_stats": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T15:38:17.357119",
+    "version": "1.0.0"
+  },
+  "speak_as_bot": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T15:38:17.360222",
+    "version": "1.0.0"
+  },
+  "test": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T14:57:29.971856",
+    "version": "1.0.0"
+  },
+  "hello-test": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T15:38:17.354875",
+    "version": "1.0.0"
+  },
+  "bite": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T15:38:17.352226",
+    "version": "1.0.0"
+  },
+  "weather": {
+    "enabled": true,
+    "loaded_at": "2025-08-07T15:38:17.364421",
+    "version": "1.0.0"
+  }
+}
