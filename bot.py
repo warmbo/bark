@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import os
 import sys
+import requests
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import threading
 from dotenv import load_dotenv

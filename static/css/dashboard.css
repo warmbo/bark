@@ -33,7 +33,7 @@ body::before {
     width: 100vw;
     height: 100vh;
     z-index: -1;
-    background: url('/static/bark-bg.jpg') center center / cover no-repeat;
+    background: url('/static/bark-bg-dark.png') center center / cover no-repeat;
     opacity: 1;
 }
 
