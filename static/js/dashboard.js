@@ -38,7 +38,15 @@ function showModule(moduleId) {
         settings: 'Settings'
     };
     
-    document.getElementById('page-title').textContent = titles[moduleId] || 'Module';
+    // Get module name from nav item or use default
+    let displayTitle = titles[moduleId];
+    if (!displayTitle && navItem) {
+        displayTitle = navItem.textContent.trim();
+    } else if (!displayTitle) {
+        displayTitle = 'Module';
+    }
+    
+    document.getElementById('page-title').textContent = displayTitle;
     currentModule = moduleId;
     
     // Initialize module if needed
@@ -46,6 +54,13 @@ function showModule(moduleId) {
         loadServers();
     } else if (moduleId === 'server_stats') {
         loadStatsServers();
+    }
+    
+    // Reinitialize Lucide icons for dynamic content
+    if (typeof lucide !== 'undefined') {
+        setTimeout(() => {
+            lucide.createIcons();
+        }, 100);
     }
 }
 
@@ -64,7 +79,7 @@ async function loadDashboardStats() {
     }
 }
 
-// Theme
+// Theme (moved from settings, now global utility)
 function saveTheme() {
     const primary = document.getElementById('primary-color').value;
     document.documentElement.style.setProperty('--primary', primary);
@@ -187,15 +202,100 @@ async function loadServerStats() {
             const container = document.getElementById('stats-container');
             if (container) {
                 container.style.display = 'block';
-                container.innerHTML = `
-                    <h3>${data.stats.server.name}</h3>
-                    <p>Members: ${data.stats.members.total}</p>
-                    <p>Channels: ${data.stats.channels.total}</p>
-                    <p>Created: ${data.stats.server.age_days} days ago</p>
-                `;
+                
+                // Update server name
+                const nameEl = document.getElementById('server-name');
+                if (nameEl) {
+                    nameEl.textContent = data.stats.server.name;
+                }
+                
+                // Update member stats
+                const memberStatsEl = document.getElementById('member-stats');
+                if (memberStatsEl) {
+                    memberStatsEl.innerHTML = `
+                        <p>Total: <strong>${data.stats.members.total}</strong></p>
+                        <p>Humans: <strong>${data.stats.members.humans}</strong></p>
+                        <p>Bots: <strong>${data.stats.members.bots}</strong></p>
+                        <p>Online: <strong>${data.stats.members.online}</strong></p>
+                    `;
+                }
+                
+                // Update channel stats
+                const channelStatsEl = document.getElementById('channel-stats');
+                if (channelStatsEl) {
+                    channelStatsEl.innerHTML = `
+                        <p>Text: <strong>${data.stats.channels.text}</strong></p>
+                        <p>Voice: <strong>${data.stats.channels.voice}</strong></p>
+                        <p>Categories: <strong>${data.stats.channels.categories}</strong></p>
+                        <p>Total: <strong>${data.stats.channels.total}</strong></p>
+                    `;
+                }
+                
+                // Update server info
+                const serverInfoEl = document.getElementById('server-info');
+                if (serverInfoEl) {
+                    serverInfoEl.innerHTML = `
+                        <p>Owner: <strong>${data.stats.server.owner}</strong></p>
+                        <p>Created: <strong>${data.stats.server.age_days} days ago</strong></p>
+                        <p>Roles: <strong>${data.stats.roles}</strong></p>
+                        <p>Boosts: <strong>${data.stats.boosts.count} (Level ${data.stats.boosts.level})</strong></p>
+                    `;
+                }
+                
+                // Load channels for stats sending
+                loadStatsChannels(serverId);
             }
         }
     } catch (error) {
         console.error('Failed to load stats:', error);
+    }
+}
+
+async function loadStatsChannels(serverId) {
+    try {
+        const response = await fetch(`/api/server_stats/get_channels?server_id=${serverId}`);
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('stats-channel-select');
+            if (select) {
+                select.innerHTML = '<option value="">Select a channel</option>';
+                data.channels.forEach(channel => {
+                    const option = document.createElement('option');
+                    option.value = channel.id;
+                    option.textContent = '#' + channel.name;
+                    select.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load channels for stats:', error);
+    }
+}
+
+async function sendStatsToChannel() {
+    const serverId = document.getElementById('stats-server-select')?.value;
+    const channelId = document.getElementById('stats-channel-select')?.value;
+    
+    if (!serverId || !channelId) {
+        alert('Please select a server and channel');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/server_stats/send_stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ server_id: serverId, channel_id: channelId })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert('Stats sent to channel!');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to send stats'));
+        }
+    } catch (error) {
+        alert('Failed to send stats to channel');
+        console.error('Error:', error);
     }
 }

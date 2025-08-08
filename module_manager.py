@@ -8,7 +8,6 @@ from watchdog.events import FileSystemEventHandler
 import time
 import threading
 import json
-from datetime import datetime
 
 class ModuleManager:
     def __init__(self, bot, app, modules_dir="modules"):
@@ -23,11 +22,23 @@ class ModuleManager:
         # Load module configurations
         self.load_module_configs()
         
+        # Clean up config to only include existing modules
+        self.cleanup_module_configs()
+        
         # Ensure modules directory exists
         os.makedirs(modules_dir, exist_ok=True)
         
         # Start file watcher for hot reloading
         self.start_file_watcher()
+    
+    def get_available_modules(self):
+        """Get list of available module files"""
+        available = []
+        if os.path.exists(self.modules_dir):
+            for filename in os.listdir(self.modules_dir):
+                if filename.endswith('.py') and filename != '__init__.py':
+                    available.append(filename[:-3])  # Remove .py extension
+        return available
     
     def load_module_configs(self):
         """Load module configurations from file"""
@@ -41,13 +52,53 @@ class ModuleManager:
         else:
             self.module_configs = {}
     
+    def cleanup_module_configs(self):
+        """Remove configs for modules that no longer exist and clean up config structure"""
+        available_modules = set(self.get_available_modules())
+        configured_modules = set(self.module_configs.keys())
+        
+        # Remove configs for modules that don't exist anymore
+        removed_modules = configured_modules - available_modules
+        for module_name in removed_modules:
+            del self.module_configs[module_name]
+            print(f"🗑️ Removed config for missing module: {module_name}")
+        
+        # Add default configs for new modules and clean existing configs
+        new_modules = available_modules - configured_modules
+        for module_name in new_modules:
+            self.module_configs[module_name] = {"enabled": True}
+            print(f"➕ Added default config for new module: {module_name}")
+        
+        # Clean up existing configs to only have 'enabled' field
+        for module_name in self.module_configs:
+            if module_name in available_modules:
+                # Preserve only the enabled status, remove any extra fields
+                enabled_status = self.module_configs[module_name].get("enabled", True)
+                self.module_configs[module_name] = {"enabled": enabled_status}
+        
+        # Save if any changes were made
+        if removed_modules or new_modules:
+            self.save_module_configs()
+    
     def save_module_configs(self):
         """Save module configurations to file"""
         try:
+            # Ensure all configs only have the 'enabled' field before saving
+            clean_configs = {}
+            for module_name, config in self.module_configs.items():
+                clean_configs[module_name] = {"enabled": config.get("enabled", True)}
+            
             with open(self.config_file, 'w') as f:
-                json.dump(self.module_configs, f, indent=2)
+                json.dump(clean_configs, f, indent=2)
         except Exception as e:
             print(f"Error saving module configs: {e}")
+    
+    def force_clean_config(self):
+        """Force clean the config file to remove any extra fields"""
+        print("🧹 Force cleaning module config...")
+        self.cleanup_module_configs()
+        self.save_module_configs()
+        print("✅ Config cleaned!")
     
     def load_module(self, filename):
         """Load a single module"""
@@ -86,16 +137,10 @@ class ModuleManager:
                     module_instance = module.setup(self.bot, self.app)
                 self.loaded_modules[module_name] = module_instance
 
-                # Initialize module config if not exists
+                # Ensure clean config structure - only store enabled status
                 if module_name not in self.module_configs:
-                    self.module_configs[module_name] = {
-                        'enabled': True,
-                        'loaded_at': datetime.now().isoformat(),
-                        'version': getattr(module_instance, 'version', '1.0.0')
-                    }
-
-                self.module_configs[module_name]['loaded_at'] = datetime.now().isoformat()
-                self.save_module_configs()
+                    self.module_configs[module_name] = {"enabled": True}
+                    self.save_module_configs()
 
                 print(f"✓ Loaded module: {module_name}")
                 return True
@@ -160,6 +205,9 @@ class ModuleManager:
             print(f"Modules directory {self.modules_dir} does not exist")
             return
         
+        # First, cleanup configs to sync with available modules
+        self.cleanup_module_configs()
+        
         loaded_count = 0
         for filename in os.listdir(self.modules_dir):
             if self.load_module(filename):
@@ -169,10 +217,17 @@ class ModuleManager:
     
     def enable_module(self, module_name):
         """Enable a module"""
-        if module_name not in self.module_configs:
-            self.module_configs[module_name] = {}
+        # Only allow enabling modules that actually exist
+        if module_name not in self.get_available_modules():
+            return False
         
-        self.module_configs[module_name]['enabled'] = True
+        # Ensure config exists with minimal structure
+        if module_name not in self.module_configs:
+            self.module_configs[module_name] = {"enabled": True}
+        else:
+            # Only update the enabled field, preserve clean structure
+            self.module_configs[module_name]["enabled"] = True
+        
         self.save_module_configs()
         
         # Try to load the module
@@ -183,10 +238,17 @@ class ModuleManager:
     
     def disable_module(self, module_name):
         """Disable a module"""
-        if module_name not in self.module_configs:
-            self.module_configs[module_name] = {}
+        # Only allow disabling modules that actually exist
+        if module_name not in self.get_available_modules():
+            return False
         
-        self.module_configs[module_name]['enabled'] = False
+        # Ensure config exists with minimal structure
+        if module_name not in self.module_configs:
+            self.module_configs[module_name] = {"enabled": False}
+        else:
+            # Only update the enabled field, preserve clean structure
+            self.module_configs[module_name]["enabled"] = False
+        
         self.save_module_configs()
         
         # Unload if currently loaded
@@ -196,6 +258,8 @@ class ModuleManager:
     
     def get_module_info(self):
         """Get information about all modules"""
+        available_modules = self.get_available_modules()
+        
         info = {
             'loaded': {},
             'available': {},
@@ -213,16 +277,13 @@ class ModuleManager:
             }
         
         # Get available module files
-        if os.path.exists(self.modules_dir):
-            for filename in os.listdir(self.modules_dir):
-                if filename.endswith('.py') and filename != '__init__.py':
-                    module_name = filename[:-3]
-                    if module_name not in info['loaded']:
-                        info['available'][module_name] = {
-                            'name': module_name,
-                            'enabled': self.module_configs.get(module_name, {}).get('enabled', True),
-                            'loaded': False
-                        }
+        for module_name in available_modules:
+            if module_name not in info['loaded']:
+                info['available'][module_name] = {
+                    'name': module_name,
+                    'enabled': self.module_configs.get(module_name, {}).get('enabled', True),
+                    'loaded': False
+                }
         
         return info
     
@@ -260,6 +321,36 @@ class ModuleManager:
                         self.module_manager.reload_module(module_name)
                     
                     threading.Thread(target=reload_delayed, daemon=True).start()
+            
+            def on_created(self, event):
+                if event.is_directory:
+                    return
+                
+                if event.src_path.endswith('.py'):
+                    filename = os.path.basename(event.src_path)
+                    module_name = filename[:-3]
+                    
+                    print(f"📁 New module file: {filename}")
+                    
+                    # Add to config and potentially load
+                    self.module_manager.cleanup_module_configs()
+            
+            def on_deleted(self, event):
+                if event.is_directory:
+                    return
+                
+                if event.src_path.endswith('.py'):
+                    filename = os.path.basename(event.src_path)
+                    module_name = filename[:-3]
+                    
+                    print(f"📁 Module file deleted: {filename}")
+                    
+                    # Unload module and clean up config
+                    if module_name in self.module_manager.loaded_modules:
+                        self.module_manager.unload_module(module_name)
+                    
+                    # Clean up config
+                    self.module_manager.cleanup_module_configs()
         
         try:
             self.observer = Observer()

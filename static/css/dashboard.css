@@ -1,41 +1,12 @@
-/* Dropdown Styles */
-/* Ensure no background appears in the modules dropdown */
-
-.dropdown-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    margin-top: 0.5rem;
-    border-left: none;
-    padding-left: 0;
-    background: none !important;
-}
-
-.dropdown-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: none !important;
-    border: none;
-    color: var(--text-muted);
-    padding: 0.5rem 1rem;
-    margin-left: 1rem;
-    border-radius: 0;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: left;
-    font-size: 0.85rem;
-    width: calc(100% - 1rem);
-}
 :root {
     --primary: #3b82f6;
     --bg: #0a0a0a;
-    --surface: rgba(26,26,26,0.4);
+    --surface: rgba(26,26,26,0.7);
     --text: #fff;
     --text-muted: #888;
     --border: #333;
-    --glass-bg: rgba(26,26,26,0.3);
-    --glass-border: rgba(255,255,255,0.12);
+    --glass-bg: rgba(26,26,26,0.6);
+    --glass-border: rgba(255,255,255,0.08);
     --blur: blur(16px);
 }
 
@@ -102,7 +73,7 @@ nav {
     border: none;
     color: var(--text-muted);
     padding: 0.75rem 1rem;
-    border-radius: 0;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
     text-align: left;
@@ -113,17 +84,13 @@ nav {
 }
 
 .nav-item:hover {
-    color: var(--primary);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
 }
 
 .nav-item.active {
-    color: var(--primary);
-}
-
-.nav-item i {
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
+    background: var(--primary);
+    color: white;
 }
 
 /* Main Content */
@@ -169,7 +136,7 @@ header h1 {
 .stat-card {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 0;
+    border-radius: 8px;
     padding: 1.5rem;
     text-align: center;
     backdrop-filter: var(--blur);
@@ -200,7 +167,7 @@ header h1 {
 .module-card {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 0;
+    border-radius: 8px;
     padding: 1.5rem;
     cursor: pointer;
     transition: all 0.2s;
@@ -216,10 +183,88 @@ header h1 {
 .module-card h3 {
     margin-bottom: 0.5rem;
     color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .module-card p {
     color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* About Section */
+.about-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.about-section {
+    background: var(--glass-bg);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.about-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: var(--text);
+}
+
+.about-section ul {
+    list-style: none;
+    padding: 0;
+}
+
+.about-section li {
+    padding: 0.5rem 0;
+    color: var(--text-muted);
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.about-section li::before {
+    content: "•";
+    color: var(--primary);
+    position: absolute;
+    left: 0;
+    font-weight: bold;
+}
+
+.about-section p {
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.info-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.info-label {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.info-value {
+    color: var(--text-muted);
+    font-family: 'Courier New', monospace;
     font-size: 0.9rem;
 }
 
@@ -237,42 +282,85 @@ header h1 {
 .module {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 0;
+    border-radius: 12px;
     padding: 1.5rem;
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     box-shadow: 0 4px 32px 0 rgba(0,0,0,0.10);
 }
 
+.module-header {
+    margin-bottom: 2rem;
+}
+
+.module-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.module-header p {
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
 input, select, textarea, button {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 0;
+    border-radius: 6px;
     padding: 0.75rem;
     color: var(--text);
     font-family: inherit;
 }
 
-button {
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     background: var(--primary);
     color: white;
     cursor: pointer;
     transition: all 0.2s;
+    text-decoration: none;
+    font-weight: 500;
+    border: none;
 }
 
-button:hover {
+.btn:hover {
     opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
 }
 
 input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 /* Module-specific styles */
 .module h2 {
     margin-bottom: 1rem;
     font-weight: 500;
+}
+
+.module h3 {
+    margin-bottom: 1rem;
+    font-weight: 500;
+    color: var(--text);
 }
 
 .module p {
@@ -297,9 +385,23 @@ input:focus, select:focus, textarea:focus {
     nav {
         flex-direction: row;
         overflow-x: auto;
+        gap: 0.25rem;
     }
     
     .nav-item {
         white-space: nowrap;
+        min-width: auto;
+    }
+    
+    .stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .module-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .about-content {
+        grid-template-columns: 1fr;
     }
 }
