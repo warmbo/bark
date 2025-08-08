@@ -21,7 +21,7 @@
                     <span>Dashboard</span>
                 </button>
 
-                <!-- Modules Dropdown -->
+                <!-- Modules Dropdown (normal modules only) -->
                 <div class="nav-dropdown">
                     <button class="nav-item dropdown-toggle" onclick="toggleDropdown('modules-dropdown')">
                         <div class="nav-content">
@@ -32,12 +32,24 @@
                     </button>
                     <div class="dropdown-content" id="modules-dropdown">
                         {% for module_name in modules %}
+                        {% if not modules[module_name].is_system_module %}
                         <button class="dropdown-item" onclick="showModule('{{ module_name }}')">
                             <span>{{ modules[module_name].name }}</span>
                         </button>
+                        {% endif %}
                         {% endfor %}
                     </div>
                 </div>
+
+                <!-- System Modules (direct nav, not in dropdown) -->
+                {% for module_name in modules %}
+                {% if modules[module_name].is_system_module %}
+                <button class="nav-item" onclick="showModule('{{ module_name }}')">
+                    <i data-lucide="settings"></i>
+                    <span>{{ modules[module_name].name }}</span>
+                </button>
+                {% endif %}
+                {% endfor %}
 
                 <button class="nav-item" onclick="showModule('about')">
                     <i data-lucide="info"></i>
