@@ -1,153 +1,474 @@
 # modules/settings.py
 from flask import jsonify, request
+from utils.module_base import BaseModule, format_module_html
+from utils.api_helpers import APIHelpers
+import os
 
-class SettingsModule:
+class SettingsModule(BaseModule):
     def __init__(self, bot, app):
-        self.bot = bot
-        self.app = app
         self.name = "Settings"
         self.description = "Bot configuration and module management"
         self.icon = "settings"
-        self.version = "1.0.0"
-        self.commands = []
+        self.version = "1.1.0"
         
-        # Special attribute to indicate this is a system module
+        # Mark as system module to prevent disabling
         self.is_system_module = True
+        self.dependencies = []
         
-        self.html = self.get_html()
+        super().__init__(bot, app)
+    
+    def _register_commands(self):
+        """No Discord commands for settings module"""
+        pass
     
     def get_html(self):
         """Return the HTML for the settings interface"""
-        return '''
-        <div class="module-header">
-            <h2><i data-lucide="settings"></i> Settings</h2>
-            <p>Configure bot settings and manage modules.</p>
-        </div>
-        
-        <div class="settings-container">
-            <div class="theme-section">
-                <h3><i data-lucide="palette"></i> Theme</h3>
+        content = '''
+        <div class="theme-section">
+            <h3 class="section-title">
+                <i data-lucide="palette"></i> 
+                Theme Customization
+            </h3>
+            <div class="theme-controls">
                 <div class="form-group">
                     <label for="primary-color">Primary Color</label>
-                    <input type="color" id="primary-color" value="#3b82f6">
+                    <div class="color-input-group">
+                        <input type="color" id="primary-color" value="#3b82f6">
+                        <input type="text" id="primary-color-text" value="#3b82f6" placeholder="#3b82f6">
+                    </div>
                 </div>
+                
+                <div class="form-group">
+                    <label for="theme-preset">Theme Presets</label>
+                    <select id="theme-preset" onchange="applyThemePreset()">
+                        <option value="custom">Custom</option>
+                        <option value="blue">Ocean Blue</option>
+                        <option value="green">Forest Green</option>
+                        <option value="purple">Royal Purple</option>
+                        <option value="red">Crimson Red</option>
+                        <option value="orange">Sunset Orange</option>
+                    </select>
+                </div>
+                
                 <button class="btn btn-primary" onclick="saveTheme()">
                     <i data-lucide="save"></i>
                     Save Theme
                 </button>
-            </div>
-            
-            <div class="module-management-section">
-                <h3><i data-lucide="puzzle"></i> Module Management</h3>
-                <div id="module-list" class="module-toggle-list">
-                    Loading modules...
-                </div>
-                <button class="btn btn-secondary" onclick="refreshModules()">
-                    <i data-lucide="refresh-cw"></i>
-                    Refresh
+                <button class="btn btn-secondary" onclick="resetTheme()">
+                    <i data-lucide="rotate-ccw"></i>
+                    Reset to Default
                 </button>
             </div>
+        </div>
+        
+        <div class="module-management-section">
+            <h3 class="section-title">
+                <i data-lucide="puzzle"></i> 
+                Module Management
+            </h3>
+            <div class="module-controls">
+                <div class="controls-header">
+                    <button class="btn btn-secondary" onclick="refreshModules()">
+                        <i data-lucide="refresh-cw"></i>
+                        Refresh
+                    </button>
+                    <button class="btn btn-secondary" onclick="reloadAllModules()">
+                        <i data-lucide="rotate-cw"></i>
+                        Reload All
+                    </button>
+                </div>
+                
+                <div id="module-list" class="module-toggle-list">
+                    <div class="loading-placeholder">Loading modules...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bot-info-section">
+            <h3 class="section-title">
+                <i data-lucide="info"></i> 
+                Bot Information
+            </h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Bot Prefix</span>
+                    <span class="info-value" id="bot-prefix">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Web Port</span>
+                    <span class="info-value" id="web-port">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Modules Directory</span>
+                    <span class="info-value">modules/</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Hot Reload</span>
+                    <span class="info-value status-enabled">
+                        <i data-lucide="check-circle"></i> Enabled
+                    </span>
+                </div>
+            </div>
             
-            <div class="bot-info-section">
-                <h3><i data-lucide="info"></i> Bot Information</h3>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <span class="info-label">Bot Prefix</span>
-                        <span class="info-value" id="bot-prefix">Loading...</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Web Port</span>
-                        <span class="info-value" id="web-port">Loading...</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Modules Directory</span>
-                        <span class="info-value">modules/</span>
+            <div class="system-actions">
+                <button class="btn btn-secondary" onclick="viewLogs()">
+                    <i data-lucide="file-text"></i>
+                    View Logs
+                </button>
+                <button class="btn btn-secondary" onclick="exportConfig()">
+                    <i data-lucide="download"></i>
+                    Export Config
+                </button>
+            </div>
+        </div>
+        
+        <!-- Logs Modal -->
+        <div id="logs-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4>System Logs</h4>
+                    <button class="modal-close" onclick="closeLogs()">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="logs-content" class="logs-container">
+                        Loading logs...
                     </div>
                 </div>
             </div>
         </div>
         
+        <script>
+        // Theme presets
+        const themePresets = {
+            blue: '#3b82f6',
+            green: '#10b981',
+            purple: '#8b5cf6',
+            red: '#ef4444',
+            orange: '#f97316'
+        };
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedTheme();
+            loadModuleList();
+            loadBotInfo();
+            setupColorInputs();
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        });
+        
+        function setupColorInputs() {
+            const colorInput = document.getElementById('primary-color');
+            const textInput = document.getElementById('primary-color-text');
+            
+            colorInput.addEventListener('change', function() {
+                textInput.value = this.value;
+                document.getElementById('theme-preset').value = 'custom';
+            });
+            
+            textInput.addEventListener('input', function() {
+                if (/^#[0-9A-F]{6}$/i.test(this.value)) {
+                    colorInput.value = this.value;
+                    document.getElementById('theme-preset').value = 'custom';
+                }
+            });
+        }
+        
+        function loadSavedTheme() {
+            const saved = localStorage.getItem('theme-primary');
+            if (saved) {
+                document.documentElement.style.setProperty('--primary', saved);
+                const colorInput = document.getElementById('primary-color');
+                const textInput = document.getElementById('primary-color-text');
+                if (colorInput) colorInput.value = saved;
+                if (textInput) textInput.value = saved;
+            }
+        }
+        
+        function applyThemePreset() {
+            const preset = document.getElementById('theme-preset').value;
+            if (preset !== 'custom' && themePresets[preset]) {
+                const color = themePresets[preset];
+                document.getElementById('primary-color').value = color;
+                document.getElementById('primary-color-text').value = color;
+            }
+        }
+        
+        function saveTheme() {
+            const primary = document.getElementById('primary-color').value;
+            document.documentElement.style.setProperty('--primary', primary);
+            localStorage.setItem('theme-primary', primary);
+            
+            UIHelpers.showNotification('Theme saved successfully!', 'success');
+            
+            const button = document.querySelector('button[onclick="saveTheme()"]');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i data-lucide="check"></i> Saved!';
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                lucide.createIcons();
+            }, 2000);
+            
+            lucide.createIcons();
+        }
+        
+        function resetTheme() {
+            const defaultColor = '#3b82f6';
+            document.getElementById('primary-color').value = defaultColor;
+            document.getElementById('primary-color-text').value = defaultColor;
+            document.getElementById('theme-preset').value = 'blue';
+            document.documentElement.style.setProperty('--primary', defaultColor);
+            localStorage.setItem('theme-primary', defaultColor);
+            
+            UIHelpers.showNotification('Theme reset to default', 'info');
+        }
+        
+        async function loadModuleList() {
+            try {
+                const data = await BarkAPI.request('/api/settings/get_modules');
+                displayModules(data.modules);
+            } catch (error) {
+                console.error('Failed to load modules:', error);
+                document.getElementById('module-list').innerHTML = 
+                    '<div class="error-placeholder">Failed to load modules: ' + error.message + '</div>';
+            }
+        }
+        
+        function displayModules(modules) {
+            const container = document.getElementById('module-list');
+            container.innerHTML = '';
+            
+            const moduleEntries = Object.entries(modules);
+            
+            // Separate system and regular modules
+            const systemModules = moduleEntries.filter(([name, info]) => info.is_system_module);
+            const regularModules = moduleEntries.filter(([name, info]) => !info.is_system_module);
+            
+            // Show system modules first (read-only)
+            if (systemModules.length > 0) {
+                const systemHeader = document.createElement('div');
+                systemHeader.className = 'module-category-header';
+                systemHeader.innerHTML = '<h4>System Modules</h4>';
+                container.appendChild(systemHeader);
+                
+                systemModules.forEach(([name, info]) => {
+                    container.appendChild(createModuleItem(name, info, true));
+                });
+            }
+            
+            // Show regular modules
+            if (regularModules.length > 0) {
+                const regularHeader = document.createElement('div');
+                regularHeader.className = 'module-category-header';
+                regularHeader.innerHTML = '<h4>Modules</h4>';
+                container.appendChild(regularHeader);
+                
+                regularModules.forEach(([name, info]) => {
+                    container.appendChild(createModuleItem(name, info, false));
+                });
+            }
+            
+            if (moduleEntries.length === 0) {
+                container.innerHTML = '<div class="empty-placeholder">No modules found</div>';
+            }
+        }
+        
+        function createModuleItem(name, info, isSystem) {
+            const item = document.createElement('div');
+            item.className = 'module-toggle-item';
+            
+            const statusClass = info.loaded ? 'loaded' : 'unloaded';
+            const deps = info.dependencies && info.dependencies.length > 0 
+                ? `<div class="module-deps">Requires: ${info.dependencies.join(', ')}</div>` 
+                : '';
+            
+            item.innerHTML = `
+                <div class="module-info">
+                    <div class="module-header">
+                        <div class="module-name">${info.name || name}</div>
+                        <div class="module-status ${statusClass}">
+                            ${info.loaded ? 'Loaded' : 'Available'}
+                        </div>
+                    </div>
+                    <div class="module-desc">${info.description || 'No description'}</div>
+                    ${deps}
+                </div>
+                <div class="module-controls">
+                    ${isSystem ? 
+                        '<span class="system-badge">System</span>' :
+                        `<div class="module-toggle ${info.enabled ? 'enabled' : ''}" 
+                              onclick="toggleModule('${name}', ${info.enabled})">
+                         </div>`
+                    }
+                </div>
+            `;
+            
+            return item;
+        }
+        
+        async function toggleModule(moduleName, currentState) {
+            const action = currentState ? 'disable' : 'enable';
+            
+            try {
+                await BarkAPI.request('/api/settings/toggle_module', {
+                    method: 'POST',
+                    body: JSON.stringify({ module: moduleName, action: action })
+                });
+                
+                UIHelpers.showNotification(
+                    `Module ${moduleName} ${action}d successfully`, 
+                    'success'
+                );
+                
+                // Refresh the module list
+                loadModuleList();
+            } catch (error) {
+                console.error('Error toggling module:', error);
+                UIHelpers.showNotification(
+                    `Failed to ${action} module: ${error.message}`, 
+                    'error'
+                );
+            }
+        }
+        
+        function refreshModules() {
+            loadModuleList();
+            UIHelpers.showNotification('Module list refreshed', 'info');
+        }
+        
+        async function reloadAllModules() {
+            try {
+                await BarkAPI.request('/api/settings/reload_all_modules', {
+                    method: 'POST'
+                });
+                
+                UIHelpers.showNotification('All modules reloaded', 'success');
+                setTimeout(loadModuleList, 1000);
+            } catch (error) {
+                UIHelpers.showNotification(`Failed to reload modules: ${error.message}`, 'error');
+            }
+        }
+        
+        async function loadBotInfo() {
+            try {
+                const data = await BarkAPI.request('/api/settings/get_bot_info');
+                document.getElementById('bot-prefix').textContent = data.prefix || '!';
+                document.getElementById('web-port').textContent = data.port || '5000';
+            } catch (error) {
+                console.error('Failed to load bot info:', error);
+            }
+        }
+        
+        async function viewLogs() {
+            const modal = document.getElementById('logs-modal');
+            const content = document.getElementById('logs-content');
+            
+            modal.style.display = 'flex';
+            content.textContent = 'Loading logs...';
+            
+            try {
+                const data = await BarkAPI.request('/api/settings/get_logs');
+                content.innerHTML = `<pre>${data.logs}</pre>`;
+            } catch (error) {
+                content.textContent = 'Failed to load logs: ' + error.message;
+            }
+        }
+        
+        function closeLogs() {
+            document.getElementById('logs-modal').style.display = 'none';
+        }
+        
+        async function exportConfig() {
+            try {
+                const data = await BarkAPI.request('/api/settings/export_config');
+                
+                // Create download
+                const blob = new Blob([JSON.stringify(data.config, null, 2)], 
+                    { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bark-config-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                UIHelpers.showNotification('Configuration exported', 'success');
+            } catch (error) {
+                UIHelpers.showNotification('Failed to export config: ' + error.message, 'error');
+            }
+        }
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('logs-modal');
+            if (event.target === modal) {
+                closeLogs();
+            }
+        });
+        </script>
+        
         <style>
-        .settings-container {
+        .theme-controls {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
+            gap: 1rem;
         }
         
-        .theme-section, .module-management-section, .bot-info-section {
-            background: var(--glass-bg);
-            backdrop-filter: var(--blur);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 1.5rem;
-        }
-        
-        .theme-section h3, .module-management-section h3, .bot-info-section h3 {
+        .color-input-group {
             display: flex;
-            align-items: center;
             gap: 0.5rem;
-            margin-bottom: 1rem;
-            color: var(--text);
-        }
-        
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text);
-            font-weight: 500;
-        }
-        
-        .form-group input {
-            width: 100%;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 0.75rem;
-            color: var(--text);
-            font-family: inherit;
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-        }
-        
-        .btn {
-            display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            background: var(--primary);
-            color: white;
+        }
+        
+        .color-input-group input[type="color"] {
+            width: 60px;
+            height: 40px;
             border: none;
             border-radius: 6px;
-            padding: 0.75rem 1rem;
             cursor: pointer;
-            transition: all 0.2s;
-            font-family: inherit;
-            font-weight: 500;
         }
         
-        .btn:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
+        .color-input-group input[type="text"] {
+            flex: 1;
+            font-family: monospace;
         }
         
-        .btn-secondary {
-            background: var(--surface);
-            color: var(--text);
-            border: 1px solid var(--border);
+        .module-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .controls-header {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
         }
         
         .module-toggle-list {
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
+            gap: 1rem;
+        }
+        
+        .module-category-header {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .module-category-header h4 {
+            margin: 0;
+            color: var(--text);
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
         
         .module-toggle-item {
@@ -158,21 +479,74 @@ class SettingsModule:
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 1rem;
+            transition: all 0.2s ease;
+        }
+        
+        .module-toggle-item:hover {
+            border-color: var(--primary);
         }
         
         .module-info {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .module-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
         }
         
         .module-name {
             font-weight: 500;
             color: var(--text);
-            margin-bottom: 0.25rem;
+        }
+        
+        .module-status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .module-status.loaded {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+        
+        .module-status.unloaded {
+            background: rgba(156, 163, 175, 0.1);
+            color: #9ca3af;
         }
         
         .module-desc {
             font-size: 0.9rem;
             color: var(--text-muted);
+        }
+        
+        .module-deps {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+        
+        .module-controls {
+            display: flex;
+            align-items: center;
+        }
+        
+        .system-badge {
+            padding: 0.5rem 1rem;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--primary);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
         }
         
         .module-toggle {
@@ -205,230 +579,249 @@ class SettingsModule:
             transform: translateX(20px);
         }
         
-        .info-grid {
-            display: grid;
+        .system-actions {
+            display: flex;
             gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
         }
         
-        .info-item {
+        .status-enabled {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 0.75rem;
+            gap: 0.5rem;
+            color: #10b981;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+        
+        .modal-content {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80%;
+            display: flex;
+            flex-direction: column;
         }
         
-        .info-label {
-            font-weight: 500;
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .modal-header h4 {
+            margin: 0;
             color: var(--text);
         }
         
-        .info-value {
+        .modal-close {
+            background: none;
+            border: none;
             color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: var(--glass-bg);
+            color: var(--text);
+        }
+        
+        .modal-body {
+            flex: 1;
+            padding: 1rem;
+            overflow: hidden;
+        }
+        
+        .logs-container {
+            height: 400px;
+            overflow-y: auto;
+            background: var(--background);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+        }
+        
+        .logs-container pre {
+            margin: 0;
             font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: var(--text);
+            white-space: pre-wrap;
+        }
+        
+        .loading-placeholder, .error-placeholder, .empty-placeholder {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+        
+        .error-placeholder {
+            color: #ef4444;
+        }
+        
+        @media (max-width: 768px) {
+            .controls-header {
+                flex-direction: column;
+            }
+            
+            .module-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+            
+            .system-actions {
+                flex-direction: column;
+            }
+            
+            .modal-content {
+                width: 95%;
+                margin: 1rem;
+            }
         }
         </style>
-        
-        <script>
-        // Load saved theme on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            loadSavedTheme();
-            loadModuleList();
-            loadBotInfo();
-            
-            // Initialize Lucide icons
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-        });
-        
-        function loadSavedTheme() {
-            const saved = localStorage.getItem('theme-primary');
-            if (saved) {
-                document.documentElement.style.setProperty('--primary', saved);
-                const input = document.getElementById('primary-color');
-                if (input) input.value = saved;
-            }
-        }
-        
-        function saveTheme() {
-            const primary = document.getElementById('primary-color').value;
-            document.documentElement.style.setProperty('--primary', primary);
-            localStorage.setItem('theme-primary', primary);
-            
-            // Show success feedback
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.innerHTML = '<i data-lucide="check"></i> Saved!';
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                lucide.createIcons();
-            }, 2000);
-            
-            lucide.createIcons();
-        }
-        
-        async function loadModuleList() {
-            try {
-                const response = await fetch('/api/settings/get_modules');
-                if (response.ok) {
-                    const data = await response.json();
-                    displayModules(data.modules);
-                }
-            } catch (error) {
-                console.error('Failed to load modules:', error);
-                document.getElementById('module-list').innerHTML = 
-                    '<div style="color: #ef4444;">Failed to load modules</div>';
-            }
-        }
-        
-        function displayModules(modules) {
-            const container = document.getElementById('module-list');
-            container.innerHTML = '';
-            
-            Object.entries(modules).forEach(([name, info]) => {
-                // Skip system modules from the toggle list
-                if (info.is_system_module) return;
-                
-                const item = document.createElement('div');
-                item.className = 'module-toggle-item';
-                item.innerHTML = `
-                    <div class="module-info">
-                        <div class="module-name">${info.name || name}</div>
-                        <div class="module-desc">${info.description || 'No description'}</div>
-                    </div>
-                    <div class="module-toggle ${info.enabled ? 'enabled' : ''}" 
-                         onclick="toggleModule('${name}', ${info.enabled})">
-                    </div>
-                `;
-                container.appendChild(item);
-            });
-            
-            if (container.children.length === 0) {
-                container.innerHTML = '<div style="color: var(--text-muted);">No modules found</div>';
-            }
-        }
-        
-        async function toggleModule(moduleName, currentState) {
-            const action = currentState ? 'disable' : 'enable';
-            
-            try {
-                const response = await fetch(`/api/settings/toggle_module`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ module: moduleName, action: action })
-                });
-                
-                if (response.ok) {
-                    // Refresh the module list
-                    loadModuleList();
-                } else {
-                    alert('Failed to toggle module');
-                }
-            } catch (error) {
-                console.error('Error toggling module:', error);
-                alert('Error toggling module');
-            }
-        }
-        
-        function refreshModules() {
-            loadModuleList();
-            
-            // Show refresh feedback
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.innerHTML = '<i data-lucide="loader-2"></i> Refreshing...';
-            button.style.pointerEvents = 'none';
-            
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                button.style.pointerEvents = 'auto';
-                lucide.createIcons();
-            }, 1000);
-            
-            lucide.createIcons();
-        }
-        
-        async function loadBotInfo() {
-            try {
-                const response = await fetch('/api/settings/get_bot_info');
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('bot-prefix').textContent = data.prefix || '!';
-                    document.getElementById('web-port').textContent = data.port || '5000';
-                }
-            } catch (error) {
-                console.error('Failed to load bot info:', error);
-            }
-        }
-        </script>
         '''
+        
+        return format_module_html('settings', self.name, self.description, self.icon, content)
     
     def handle_api(self, action, request):
         """Handle API requests for settings"""
-        if action == "get_modules":
-            # Get module info but mark system modules
-            module_info = self.bot.module_manager.get_module_info()
-            
-            # Combine loaded and available modules
-            all_modules = {}
-            
-            # Add loaded modules
-            for name, info in module_info['loaded'].items():
-                module_instance = self.bot.module_manager.loaded_modules.get(name)
-                all_modules[name] = {
-                    **info,
-                    'loaded': True,
-                    'is_system_module': getattr(module_instance, 'is_system_module', False)
-                }
-            
-            # Add available but not loaded modules
-            for name, info in module_info['available'].items():
-                all_modules[name] = {
-                    **info,
-                    'is_system_module': False  # Unloaded modules can't be system modules
-                }
-            
-            return jsonify({"modules": all_modules})
-        
-        elif action == "toggle_module":
-            data = request.get_json()
-            module_name = data.get('module')
-            action_type = data.get('action')
-            
-            if not module_name or action_type not in ['enable', 'disable']:
-                return jsonify({"error": "Invalid request"}), 400
-            
-            # Don't allow toggling system modules
-            if module_name in self.bot.module_manager.loaded_modules:
-                module_instance = self.bot.module_manager.loaded_modules[module_name]
-                if getattr(module_instance, 'is_system_module', False):
-                    return jsonify({"error": "Cannot toggle system modules"}), 403
-            
-            try:
-                if action_type == 'enable':
-                    success = self.bot.module_manager.enable_module(module_name)
-                else:
-                    success = self.bot.module_manager.disable_module(module_name)
+        try:
+            if action == "get_modules":
+                # Get comprehensive module info including dependencies
+                module_info = self.bot.module_manager.get_module_info()
                 
-                return jsonify({"success": success})
-            except Exception as e:
-                return jsonify({"error": str(e)}), 500
+                # Combine loaded and available modules with enhanced info
+                all_modules = {}
+                
+                # Add loaded modules
+                for name, info in module_info['loaded'].items():
+                    module_instance = self.bot.module_manager.loaded_modules.get(name)
+                    all_modules[name] = {
+                        **info,
+                        'loaded': True,
+                        'is_system_module': getattr(module_instance, 'is_system_module', False),
+                        'dependencies': getattr(module_instance, 'dependencies', [])
+                    }
+                
+                # Add available but not loaded modules
+                for name, info in module_info['available'].items():
+                    if name not in all_modules:
+                        all_modules[name] = {
+                            **info,
+                            'loaded': False,
+                            'is_system_module': False
+                        }
+                
+                return APIHelpers.standard_success_response({"modules": all_modules})
+            
+            elif action == "toggle_module":
+                data = request.get_json()
+                if not data:
+                    return APIHelpers.standard_error_response("No JSON data provided")
+                
+                module_name = data.get('module')
+                action_type = data.get('action')
+                
+                if not module_name or action_type not in ['enable', 'disable']:
+                    return APIHelpers.standard_error_response("Invalid request parameters")
+                
+                # Prevent toggling system modules
+                if module_name in self.bot.module_manager.loaded_modules:
+                    module_instance = self.bot.module_manager.loaded_modules[module_name]
+                    if getattr(module_instance, 'is_system_module', False):
+                        return APIHelpers.standard_error_response("Cannot toggle system modules", 403)
+                
+                try:
+                    if action_type == 'enable':
+                        success = self.bot.module_manager.enable_module(module_name)
+                    else:
+                        success = self.bot.module_manager.disable_module(module_name)
+                    
+                    if success:
+                        return APIHelpers.standard_success_response({
+                            "message": f"Module {module_name} {action_type}d successfully"
+                        })
+                    else:
+                        return APIHelpers.standard_error_response(f"Failed to {action_type} module")
+                        
+                except Exception as e:
+                    return APIHelpers.standard_error_response(str(e), 500)
+            
+            elif action == "reload_all_modules":
+                try:
+                    # Get list of currently loaded modules (excluding system modules)
+                    modules_to_reload = []
+                    for name, module_instance in self.bot.module_manager.loaded_modules.items():
+                        if not getattr(module_instance, 'is_system_module', False):
+                            modules_to_reload.append(name)
+                    
+                    # Reload each module
+                    reloaded_count = 0
+                    for module_name in modules_to_reload:
+                        if self.bot.module_manager.reload_module(module_name):
+                            reloaded_count += 1
+                    
+                    return APIHelpers.standard_success_response({
+                        "message": f"Reloaded {reloaded_count}/{len(modules_to_reload)} modules"
+                    })
+                    
+                except Exception as e:
+                    return APIHelpers.standard_error_response(str(e), 500)
+            
+            elif action == "get_bot_info":
+                return APIHelpers.standard_success_response({
+                    "prefix": os.getenv('BOT_PREFIX', '!'),
+                    "port": os.getenv('WEB_PORT', '5000'),
+                    "modules_loaded": len(self.bot.module_manager.loaded_modules),
+                    "hot_reload": True
+                })
+            
+            elif action == "get_logs":
+                # Return recent log entries (this would need to be implemented with actual logging)
+                return APIHelpers.standard_success_response({
+                    "logs": "Log viewing not yet implemented.\nThis would show recent bot activity and errors."
+                })
+            
+            elif action == "export_config":
+                try:
+                    config = {
+                        "modules": self.bot.module_manager.module_configs,
+                        "bot_settings": {
+                            "prefix": os.getenv('BOT_PREFIX', '!'),
+                            "port": os.getenv('WEB_PORT', '5000')
+                        },
+                        "export_date": __import__('datetime').datetime.now().isoformat()
+                    }
+                    return APIHelpers.standard_success_response({"config": config})
+                except Exception as e:
+                    return APIHelpers.standard_error_response(str(e), 500)
         
-        elif action == "get_bot_info":
-            import os
-            return jsonify({
-                "prefix": os.getenv('BOT_PREFIX', '!'),
-                "port": os.getenv('WEB_PORT', '5000')
-            })
+        except Exception as e:
+            return APIHelpers.standard_error_response(f"Settings error: {str(e)}", 500)
         
-        return jsonify({"error": "Unknown action"}), 404
-    
-    def cleanup(self):
-        """No cleanup needed for settings module"""
-        pass
+        return APIHelpers.standard_error_response("Unknown action", 404)
 
 def setup(bot, app):
     return SettingsModule(bot, app)
