@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bark Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/modules.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body>
@@ -21,7 +23,7 @@
                     <span>Dashboard</span>
                 </button>
 
-                <!-- Modules Dropdown (normal modules only) -->
+                <!-- Modules Dropdown -->
                 <div class="nav-dropdown">
                     <button class="nav-item dropdown-toggle" onclick="toggleDropdown('modules-dropdown')">
                         <div class="nav-content">
@@ -31,37 +33,29 @@
                         <i data-lucide="chevron-down" class="dropdown-arrow"></i>
                     </button>
                     <div class="dropdown-content" id="modules-dropdown">
-                        <!-- Draggable module links with extra spacing -->
-                        <div id="draggable-modules" style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        {% for module_name in modules %}
-                        {% if not modules[module_name].is_system_module %}
-                        <button class="dropdown-item draggable-module" draggable="true" data-module="{{ module_name }}" onclick="showModule('{{ module_name }}')">
-                            <span>{{ modules[module_name].name }}</span>
-                        </button>
-                        {% endif %}
+                        {% for module_name, module_info in modules.items() %}
+                            {% if not module_info.get('is_system_module', False) %}
+                                <button class="dropdown-item" onclick="showModule('{{ module_name }}')">
+                                    <i data-lucide="{{ module_info.icon or 'puzzle' }}"></i>
+                                    <span>{{ module_info.name }}</span>
+                                </button>
+                            {% endif %}
                         {% endfor %}
-                        </div>
+                        
+                        {% if modules.items() | selectattr('1.is_system_module', 'equalto', False) | list | length == 0 %}
+                            <div class="dropdown-empty">No modules available</div>
+                        {% endif %}
                     </div>
                 </div>
 
-                <!-- Settings (system module) placed between Modules and About -->
-                {% for module_name in modules %}
-                {% if modules[module_name].is_system_module and module_name == 'settings' %}
-                <button class="nav-item" onclick="showModule('{{ module_name }}')" style="margin: 1.5rem 0;">
-                    <i data-lucide="settings"></i>
-                    <span>{{ modules[module_name].name }}</span>
-                </button>
-                {% endif %}
-                {% endfor %}
-
-                <!-- Other system modules (if any) -->
-                {% for module_name in modules %}
-                {% if modules[module_name].is_system_module and module_name != 'settings' %}
-                <button class="nav-item" onclick="showModule('{{ module_name }}')">
-                    <i data-lucide="settings"></i>
-                    <span>{{ modules[module_name].name }}</span>
-                </button>
-                {% endif %}
+                <!-- System Modules as Top-Level Nav Items -->
+                {% for module_name, module_info in modules.items() %}
+                    {% if module_info.get('is_system_module', False) %}
+                        <button class="nav-item system-nav-item" onclick="showModule('{{ module_name }}')">
+                            <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
+                            <span>{{ module_info.name }}</span>
+                        </button>
+                    {% endif %}
                 {% endfor %}
 
                 <button class="nav-item" onclick="showModule('about')">
@@ -96,19 +90,46 @@
 
                     <h2>Quick Actions</h2>
                     <div class="module-grid">
-                        {% for module_name in modules %}
-                        <div class="module-card" onclick="showModule('{{ module_name }}')">
-                            <h3>{{ modules[module_name].name }}</h3>
-                            <p>{{ modules[module_name].description }}</p>
-                        </div>
+                        {% for module_name, module_info in modules.items() %}
+                            {% if not module_info.get('is_system_module', False) %}
+                                <div class="module-card" onclick="showModule('{{ module_name }}')">
+                                    <div class="module-icon">
+                                        <i data-lucide="{{ module_info.icon or 'puzzle' }}"></i>
+                                    </div>
+                                    <h3>{{ module_info.name }}</h3>
+                                    <p>{{ module_info.description }}</p>
+                                </div>
+                            {% endif %}
                         {% endfor %}
                     </div>
+                    
+                    {% set system_modules = [] %}
+                    {% for module_name, module_info in modules.items() %}
+                        {% if module_info.get('is_system_module', False) %}
+                            {% set _ = system_modules.append((module_name, module_info)) %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if system_modules %}
+                        <h2>System</h2>
+                        <div class="module-grid">
+                            {% for module_name, module_info in system_modules %}
+                                <div class="module-card system-card" onclick="showModule('{{ module_name }}')">
+                                    <div class="module-icon">
+                                        <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
+                                    </div>
+                                    <h3>{{ module_info.name }}</h3>
+                                    <p>{{ module_info.description }}</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
                 </div>
 
                 <!-- Module Content -->
-                {% for module_name in modules %}
+                {% for module_name, module_info in modules.items() %}
                 <div id="{{ module_name }}" class="module">
-                    {{ modules[module_name].html|safe }}
+                    {{ module_info.html|safe }}
                 </div>
                 {% endfor %}
 
@@ -143,166 +164,25 @@
         </main>
     </div>
 
-    <style>
-        /* Dropdown Styles */
-        .nav-dropdown {
-            position: relative;
-        }
-        
-        .nav-content {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .dropdown-toggle {
-            display: flex !important;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
-        }
-        
-        .dropdown-arrow {
-            width: 16px;
-            height: 16px;
-            transition: transform 0.2s ease;
-            flex-shrink: 0;
-        }
-        
-        .dropdown-toggle.active .dropdown-arrow {
-            transform: rotate(180deg);
-        }
-        
-        .dropdown-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-            margin-top: 0.5rem;
-            border-left: none;
-            padding-left: 0;
-        }
-        
-        .dropdown-content.open {
-            max-height: 500px;
-        }
-        
-        .dropdown-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: transparent !important;
-            border: none;
-            color: var(--text-muted);
-            padding: 0.5rem 1rem;
-            margin-left: 1rem;
-            border-radius: 0;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: left;
-            font-size: 0.85rem;
-            width: calc(100% - 1rem);
-        }
-        
-        .dropdown-item:hover {
-            color: var(--primary);
-        }
-        
-        .dropdown-item.active {
-            color: var(--primary);
-        }
-        
-        .dropdown-item i {
-            width: 16px;
-            height: 16px;
-            flex-shrink: 0;
-        }
-        
-        /* Module card improvements */
-        .module-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 48px;
-            height: 48px;
-            background: var(--primary);
-            margin-bottom: 1rem;
-        }
-        
-        .module-icon i {
-            width: 24px;
-            height: 24px;
-            color: white;
-        }
-        
-        /* About page styling */
-        .about-features {
-            margin: 2rem 0;
-        }
-        
-        .about-features h3 {
-            margin-bottom: 1rem;
-            color: var(--text);
-        }
-        
-        .about-features ul {
-            list-style: none;
-            padding-left: 0;
-        }
-        
-        .about-features li {
-            padding: 0.5rem 0;
-            padding-left: 1.5rem;
-            position: relative;
-            color: var(--text-muted);
-        }
-        
-        .about-features li::before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: var(--primary);
-            font-weight: bold;
-        }
-        
-        .about-links {
-            margin-top: 2rem;
-        }
-        
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.5rem;
-            background: var(--primary);
-            color: white;
-            text-decoration: none;
-            border-radius: 0;
-            transition: all 0.2s ease;
-            font-weight: 500;
-        }
-        
-        .btn:hover {
-            opacity: 0.9;
-        }
-    </style>
-
     <script src="/static/js/dashboard.js"></script>
     <script>
         // Initialize Lucide icons
         lucide.createIcons();
-
+        
         // Dropdown functionality
         function toggleDropdown(dropdownId) {
             const dropdown = document.getElementById(dropdownId);
             const toggle = dropdown.previousElementSibling;
+            
             dropdown.classList.toggle('open');
             toggle.classList.toggle('active');
         }
-
+        
         // Close dropdowns when clicking outside
         document.addEventListener('click', function(event) {
             const dropdowns = document.querySelectorAll('.dropdown-content');
             const toggles = document.querySelectorAll('.dropdown-toggle');
+            
             if (!event.target.closest('.nav-dropdown')) {
                 dropdowns.forEach(dropdown => {
                     dropdown.classList.remove('open');
@@ -312,115 +192,64 @@
                 });
             }
         });
-
-        // Drag-and-drop for modules
-        let dragSrcEl = null;
-        function handleDragStart(e) {
-            dragSrcEl = this;
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', this.dataset.module);
-            this.classList.add('dragging');
-        }
-        function handleDragOver(e) {
-            if (e.preventDefault) e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            return false;
-        }
-        function handleDragEnter(e) {
-            this.classList.add('drag-over');
-        }
-        function handleDragLeave(e) {
-            this.classList.remove('drag-over');
-        }
-        function handleDrop(e) {
-            if (e.stopPropagation) e.stopPropagation();
-            if (dragSrcEl !== this) {
-                const parent = this.parentNode;
-                parent.insertBefore(dragSrcEl, this);
-                saveModuleOrder();
-            }
-            this.classList.remove('drag-over');
-            return false;
-        }
-        function handleDragEnd(e) {
-            this.classList.remove('dragging');
-            document.querySelectorAll('.draggable-module').forEach(item => {
-                item.classList.remove('drag-over');
-            });
-        }
-        function saveModuleOrder() {
-            const order = Array.from(document.querySelectorAll('.draggable-module')).map(btn => btn.dataset.module);
-            localStorage.setItem('moduleOrder', JSON.stringify(order));
-        }
-        function loadModuleOrder() {
-            const order = JSON.parse(localStorage.getItem('moduleOrder') || '[]');
-            if (order.length) {
-                const container = document.getElementById('draggable-modules');
-                const buttons = Array.from(container.querySelectorAll('.draggable-module'));
-                order.forEach(moduleName => {
-                    const btn = buttons.find(b => b.dataset.module === moduleName);
-                    if (btn) container.appendChild(btn);
-                });
-            }
-        }
-        document.addEventListener('DOMContentLoaded', function() {
-            const items = document.querySelectorAll('.draggable-module');
-            items.forEach(item => {
-                item.addEventListener('dragstart', handleDragStart, false);
-                item.addEventListener('dragenter', handleDragEnter, false);
-                item.addEventListener('dragover', handleDragOver, false);
-                item.addEventListener('dragleave', handleDragLeave, false);
-                item.addEventListener('drop', handleDrop, false);
-                item.addEventListener('dragend', handleDragEnd, false);
-            });
-            loadModuleOrder();
-        });
-
-        // Update showModule function to handle dropdown items
+        
+        // Enhanced showModule function
         function showModule(moduleId) {
             // Hide all modules
             document.querySelectorAll('.module').forEach(el => {
                 el.classList.remove('active');
             });
-            // Remove active from nav items and dropdown items
+            
+            // Remove active from all nav items and dropdown items
             document.querySelectorAll('.nav-item, .dropdown-item').forEach(el => {
                 el.classList.remove('active');
             });
+            
             // Show selected module
             const moduleEl = document.getElementById(moduleId);
             if (moduleEl) {
                 moduleEl.classList.add('active');
             }
+            
             // Update nav - check if it's a dropdown item first
             let navItem = document.querySelector(`[onclick="showModule('${moduleId}')"]`);
             if (navItem) {
                 navItem.classList.add('active');
-                // If it's a dropdown item, also highlight the dropdown toggle
+                
+                // If it's a dropdown item, also highlight the dropdown toggle and keep it open
                 if (navItem.classList.contains('dropdown-item')) {
                     const dropdown = navItem.closest('.nav-dropdown');
                     if (dropdown) {
                         const toggle = dropdown.querySelector('.dropdown-toggle');
+                        const content = dropdown.querySelector('.dropdown-content');
                         toggle.classList.add('active');
+                        content.classList.add('open');
                     }
                 }
             }
+            
             // Update title
             const titles = {
                 home: 'Dashboard',
                 about: 'About'
             };
+            
             let title = titles[moduleId];
             if (!title && navItem) {
                 // Extract module name from the nav item text
-                title = navItem.textContent.trim();
+                const textElement = navItem.querySelector('span');
+                title = textElement ? textElement.textContent.trim() : moduleId;
             }
+            
             document.getElementById('page-title').textContent = title || 'Module';
-            // Initialize module if needed
+            
+            // Initialize module-specific functionality
             if (moduleId === 'speak_as_bot') {
                 loadServers();
             } else if (moduleId === 'server_stats') {
                 loadStatsServers();
             }
+            
             // Re-initialize Lucide icons for dynamic content
             lucide.createIcons();
         }

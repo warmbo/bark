@@ -30,10 +30,37 @@ bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents, help_command=None
 app = Flask(__name__)
 module_manager = None
 
+def prepare_modules_for_template():
+    """Prepare module data in the format expected by the template"""
+    if not module_manager or not module_manager.loaded_modules:
+        print("⚠️ No module manager or no loaded modules")
+        return {}
+    
+    modules_data = {}
+    print(f"📊 Preparing {len(module_manager.loaded_modules)} modules for template:")
+    
+    for module_name, module_instance in module_manager.loaded_modules.items():
+        is_system = getattr(module_instance, 'is_system_module', False)
+        module_info = {
+            'name': getattr(module_instance, 'name', module_name),
+            'description': getattr(module_instance, 'description', 'No description'),
+            'icon': getattr(module_instance, 'icon', 'puzzle'),
+            'version': getattr(module_instance, 'version', '1.0.0'),
+            'is_system_module': is_system,
+            'dependencies': getattr(module_instance, 'dependencies', []),
+            'html': getattr(module_instance, 'html', '<p>No interface available</p>')
+        }
+        modules_data[module_name] = module_info
+        
+        system_flag = "🔧 SYSTEM" if is_system else "📦 REGULAR"
+        print(f"  - {module_info['name']} ({module_name}) {system_flag}")
+    
+    return modules_data
+
 @app.route('/')
 def dashboard():
-    return render_template('dashboard.html', 
-                         modules=module_manager.loaded_modules if module_manager else {})
+    modules_data = prepare_modules_for_template()
+    return render_template('dashboard.html', modules=modules_data)
 
 @app.route('/static/<path:filename>')
 def static_files(filename):
@@ -226,8 +253,6 @@ async def reload_command(ctx, module_name: str = None):
     await ctx.send(embed=embed)
 
 
-
-
 # New paginator: one module per page, first page is built-in commands
 class HelpPaginator(View):
     def __init__(self, ctx, modules, prefix, page):
@@ -342,13 +367,33 @@ def main():
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static/css', exist_ok=True)
     os.makedirs('static/js', exist_ok=True)
+    os.makedirs('system_modules', exist_ok=True)
+    
+    print("🔧 Initializing Bark Discord Bot...")
     
     # Initialize module manager
     module_manager = ModuleManager(bot, app)
     # Attach module_manager to bot and app for module access
     bot.module_manager = module_manager
     app.module_manager = module_manager
+    
+    print("📦 Loading regular modules...")
     module_manager.load_all_modules()
+    
+    print("🔧 Loading system modules...")
+    # Load system modules from system_modules directory
+    system_modules_dir = "system_modules"
+    if os.path.exists(system_modules_dir):
+        for filename in os.listdir(system_modules_dir):
+            if filename.endswith('.py') and filename != '__init__.py':
+                module_path = os.path.join(system_modules_dir, filename)
+                module_manager.load_module_from_path(filename, module_path)
+    
+    print(f"✅ Loaded {len(module_manager.loaded_modules)} total modules:")
+    for name, instance in module_manager.loaded_modules.items():
+        is_system = getattr(instance, 'is_system_module', False)
+        system_flag = "[SYSTEM]" if is_system else "[REGULAR]"
+        print(f"   - {name} {system_flag}")
     
     # Start Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)

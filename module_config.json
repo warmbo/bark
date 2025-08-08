@@ -10,5 +10,8 @@
   },
   "github": {
     "enabled": true
+  },
+  "settings": {
+    "enabled": true
   }
 }

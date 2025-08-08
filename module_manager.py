@@ -1,4 +1,4 @@
-# module_manager.py (improved version)
+# module_manager.py (improved version with system modules support)
 import os
 import sys
 import importlib
@@ -16,10 +16,12 @@ class ModuleManager:
         self.bot = bot
         self.app = app
         self.modules_dir = modules_dir
+        self.system_modules_dir = "system_modules"
         self.loaded_modules = {}
         self.module_configs = {}
         self.module_dependencies = defaultdict(list)
         self.observer = None
+        self.system_observer = None
         self.config_file = "module_config.json"
         self._load_lock = threading.Lock()
         
@@ -29,21 +31,34 @@ class ModuleManager:
         # Clean up config to only include existing modules
         self.cleanup_module_configs()
         
-        # Ensure modules directory exists
+        # Ensure directories exist
         os.makedirs(modules_dir, exist_ok=True)
+        os.makedirs(self.system_modules_dir, exist_ok=True)
         
-        # Start file watcher for hot reloading
+        # Start file watchers for hot reloading
         self.start_file_watcher()
+        self.start_system_file_watcher()
     
     def get_available_modules(self):
-        """Get list of available module files"""
+        """Get list of available module files from both directories"""
         available = []
+        
+        # Regular modules
         if os.path.exists(self.modules_dir):
             for filename in os.listdir(self.modules_dir):
                 if (filename.endswith('.py') and 
                     filename != '__init__.py' and 
                     not filename.startswith('.')):
                     available.append(filename[:-3])  # Remove .py extension
+        
+        # System modules
+        if os.path.exists(self.system_modules_dir):
+            for filename in os.listdir(self.system_modules_dir):
+                if (filename.endswith('.py') and 
+                    filename != '__init__.py' and 
+                    not filename.startswith('.')):
+                    available.append(filename[:-3])  # Remove .py extension
+        
         return available
     
     def load_module_configs(self):
@@ -144,7 +159,11 @@ class ModuleManager:
         in_degree = defaultdict(int)
         
         for module_name in modules_to_load:
+            # Check both regular and system modules directories
             module_path = os.path.join(self.modules_dir, f"{module_name}.py")
+            if not os.path.exists(module_path):
+                module_path = os.path.join(self.system_modules_dir, f"{module_name}.py")
+            
             dependencies = self._get_module_dependencies(module_path)
             
             dep_graph[module_name] = dependencies
@@ -180,13 +199,12 @@ class ModuleManager:
         
         return result
     
-    def load_module(self, filename):
-        """Load a single module with dependency checking"""
+    def load_module_from_path(self, filename, module_path):
+        """Load a single module from a specific path"""
         if not filename.endswith(".py") or filename == "__init__.py":
             return False
         
         module_name = filename[:-3]
-        module_path = os.path.join(self.modules_dir, filename)
         
         with self._load_lock:
             try:
@@ -234,7 +252,10 @@ class ModuleManager:
                             self.module_configs[module_name] = {"enabled": True}
                             self.save_module_configs()
                         
-                        print(f"✓ Loaded module: {module_name}")
+                        # Determine module type for logging
+                        is_system = getattr(module_instance, 'is_system_module', False)
+                        module_type = "SYSTEM" if is_system else "REGULAR"
+                        print(f"✓ Loaded {module_type} module: {module_name}")
                         return True
                     except Exception as e:
                         print(f"✗ Error in module setup for {module_name}: {e}")
@@ -248,6 +269,11 @@ class ModuleManager:
                 print(f"✗ Failed to load module {module_name}: {e}")
                 print(traceback.format_exc())
                 return False
+    
+    def load_module(self, filename):
+        """Load a single module from the regular modules directory"""
+        module_path = os.path.join(self.modules_dir, filename)
+        return self.load_module_from_path(filename, module_path)
     
     def unload_module(self, module_name):
         """Unload a module and check for dependents"""
@@ -283,11 +309,23 @@ class ModuleManager:
     
     def reload_module(self, module_name):
         """Reload a specific module"""
+        # Try regular modules first
         filename = f"{module_name}.py"
-        return self.load_module(filename)
+        module_path = os.path.join(self.modules_dir, filename)
+        
+        if os.path.exists(module_path):
+            return self.load_module_from_path(filename, module_path)
+        
+        # Try system modules
+        module_path = os.path.join(self.system_modules_dir, filename)
+        if os.path.exists(module_path):
+            return self.load_module_from_path(filename, module_path)
+        
+        print(f"✗ Module file not found for {module_name}")
+        return False
     
     def load_all_modules(self):
-        """Load all modules in dependency order"""
+        """Load all modules from both regular and system directories"""
         if not os.path.exists(self.modules_dir):
             print(f"Modules directory {self.modules_dir} does not exist")
             return
@@ -295,7 +333,7 @@ class ModuleManager:
         # First, cleanup configs to sync with available modules
         self.cleanup_module_configs()
         
-        # Get all available modules
+        # Get all available modules from both directories
         available_modules = self.get_available_modules()
         
         # Filter enabled modules
@@ -312,8 +350,22 @@ class ModuleManager:
         loaded_count = 0
         for module_name in load_order:
             filename = f"{module_name}.py"
-            if self.load_module(filename):
-                loaded_count += 1
+            
+            # Try regular modules first
+            module_path = os.path.join(self.modules_dir, filename)
+            if os.path.exists(module_path):
+                if self.load_module_from_path(filename, module_path):
+                    loaded_count += 1
+                continue
+            
+            # Try system modules
+            module_path = os.path.join(self.system_modules_dir, filename)
+            if os.path.exists(module_path):
+                if self.load_module_from_path(filename, module_path):
+                    loaded_count += 1
+                continue
+            
+            print(f"⚠️ Module file not found: {module_name}")
         
         print(f"Loaded {loaded_count}/{len(enabled_modules)} modules")
     
@@ -326,8 +378,17 @@ class ModuleManager:
         self.save_module_configs()
         
         filename = f"{module_name}.py"
-        if os.path.exists(os.path.join(self.modules_dir, filename)):
-            return self.load_module(filename)
+        
+        # Try regular modules first
+        module_path = os.path.join(self.modules_dir, filename)
+        if os.path.exists(module_path):
+            return self.load_module_from_path(filename, module_path)
+        
+        # Try system modules
+        module_path = os.path.join(self.system_modules_dir, filename)
+        if os.path.exists(module_path):
+            return self.load_module_from_path(filename, module_path)
+        
         return False
     
     def disable_module(self, module_name):
@@ -370,13 +431,20 @@ class ModuleManager:
         # Get available module files
         for module_name in available_modules:
             if module_name not in info['loaded']:
-                module_path = os.path.join(self.modules_dir, f"{module_name}.py")
+                # Try to determine if it's a system module by checking directory
+                is_system = os.path.exists(os.path.join(self.system_modules_dir, f"{module_name}.py"))
+                
+                module_path = os.path.join(
+                    self.system_modules_dir if is_system else self.modules_dir, 
+                    f"{module_name}.py"
+                )
                 dependencies = self._get_module_dependencies(module_path)
                 
                 info['available'][module_name] = {
                     'name': module_name,
                     'enabled': self.module_configs.get(module_name, {}).get('enabled', True),
                     'loaded': False,
+                    'is_system_module': is_system,
                     'dependencies': dependencies
                 }
                 info['dependencies'][module_name] = dependencies
@@ -384,7 +452,7 @@ class ModuleManager:
         return info
     
     def start_file_watcher(self):
-        """Start watching for file changes for hot reloading"""
+        """Start watching for file changes in regular modules directory"""
         if not os.path.exists(self.modules_dir):
             return
         
@@ -408,7 +476,7 @@ class ModuleManager:
                 filename = os.path.basename(event.src_path)
                 module_name = filename[:-3]
                 
-                print(f"📁 File changed: {filename}")
+                print(f"📁 Regular module file changed: {filename}")
                 
                 # Reload module after a short delay
                 def reload_delayed():
@@ -416,28 +484,6 @@ class ModuleManager:
                     self.module_manager.reload_module(module_name)
                 
                 threading.Thread(target=reload_delayed, daemon=True).start()
-            
-            def on_created(self, event):
-                if event.is_directory or not event.src_path.endswith('.py'):
-                    return
-                
-                filename = os.path.basename(event.src_path)
-                print(f"📁 New module file: {filename}")
-                self.module_manager.cleanup_module_configs()
-            
-            def on_deleted(self, event):
-                if event.is_directory or not event.src_path.endswith('.py'):
-                    return
-                
-                filename = os.path.basename(event.src_path)
-                module_name = filename[:-3]
-                
-                print(f"📁 Module file deleted: {filename}")
-                
-                if module_name in self.module_manager.loaded_modules:
-                    self.module_manager.unload_module(module_name)
-                
-                self.module_manager.cleanup_module_configs()
         
         try:
             self.observer = Observer()
@@ -446,13 +492,60 @@ class ModuleManager:
             self.observer.start()
             print(f"🔄 Hot reloading enabled for {self.modules_dir}")
         except Exception as e:
-            print(f"Could not start file watcher: {e}")
+            print(f"Could not start file watcher for {self.modules_dir}: {e}")
+    
+    def start_system_file_watcher(self):
+        """Start watching for file changes in system modules directory"""
+        if not os.path.exists(self.system_modules_dir):
+            return
+        
+        class SystemModuleChangeHandler(FileSystemEventHandler):
+            def __init__(self, module_manager):
+                self.module_manager = module_manager
+                self.last_modified = {}
+            
+            def on_modified(self, event):
+                if event.is_directory or not event.src_path.endswith('.py'):
+                    return
+                
+                # Debounce rapid file changes
+                now = time.time()
+                if event.src_path in self.last_modified:
+                    if now - self.last_modified[event.src_path] < 1:
+                        return
+                
+                self.last_modified[event.src_path] = now
+                
+                filename = os.path.basename(event.src_path)
+                module_name = filename[:-3]
+                
+                print(f"🔧 System module file changed: {filename}")
+                
+                # Reload module after a short delay
+                def reload_delayed():
+                    time.sleep(0.5)
+                    self.module_manager.reload_module(module_name)
+                
+                threading.Thread(target=reload_delayed, daemon=True).start()
+        
+        try:
+            self.system_observer = Observer()
+            event_handler = SystemModuleChangeHandler(self)
+            self.system_observer.schedule(event_handler, self.system_modules_dir, recursive=False)
+            self.system_observer.start()
+            print(f"🔄 Hot reloading enabled for {self.system_modules_dir}")
+        except Exception as e:
+            print(f"Could not start file watcher for {self.system_modules_dir}: {e}")
     
     def stop_file_watcher(self):
-        """Stop the file watcher"""
+        """Stop the file watchers"""
         if self.observer:
             self.observer.stop()
             self.observer.join()
+        
+        if self.system_observer:
+            self.system_observer.stop()
+            self.system_observer.join()
     
     def cleanup(self):
         """Cleanup resources"""

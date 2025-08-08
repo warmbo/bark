@@ -1,0 +1,221 @@
+/* base.css - Core variables, reset, and layout */
+
+:root {
+    --primary: #3b82f6;
+    --bg: #0a0a0a;
+    --surface: rgba(26,26,26,0.3);
+    --text: #fff;
+    --text-muted: #888;
+    --border: #333;
+    --glass-bg: rgba(26,26,26,0.6);
+    --glass-border: rgba(255,255,255,0.08);
+    --blur: blur(16px);
+    --accent: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    position: relative;
+    line-height: 1.6;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    background: url('/static/bark-bg-dark.png') center center / cover no-repeat;
+    opacity: 1;
+}
+
+/* Layout */
+.layout {
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background: var(--glass-bg);
+    border-right: 1px solid var(--glass-border);
+    padding: 1.25rem;
+    overflow-y: auto;
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: 0 4px 32px 0 rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column;
+}
+
+.logo {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 2rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    color: var(--primary);
+}
+
+/* Navigation */
+nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+/* Main Content */
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Prevent flex overflow */
+}
+
+header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+}
+
+header h1 {
+    font-size: 1.75rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.modules {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.modules > .module {
+    max-width: 1220px;
+    margin: 0 auto;
+}
+
+.module {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 32px 0 rgba(0,0,0,0.10);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+}
+
+.module.active {
+    display: block;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 100px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+/* Firefox scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.25) transparent;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .layout {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 1rem;
+    }
+
+    .logo {
+        margin-bottom: 1rem;
+        padding: 0.5rem 0;
+    }
+
+    nav {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 0.5rem;
+    }
+
+    .content {
+        min-height: calc(100vh - 120px);
+    }
+
+    header {
+        padding: 1rem;
+    }
+
+    header h1 {
+        font-size: 1.5rem;
+    }
+
+    .modules {
+        padding: 1rem;
+    }
+
+    .module {
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar {
+        padding: 0.75rem;
+    }
+
+    nav {
+        gap: 0.25rem;
+    }
+
+    .modules {
+        padding: 0.75rem;
+    }
+
+    .module {
+        padding: 1rem;
+    }
+}
