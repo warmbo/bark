@@ -42,21 +42,26 @@
                             {% endif %}
                         {% endfor %}
                         
-                        {% if modules.items() | selectattr('1.is_system_module', 'equalto', False) | list | length == 0 %}
-                            <div class="dropdown-empty">No modules available</div>
+                        <!-- System Modules Section -->
+                        {% set system_modules = [] %}
+                        {% for module_name, module_info in modules.items() %}
+                            {% if module_info.get('is_system_module', False) %}
+                                {% set _ = system_modules.append((module_name, module_info)) %}
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if system_modules %}
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-section-header">System</div>
+                            {% for module_name, module_info in system_modules %}
+                                <button class="dropdown-item system-module" onclick="showModule('{{ module_name }}')">
+                                    <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
+                                    <span>{{ module_info.name }}</span>
+                                </button>
+                            {% endfor %}
                         {% endif %}
                     </div>
                 </div>
-
-                <!-- System Modules as Top-Level Nav Items -->
-                {% for module_name, module_info in modules.items() %}
-                    {% if module_info.get('is_system_module', False) %}
-                        <button class="nav-item system-nav-item" onclick="showModule('{{ module_name }}')">
-                            <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
-                            <span>{{ module_info.name }}</span>
-                        </button>
-                    {% endif %}
-                {% endfor %}
 
                 <button class="nav-item" onclick="showModule('about')">
                     <i data-lucide="info"></i>

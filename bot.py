@@ -6,7 +6,15 @@ import sys
 import requests
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import threading
+import logging
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 from module_manager import ModuleManager
 
 # Load environment variables
@@ -363,37 +371,21 @@ def run_flask():
 def main():
     global module_manager
     
-    # Create directories
-    os.makedirs('templates', exist_ok=True)
-    os.makedirs('static/css', exist_ok=True)
-    os.makedirs('static/js', exist_ok=True)
-    os.makedirs('system_modules', exist_ok=True)
+    # Create necessary directories
+    for directory in ['templates', 'static/css', 'static/js', 'system_modules']:
+        os.makedirs(directory, exist_ok=True)
     
-    print("🔧 Initializing Bark Discord Bot...")
+    logging.info("Initializing Bark Discord Bot...")
     
     # Initialize module manager
     module_manager = ModuleManager(bot, app)
-    # Attach module_manager to bot and app for module access
     bot.module_manager = module_manager
     app.module_manager = module_manager
     
-    print("📦 Loading regular modules...")
-    module_manager.load_all_modules()
+    # Load modules
+    total_modules = module_manager.load_all_modules()
     
-    print("🔧 Loading system modules...")
-    # Load system modules from system_modules directory
-    system_modules_dir = "system_modules"
-    if os.path.exists(system_modules_dir):
-        for filename in os.listdir(system_modules_dir):
-            if filename.endswith('.py') and filename != '__init__.py':
-                module_path = os.path.join(system_modules_dir, filename)
-                module_manager.load_module_from_path(filename, module_path)
-    
-    print(f"✅ Loaded {len(module_manager.loaded_modules)} total modules:")
-    for name, instance in module_manager.loaded_modules.items():
-        is_system = getattr(instance, 'is_system_module', False)
-        system_flag = "[SYSTEM]" if is_system else "[REGULAR]"
-        print(f"   - {name} {system_flag}")
+    logging.info(f"Loaded {total_modules} total modules")
     
     # Start Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
