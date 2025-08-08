@@ -23,7 +23,14 @@
                     <span>Dashboard</span>
                 </button>
 
-                <!-- Modules Dropdown -->
+                {% set regular_modules = [] %}
+                {% for module_name, module_info in modules.items() %}
+                    {% if not module_info.get('is_system_module', False) %}
+                        {% set _ = regular_modules.append((module_name, module_info)) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if regular_modules %}
                 <div class="nav-dropdown">
                     <button class="nav-item dropdown-toggle" onclick="toggleDropdown('modules-dropdown')">
                         <div class="nav-content">
@@ -33,35 +40,29 @@
                         <i data-lucide="chevron-down" class="dropdown-arrow"></i>
                     </button>
                     <div class="dropdown-content" id="modules-dropdown">
-                        {% for module_name, module_info in modules.items() %}
-                            {% if not module_info.get('is_system_module', False) %}
-                                <button class="dropdown-item" onclick="showModule('{{ module_name }}')">
-                                    <i data-lucide="{{ module_info.icon or 'puzzle' }}"></i>
-                                    <span>{{ module_info.name }}</span>
-                                </button>
-                            {% endif %}
+                        {% for module_name, module_info in regular_modules %}
+                            <button class="dropdown-item" onclick="showModule('{{ module_name }}')">
+                                <i data-lucide="{{ module_info.icon or 'puzzle' }}"></i>
+                                <span>{{ module_info.name }}</span>
+                            </button>
                         {% endfor %}
-                        
-                        <!-- System Modules Section -->
-                        {% set system_modules = [] %}
-                        {% for module_name, module_info in modules.items() %}
-                            {% if module_info.get('is_system_module', False) %}
-                                {% set _ = system_modules.append((module_name, module_info)) %}
-                            {% endif %}
-                        {% endfor %}
-                        
-                        {% if system_modules %}
-                            <div class="dropdown-divider"></div>
-                            <div class="dropdown-section-header">System</div>
-                            {% for module_name, module_info in system_modules %}
-                                <button class="dropdown-item system-module" onclick="showModule('{{ module_name }}')">
-                                    <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
-                                    <span>{{ module_info.name }}</span>
-                                </button>
-                            {% endfor %}
-                        {% endif %}
                     </div>
                 </div>
+                {% endif %}
+                {# collect system modules #}
+{% set system_modules = [] %}
+{% for module_name, module_info in modules.items() %}
+    {% if module_info.get('is_system_module', False) %}
+        {% set _ = system_modules.append((module_name, module_info)) %}
+    {% endif %}
+{% endfor %}
+
+{% for module_name, module_info in system_modules %}
+    <button class="nav-item system-nav-item" onclick="showModule('{{ module_name }}')">
+        <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
+        <span>{{ module_info.name }}</span>
+    </button>
+{% endfor %}
 
                 <button class="nav-item" onclick="showModule('about')">
                     <i data-lucide="info"></i>
@@ -76,7 +77,6 @@
             </header>
 
             <div class="modules">
-                <!-- Home -->
                 <div id="home" class="module active">
                     <div class="stats">
                         <div class="stat-card">
@@ -93,52 +93,28 @@
                         </div>
                     </div>
 
-                    <h2>Quick Actions</h2>
+                    {% if regular_modules %}
+                    <h2>Modules</h2>
                     <div class="module-grid">
-                        {% for module_name, module_info in modules.items() %}
-                            {% if not module_info.get('is_system_module', False) %}
-                                <div class="module-card" onclick="showModule('{{ module_name }}')">
-                                    <div class="module-icon">
-                                        <i data-lucide="{{ module_info.icon or 'puzzle' }}"></i>
-                                    </div>
-                                    <h3>{{ module_info.name }}</h3>
-                                    <p>{{ module_info.description }}</p>
+                        {% for module_name, module_info in regular_modules %}
+                            <div class="module-card" onclick="showModule('{{ module_name }}')">
+                                <div class="module-icon">
+                                    <i data-lucide="{{ module_info.icon or 'puzzle' }}"></i>
                                 </div>
-                            {% endif %}
+                                <h3>{{ module_info.name }}</h3>
+                                <p>{{ module_info.description }}</p>
+                            </div>
                         {% endfor %}
                     </div>
-                    
-                    {% set system_modules = [] %}
-                    {% for module_name, module_info in modules.items() %}
-                        {% if module_info.get('is_system_module', False) %}
-                            {% set _ = system_modules.append((module_name, module_info)) %}
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if system_modules %}
-                        <h2>System</h2>
-                        <div class="module-grid">
-                            {% for module_name, module_info in system_modules %}
-                                <div class="module-card system-card" onclick="showModule('{{ module_name }}')">
-                                    <div class="module-icon">
-                                        <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
-                                    </div>
-                                    <h3>{{ module_info.name }}</h3>
-                                    <p>{{ module_info.description }}</p>
-                                </div>
-                            {% endfor %}
-                        </div>
                     {% endif %}
                 </div>
 
-                <!-- Module Content -->
-                {% for module_name, module_info in modules.items() %}
+                {% for module_name, module_info in regular_modules %}
                 <div id="{{ module_name }}" class="module">
                     {{ module_info.html|safe }}
                 </div>
                 {% endfor %}
 
-                <!-- About -->
                 <div id="about" class="module">
                     <div style="display: flex; flex-direction: column; margin-bottom: 2rem;">
                         <img src="/static/bark.png" alt="Bark Logo" style="width: 160px; height: 160px; border-radius: 50%; border: 6px solid #e0e0e0; box-shadow: 0 4px 24px rgba(0,0,0,0.10); object-fit: cover; background: #fff; margin-bottom: 24px;">
@@ -171,93 +147,51 @@
 
     <script src="/static/js/dashboard.js"></script>
     <script>
-        // Initialize Lucide icons
         lucide.createIcons();
-        
-        // Dropdown functionality
+
         function toggleDropdown(dropdownId) {
-            const dropdown = document.getElementById(dropdownId);
-            const toggle = dropdown.previousElementSibling;
-            
-            dropdown.classList.toggle('open');
-            toggle.classList.toggle('active');
+            document.querySelectorAll('.dropdown-content').forEach(dd => {
+                dd.classList.toggle('open', dd.id === dropdownId && !dd.classList.contains('open'));
+            });
+            document.querySelectorAll('.dropdown-toggle').forEach(dt => {
+                dt.classList.toggle('active', dt.nextElementSibling.id === dropdownId && !dt.classList.contains('active'));
+            });
         }
         
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', function(event) {
-            const dropdowns = document.querySelectorAll('.dropdown-content');
-            const toggles = document.querySelectorAll('.dropdown-toggle');
-            
-            if (!event.target.closest('.nav-dropdown')) {
-                dropdowns.forEach(dropdown => {
-                    dropdown.classList.remove('open');
-                });
-                toggles.forEach(toggle => {
-                    toggle.classList.remove('active');
-                });
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.nav-dropdown')) {
+                document.querySelectorAll('.dropdown-content').forEach(dd => dd.classList.remove('open'));
+                document.querySelectorAll('.dropdown-toggle').forEach(dt => dt.classList.remove('active'));
             }
         });
         
-        // Enhanced showModule function
         function showModule(moduleId) {
-            // Hide all modules
-            document.querySelectorAll('.module').forEach(el => {
-                el.classList.remove('active');
-            });
-            
-            // Remove active from all nav items and dropdown items
-            document.querySelectorAll('.nav-item, .dropdown-item').forEach(el => {
-                el.classList.remove('active');
-            });
-            
-            // Show selected module
+            document.querySelectorAll('.module').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item, .dropdown-item').forEach(el => el.classList.remove('active'));
+
             const moduleEl = document.getElementById(moduleId);
-            if (moduleEl) {
-                moduleEl.classList.add('active');
-            }
-            
-            // Update nav - check if it's a dropdown item first
-            let navItem = document.querySelector(`[onclick="showModule('${moduleId}')"]`);
+            if (moduleEl) moduleEl.classList.add('active');
+
+            const navItem = document.querySelector(`[onclick="showModule('${moduleId}')"]`);
             if (navItem) {
                 navItem.classList.add('active');
-                
-                // If it's a dropdown item, also highlight the dropdown toggle and keep it open
                 if (navItem.classList.contains('dropdown-item')) {
-                    const dropdown = navItem.closest('.nav-dropdown');
-                    if (dropdown) {
-                        const toggle = dropdown.querySelector('.dropdown-toggle');
-                        const content = dropdown.querySelector('.dropdown-content');
-                        toggle.classList.add('active');
-                        content.classList.add('open');
-                    }
+                    navItem.closest('.nav-dropdown').querySelector('.dropdown-toggle').classList.add('active');
+                    navItem.closest('.dropdown-content').classList.add('open');
                 }
             }
-            
-            // Update title
-            const titles = {
-                home: 'Dashboard',
-                about: 'About'
-            };
-            
-            let title = titles[moduleId];
-            if (!title && navItem) {
-                // Extract module name from the nav item text
-                const textElement = navItem.querySelector('span');
-                title = textElement ? textElement.textContent.trim() : moduleId;
-            }
-            
-            document.getElementById('page-title').textContent = title || 'Module';
-            
-            // Initialize module-specific functionality
-            if (moduleId === 'speak_as_bot') {
-                loadServers();
-            } else if (moduleId === 'server_stats') {
-                loadStatsServers();
-            }
-            
-            // Re-initialize Lucide icons for dynamic content
+
+            document.getElementById('page-title').textContent = 
+                moduleId === 'home' ? 'Dashboard' : 
+                moduleId === 'about' ? 'About' : 
+                (navItem?.querySelector('span')?.textContent.trim() || 'Module');
+
             lucide.createIcons();
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof loadDashboardStats === 'function') loadDashboardStats();
+        });
     </script>
 </body>
 </html>
