@@ -31,19 +31,32 @@
                         <i data-lucide="chevron-down" class="dropdown-arrow"></i>
                     </button>
                     <div class="dropdown-content" id="modules-dropdown">
+                        <!-- Draggable module links with extra spacing -->
+                        <div id="draggable-modules" style="display: flex; flex-direction: column; gap: 1.5rem;">
                         {% for module_name in modules %}
                         {% if not modules[module_name].is_system_module %}
-                        <button class="dropdown-item" onclick="showModule('{{ module_name }}')">
+                        <button class="dropdown-item draggable-module" draggable="true" data-module="{{ module_name }}" onclick="showModule('{{ module_name }}')">
                             <span>{{ modules[module_name].name }}</span>
                         </button>
                         {% endif %}
                         {% endfor %}
+                        </div>
                     </div>
                 </div>
 
-                <!-- System Modules (direct nav, not in dropdown) -->
+                <!-- Settings (system module) placed between Modules and About -->
                 {% for module_name in modules %}
-                {% if modules[module_name].is_system_module %}
+                {% if modules[module_name].is_system_module and module_name == 'settings' %}
+                <button class="nav-item" onclick="showModule('{{ module_name }}')" style="margin: 1.5rem 0;">
+                    <i data-lucide="settings"></i>
+                    <span>{{ modules[module_name].name }}</span>
+                </button>
+                {% endif %}
+                {% endfor %}
+
+                <!-- Other system modules (if any) -->
+                {% for module_name in modules %}
+                {% if modules[module_name].is_system_module and module_name != 'settings' %}
                 <button class="nav-item" onclick="showModule('{{ module_name }}')">
                     <i data-lucide="settings"></i>
                     <span>{{ modules[module_name].name }}</span>
@@ -277,21 +290,19 @@
     <script>
         // Initialize Lucide icons
         lucide.createIcons();
-        
+
         // Dropdown functionality
         function toggleDropdown(dropdownId) {
             const dropdown = document.getElementById(dropdownId);
             const toggle = dropdown.previousElementSibling;
-            
             dropdown.classList.toggle('open');
             toggle.classList.toggle('active');
         }
-        
+
         // Close dropdowns when clicking outside
         document.addEventListener('click', function(event) {
             const dropdowns = document.querySelectorAll('.dropdown-content');
             const toggles = document.querySelectorAll('.dropdown-toggle');
-            
             if (!event.target.closest('.nav-dropdown')) {
                 dropdowns.forEach(dropdown => {
                     dropdown.classList.remove('open');
@@ -301,30 +312,89 @@
                 });
             }
         });
-        
+
+        // Drag-and-drop for modules
+        let dragSrcEl = null;
+        function handleDragStart(e) {
+            dragSrcEl = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', this.dataset.module);
+            this.classList.add('dragging');
+        }
+        function handleDragOver(e) {
+            if (e.preventDefault) e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+        function handleDragEnter(e) {
+            this.classList.add('drag-over');
+        }
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+        function handleDrop(e) {
+            if (e.stopPropagation) e.stopPropagation();
+            if (dragSrcEl !== this) {
+                const parent = this.parentNode;
+                parent.insertBefore(dragSrcEl, this);
+                saveModuleOrder();
+            }
+            this.classList.remove('drag-over');
+            return false;
+        }
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.draggable-module').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+        function saveModuleOrder() {
+            const order = Array.from(document.querySelectorAll('.draggable-module')).map(btn => btn.dataset.module);
+            localStorage.setItem('moduleOrder', JSON.stringify(order));
+        }
+        function loadModuleOrder() {
+            const order = JSON.parse(localStorage.getItem('moduleOrder') || '[]');
+            if (order.length) {
+                const container = document.getElementById('draggable-modules');
+                const buttons = Array.from(container.querySelectorAll('.draggable-module'));
+                order.forEach(moduleName => {
+                    const btn = buttons.find(b => b.dataset.module === moduleName);
+                    if (btn) container.appendChild(btn);
+                });
+            }
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            const items = document.querySelectorAll('.draggable-module');
+            items.forEach(item => {
+                item.addEventListener('dragstart', handleDragStart, false);
+                item.addEventListener('dragenter', handleDragEnter, false);
+                item.addEventListener('dragover', handleDragOver, false);
+                item.addEventListener('dragleave', handleDragLeave, false);
+                item.addEventListener('drop', handleDrop, false);
+                item.addEventListener('dragend', handleDragEnd, false);
+            });
+            loadModuleOrder();
+        });
+
         // Update showModule function to handle dropdown items
         function showModule(moduleId) {
             // Hide all modules
             document.querySelectorAll('.module').forEach(el => {
                 el.classList.remove('active');
             });
-            
             // Remove active from nav items and dropdown items
             document.querySelectorAll('.nav-item, .dropdown-item').forEach(el => {
                 el.classList.remove('active');
             });
-            
             // Show selected module
             const moduleEl = document.getElementById(moduleId);
             if (moduleEl) {
                 moduleEl.classList.add('active');
             }
-            
             // Update nav - check if it's a dropdown item first
             let navItem = document.querySelector(`[onclick="showModule('${moduleId}')"]`);
             if (navItem) {
                 navItem.classList.add('active');
-                
                 // If it's a dropdown item, also highlight the dropdown toggle
                 if (navItem.classList.contains('dropdown-item')) {
                     const dropdown = navItem.closest('.nav-dropdown');
@@ -334,28 +404,23 @@
                     }
                 }
             }
-            
             // Update title
             const titles = {
                 home: 'Dashboard',
                 about: 'About'
             };
-            
             let title = titles[moduleId];
             if (!title && navItem) {
                 // Extract module name from the nav item text
                 title = navItem.textContent.trim();
             }
-            
             document.getElementById('page-title').textContent = title || 'Module';
-            
             // Initialize module if needed
             if (moduleId === 'speak_as_bot') {
                 loadServers();
             } else if (moduleId === 'server_stats') {
                 loadStatsServers();
             }
-            
             // Re-initialize Lucide icons for dynamic content
             lucide.createIcons();
         }

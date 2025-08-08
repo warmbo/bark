@@ -65,7 +65,7 @@ body::before {
 nav {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 1.25rem;
 }
 
 /* Nav items - glass */
@@ -134,6 +134,8 @@ header h1 {
     border-radius: 12px;
     padding: 1.5rem;
     box-shadow: 0 4px 32px 0 rgba(0,0,0,0.10);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
 }
 
 .module.active {
