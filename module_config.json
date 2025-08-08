@@ -25,5 +25,8 @@
   },
   "settings": {
     "enabled": true
+  },
+  "time_info": {
+    "enabled": true
   }
 }
