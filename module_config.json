@@ -5,40 +5,13 @@
   "speak_as_bot": {
     "enabled": true
   },
-  "hello-test": {
-    "enabled": true
-  },
-  "bite": {
-    "enabled": true
-  },
   "weather": {
-    "enabled": true
-  },
-  "member_info": {
-    "enabled": true
-  },
-  "channel_manager": {
     "enabled": true
   },
   "github": {
     "enabled": true
   },
   "settings": {
-    "enabled": true
-  },
-  "time_info": {
-    "enabled": true
-  },
-  "screenshot": {
-    "enabled": true
-  },
-  "pdf": {
-    "enabled": true
-  },
-  "analyze": {
-    "enabled": true
-  },
-  "moderation": {
     "enabled": true
   }
 }

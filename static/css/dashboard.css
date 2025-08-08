@@ -1,7 +1,7 @@
 :root {
     --primary: #3b82f6;
     --bg: #0a0a0a;
-    --surface: rgba(26,26,26,0.1);
+    --surface: rgba(26,26,26,0.3);
     --text: #fff;
     --text-muted: #888;
     --border: #333;
@@ -118,7 +118,14 @@ header h1 {
     flex: 1;
     padding: 2rem;
     overflow-y: auto;
+    max-width: none; /* let the container go full width */
 }
+
+.modules > .module {
+    max-width: 1220px;
+    margin-right: auto; /* center inner module content */
+}
+
 
 .module {
     display: none;
@@ -332,6 +339,57 @@ input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* === Dropdown Menus (glass style) === */
+.dropdown-menu {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+.dropdown-menu a {
+    color: var(--text);
+    display: block;
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+}
+.dropdown-menu a:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* === Pill Scrollbars === */
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 100px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+::-webkit-scrollbar-button {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 100px;
+}
+::-webkit-scrollbar-button:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.25) transparent;
 }
 
 /* Responsive */
