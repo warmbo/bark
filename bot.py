@@ -26,7 +26,7 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 WEB_PORT = int(os.getenv('WEB_PORT', 5000))
-BOT_PREFIX = os.getenv('BOT_PREFIX', '!')
+BOT_PREFIX = os.getenv('BOT_PREFIX', 'bark-')
 API_KEY = os.getenv('API_KEY')  # Optional
 
 if not BOT_TOKEN:

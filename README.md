@@ -25,7 +25,7 @@ Bark is a modular, self-hosted Discord bot designed for simplicity and extensibi
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/yourusername/bark.git
+   git clone https://github.com/warmbo/bark.git
    cd bark
    ```
 
