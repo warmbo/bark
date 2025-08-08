@@ -1,7 +1,6 @@
 # modules/settings.py
 from flask import jsonify, request
-from utils.module_base import BaseModule, format_module_html
-from utils.api_helpers import APIHelpers
+from utils import BaseModule, APIHelpers, format_module_html
 import os
 
 class SettingsModule(BaseModule):
@@ -203,7 +202,7 @@ class SettingsModule(BaseModule):
             document.documentElement.style.setProperty('--primary', primary);
             localStorage.setItem('theme-primary', primary);
             
-            UIHelpers.showNotification('Theme saved successfully!', 'success');
+            showNotification('Theme saved successfully!', 'success');
             
             const button = document.querySelector('button[onclick="saveTheme()"]');
             const originalText = button.innerHTML;
@@ -224,12 +223,13 @@ class SettingsModule(BaseModule):
             document.documentElement.style.setProperty('--primary', defaultColor);
             localStorage.setItem('theme-primary', defaultColor);
             
-            UIHelpers.showNotification('Theme reset to default', 'info');
+            showNotification('Theme reset to default', 'info');
         }
         
         async function loadModuleList() {
             try {
-                const data = await BarkAPI.request('/api/settings/get_modules');
+                const response = await fetch('/api/settings/get_modules');
+                const data = await response.json();
                 displayModules(data.modules);
             } catch (error) {
                 console.error('Failed to load modules:', error);
@@ -314,48 +314,53 @@ class SettingsModule(BaseModule):
             const action = currentState ? 'disable' : 'enable';
             
             try {
-                await BarkAPI.request('/api/settings/toggle_module', {
+                const response = await fetch('/api/settings/toggle_module', {
                     method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ module: moduleName, action: action })
                 });
                 
-                UIHelpers.showNotification(
-                    `Module ${moduleName} ${action}d successfully`, 
-                    'success'
-                );
+                const data = await response.json();
                 
-                // Refresh the module list
-                loadModuleList();
+                if (data.success) {
+                    showNotification(`Module ${moduleName} ${action}d successfully`, 'success');
+                    loadModuleList();
+                } else {
+                    showNotification(`Failed to ${action} module: ${data.error}`, 'error');
+                }
             } catch (error) {
                 console.error('Error toggling module:', error);
-                UIHelpers.showNotification(
-                    `Failed to ${action} module: ${error.message}`, 
-                    'error'
-                );
+                showNotification(`Failed to ${action} module: ${error.message}`, 'error');
             }
         }
         
         function refreshModules() {
             loadModuleList();
-            UIHelpers.showNotification('Module list refreshed', 'info');
+            showNotification('Module list refreshed', 'info');
         }
         
         async function reloadAllModules() {
             try {
-                await BarkAPI.request('/api/settings/reload_all_modules', {
+                const response = await fetch('/api/settings/reload_all_modules', {
                     method: 'POST'
                 });
+                const data = await response.json();
                 
-                UIHelpers.showNotification('All modules reloaded', 'success');
-                setTimeout(loadModuleList, 1000);
+                if (data.success) {
+                    showNotification('All modules reloaded', 'success');
+                    setTimeout(loadModuleList, 1000);
+                } else {
+                    showNotification(`Failed to reload modules: ${data.error}`, 'error');
+                }
             } catch (error) {
-                UIHelpers.showNotification(`Failed to reload modules: ${error.message}`, 'error');
+                showNotification(`Failed to reload modules: ${error.message}`, 'error');
             }
         }
         
         async function loadBotInfo() {
             try {
-                const data = await BarkAPI.request('/api/settings/get_bot_info');
+                const response = await fetch('/api/settings/get_bot_info');
+                const data = await response.json();
                 document.getElementById('bot-prefix').textContent = data.prefix || '!';
                 document.getElementById('web-port').textContent = data.port || '5000';
             } catch (error) {
@@ -371,7 +376,8 @@ class SettingsModule(BaseModule):
             content.textContent = 'Loading logs...';
             
             try {
-                const data = await BarkAPI.request('/api/settings/get_logs');
+                const response = await fetch('/api/settings/get_logs');
+                const data = await response.json();
                 content.innerHTML = `<pre>${data.logs}</pre>`;
             } catch (error) {
                 content.textContent = 'Failed to load logs: ' + error.message;
@@ -384,7 +390,8 @@ class SettingsModule(BaseModule):
         
         async function exportConfig() {
             try {
-                const data = await BarkAPI.request('/api/settings/export_config');
+                const response = await fetch('/api/settings/export_config');
+                const data = await response.json();
                 
                 // Create download
                 const blob = new Blob([JSON.stringify(data.config, null, 2)], 
@@ -399,10 +406,15 @@ class SettingsModule(BaseModule):
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 
-                UIHelpers.showNotification('Configuration exported', 'success');
+                showNotification('Configuration exported', 'success');
             } catch (error) {
-                UIHelpers.showNotification('Failed to export config: ' + error.message, 'error');
+                showNotification('Failed to export config: ' + error.message, 'error');
             }
+        }
+        
+        function showNotification(message, type) {
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            // Simple notification - could be enhanced
         }
         
         // Close modal when clicking outside
