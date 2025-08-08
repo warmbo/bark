@@ -1,7 +1,7 @@
 :root {
     --primary: #3b82f6;
     --bg: #0a0a0a;
-    --surface: rgba(26,26,26,0.7);
+    --surface: rgba(26,26,26,0.1);
     --text: #fff;
     --text-muted: #888;
     --border: #333;
@@ -42,7 +42,7 @@ body::before {
     height: 100vh;
 }
 
-/* Sidebar */
+/* Sidebar - glass */
 .sidebar {
     width: 250px;
     background: var(--glass-bg);
@@ -68,10 +68,10 @@ nav {
     gap: 0.5rem;
 }
 
+/* Nav items - glass */
 .nav-item {
-    background: none;
-    border: none;
-    color: var(--text-muted);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
     padding: 0.75rem 1rem;
     border-radius: 6px;
     cursor: pointer;
@@ -81,6 +81,9 @@ nav {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    color: var(--text-muted);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
 }
 
 .nav-item:hover {
@@ -119,13 +122,18 @@ header h1 {
 
 .module {
     display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 32px 0 rgba(0,0,0,0.10);
 }
 
 .module.active {
     display: block;
 }
 
-/* Stats */
+/* Stats - no glass */
 .stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -134,13 +142,11 @@ header h1 {
 }
 
 .stat-card {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 1.5rem;
     text-align: center;
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
 }
 
 .stat-label {
@@ -164,6 +170,7 @@ header h1 {
     gap: 1rem;
 }
 
+/* Module cards - glass */
 .module-card {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
@@ -193,7 +200,7 @@ header h1 {
     font-size: 0.9rem;
 }
 
-/* About Section */
+/* About Section - no glass */
 .about-content {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -201,9 +208,8 @@ header h1 {
 }
 
 .about-section {
-    background: var(--glass-bg);
-    backdrop-filter: var(--blur);
-    border: 1px solid var(--glass-border);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 1.5rem;
 }
@@ -279,54 +285,26 @@ header h1 {
     color: var(--text);
 }
 
-.module {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: 12px;
-    padding: 1.5rem;
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    box-shadow: 0 4px 32px 0 rgba(0,0,0,0.10);
-}
-
-.module-header {
-    margin-bottom: 2rem;
-}
-
-.module-header h2 {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    color: var(--text);
-    font-weight: 500;
-}
-
-.module-header p {
-    color: var(--text-muted);
-    line-height: 1.6;
-}
-
-input, select, textarea, button {
-    background: var(--surface);
-    border: 1px solid var(--border);
+/* Buttons - glass */
+input, select, textarea, button, .btn {
     border-radius: 6px;
     padding: 0.75rem;
     color: var(--text);
     font-family: inherit;
+    cursor: pointer;
 }
 
 .btn {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background: var(--primary);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
     color: white;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-decoration: none;
     font-weight: 500;
-    border: none;
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    transition: all 0.2s;
 }
 
 .btn:hover {
@@ -336,12 +314,17 @@ input, select, textarea, button {
 
 .btn-primary {
     background: var(--primary);
-    color: white;
+    border: none;
 }
 
 .btn-secondary {
     background: var(--surface);
+    border: 1px solid var(--border);
     color: var(--text);
+}
+
+input, select, textarea {
+    background: var(--surface);
     border: 1px solid var(--border);
 }
 
@@ -351,56 +334,38 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
-/* Module-specific styles */
-.module h2 {
-    margin-bottom: 1rem;
-    font-weight: 500;
-}
-
-.module h3 {
-    margin-bottom: 1rem;
-    font-weight: 500;
-    color: var(--text);
-}
-
-.module p {
-    color: var(--text-muted);
-    line-height: 1.6;
-    margin-bottom: 1rem;
-}
-
 /* Responsive */
 @media (max-width: 768px) {
     .layout {
         flex-direction: column;
     }
-    
+
     .sidebar {
         width: 100%;
         height: auto;
         border-right: none;
         border-bottom: 1px solid var(--border);
     }
-    
+
     nav {
         flex-direction: row;
         overflow-x: auto;
         gap: 0.25rem;
     }
-    
+
     .nav-item {
         white-space: nowrap;
         min-width: auto;
     }
-    
+
     .stats {
         grid-template-columns: 1fr;
     }
-    
+
     .module-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .about-content {
         grid-template-columns: 1fr;
     }

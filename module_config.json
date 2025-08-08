@@ -31,5 +31,14 @@
   },
   "screenshot": {
     "enabled": true
+  },
+  "pdf": {
+    "enabled": true
+  },
+  "analyze": {
+    "enabled": true
+  },
+  "moderation": {
+    "enabled": true
   }
 }
