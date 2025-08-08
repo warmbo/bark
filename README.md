@@ -81,7 +81,7 @@ bark/
 │
 └── system_modules/          # Core system modules
     └── settings.py         # Settings and module management
-
+```
 
 
 
