@@ -49,20 +49,21 @@
                     </div>
                 </div>
                 {% endif %}
-                {# collect system modules #}
-{% set system_modules = [] %}
-{% for module_name, module_info in modules.items() %}
-    {% if module_info.get('is_system_module', False) %}
-        {% set _ = system_modules.append((module_name, module_info)) %}
-    {% endif %}
-{% endfor %}
 
-{% for module_name, module_info in system_modules %}
-    <button class="nav-item system-nav-item" onclick="showModule('{{ module_name }}')">
-        <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
-        <span>{{ module_info.name }}</span>
-    </button>
-{% endfor %}
+                {# System modules #}
+                {% set system_modules = [] %}
+                {% for module_name, module_info in modules.items() %}
+                    {% if module_info.get('is_system_module', False) %}
+                        {% set _ = system_modules.append((module_name, module_info)) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% for module_name, module_info in system_modules %}
+                    <button class="nav-item system-nav-item" onclick="showModule('{{ module_name }}')">
+                        <i data-lucide="{{ module_info.icon or 'settings' }}"></i>
+                        <span>{{ module_info.name }}</span>
+                    </button>
+                {% endfor %}
 
                 <button class="nav-item" onclick="showModule('about')">
                     <i data-lucide="info"></i>
@@ -109,7 +110,15 @@
                     {% endif %}
                 </div>
 
+                {# Regular modules content #}
                 {% for module_name, module_info in regular_modules %}
+                <div id="{{ module_name }}" class="module">
+                    {{ module_info.html|safe }}
+                </div>
+                {% endfor %}
+
+                {# System modules content - THIS WAS MISSING! #}
+                {% for module_name, module_info in system_modules %}
                 <div id="{{ module_name }}" class="module">
                     {{ module_info.html|safe }}
                 </div>
@@ -185,6 +194,11 @@
                 moduleId === 'home' ? 'Dashboard' : 
                 moduleId === 'about' ? 'About' : 
                 (navItem?.querySelector('span')?.textContent.trim() || 'Module');
+
+            // Initialize settings module if it becomes active
+            if (moduleId === 'settings' && typeof initializeSettings === 'function') {
+                setTimeout(initializeSettings, 100);
+            }
 
             lucide.createIcons();
         }

@@ -28,7 +28,7 @@ class SettingsModule(BaseModule):
     def get_html(self):
         """Return the HTML for the settings interface"""
         content = '''
-        <div class="theme-section">
+        <div class="info-section">
             <h3 class="section-title">
                 <i data-lucide="palette"></i> 
                 Theme Customization
@@ -65,7 +65,7 @@ class SettingsModule(BaseModule):
             </div>
         </div>
         
-        <div class="module-management-section">
+        <div class="info-section">
             <h3 class="section-title">
                 <i data-lucide="puzzle"></i> 
                 Module Management
@@ -88,7 +88,7 @@ class SettingsModule(BaseModule):
             </div>
         </div>
         
-        <div class="bot-info-section">
+        <div class="info-section">
             <h3 class="section-title">
                 <i data-lucide="info"></i> 
                 Bot Information
@@ -159,6 +159,20 @@ class SettingsModule(BaseModule):
         
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            if (document.getElementById('settings') && document.getElementById('settings').classList.contains('active')) {
+                loadSavedTheme();
+                loadModuleList();
+                loadBotInfo();
+                setupColorInputs();
+                
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            }
+        });
+        
+        // Also trigger when module becomes active
+        function initializeSettings() {
             loadSavedTheme();
             loadModuleList();
             loadBotInfo();
@@ -167,7 +181,7 @@ class SettingsModule(BaseModule):
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
             }
-        });
+        }
         
         function setupColorInputs() {
             const colorInput = document.getElementById('primary-color');
@@ -454,6 +468,9 @@ class SettingsModule(BaseModule):
                 closeLogs();
             }
         });
+        
+        // Export initialization function for external use
+        window.initializeSettings = initializeSettings;
         </script>
         '''
         

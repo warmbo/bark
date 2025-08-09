@@ -66,19 +66,38 @@ def require_api_key():
 def prepare_modules_for_template():
     """
     Build the modules dictionary passed to dashboard.html by:
-      1) reading currently loaded modules from module_manager (if available)
-      2) scanning filesystem modules (modules/, system_modules/) and merging
-         anything not present, marking them as system modules when appropriate.
+      1) Starting with all filesystem modules
+      2) Updating with loaded module data from module_manager if available
     """
     modules_data = {}
 
-    # 1) Add modules from ModuleManager if present
+    # 1) Start with filesystem modules to ensure we get everything
+    try:
+        fs_modules = loader.load_modules()
+        for name, info in fs_modules.items():
+            modules_data[name] = {
+                'name': info.get('name', name),
+                'description': info.get('description', ''),
+                'icon': info.get('icon', 'settings' if info.get('is_system_module') else 'puzzle'),
+                'version': info.get('version', '1.0.0'),
+                'is_system_module': info.get('is_system_module', False),
+                'dependencies': info.get('dependencies', []),
+                'html': info.get('html', '<p>No interface available</p>'),
+                'enabled': True,
+                'loaded': False
+            }
+    except Exception:
+        log.exception("Failed to load filesystem modules for template")
+
+    # 2) Update with actual loaded module data if module_manager is available
     with module_lock:
         if module_manager and getattr(module_manager, 'loaded_modules', None):
             for module_name, module_instance in module_manager.loaded_modules.items():
                 try:
                     is_system = getattr(module_instance, 'is_system_module', False)
                     module_html = getattr(module_instance, 'html', '')
+                    
+                    # Try to get fresh HTML if get_html method exists
                     if callable(getattr(module_instance, 'get_html', None)):
                         try:
                             module_html = module_instance.get_html()
@@ -86,6 +105,7 @@ def prepare_modules_for_template():
                             log.exception(f"Error in {module_name}.get_html()")
                             module_html = module_html or "<p>Error loading interface</p>"
 
+                    # Update or add the module data
                     modules_data[module_name] = {
                         'name': getattr(module_instance, 'name', module_name),
                         'description': getattr(module_instance, 'description', 'No description'),
@@ -98,40 +118,23 @@ def prepare_modules_for_template():
                         'loaded': True
                     }
                 except Exception:
-                    log.exception(f"Error preparing module {module_name}; skipping.")
+                    log.exception(f"Error preparing loaded module {module_name}")
 
-    # 2) Merge filesystem modules (auto-detected from modules/ and system_modules/)
-    try:
-        fs_modules = loader.load_modules()
-        for name, info in fs_modules.items():
-            if name in modules_data:
-                # prefer existing ModuleManager entry but ensure system flag if fs says so
-                if info.get('is_system_module'):
-                    modules_data[name]['is_system_module'] = True
-                # if ModuleManager entry lacks an html interface, use the filesystem html
-                if not modules_data[name].get('html'):
-                    modules_data[name]['html'] = info.get('html', '<p>No interface available</p>')
-            else:
-                # Not loaded in ModuleManager; add as filesystem-only module
-                modules_data[name] = {
-                    'name': info.get('name', name),
-                    'description': info.get('description', ''),
-                    'icon': info.get('icon', 'settings' if info.get('is_system_module') else 'puzzle'),
-                    'version': info.get('version', '1.0.0'),
-                    'is_system_module': info.get('is_system_module', False),
-                    'dependencies': info.get('dependencies', []),
-                    'html': info.get('html', '<p>No interface available</p>'),
-                    'enabled': True,
-                    'loaded': False
-                }
-    except Exception:
-        log.exception("Failed to merge filesystem modules into template data")
+            # Also update enabled status for filesystem modules based on config
+            for name in modules_data:
+                if name not in module_manager.loaded_modules:
+                    modules_data[name]['enabled'] = module_manager.module_configs.get(name, {}).get('enabled', True)
 
     # 3) Sort: system modules first then alphabetically
     sorted_modules = dict(sorted(modules_data.items(), key=lambda x: (
         not x[1]['is_system_module'],
         x[1]['name'].lower()
     )))
+
+    log.info(f"Template prepared with {len(sorted_modules)} modules")
+    system_count = sum(1 for m in sorted_modules.values() if m['is_system_module'])
+    loaded_count = sum(1 for m in sorted_modules.values() if m['loaded'])
+    log.info(f"  System: {system_count}, Loaded: {loaded_count}")
 
     return sorted_modules
 
