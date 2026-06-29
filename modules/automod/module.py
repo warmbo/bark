@@ -112,7 +112,11 @@ class AutoModModule(BarkModule):
                             "type": "integer",
                             "minimum": 1,
                             "title": "Threshold",
-                            "placeholder": "5",
+                            "placeholder": {
+                                "spam": "Max messages per 10s window (e.g. 5)",
+                                "invite": "Not used",
+                                "mention": "Max @mentions per message (e.g. 5)",
+                            }.get(rule_type, "Trigger value"),
                             "description": {
                                 "spam": "Max messages allowed in the 10-second window before triggering.",
                                 "invite": "Not used for invite filtering.",
@@ -123,7 +127,6 @@ class AutoModModule(BarkModule):
                             "type": "string",
                             "enum": ["warn", "timeout", "delete"],
                             "title": "Action",
-                            "placeholder": "warn",
                             "description": {
                                 "spam": "What to do when spam is detected. 'warn' sends a warning, "
                                         "'timeout' temporarily mutes, 'delete' just removes the message.",
@@ -135,7 +138,7 @@ class AutoModModule(BarkModule):
                             "type": "integer",
                             "minimum": 1,
                             "title": "Duration (minutes)",
-                            "placeholder": "10",
+                            "placeholder": "Minutes (e.g. 10)",
                             "description": "How long a timeout lasts, in minutes. "
                                            "Only applies when action is set to 'timeout'.",
                         },
@@ -143,7 +146,7 @@ class AutoModModule(BarkModule):
                             "type": "array",
                             "items": {"type": "string"},
                             "title": "Ignored Role IDs",
-                            "placeholder": '["123456789", "987654321"]',
+                            "placeholder": '["role_id_1", "role_id_2"]',
                             "description": "Discord role IDs that are exempt from this rule. "
                                            "Members with any of these roles won't be checked.",
                         },
@@ -151,7 +154,7 @@ class AutoModModule(BarkModule):
                             "type": "array",
                             "items": {"type": "string"},
                             "title": "Ignored Channel IDs",
-                            "placeholder": '["123456789", "987654321"]',
+                            "placeholder": '["channel_id_1", "channel_id_2"]',
                             "description": "Channel IDs where this rule is disabled. "
                                            "Messages in these channels won't be checked.",
                         },

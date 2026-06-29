@@ -1544,6 +1544,36 @@ a { color: inherit; text-decoration: none; }
     font-size: 14px;
 }
 
+/* ── Config Subsection ────────────────────────── */
+
+.config-subsection {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.config-subsection:last-child {
+    border-bottom: none;
+}
+
+.config-subsection-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 4px;
+    text-transform: capitalize;
+}
+
+.config-subsection-desc {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.config-subsection .form-group {
+    padding: 0;
+}
+
 /* ── Lucide Icons ─────────────────────────────── */
 
 .nav-icon {

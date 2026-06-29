@@ -35,6 +35,22 @@ async def modules_page(request: Request, guild_id: int):
     )
 
 
+def _ensure_nested_config(raw: dict, schema: dict) -> dict:
+    """Walk the schema and ensure every object property has a nested dict
+    in the config, so the template never hits .get() on a string."""
+    result = dict(raw)
+    props = schema.get("properties", {})
+    for key, prop in props.items():
+        if prop.get("type") == "object" and prop.get("properties"):
+            if key not in result or not isinstance(result[key], dict):
+                result[key] = {}
+            sub_props = prop["properties"]
+            for sub_key in sub_props:
+                if sub_key not in result[key]:
+                    result[key][sub_key] = sub_props[sub_key].get("default", "")
+    return result
+
+
 @router.get("/modules/{module_name}", response_class=HTMLResponse)
 async def module_detail_page(request: Request, guild_id: int, module_name: str):
     bot = request.state.bot
@@ -58,14 +74,19 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
         )
         db_config = result.scalar_one_or_none()
 
+    # Build config with nested defaults matching schema
+    raw_config = json.loads(db_config.config) if db_config and db_config.config else {}
+    schema = module.get_settings_schema()
+    safe_config = _ensure_nested_config(raw_config, schema)
+
     module_data = {
         "version": module.version,
         "description": module.description,
         "author": module.author,
         "enabled": db_config.enabled if db_config else False,
         "priority": db_config.priority if db_config else 100,
-        "config": json.loads(db_config.config) if db_config and db_config.config else {},
-        "settings_schema": module.get_settings_schema(),
+        "config": safe_config,
+        "settings_schema": schema,
         "commands": [
             {"name": c.name, "description": c.description, "slash": c.slash}
             for c in module.get_commands()

@@ -130,7 +130,7 @@ class LoggingModule(BarkModule):
                         "channel_id": {
                             "type": "string",
                             "title": "Channel ID",
-                            "placeholder": "123456789012345678",
+                            "placeholder": "Paste a Discord channel ID",
                             "description": "The Discord channel ID where these logs will be posted. "
                                            "Right-click a channel → Copy ID to get this.",
                         },

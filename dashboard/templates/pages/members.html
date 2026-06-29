@@ -78,7 +78,7 @@
             `).join('');
         } catch (e) {
             console.error('Member fetch failed:', e);
-            grid.innerHTML = `<div class="empty-state"><p>Failed. (${e.message})</p></div>`;
+            grid.innerHTML = `<div class="empty-state"><p>Failed. (${e.message})<br><small>URL: /api/v1/guilds/${GUILD_ID}/members?search=&page=0&limit=100</small></p></div>`;
         }
     }
 

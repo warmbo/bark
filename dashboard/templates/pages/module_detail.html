@@ -112,6 +112,52 @@
                 {% if module_data.settings_schema and module_data.settings_schema.properties %}
                 <form class="module-config-form" data-module="{{ module_name }}">
                     {% for key, prop in module_data.settings_schema.properties.items() %}
+                    {% if prop.type == "object" and prop.properties %}
+                    {#--- Nested object: render as sub-section ---#}
+                    <div class="config-subsection">
+                        <h3 class="config-subsection-title">{{ prop.title | default(key | capitalize) }}</h3>
+                        {% if prop.description %}
+                        <p class="config-subsection-desc">{{ prop.description }}</p>
+                        {% endif %}
+                        {% for sub_key, sub_prop in prop.properties.items() %}
+                            <div class="form-group">
+                                <label class="form-label">{{ sub_prop.title | default(sub_key) }}</label>
+                                {% if sub_prop.type == "boolean" %}
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="{{ key }}_{{ sub_key }}"
+                                           {{ 'checked' if module_data.config.get(key, {}).get(sub_key, sub_prop.default) else '' }}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                {% elif sub_prop.type == "integer" or sub_prop.type == "number" %}
+                                <input type="number" class="form-input" name="{{ key }}_{{ sub_key }}"
+                                       value="{{ module_data.config.get(key, {}).get(sub_key, sub_prop.default or '') }}"
+                                       min="{{ sub_prop.minimum or '' }}" max="{{ sub_prop.maximum or '' }}"
+                                       placeholder="{{ sub_prop.placeholder or 'Enter a number' }}">
+                                {% elif sub_prop.enum %}
+                                <select class="form-select" name="{{ key }}_{{ sub_key }}">
+                                    {% for opt in sub_prop.enum %}
+                                    <option value="{{ opt }}"
+                                            {{ 'selected' if module_data.config.get(key, {}).get(sub_key) == opt else '' }}>
+                                        {{ opt | capitalize }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% elif sub_prop.type == "array" %}
+                                <textarea class="form-input" name="{{ key }}_{{ sub_key }}" rows="2"
+                                          placeholder="{{ sub_prop.placeholder or 'e.g. [\"id1\", \"id2\"]' }}">{{ module_data.config.get(key, {}).get(sub_key, sub_prop.default or '') }}</textarea>
+                                {% else %}
+                                <input type="text" class="form-input" name="{{ key }}_{{ sub_key }}"
+                                       value="{{ module_data.config.get(key, {}).get(sub_key, sub_prop.default or '') }}"
+                                       placeholder="{{ sub_prop.placeholder or 'Enter a value' }}">
+                                {% endif %}
+                            {% if sub_prop.description %}
+                            <span class="form-hint">{{ sub_prop.description }}</span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    {#--- Simple field ---#}
                     <div class="form-group">
                         <label class="form-label">{{ prop.title | default(key) }}</label>
                         {% if prop.type == "boolean" %}
@@ -137,16 +183,17 @@
                         </select>
                         {% elif prop.type == "array" %}
                         <textarea class="form-input" name="{{ key }}" rows="2"
-                                  placeholder="{{ prop.placeholder or 'Enter JSON array' }}">{{ module_data.config.get(key, prop.default or '') }}</textarea>
+                                  placeholder="{{ prop.placeholder or 'e.g. [\"id1\", \"id2\"]' }}">{{ module_data.config.get(key, prop.default or '') }}</textarea>
                         {% else %}
                         <input type="text" class="form-input" name="{{ key }}"
                                value="{{ module_data.config.get(key, prop.default or '') }}"
-                               placeholder="{{ prop.placeholder or 'Enter value' }}">
+                               placeholder="{{ prop.placeholder or 'Enter a value' }}">
                         {% endif %}
                         {% if prop.description %}
                         <span class="form-hint">{{ prop.description }}</span>
                         {% endif %}
                     </div>
+                    {% endif %}
                     {% endfor %}
                     <button type="submit" class="btn btn-primary">Save Configuration</button>
                 </form>
