@@ -1,0 +1,106 @@
+{% from "components/icons.html" import icon %}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bark — {% block title %}Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/main.css?v=3">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@1.22.0"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="app-shell">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <span class="logo-icon">◆</span>
+                    <span class="logo-text">Bark</span>
+                </div>
+                <span class="sidebar-version">v0.2.0</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                {% if guild is defined and guild %}
+                <div class="sidebar-section">
+                    <div class="sidebar-guild">
+                        {% if guild.icon %}
+                        <img src="{{ guild.icon.url }}" alt="" class="guild-icon-small">
+                        {% else %}
+                        <div class="guild-icon-small guild-icon-placeholder">{{ guild.name[:2] }}</div>
+                        {% endif %}
+                        <div class="sidebar-guild-info">
+                            <span class="sidebar-guild-name">{{ guild.name }}</span>
+                            <span class="sidebar-guild-members">{{ guild.member_count }} members</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-nav-items">
+                    <a href="/guild/{{ guild.id }}" class="nav-item {% if active_page == 'overview' %}active{% endif %}">
+                        <span class="nav-icon">{{ icon("layout-dashboard", 16) }}</span>
+                        <span>Overview</span>
+                    </a>
+
+                    {% if request and request.state and request.state.bot is defined %}
+                    {% set _modules = request.state.bot.modules.get_all_modules() %}
+                    {% if _modules %}
+                    <div class="nav-section-label">Modules</div>
+                    {% for mod_name, mod in _modules.items() %}
+                    <a href="/guild/{{ guild.id }}/modules/{{ mod_name }}"
+                       class="nav-item nav-item-module {% if active_page == 'module_' + mod_name %}active{% endif %}">
+                        <span class="nav-icon">{{ icon("puzzle", 14) }}</span>
+                        <span class="nav-module-name">{{ mod_name | capitalize }}</span>
+                        <span class="nav-module-status {{ 'on' if mod.enabled else 'off' }}"></span>
+                    </a>
+                    {% endfor %}
+                    {% endif %}
+                    {% endif %}
+
+                    <div class="nav-section-label">Tools</div>
+                    <a href="/guild/{{ guild.id }}/members" class="nav-item {% if active_page == 'members' %}active{% endif %}">
+                        <span class="nav-icon">{{ icon("users", 16) }}</span>
+                        <span>Members</span>
+                    </a>
+                    <a href="/guild/{{ guild.id }}/moderation" class="nav-item {% if active_page == 'moderation' %}active{% endif %}">
+                        <span class="nav-icon">{{ icon("shield", 16) }}</span>
+                        <span>Moderation</span>
+                    </a>
+                    <a href="/guild/{{ guild.id }}/settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
+                        <span class="nav-icon">{{ icon("settings", 16) }}</span>
+                        <span>Settings</span>
+                    </a>
+                </div>
+                {% else %}
+                <div class="sidebar-nav-items">
+                    <a href="/dashboard" class="nav-item active">
+                        <span class="nav-icon">◉</span>
+                        <span>Servers</span>
+                    </a>
+                </div>
+                {% endif %}
+            </nav>
+
+            <div class="sidebar-footer">
+                <span class="sidebar-status">
+                    <span class="status-dot online"></span>
+                    Connected
+                </span>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="/static/js/main.js?v=3"></script>
+    <script>lucide.createIcons();</script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

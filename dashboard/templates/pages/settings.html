@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ guild.name }}{% endblock %}
+
+{% block content %}
+{% set active_page = "settings" %}
+{% include "partials/guild_header.html" %}
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">Settings</h1>
+        <p class="page-subtitle">Configure logging, AutoMod, and general preferences</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="general" role="tab">General</button>
+        <button class="tab" data-tab="logging" role="tab">Logging</button>
+        <button class="tab" data-tab="automod" role="tab">AutoMod</button>
+    </div>
+
+    <!-- General Tab -->
+    <div class="tab-panel active" id="tab-general">
+        <div class="content-card">
+            <div class="card-header">
+                <h2 class="card-title">General Settings</h2>
+            </div>
+            <form class="settings-form" id="general-settings-form">
+                <div class="form-group">
+                    <label class="form-label">Command Prefix</label>
+                    <input type="text" class="form-input" name="prefix" value="!" placeholder="!">
+                    <span class="form-hint">Prefix for text-based commands</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moderator Role ID</label>
+                    <input type="text" class="form-input" name="mod_role" placeholder="Discord role ID">
+                    <span class="form-hint">Members with this role automatically get moderator access</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Admin Role ID</label>
+                    <input type="text" class="form-input" name="admin_role" placeholder="Discord role ID">
+                    <span class="form-hint">Members with this role automatically get admin access</span>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Logging Tab -->
+    <div class="tab-panel" id="tab-logging">
+        <div class="content-card">
+            <div class="card-header">
+                <h2 class="card-title">Log Channel Configuration</h2>
+            </div>
+            <form class="settings-form" id="logging-settings-form">
+                <div class="logging-grid">
+                    <div class="form-group">
+                        <label class="form-label">Message Edits</label>
+                        <input type="text" class="form-input" name="log_message_edit" placeholder="Channel ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Message Deletes</label>
+                        <input type="text" class="form-input" name="log_message_delete" placeholder="Channel ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Member Joins</label>
+                        <input type="text" class="form-input" name="log_member_join" placeholder="Channel ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Member Leaves</label>
+                        <input type="text" class="form-input" name="log_member_leave" placeholder="Channel ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Moderation Actions</label>
+                        <input type="text" class="form-input" name="log_moderation" placeholder="Channel ID">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- AutoMod Tab -->
+    <div class="tab-panel" id="tab-automod">
+        <div class="content-card">
+            <div class="card-header">
+                <h2 class="card-title">AutoMod Rules</h2>
+            </div>
+            <form class="settings-form" id="automod-settings-form">
+                <div class="automod-rules">
+                    <!-- Spam Detection -->
+                    <div class="automod-rule">
+                        <div class="automod-rule-header">
+                            <h3>Spam Detection</h3>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="spam_enabled">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="automod-rule-body">
+                            <div class="form-group">
+                                <label class="form-label">Threshold (messages/10s)</label>
+                                <input type="number" class="form-input" name="spam_threshold" value="5" min="1" max="50">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Action</label>
+                                <select class="form-select" name="spam_action">
+                                    <option value="warn">Warn</option>
+                                    <option value="timeout">Timeout</option>
+                                    <option value="delete">Delete Only</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Duration (minutes)</label>
+                                <input type="number" class="form-input" name="spam_duration" value="10" min="1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invite Filtering -->
+                    <div class="automod-rule">
+                        <div class="automod-rule-header">
+                            <h3>Invite Filtering</h3>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="invite_enabled">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="automod-rule-body">
+                            <div class="form-group">
+                                <label class="form-label">Action</label>
+                                <select class="form-select" name="invite_action">
+                                    <option value="warn">Warn</option>
+                                    <option value="delete">Delete Only</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mention Spam -->
+                    <div class="automod-rule">
+                        <div class="automod-rule-header">
+                            <h3>Mention Spam</h3>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="mention_enabled">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="automod-rule-body">
+                            <div class="form-group">
+                                <label class="form-label">Max mentions per message</label>
+                                <input type="number" class="form-input" name="mention_threshold" value="5" min="1" max="100">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Action</label>
+                                <select class="form-select" name="mention_action">
+                                    <option value="warn">Warn</option>
+                                    <option value="timeout">Timeout</option>
+                                    <option value="delete">Delete Only</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

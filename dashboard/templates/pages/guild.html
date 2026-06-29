@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ guild.name }}{% endblock %}
+
+{% block content %}
+{% set active_page = "overview" %}
+{% include "partials/guild_header.html" %}
+
+<div class="page-container">
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">{{ icon("users", 14) }} Members</div>
+            <div class="stat-value">{{ guild.member_count }}</div>
+            <div class="stat-change positive">+{{ guild.premium_subscriber_count }} boosting</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">{{ icon("hash", 14) }} Channels</div>
+            <div class="stat-value">{{ guild.channels | length }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">{{ icon("tag", 14) }} Roles</div>
+            <div class="stat-value">{{ guild.roles | length }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">{{ icon("crown", 14) }} Tier</div>
+            <div class="stat-value">{{ guild.premium_tier }}</div>
+            <div class="stat-change">{{ guild.premium_subscriber_count }} boosts</div>
+        </div>
+    </div>
+
+    <!-- Module Status -->
+    <div class="content-card">
+        <div class="card-header">
+            <h2 class="card-title">{{ icon("puzzle", 16) }} Module Status</h2>
+            <a href="/guild/{{ guild.id }}/modules" class="card-action">Manage</a>
+        </div>
+        <div class="module-status-list">
+            {% for name, module in bot.modules.get_all_modules().items() %}
+            <div class="module-status-item">
+                <div class="module-status-info">
+                    <span class="module-status-name">{{ name }}</span>
+                    <span class="module-status-desc">{{ module.description }}</span>
+                </div>
+                <span class="module-badge {{ 'enabled' if module.enabled else 'disabled' }}">
+                    {{ 'Enabled' if module.enabled else 'Disabled' }}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent Actions -->
+    <div class="content-card">
+        <div class="card-header">
+            <h2 class="card-title">{{ icon("scroll-text", 16) }} Recent Actions</h2>
+            <a href="/guild/{{ guild.id }}/moderation" class="card-action">View All</a>
+        </div>
+        <div class="action-list" id="recent-actions">
+            <div class="empty-state small">
+                <p>No recent moderation actions.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const res = await fetch(`/api/v1/guilds/{{ guild.id }}/moderation/cases?limit=5`);
+            const data = await res.json();
+            const container = document.getElementById('recent-actions');
+            if (data.cases && data.cases.length > 0) {
+                container.innerHTML = data.cases.map(c => `
+                    <div class="action-item">
+                        <span class="action-type ${c.action_type}">${c.action_type}</span>
+                        <span class="action-target">${c.target_tag}</span>
+                        <span class="action-reason">${c.reason || 'No reason provided'}</span>
+                        <span class="action-time">${new Date(c.created_at).toLocaleDateString()}</span>
+                    </div>
+                `).join('');
+            }
+        } catch (e) {
+            console.error('Failed to load recent actions:', e);
+        }
+    });
+</script>
+{% endblock %}

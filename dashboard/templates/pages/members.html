@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Members — {{ guild.name }}{% endblock %}
+
+{% block content %}
+{% set active_page = "members" %}
+{% include "partials/guild_header.html" %}
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">{{ icon("users", 24) }} Members</h1>
+        <p class="page-subtitle">Browse, search, and manage server members</p>
+    </div>
+
+    <div class="member-controls">
+        <div class="search-bar">
+            <span class="search-icon">{{ icon("search", 14) }}</span>
+            <input type="text" class="form-input search-input" id="member-search"
+                   placeholder="Search by name or tag..." autofocus>
+        </div>
+        <span class="member-count" id="member-count">Loading...</span>
+    </div>
+
+    <div class="member-grid" id="member-grid">
+        <div class="loading-spinner">{{ icon("loader-circle", 20) }} Loading members...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const GUILD_ID = '{{ guild.id }}';
+    let searchTimeout = null;
+
+    async function loadMembers(search = '', page = 0) {
+        const grid = document.getElementById('member-grid');
+        const count = document.getElementById('member-count');
+        grid.innerHTML = '<div class="loading-spinner">{{ icon("loader-circle", 20) }} Loading members...</div>';
+
+        try {
+            const params = new URLSearchParams({search, page, limit: 100});
+            const url = `/api/v1/guilds/${GUILD_ID}/members?${params}`;
+            console.log('Fetching:', url);
+            const res = await fetch(url);
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            const data = await res.json();
+            count.textContent = `${data.total} members`;
+
+            if (data.members.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><p>No members found.</p></div>';
+                return;
+            }
+
+            grid.innerHTML = data.members.map(m => `
+                <a href="/guild/${GUILD_ID}/members/${m.id}" class="member-card">
+                    <div class="member-avatar">
+                        ${m.avatar_url
+                            ? `<img src="${m.avatar_url}" alt="">`
+                            : `<div class="avatar-placeholder">${m.name[0]}</div>`}
+                    </div>
+                    <div class="member-info">
+                        <div class="member-name-row">
+                            <span class="member-name">${escapeHtml(m.name)}</span>
+                            ${m.is_bot ? '<span class="badge-sm bot">BOT</span>' : ''}
+                            ${m.is_timed_out ? '<span class="badge-sm timeout">TIMED OUT</span>' : ''}
+                        </div>
+                        <span class="member-tag">${escapeHtml(m.tag)}</span>
+                        <div class="member-meta-row">
+                            <span class="member-role">${escapeHtml(m.top_role)}</span>
+                            ${m.voice_channel ? `<span class="member-vc">{{ icon("volume", 12) }} ${escapeHtml(m.voice_channel)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="member-actions">
+                        <span class="card-footer-link">View {{ icon("chevron-right", 14) }}</span>
+                    </div>
+                </a>
+            `).join('');
+        } catch (e) {
+            console.error('Member fetch failed:', e);
+            grid.innerHTML = `<div class="empty-state"><p>Failed. (${e.message})</p></div>`;
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    document.getElementById('member-search').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => loadMembers(e.target.value), 300);
+    });
+
+    loadMembers();
+</script>
+{% endblock %}

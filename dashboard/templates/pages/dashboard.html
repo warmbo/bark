@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Servers{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">Servers</h1>
+        <p class="page-subtitle">Select a server to manage</p>
+    </div>
+
+    <div class="guild-grid">
+        {% if guilds %}
+            {% for guild in guilds %}
+            <a href="/guild/{{ guild.id }}" class="guild-card">
+                <div class="guild-card-icon">
+                    {% if guild.icon %}
+                    <img src="{{ guild.icon.url }}" alt="{{ guild.name }}">
+                    {% else %}
+                    <div class="guild-initials">{{ guild.name[:2] }}</div>
+                    {% endif %}
+                </div>
+                <div class="guild-card-body">
+                    <h3 class="guild-card-name">{{ guild.name }}</h3>
+                    <span class="guild-card-meta">{{ guild.member_count }} members</span>
+                </div>
+                <div class="guild-card-arrow">{{ icon("chevron-right", 18) }}</div>
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">{{ icon("radio", 48) }}</div>
+                <h3>No Servers Connected</h3>
+                <p>Invite Bark to your Discord server to get started.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

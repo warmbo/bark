@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Modules — {{ guild.name }}{% endblock %}
+
+{% block content %}
+{% set active_page = "modules" %}
+{% include "partials/guild_header.html" %}
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">{{ icon("puzzle", 24) }} Modules</h1>
+        <p class="page-subtitle">Enable, disable, and configure Bark modules</p>
+    </div>
+
+    <div class="modules-grid">
+        {% for name, module in modules.items() %}
+        <a href="/guild/{{ guild.id }}/modules/{{ name }}" class="module-card" data-module="{{ name }}">
+            <div class="module-card-header">
+                <div class="module-card-title">
+                    <h3>{{ icon("puzzle", 16) }} {{ name | capitalize }}</h3>
+                    <span class="module-version">v{{ module.version }}</span>
+                </div>
+                <label class="toggle-switch" onclick="event.stopPropagation();">
+                    <input type="checkbox" class="module-toggle"
+                           data-module="{{ name }}"
+                           {{ 'checked' if module.enabled else '' }}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            {% if module.description %}
+            <p class="module-description">{{ module.description }}</p>
+            {% endif %}
+            <div class="module-meta">
+                <span class="module-meta-item">{{ module.get_commands() | length }} commands</span>
+                <span class="module-meta-item">{{ module.get_events() | length }} events</span>
+                {% if module.get_dashboard_pages() %}
+                <span class="module-meta-item">{{ module.get_dashboard_pages() | length }} pages</span>
+                {% endif %}
+            </div>
+            <div class="module-commands">
+                {% for cmd in module.get_commands() %}
+                <code class="cmd-badge">/{{ cmd.name }}</code>
+                {% endfor %}
+            </div>
+            <div class="module-card-footer">
+                <span class="card-footer-link">Manage {{ icon("chevron-right", 14) }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll('.module-toggle').forEach(toggle => {
+        toggle.addEventListener('change', async (e) => {
+            const moduleName = e.target.dataset.module;
+            const enabled = e.target.checked;
+            try {
+                const res = await fetch(`/api/v1/guilds/{{ guild.id }}/modules/${moduleName}/toggle`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({enabled})
+                });
+                const data = await res.json();
+                if (!data.success) e.target.checked = !enabled;
+            } catch (err) {
+                e.target.checked = !enabled;
+            }
+        });
+    });
+</script>
+{% endblock %}
