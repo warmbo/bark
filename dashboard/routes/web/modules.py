@@ -2,15 +2,15 @@
 Modules web routes.
 """
 
-import json
-
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
 from database.engine import session_scope
 from database.models.module import ModuleConfig
+from database.models.permissions import ModuleRoleAccess
+from services.response import check_api_permission, set_cached_module_min_role
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -27,11 +27,19 @@ async def modules_page(request: Request, guild_id: int):
         return HTMLResponse("Guild not found", status_code=404)
 
     all_modules = bot.modules.get_all_modules()
+    from sqlalchemy import select
+    async with session_scope() as session:
+        configs = (
+            await session.execute(
+                select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
+            )
+        ).scalars().all()
+    module_states = {config.module_name: config.enabled for config in configs}
 
     return templates.TemplateResponse(
         request,
         "pages/modules.html",
-        {"guild": guild, "modules": all_modules},
+        {"guild": guild, "modules": all_modules, "module_states": module_states},
     )
 
 
@@ -68,22 +76,41 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
     async with session_scope() as session:
         result = await session.execute(
             select(ModuleConfig).where(
-                ModuleConfig.guild_id == guild_id,
+                ModuleConfig.guild_id == str(guild_id),
                 ModuleConfig.module_name == module_name,
             )
         )
         db_config = result.scalar_one_or_none()
+        role_access = (
+            await session.execute(
+                select(ModuleRoleAccess).where(
+                    ModuleRoleAccess.guild_id == str(guild_id),
+                    ModuleRoleAccess.module_name == module_name,
+                )
+            )
+        ).scalar_one_or_none()
 
-    # Build config with nested defaults matching schema
-    raw_config = json.loads(db_config.config) if db_config and db_config.config else {}
+    set_cached_module_min_role(
+        module_name,
+        guild_id,
+        role_access.min_role if role_access else None,
+    )
+    if not check_api_permission(request, f"{module_name}.access", guild_id):
+        return HTMLResponse("Insufficient permissions", status_code=403)
+    # Module hooks keep specialized modules on one authoritative config store.
+    raw_config = await module.load_dashboard_config(guild_id)
     schema = module.get_settings_schema()
     safe_config = _ensure_nested_config(raw_config, schema)
+    minimum_role = role_access.min_role if role_access else "admin"
+    role_rank = {"viewer": 0, "moderator": 1, "admin": 2, "owner": 3}
+    current_role = request.session.get("role", "admin")
+    can_manage_module = role_rank.get(current_role, -1) >= role_rank[minimum_role]
 
     module_data = {
         "version": module.version,
         "description": module.description,
         "author": module.author,
-        "enabled": db_config.enabled if db_config else False,
+        "enabled": db_config.enabled if db_config else True,
         "priority": db_config.priority if db_config else 100,
         "config": safe_config,
         "settings_schema": schema,
@@ -96,6 +123,12 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
             {"route": p.route, "label": p.label}
             for p in module.get_dashboard_pages()
         ],
+        "actions": module.get_actions(),
+        "about": module.get_about(),
+        "extra_tabs": module.get_extra_tabs(),
+        "role_access_override": role_access.min_role if role_access else None,
+        "minimum_role": minimum_role,
+        "can_manage_module": can_manage_module,
     }
 
     return templates.TemplateResponse(

@@ -3,167 +3,381 @@
 
 {% block content %}
 {% set active_page = "settings" %}
-{% include "partials/guild_header.html" %}
 
 <div class="page-container">
     <div class="page-header">
-        <h1 class="page-title">Settings</h1>
-        <p class="page-subtitle">Configure logging, AutoMod, and general preferences</p>
+        <h1 class="page-title">{{ icon("settings", 24) }} Settings</h1>
+        <p class="page-subtitle">Server configuration and module management</p>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="general" role="tab">General</button>
-        <button class="tab" data-tab="logging" role="tab">Logging</button>
-        <button class="tab" data-tab="automod" role="tab">AutoMod</button>
-    </div>
-
-    <!-- General Tab -->
-    <div class="tab-panel active" id="tab-general">
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">General Settings</h2>
-            </div>
-            <form class="settings-form" id="general-settings-form">
-                <div class="form-group">
-                    <label class="form-label">Command Prefix</label>
-                    <input type="text" class="form-input" name="prefix" value="!" placeholder="!">
-                    <span class="form-hint">Prefix for text-based commands</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Moderator Role ID</label>
-                    <input type="text" class="form-input" name="mod_role" placeholder="Discord role ID">
-                    <span class="form-hint">Members with this role automatically get moderator access</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Admin Role ID</label>
-                    <input type="text" class="form-input" name="admin_role" placeholder="Discord role ID">
-                    <span class="form-hint">Members with this role automatically get admin access</span>
-                </div>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-            </form>
+    <!-- Module Config Links -->
+    <div class="content-card">
+        <div class="card-header">
+            <h2 class="card-title">{{ icon("puzzle", 16) }} Module Configuration</h2>
+        </div>
+        <div class="module-nav-list" id="module-nav-list">
+            {% if request and request.state and request.state.bot is defined %}
+            {% set _mods = request.state.bot.modules.get_all_modules() %}
+            {% if _mods %}
+                {% for mod_name, mod in _mods.items() %}
+                <a href="/guild/{{ guild.id }}/modules/{{ mod_name }}" class="module-nav-item">
+                    <div class="module-nav-icon">{{ icon("puzzle", 20) }}</div>
+                    <div class="module-nav-body">
+                        <span class="module-nav-name">{{ mod_name | capitalize }}</span>
+                        <span class="module-nav-desc">{{ mod.description or 'Configure this module' }}</span>
+                    </div>
+                    <span class="module-nav-status {{ 'enabled' if mod.enabled else 'disabled' }}">
+                        {{ 'Enabled' if mod.enabled else 'Disabled' }}
+                    </span>
+                    <span class="module-nav-arrow">{{ icon("chevron-right", 16) }}</span>
+                </a>
+                {% endfor %}
+            {% endif %}
+            {% endif %}
+        </div>
+        <div class="config-health" id="settings-health">
+            <span class="config-health-label">{{ icon("activity", 14) }} Config health</span>
+            <span class="config-health-status" id="settings-health-status">Loading...</span>
+            <div class="config-health-issues mt-1" id="settings-health-issues"></div>
         </div>
     </div>
 
-    <!-- Logging Tab -->
-    <div class="tab-panel" id="tab-logging">
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">Log Channel Configuration</h2>
+    <!-- Dashboard Configuration -->
+    <div class="content-card">
+        <div class="card-header">
+            <h2 class="card-title">{{ icon("radio", 16) }} Dashboard Configuration</h2>
+        </div>
+        <div class="module-info-body">
+            <div class="info-row">
+                <span class="info-label">Authentication</span>
+                <span class="info-value">
+                    {% if config.oauth2.enabled %}
+                    <span class="badge badge-ok">OAuth2 Enabled</span>
+                    {% elif config.oauth2.client_id %}
+                    <span class="badge badge-warn">OAuth2 Incomplete</span>
+                    {% else %}
+                    <span class="badge badge-muted">Permissive Mode</span>
+                    <span class="form-hint mt-1">Set BARK_OAUTH2_CLIENT_ID to enable Discord login.</span>
+                    {% endif %}
+                </span>
             </div>
-            <form class="settings-form" id="logging-settings-form">
-                <div class="logging-grid">
-                    <div class="form-group">
-                        <label class="form-label">Message Edits</label>
-                        <input type="text" class="form-input" name="log_message_edit" placeholder="Channel ID">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Message Deletes</label>
-                        <input type="text" class="form-input" name="log_message_delete" placeholder="Channel ID">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Member Joins</label>
-                        <input type="text" class="form-input" name="log_member_join" placeholder="Channel ID">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Member Leaves</label>
-                        <input type="text" class="form-input" name="log_member_leave" placeholder="Channel ID">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Moderation Actions</label>
-                        <input type="text" class="form-input" name="log_moderation" placeholder="Channel ID">
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-            </form>
+            <div class="info-row">
+                <span class="info-label">Public URL</span>
+                <span class="info-value"><a href="{{ config.dashboard.public_url }}" rel="noopener"><code class="code-sm">{{ config.dashboard.public_url }}</code></a></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">OAuth Callback</span>
+                <span class="info-value"><code class="code-sm">{{ config.oauth2.redirect_uri }}</code></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Invite URL</span>
+                <span class="info-value">
+                    {% if config.dashboard.invite_url %}
+                    <code class="code-sm">{{ config.dashboard.invite_url }}</code>
+                    {% else %}
+                    <span class="text-tertiary">Not configured</span>
+                    <span class="form-hint mt-1">Set BARK_INVITE_URL to show an invite button on the server selection page.</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Data Directory</span>
+                <span class="info-value"><code class="code-sm">{{ config.data_dir }}</code></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Version</span>
+                <span class="info-value">Bark 0.2.0</span>
+            </div>
         </div>
     </div>
 
-    <!-- AutoMod Tab -->
-    <div class="tab-panel" id="tab-automod">
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">AutoMod Rules</h2>
+    <!-- General Settings -->
+    <div class="content-card">
+        <div class="card-header">
+            <h2 class="card-title">{{ icon("sliders", 16) }} General</h2>
+        </div>
+        <form class="settings-form" id="general-settings-form">
+            <div class="form-group">
+                <label class="form-label" for="general-prefix">Command Prefix</label>
+                <input type="text" class="form-input" id="general-prefix" name="prefix" value="" placeholder="!">
+                <span class="form-hint">Slash command prefix for text commands. Defaults to !.</span>
             </div>
-            <form class="settings-form" id="automod-settings-form">
-                <div class="automod-rules">
-                    <!-- Spam Detection -->
-                    <div class="automod-rule">
-                        <div class="automod-rule-header">
-                            <h3>Spam Detection</h3>
-                            <label class="toggle-switch">
-                                <input type="checkbox" name="spam_enabled">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="automod-rule-body">
-                            <div class="form-group">
-                                <label class="form-label">Threshold (messages/10s)</label>
-                                <input type="number" class="form-input" name="spam_threshold" value="5" min="1" max="50">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Action</label>
-                                <select class="form-select" name="spam_action">
-                                    <option value="warn">Warn</option>
-                                    <option value="timeout">Timeout</option>
-                                    <option value="delete">Delete Only</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Duration (minutes)</label>
-                                <input type="number" class="form-input" name="spam_duration" value="10" min="1">
-                            </div>
-                        </div>
-                    </div>
+            <div class="form-actions form-actions-static">
+                <button type="button" class="btn" id="general-settings-discard" disabled>Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled>{{ icon("save", 16) }} Loading settings...</button>
+            </div>
+        </form>
+    </div>
 
-                    <!-- Invite Filtering -->
-                    <div class="automod-rule">
-                        <div class="automod-rule-header">
-                            <h3>Invite Filtering</h3>
-                            <label class="toggle-switch">
-                                <input type="checkbox" name="invite_enabled">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="automod-rule-body">
-                            <div class="form-group">
-                                <label class="form-label">Action</label>
-                                <select class="form-select" name="invite_action">
-                                    <option value="warn">Warn</option>
-                                    <option value="delete">Delete Only</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Mention Spam -->
-                    <div class="automod-rule">
-                        <div class="automod-rule-header">
-                            <h3>Mention Spam</h3>
-                            <label class="toggle-switch">
-                                <input type="checkbox" name="mention_enabled">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="automod-rule-body">
-                            <div class="form-group">
-                                <label class="form-label">Max mentions per message</label>
-                                <input type="number" class="form-input" name="mention_threshold" value="5" min="1" max="100">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Action</label>
-                                <select class="form-select" name="mention_action">
-                                    <option value="warn">Warn</option>
-                                    <option value="timeout">Timeout</option>
-                                    <option value="delete">Delete Only</option>
-                                </select>
-                            </div>
-                        </div>
+    <!-- Bot Appearance -->
+    <details class="advanced-section">
+      <summary>{{ icon("palette", 12) }} Bot Customization</summary>
+    <div class="content-card">
+        <div class="card-header">
+            <div><h2 class="card-title">{{ icon("palette", 16) }} Bot Appearance</h2><p class="card-description">Change the bot's avatar, banner, and Discord presence.</p></div>
+        </div>
+        <div class="config-body">
+            <!-- Current avatar preview -->
+            <div class="avatar-preview-section" id="bot-avatar-section">
+                <div class="avatar-preview-frame">
+                    <img id="bot-avatar-preview" src="" alt="Bot avatar" class="avatar-preview-img">
+                    <div class="avatar-preview-fallback" id="bot-avatar-fallback" style="display:none">
+                        <span class="avatar-placeholder-icon">{{ icon("bot", 32) }}</span>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <div class="avatar-upload-controls">
+                    <strong id="bot-avatar-name">Loading...</strong>
+                    <div class="form-actions form-actions-static">
+                        <input type="file" id="avatar-upload" name="avatar" accept="image/png,image/jpeg,image/gif" hidden>
+                        <label class="btn btn-sm" for="avatar-upload">{{ icon("upload", 14) }} Upload avatar</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Presence form -->
+            <form id="bot-presence-form" class="module-config-form">
+                <fieldset class="config-subsection">
+                    <legend class="config-subsection-title">Rich Presence</legend>
+                    <p class="config-subsection-desc">Controls what the bot is "playing", "watching", etc.</p>
+                    <div class="form-grid form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label" for="bot-activity-type">Activity type</label>
+                            <select class="form-select" id="bot-activity-type" name="activity_type">
+                                <option value="playing">Playing</option>
+                                <option value="streaming">Streaming</option>
+                                <option value="listening">Listening to</option>
+                                <option value="watching">Watching</option>
+                                <option value="competing">Competing in</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="bot-activity-name">Activity name</label>
+                            <input class="form-input" id="bot-activity-name" name="activity_name" type="text" placeholder="with the dashboard" maxlength="128">
+                        </div>
+                    </div>
+                    <div class="form-actions form-actions-static">
+                        <button type="submit" class="btn btn-primary" id="bot-presence-save">{{ icon("save", 16) }} Update presence</button>
+                    </div>
+                </fieldset>
             </form>
+
+            <!-- Banner upload -->
+            <fieldset class="config-subsection">
+                <legend class="config-subsection-title">Banner</legend>
+                <p class="config-subsection-desc">Set a banner image for the bot's Discord profile (requires Discord Nitro on the bot owner's account).</p>
+                <div class="form-actions form-actions-static">
+                    <label class="btn btn-sm" for="banner-upload">{{ icon("image", 14) }} Upload banner</label>
+                    <input type="file" id="banner-upload" name="banner" accept="image/png,image/jpeg,image/gif" hidden>
+                    <span class="form-hint" id="banner-status" role="status" aria-live="polite"></span>
+                </div>
+            </fieldset>
         </div>
     </div>
+    </details>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const GUILD_ID = '{{ guild.id }}';
+    const generalForm = document.getElementById('general-settings-form');
+    const generalDiscard = document.getElementById('general-settings-discard');
+    let generalBaseline = null;
+
+    function setGeneralDirty(dirty) {
+        if (!generalForm || generalForm.dataset.ready !== 'true') return;
+        generalForm.dataset.dirty = String(dirty);
+        generalForm.querySelector('.btn-primary').disabled = !dirty;
+        generalDiscard.disabled = !dirty;
+    }
+
+    async function loadGeneralSettings() {
+        if (!generalForm) return;
+        const btn = generalForm.querySelector('.btn-primary');
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings`, {cache: 'no-cache'});
+            const settings = result?.data?.settings || {};
+            if (generalForm.elements.prefix) generalForm.elements.prefix.value = settings.prefix ?? '!';
+            generalForm.dataset.ready = 'true';
+            generalBaseline = Object.fromEntries(new FormData(generalForm).entries());
+            btn.disabled = true;
+            generalDiscard.disabled = true;
+            btn.innerHTML = '{{ icon("save", 16) }} Save';
+        } catch (error) {
+            btn.disabled = true;
+            btn.textContent = 'Settings unavailable';
+            showToast(error.message || 'Could not load general settings', 'error');
+        }
+    }
+
+    generalForm?.addEventListener('input', () => setGeneralDirty(true));
+    generalForm?.addEventListener('change', () => setGeneralDirty(true));
+    generalDiscard?.addEventListener('click', () => {
+        if (!generalBaseline) return;
+        for (const [name, value] of Object.entries(generalBaseline)) generalForm.elements[name].value = value;
+        setGeneralDirty(false);
+    });
+
+    generalForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (e.target.dataset.ready !== 'true') return;
+        const btn = e.target.querySelector('.btn-primary');
+        btn.disabled = true; btn.innerHTML = 'Saving...';
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/general`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            if (result.success === false) throw new Error(result.error || 'Save failed');
+            generalBaseline = Object.fromEntries(new FormData(e.target).entries());
+            setGeneralDirty(false);
+            showToast('Settings saved', 'success');
+        } catch (err) {
+            showToast(err.message || 'Unable to save settings', 'error');
+            btn.disabled = false;
+        }
+        btn.innerHTML = '{{ icon("save", 16) }} Save';
+    });
+
+    async function loadSettingsHealth() {
+        const statusEl = document.getElementById('settings-health-status');
+        const issuesEl = document.getElementById('settings-health-issues');
+        if (!statusEl || !issuesEl) return;
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/health`, { cache: 'no-cache' });
+            const health = result?.data || {};
+            statusEl.textContent = health.healthy ? 'Healthy' : `Unhealthy (${health.issue_count || 0})`;
+            statusEl.className = `config-health-status ${health.healthy ? 'status-good' : 'status-bad'}`;
+            const issues = [];
+            for (const m of health.modules || []) {
+                for (const issue of m.issues || []) issues.push(`${m.module || 'module'}: ${issue}`);
+            }
+            issuesEl.innerHTML = issues.length ? issues.map(i => `<div class="config-health-issue">⚠️ ${escHtml(i)}</div>`).join('') : '<div class="config-health-issue">No issues</div>';
+        } catch {
+            statusEl.textContent = 'Unavailable';
+            statusEl.className = 'config-health-status status-bad';
+        }
+    }
+
+    loadSettingsHealth();
+    loadGeneralSettings();
+
+    // ── Bot Appearance ─────────────────────────────────────
+    const appearanceForm = document.getElementById('bot-presence-form');
+    const avatarUpload = document.getElementById('avatar-upload');
+    const avatarPreview = document.getElementById('bot-avatar-preview');
+    const avatarName = document.getElementById('bot-avatar-name');
+    const avatarUploadButton = document.querySelector('label[for="avatar-upload"]');
+
+    avatarPreview?.addEventListener('error', function() {
+        this.style.display = 'none';
+        const fallback = document.getElementById('bot-avatar-fallback');
+        if (fallback) fallback.style.display = '';
+    });
+
+    async function loadBotAppearance() {
+        if (!avatarPreview) return;
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/bot/appearance`, {cache: 'no-cache'});
+            const data = result?.data || {};
+            // Avatar
+            if (data.avatar_url) {
+                avatarPreview.src = safeResourceUrl(data.avatar_url, '');
+                avatarPreview.style.display = '';
+                document.getElementById('bot-avatar-fallback').style.display = 'none';
+            }
+            if (avatarName) avatarName.textContent = data.username || 'Unknown';
+            // Presence
+            const typeSelect = document.getElementById('bot-activity-type');
+            const nameInput = document.getElementById('bot-activity-name');
+            if (typeSelect && data.activity_type) typeSelect.value = data.activity_type;
+            if (nameInput && data.activity_name) nameInput.value = data.activity_name;
+        } catch (error) {
+            showToast('Could not load bot appearance: ' + (error.message || 'Unknown error'), 'error');
+        }
+    }
+
+    // Avatar upload
+    avatarUpload?.addEventListener('change', async () => {
+        const file = avatarUpload.files?.[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        if (avatarUploadButton) avatarUploadButton.textContent = 'Uploading...';
+        avatarUpload.disabled = true;
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/bot/appearance/avatar`, {
+                method: 'POST',
+                body: formData,
+            });
+            if (result.success === false) throw new Error(result.error || 'Upload failed');
+            showToast('Avatar updated', 'success');
+            await loadBotAppearance();
+        } catch (error) {
+            showToast(error.message || 'Avatar upload failed', 'error');
+        } finally {
+            if (avatarUploadButton) avatarUploadButton.textContent = 'Upload avatar';
+            avatarUpload.disabled = false;
+            avatarUpload.value = '';
+        }
+    });
+
+    // Banner upload
+    const bannerUpload = document.getElementById('banner-upload');
+    const bannerStatus = document.getElementById('banner-status');
+    bannerUpload?.addEventListener('change', async () => {
+        const file = bannerUpload.files?.[0];
+        if (!file) return;
+        if (bannerUpload.disabled) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        bannerStatus.textContent = 'Uploading...';
+        bannerUpload.disabled = true;
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/bot/appearance/banner`, {
+                method: 'POST',
+                body: formData,
+            });
+            if (result.success === false) throw new Error(result.error || 'Upload failed');
+            showToast(result.data?.message || 'Banner updated', 'success');
+            bannerStatus.textContent = 'Banner updated';
+        } catch (error) {
+            showToast(error.message || 'Banner upload failed', 'error');
+            bannerStatus.textContent = error.message || 'Upload failed';
+        } finally {
+            bannerUpload.disabled = false;
+            bannerUpload.value = '';
+        }
+    });
+
+    // Presence form
+    appearanceForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('bot-presence-save');
+        btn.disabled = true;
+        btn.innerHTML = 'Saving...';
+        const data = {
+            activity_type: document.getElementById('bot-activity-type').value,
+            activity_name: document.getElementById('bot-activity-name').value.trim(),
+        };
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/bot/appearance/presence`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data),
+            });
+            if (result.success === false) throw new Error(result.error || 'Update failed');
+            showToast('Presence updated', 'success');
+        } catch (error) {
+            showToast(error.message || 'Failed to update presence', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '{{ icon("save", 16) }} Update presence';
+        }
+    });
+
+    loadBotAppearance();
+</script>
 {% endblock %}

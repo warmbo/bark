@@ -1,0 +1,1 @@
+from modules.announcements.module import AnnouncementsModule

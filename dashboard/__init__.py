@@ -4,18 +4,22 @@ Dashboard — FastAPI application for the Bark management web UI.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from config import config
 from dashboard.app import DashboardApp
+from services.security import SecurityMiddleware, AuthMiddleware
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -36,12 +40,23 @@ def create_app(bot: BarkBot) -> DashboardApp:
         redoc_url=None,
     )
 
-    # Session middleware
+    # Starlette executes class middleware in reverse registration order. Auth
+    # must run inside SessionMiddleware so request.session is available.
+    app.add_middleware(AuthMiddleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=config.dashboard.secret_key,
         max_age=config.dashboard.session_ttl,
         same_site="lax",
+        https_only=config.dashboard.secure_cookies,
+    )
+    app.add_middleware(SecurityMiddleware)
+    public_host = urlparse(config.dashboard.public_url).hostname
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=[
+            host for host in (public_host, "localhost", "127.0.0.1", "test") if host
+        ],
     )
 
     # Static files
@@ -56,15 +71,29 @@ def create_app(bot: BarkBot) -> DashboardApp:
     # Make bot available on app state
     app.state.bot = bot
 
+    from services.realtime_bridge import RealtimeBridge
+    realtime_bridge = RealtimeBridge(bot.modules.event_bus)
+    app.state.realtime_bridge = realtime_bridge
+    app.router.add_event_handler("startup", realtime_bridge.start)
+    app.router.add_event_handler("shutdown", realtime_bridge.stop)
+    from services.response import load_module_role_access_cache
+    app.router.add_event_handler("startup", load_module_role_access_cache)
+
+    # Give bot a reference to the FastAPI app for module API route registration
+    bot.app = app
+
     # ── Middleware ────────────────────────────────────
 
     @app.middleware("http")
     async def add_bot_to_request(request: Request, call_next):
         request.state.bot = bot
         response = await call_next(request)
-        # Prevent browser caching on HTML pages
+        # Versioned static assets can be cached aggressively — ?v=N handles invalidation
         content_type = response.headers.get("content-type", "")
-        if "text/html" in content_type:
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        # Prevent browser caching on HTML pages
+        elif "text/html" in content_type:
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
@@ -91,12 +120,26 @@ def create_app(bot: BarkBot) -> DashboardApp:
     from dashboard.routes.api.moderation import router as moderation_api
     from dashboard.routes.api.settings import router as settings_api
     from dashboard.routes.api.actions import router as actions_api
+    from dashboard.routes.api.health import router as health_api
+    from dashboard.routes.api.manifest import router as manifest_api
+    from dashboard.routes.api.bot_appearance import router as bot_appearance_api
+    from dashboard.routes.api.audit_log import router as audit_log_api
+    from dashboard.routes.api.realtime import router as realtime_api
+    from dashboard.routes.api.notes import router as notes_api
+    from dashboard.routes.auth import router as auth_router
 
     app.include_router(guilds_api, prefix="/api/v1")
     app.include_router(modules_api, prefix="/api/v1")
     app.include_router(moderation_api, prefix="/api/v1")
     app.include_router(settings_api, prefix="/api/v1")
     app.include_router(actions_api, prefix="/api/v1")
+    app.include_router(health_api, prefix="/api/v1")
+    app.include_router(manifest_api, prefix="/api/v1")
+    app.include_router(audit_log_api, prefix="/api/v1")
+    app.include_router(realtime_api, prefix="/api/v1")
+    app.include_router(notes_api, prefix="/api/v1")
+    app.include_router(bot_appearance_api, prefix="/api/v1")
+    app.include_router(auth_router)
 
     # ── Root Route ────────────────────────────────────
 
@@ -106,12 +149,46 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     @app.get("/dashboard", response_class=HTMLResponse)
     async def dashboard_home(request: Request):
-        guilds = list(bot.guilds)
+        # Uvicorn starts accepting requests before the Discord gateway is ready.
+        # Give the initial dashboard request a chance to receive the real guild
+        # cache instead of rendering a stale "0 connected" page.
+        if not bot.is_ready():
+            try:
+                await asyncio.wait_for(bot.wait_until_ready(), timeout=10)
+            except TimeoutError:
+                logger.warning("Dashboard rendered before Discord became ready")
+
+        if config.oauth2.enabled and request.session.get("user"):
+            from database.engine import session_scope
+            from services.dashboard_access import build_guild_catalog, get_user_guild_access
+
+            user_id = request.session["user"]["id"]
+            async with session_scope() as session:
+                access = await get_user_guild_access(session, user_id)
+            guilds = build_guild_catalog(
+                access,
+                bot.guilds,
+                client_id=config.oauth2.client_id,
+            )
+        else:
+            guilds = [
+                {
+                    "id": str(guild.id),
+                    "name": guild.name,
+                    "icon_url": guild.icon.url if guild.icon else None,
+                    "member_count": guild.member_count,
+                    "connected": True,
+                    "can_manage": True,
+                    "access_tier": "connected",
+                    "invite_url": "",
+                }
+                for guild in bot.guilds
+            ]
         tmpl = request.app.state.templates
         return tmpl.TemplateResponse(
             request,
             "pages/dashboard.html",
-            {"guilds": guilds},
+            {"guilds": guilds, "config": config},
         )
 
     return DashboardApp(app, bot)

@@ -1,0 +1,17 @@
+<article class="content-card workspace-data-card" data-section="notes">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("file-text", 16) }} User Notes</h2><p class="card-description">Private context for the moderation team. Notes are never shown to members.</p></div>
+    <div class="card-header-actions"><button type="button" class="btn btn-sm" data-refresh-section="notes" aria-label="Refresh user notes">{{ icon("refresh-cw", 14) }} Refresh</button>{% if module_data.can_manage_module %}<button type="button" class="btn btn-primary btn-sm" id="mod-note-new-btn">{{ icon("plus", 14) }} Add note</button>{% endif %}</div>
+  </div>
+  {% if module_data.can_manage_module %}
+  <form class="config-body inline-editor-form" id="mod-note-form" hidden>
+    <input type="hidden" id="mod-note-id" name="note_id">
+    <div class="form-grid form-grid-2">
+      <div class="form-group"><label class="form-label" for="mod-note-user">Member <span aria-hidden="true">*</span></label><select class="form-select api-select" id="mod-note-user" name="user_id" data-api="/api/v1/guilds/{guild_id}/members" data-value-key="id" data-label-key="tag" required><option value="">Loading members…</option></select></div>
+      <div class="form-group"><label class="form-label" for="mod-note-text">Note <span aria-hidden="true">*</span></label><textarea class="form-input" id="mod-note-text" name="content" rows="3" maxlength="2000" placeholder="Add useful internal context…" required></textarea></div>
+    </div>
+    <div class="form-actions form-actions-static"><button type="button" class="btn" id="mod-note-cancel">Cancel</button><button type="submit" class="btn btn-primary" id="mod-note-save">{{ icon("save", 14) }} Save note</button></div>
+  </form>
+  {% endif %}
+  <div id="mod-notes-content" aria-live="polite"><div class="skeleton skeleton-card"></div></div>
+</article>

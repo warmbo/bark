@@ -1,295 +1,154 @@
+{# Module workspace contract: docs/module-workspace.md #}
 {% extends "base.html" %}
+{% from "components/primitives.html" import schema_field, state_panel, status_badge %}
 {% block title %}{{ module_name | capitalize }} — {{ guild.name }}{% endblock %}
 
 {% block content %}
-{% set active_page = "module_" + module_name %}
-{% include "partials/guild_header.html" %}
-
-<div class="page-container">
-    <div class="page-header module-detail-header">
-        <div>
-            <a href="/guild/{{ guild.id }}/modules" class="back-link">← Back to Modules</a>
-            <h1 class="page-title">{{ module_name | capitalize }}</h1>
-            <p class="page-subtitle">{{ module_data.description }}</p>
-        </div>
-        <div class="module-detail-actions">
-            <label class="toggle-switch">
-                <input type="checkbox" class="module-toggle"
-                       data-module="{{ module_name }}"
-                       {{ 'checked' if module_data.enabled else '' }}>
-                <span class="toggle-slider"></span>
-            </label>
-            <span class="toggle-label">{{ 'Enabled' if module_data.enabled else 'Disabled' }}</span>
-            <button class="btn btn-sm module-reload" data-module="{{ module_name }}">
-                ↻ Reload
-            </button>
-        </div>
+{% set active_page = 'module_' + module_name %}
+{% set has_operations = module_data.actions | length > 0 %}
+<div class="page-container module-workspace" data-tab-scope data-guild-id="{{ guild.id }}" data-module-name="{{ module_name }}" data-user-role="{{ request.session.get('role', 'admin') }}" data-can-manage="{{ 'true' if module_data.can_manage_module else 'false' }}">
+  <header class="page-header page-header-standard module-workspace-header">
+    <div class="module-heading">
+      <a href="/guild/{{ guild.id }}/modules" class="back-link">{{ icon('arrow-left', 14) }} All modules</a>
+      <p class="page-eyebrow">Module workspace</p>
+      <h1 class="page-title">{{ module_name | capitalize }}</h1>
+      <p class="page-subtitle">{{ module_data.description }}</p>
     </div>
-
-    <div class="detail-grid">
-        <!-- Info Card -->
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">Module Info</h2>
+    <div class="page-actions">
+      <span id="module-status-badge">{{ status_badge('Enabled' if module_data.enabled else 'Disabled', 'success' if module_data.enabled else 'neutral') }}</span>
+      <label class="module-toggle-control" for="module-enabled">
+        <span class="sr-only">Enable {{ module_name }}</span>
+        <span class="toggle-switch"><input id="module-enabled" name="module_enabled" type="checkbox" class="module-toggle" {{ 'checked' if module_data.enabled else '' }}><span class="toggle-slider"></span></span>
+      </label>
+      <button type="button" class="btn btn-sm module-reload" data-module="{{ module_name }}">{{ icon('refresh-cw', 14) }} Reload</button>
+      {% if request.session.get('role', 'admin') in ['admin', 'owner'] %}
+      <details class="role-access-menu">
+        <summary class="btn btn-sm role-access-summary">{{ icon('shield', 14) }} <span id="role-access-summary-text">{{ (module_data.role_access_override or 'admin') | capitalize }}+</span> {{ icon('edit-3', 12) }}</summary>
+        <div class="role-access-popover">
+          <form id="module-role-access-form" data-current-role="{{ module_data.role_access_override or '' }}">
+            <div class="form-group">
+              <label class="form-label" for="module-min-role">Minimum dashboard role</label>
+              <select id="module-min-role" name="min_role" class="form-select">
+                <option value="" {{ 'selected' if not module_data.role_access_override else '' }}>Default (Admin+)</option>
+                {% for role in ['viewer', 'moderator', 'admin', 'owner'] %}<option value="{{ role }}" {{ 'selected' if module_data.role_access_override == role else '' }}>{{ role | capitalize }}+</option>{% endfor %}
+              </select>
+              <p class="form-hint">Higher roles inherit access.</p>
             </div>
-            <div class="module-info-body">
-                <div class="info-row">
-                    <span class="info-label">Version</span>
-                    <span class="info-value mono">v{{ module_data.version }}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Author</span>
-                    <span class="info-value">{{ module_data.author }}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Status</span>
-                    <span class="info-value">
-                        <span class="module-badge {{ 'enabled' if module_data.enabled else 'disabled' }}">
-                            {{ 'Enabled' if module_data.enabled else 'Disabled' }}
-                        </span>
-                    </span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Priority</span>
-                    <span class="info-value">{{ module_data.priority }}</span>
-                </div>
+            <div class="form-actions form-actions-static">
+              <button type="button" class="btn btn-sm" id="reset-role-access-btn" {{ 'disabled' if not module_data.role_access_override else '' }}>Use default</button>
+              <button type="submit" class="btn btn-primary btn-sm" id="save-role-access-btn">Save</button>
             </div>
+          </form>
         </div>
-
-        <!-- Commands Card -->
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">Discord Commands ({{ module_data.commands | length }})</h2>
-            </div>
-            <div class="commands-list">
-                {% if module_data.commands %}
-                    {% for cmd in module_data.commands %}
-                    <div class="command-item">
-                        <div class="command-header">
-                            <code class="command-name">/{{ cmd.name }}</code>
-                            <div class="command-badges">
-                                {% if cmd.slash %}<span class="badge-sm slash">slash</span>{% endif %}
-                            </div>
-                        </div>
-                        <span class="command-desc">{{ cmd.description }}</span>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="empty-state small">
-                        <p>No slash commands registered.</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Events Card -->
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">Events ({{ module_data.events | length }})</h2>
-            </div>
-            <div class="events-list">
-                {% if module_data.events %}
-                    {% for evt in module_data.events %}
-                    <div class="event-item">
-                        <code class="event-name">{{ evt }}</code>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="empty-state small">
-                        <p>No events registered.</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Configuration Card -->
-        <div class="content-card" id="config-card">
-            <div class="card-header">
-                <h2 class="card-title">Configuration</h2>
-                <span class="config-saved hidden" id="config-saved">✅ Saved</span>
-            </div>
-            <div class="config-body">
-                {% if module_data.settings_schema and module_data.settings_schema.properties %}
-                <form class="module-config-form" data-module="{{ module_name }}">
-                    {% for key, prop in module_data.settings_schema.properties.items() %}
-                    {% if prop.type == "object" and prop.properties %}
-                    {#--- Nested object: render as sub-section ---#}
-                    <div class="config-subsection">
-                        <h3 class="config-subsection-title">{{ prop.title | default(key | capitalize) }}</h3>
-                        {% if prop.description %}
-                        <p class="config-subsection-desc">{{ prop.description }}</p>
-                        {% endif %}
-                        {% for sub_key, sub_prop in prop.properties.items() %}
-                            <div class="form-group">
-                                <label class="form-label">{{ sub_prop.title | default(sub_key) }}</label>
-                                {% if sub_prop.type == "boolean" %}
-                                <label class="toggle-switch">
-                                    <input type="checkbox" name="{{ key }}_{{ sub_key }}"
-                                           {{ 'checked' if module_data.config.get(key, {}).get(sub_key, sub_prop.default) else '' }}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                {% elif sub_prop.type == "integer" or sub_prop.type == "number" %}
-                                <input type="number" class="form-input" name="{{ key }}_{{ sub_key }}"
-                                       value="{{ module_data.config.get(key, {}).get(sub_key, sub_prop.default or '') }}"
-                                       min="{{ sub_prop.minimum or '' }}" max="{{ sub_prop.maximum or '' }}"
-                                       placeholder="{{ sub_prop.placeholder or 'Enter a number' }}">
-                                {% elif sub_prop.enum %}
-                                <select class="form-select" name="{{ key }}_{{ sub_key }}">
-                                    {% for opt in sub_prop.enum %}
-                                    <option value="{{ opt }}"
-                                            {{ 'selected' if module_data.config.get(key, {}).get(sub_key) == opt else '' }}>
-                                        {{ opt | capitalize }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                                {% elif sub_prop.type == "array" %}
-                                <textarea class="form-input" name="{{ key }}_{{ sub_key }}" rows="2"
-                                          placeholder="{{ sub_prop.placeholder or 'e.g. [\"id1\", \"id2\"]' }}">{{ module_data.config.get(key, {}).get(sub_key, sub_prop.default or '') }}</textarea>
-                                {% else %}
-                                <input type="text" class="form-input" name="{{ key }}_{{ sub_key }}"
-                                       value="{{ module_data.config.get(key, {}).get(sub_key, sub_prop.default or '') }}"
-                                       placeholder="{{ sub_prop.placeholder or 'Enter a value' }}">
-                                {% endif %}
-                            {% if sub_prop.description %}
-                            <span class="form-hint">{{ sub_prop.description }}</span>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    {#--- Simple field ---#}
-                    <div class="form-group">
-                        <label class="form-label">{{ prop.title | default(key) }}</label>
-                        {% if prop.type == "boolean" %}
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="{{ key }}"
-                                   {{ 'checked' if module_data.config.get(key, prop.default) else '' }}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        {% elif prop.type == "integer" or prop.type == "number" %}
-                        <input type="number" class="form-input" name="{{ key }}"
-                               value="{{ module_data.config.get(key, prop.default or '') }}"
-                               min="{{ prop.minimum or '' }}" max="{{ prop.maximum or '' }}"
-                               placeholder="{{ prop.placeholder or 'Enter a number' }}">
-                        {% elif prop.enum %}
-                        <select class="form-select" name="{{ key }}">
-                            <option value="">Select {{ prop.title | lower }}...</option>
-                            {% for opt in prop.enum %}
-                            <option value="{{ opt }}"
-                                    {{ 'selected' if module_data.config.get(key) == opt else '' }}>
-                                {{ opt | capitalize }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        {% elif prop.type == "array" %}
-                        <textarea class="form-input" name="{{ key }}" rows="2"
-                                  placeholder="{{ prop.placeholder or 'e.g. [\"id1\", \"id2\"]' }}">{{ module_data.config.get(key, prop.default or '') }}</textarea>
-                        {% else %}
-                        <input type="text" class="form-input" name="{{ key }}"
-                               value="{{ module_data.config.get(key, prop.default or '') }}"
-                               placeholder="{{ prop.placeholder or 'Enter a value' }}">
-                        {% endif %}
-                        {% if prop.description %}
-                        <span class="form-hint">{{ prop.description }}</span>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                    {% endfor %}
-                    <button type="submit" class="btn btn-primary">Save Configuration</button>
-                </form>
-                {% else %}
-                <div class="empty-state small">
-                    <p>This module has no configurable settings.</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+      </details>
+      {% endif %}
     </div>
+  </header>
+
+  <section class="module-health-strip" aria-label="Module health">
+    <div><span class="health-label">Runtime</span><strong id="module-runtime-status">{{ 'Active' if module_data.enabled else 'Paused' }}</strong></div>
+    <div><span class="health-label">Configuration</span><strong>{{ 'Configured' if module_data.config else 'Defaults' }}</strong></div>
+    <div><span class="health-label">Version</span><strong>v{{ module_data.version }}</strong></div>
+    <div><span class="health-label">Commands</span><strong>{{ module_data.commands | length }}</strong></div>
+  </section>
+
+  <div class="tabs workspace-tabs" role="tablist" aria-label="{{ module_name | capitalize }} workspace">
+    {% if has_operations %}<button id="workspace-tab-operate" class="tab active" type="button" role="tab" aria-controls="tab-operate" aria-selected="true">Operate</button>{% endif %}
+    <button id="workspace-tab-configure" class="tab {{ '' if has_operations else 'active' }}" type="button" role="tab" aria-controls="tab-configure" aria-selected="{{ 'false' if has_operations else 'true' }}" {{ 'tabindex="-1"' if has_operations else '' }}>Configure</button>
+    <button id="workspace-tab-about" class="tab" type="button" role="tab" aria-controls="tab-about" aria-selected="false" tabindex="-1">About</button>
+    {% for tab in module_data.extra_tabs %}<button id="workspace-tab-{{ tab.id }}" class="tab" type="button" role="tab" aria-controls="tab-{{ tab.id }}" aria-selected="false" tabindex="-1">{{ tab.label }}</button>{% endfor %}
+  </div>
+
+  {% if has_operations %}<section class="tab-panel active" id="tab-operate" role="tabpanel" aria-labelledby="workspace-tab-operate" tabindex="0">
+    <div class="operation-grid">
+    {% for action in module_data.actions %}
+      <article class="content-card action-card" id="action-{{ action.id }}">
+        <div class="card-header"><div><h2 class="card-title">{{ icon('zap', 16) }} {{ action.label }}</h2>{% if action.description %}<p class="card-description">{{ action.description }}</p>{% endif %}</div>{% if action.destructive %}{{ status_badge('Destructive', 'danger') }}{% endif %}</div>
+        <div class="config-body">
+          <form class="module-action-form" data-action="{{ action.id }}" data-endpoint="{{ action.endpoint }}" data-label="{{ action.label }}" data-destructive="{{ 'true' if action.destructive else 'false' }}">
+          {% for field in action.fields %}{% set field_id = 'action-' ~ action.id ~ '-' ~ field.key %}
+            <div class="form-group" {% if field.depends_on %}hidden data-depends="{{ field.depends_on.field }}" data-depends-value="{{ field.depends_on.value }}"{% endif %}>
+              <label class="form-label" for="{{ field_id }}">{{ field.label }}{% if field.required %}<span aria-hidden="true"> *</span><span class="sr-only"> required</span>{% endif %}</label>
+              {% if field.type == 'textarea' %}
+                {% if field.format_toolbar %}
+                <div class="discord-toolbar" data-for="{{ field_id }}">
+                  <button type="button" class="btn btn-xs" data-insert="**">B</button>
+                  <button type="button" class="btn btn-xs" data-insert="*">I</button>
+                  <button type="button" class="btn btn-xs" data-insert="__">U</button>
+                  <button type="button" class="btn btn-xs" data-insert="~~">S</button>
+                  <button type="button" class="btn btn-xs" data-insert="```">Code</button>
+                  <button type="button" class="btn btn-xs" data-insert="> ">Quote</button>
+                </div>
+                {% endif %}
+                <textarea id="{{ field_id }}" class="form-input" name="{{ field.key }}" rows="{{ field.rows | default(4) }}" placeholder="{{ field.placeholder }}" {{ 'required' if field.required else '' }}></textarea>
+              {% elif field.type == 'select' %}<select id="{{ field_id }}" class="form-select" name="{{ field.key }}" {{ 'required' if field.required else '' }}><option value="">{{ field.placeholder or 'Select…' }}</option>{% for option in field.options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}</select>
+              {% elif field.type == 'api_select' %}<select id="{{ field_id }}" class="form-select api-select" name="{{ field.key }}" data-api="{{ field.api }}" data-value-key="{{ field.value_key }}" data-label-key="{{ field.label_key }}" data-group-key="{{ field.group_key | default('') }}" data-placeholder="{{ field.placeholder or 'Select…' }}" {{ 'required' if field.required else '' }}><option value="">Loading…</option></select>
+              {% elif field.type == 'boolean' %}<label class="checkbox-control"><input id="{{ field_id }}" type="checkbox" name="{{ field.key }}" data-schema-type="boolean" {{ 'checked' if field.default else '' }}><span>{{ field.placeholder or field.label }}</span></label>
+              {% else %}<input id="{{ field_id }}" class="form-input" type="{{ 'number' if field.type in ['integer','number'] else (field.type or 'text') }}" name="{{ field.key }}" data-schema-type="{{ field.type }}" placeholder="{{ field.placeholder }}" {{ 'required' if field.required else '' }}>{% endif %}
+            </div>
+          {% endfor %}
+            <button type="submit" class="btn {{ 'btn-danger' if action.destructive else 'btn-primary' }} action-submit-btn">{{ icon('play', 15) }} {{ action.label }}</button>
+          </form>
+          <div class="action-result" role="status" aria-live="polite" hidden></div>
+        </div>
+      </article>
+    {% endfor %}
+    </div>
+  </section>{% endif %}
+
+  <section class="tab-panel {{ '' if has_operations else 'active' }}" id="tab-configure" role="tabpanel" aria-labelledby="workspace-tab-configure" tabindex="0" {{ 'hidden' if has_operations else '' }}>
+    <article class="content-card workspace-form-card">
+      <div class="card-header"><div><h2 class="card-title">{{ icon('settings', 16) }} Configuration</h2><p class="card-description">Changes apply to this server only.</p></div></div>
+      <div class="config-body">
+      {% if module_data.settings_schema and module_data.settings_schema.properties %}
+        <form class="module-config-form" id="module-config-form" data-module="{{ module_name }}">
+        {% for key, prop in module_data.settings_schema.properties.items() %}
+          {% if prop.type == 'object' and prop.properties %}
+          <fieldset class="config-subsection"><legend class="config-subsection-title">{{ prop.title | default(key | replace('_', ' ') | title) }}</legend>{% if prop.description %}<p class="config-subsection-desc">{{ prop.description }}</p>{% endif %}
+            <div class="form-grid">{% for sub_key, sub_prop in prop.properties.items() %}{{ schema_field(key ~ '__' ~ sub_key, sub_prop, module_data.config.get(key, {}).get(sub_key, sub_prop.default), 'config-' ~ key ~ '-' ~ sub_key) }}{% endfor %}</div>
+          </fieldset>
+          {% else %}{{ schema_field(key, prop, module_data.config.get(key, prop.default), 'config-' ~ key) }}{% endif %}
+        {% endfor %}
+        <div class="form-actions"><button type="button" class="btn" id="discard-config-btn" disabled>Cancel</button><button type="submit" class="btn btn-primary" id="save-config-btn" disabled>{{ icon('save', 16) }} Save Changes</button></div>
+        </form>
+      {% else %}{{ state_panel('empty', 'No configuration required', 'This module is ready with its built-in defaults.') }}{% endif %}
+      </div>
+    </article>
+    {% if module_name == 'moderation' and module_data.can_manage_module %}
+    <details class="advanced-section">
+      <summary>{{ icon("alert-triangle", 12) }} Data Retention</summary>
+      <article class="content-card danger-zone" id="moderation-retention-danger-zone">
+        <div class="card-header"><div><h2 class="card-title">{{ icon("alert-triangle", 16) }} Moderation data retention</h2><p class="card-description">Delete stored moderation metadata that is not part of voice history. These actions cannot be undone.</p></div><span class="status-badge status-danger">Admin only</span></div>
+        <div class="danger-zone-list">
+          <div class="danger-zone-row"><div><strong>Clear audit logs</strong><p>Delete every stored Bark audit entry for this server.</p></div><button type="button" class="btn btn-danger btn-sm" data-purge="audit-logs" data-purge-label="audit logs">{{ icon("trash-2", 14) }} Clear all</button></div>
+          <div class="danger-zone-row"><div><strong>Clear attachment records</strong><p>Delete stored attachment metadata. Files hosted by Discord are not deleted.</p></div><button type="button" class="btn btn-danger btn-sm" data-purge="attachments" data-purge-label="attachment records">{{ icon("trash-2", 14) }} Clear all</button></div>
+        </div>
+      </article>
+    </details>
+    {% endif %}
+  </section>
+
+  <section class="tab-panel" id="tab-about" role="tabpanel" aria-labelledby="workspace-tab-about" tabindex="0" hidden>
+    <div class="about-grid">
+      <article class="content-card">
+        <div class="card-header"><h2 class="card-title">{{ icon('book-open', 16) }} About this module</h2></div>
+        <div class="module-info-body">
+          {% for story in module_data.about %}<div class="about-story-item"><h3 class="about-story-title">{{ story.title }}</h3><p class="about-story-text">{{ story.description }}</p></div>{% else %}<p class="about-story-text about-description-fallback">{{ module_data.description }}</p>{% endfor %}
+        </div>
+      </article>
+      <article class="content-card">
+        <div class="card-header"><h2 class="card-title">{{ icon('info', 16) }} Module details</h2></div>
+        <dl class="definition-list"><div><dt>Version</dt><dd>v{{ module_data.version }}</dd></div><div><dt>Author</dt><dd>{{ module_data.author }}</dd></div><div><dt>Priority</dt><dd>{{ module_data.priority }}</dd></div><div><dt>Events</dt><dd>{{ module_data.events | join(', ') if module_data.events else 'None' }}</dd></div></dl>
+      </article>
+      {% if module_data.commands %}<article class="content-card"><div class="card-header"><h2 class="card-title">{{ icon('terminal', 16) }} Commands</h2></div><div class="commands-list">{% for cmd in module_data.commands %}<div class="command-item"><div class="command-header"><code class="command-name">/{{ cmd.name }}</code>{% if cmd.slash %}<span class="badge-sm slash">slash</span>{% endif %}</div><span class="command-desc">{{ cmd.description }}</span></div>{% endfor %}</div></article>{% endif %}
+    </div>
+  </section>
+
+  {% for tab in module_data.extra_tabs %}<section class="tab-panel" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" hidden>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const GUILD_ID = '{{ guild.id }}';
-    const MODULE_NAME = '{{ module_name }}';
-
-    // Toggle module
-    document.querySelector('.module-toggle')?.addEventListener('change', async (e) => {
-        const enabled = e.target.checked;
-        const label = e.target.closest('.module-detail-actions').querySelector('.toggle-label');
-        label.textContent = enabled ? 'Enabled' : 'Disabled';
-
-        try {
-            const res = await fetch(`/api/v1/guilds/${GUILD_ID}/modules/${MODULE_NAME}/toggle`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({enabled})
-            });
-            const data = await res.json();
-            if (!data.success) {
-                e.target.checked = !enabled;
-                label.textContent = !enabled ? 'Enabled' : 'Disabled';
-            }
-        } catch (err) {
-            e.target.checked = !enabled;
-            label.textContent = !enabled ? 'Enabled' : 'Disabled';
-        }
-    });
-
-    // Reload module
-    document.querySelector('.module-reload')?.addEventListener('click', async () => {
-        const btn = document.querySelector('.module-reload');
-        btn.textContent = '↻ Reloading...';
-        btn.disabled = true;
-        try {
-            const res = await fetch(`/api/v1/guilds/${GUILD_ID}/modules/${MODULE_NAME}/reload`, {
-                method: 'POST'
-            });
-            const data = await res.json();
-            btn.textContent = data.success ? '✅ Reloaded' : '❌ Failed';
-            setTimeout(() => {
-                btn.textContent = '↻ Reload';
-                btn.disabled = false;
-            }, 2000);
-        } catch (err) {
-            btn.textContent = '❌ Error';
-            setTimeout(() => {
-                btn.textContent = '↻ Reload';
-                btn.disabled = false;
-            }, 2000);
-        }
-    });
-
-    // Save config
-    document.querySelector('.module-config-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const formData = new FormData(form);
-        const config = {};
-        for (const [key, value] of formData.entries()) {
-            const input = form.querySelector(`[name="${key}"]`);
-            if (input.type === 'checkbox') {
-                config[key] = input.checked;
-            } else if (input.type === 'number') {
-                config[key] = Number(value);
-            } else {
-                config[key] = value;
-            }
-        }
-
-        try {
-            const res = await fetch(`/api/v1/guilds/${GUILD_ID}/modules/${MODULE_NAME}`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({config})
-            });
-            const data = await res.json();
-            const savedLabel = document.getElementById('config-saved');
-            savedLabel.classList.remove('hidden');
-            setTimeout(() => savedLabel.classList.add('hidden'), 3000);
-        } catch (err) {
-            alert('Failed to save configuration');
-        }
-    });
-</script>
+<script src="/static/js/module-workspace.js?v=9"></script>
+{% if module_name == 'moderation' %}<script src="/static/js/moderation-workspace.js?v=7"></script>{% endif %}
 {% endblock %}

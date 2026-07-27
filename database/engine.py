@@ -6,6 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -47,6 +48,13 @@ def get_engine():
             pool_size=config.database.pool_size,
             max_overflow=config.database.max_overflow,
         )
+        if database_url.startswith("sqlite+aiosqlite:///"):
+            @event.listens_for(_engine.sync_engine, "connect")
+            def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+                del connection_record
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
     return _engine
 
 
@@ -87,9 +95,22 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
 
 
 async def init_db() -> None:
-    """Create all tables if they don't exist."""
-    async with get_engine().begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create current tables and record/apply ordered deployment migrations."""
+    from database.migrations import apply_migrations
+
+    engine = get_engine()
+    async with engine.connect() as conn:
+        if engine.url.get_backend_name() == "sqlite":
+            await conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            await conn.commit()
+        async with conn.begin():
+            await conn.run_sync(Base.metadata.create_all)
+            await apply_migrations(conn)
+        if engine.url.get_backend_name() == "sqlite":
+            await conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+            enabled = (await conn.exec_driver_sql("PRAGMA foreign_keys")).scalar_one()
+            if enabled != 1:
+                raise RuntimeError("SQLite foreign-key enforcement could not be enabled")
     logger.info("All tables created/verified")
 
 

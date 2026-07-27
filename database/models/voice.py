@@ -17,7 +17,7 @@ class VoiceSession(Base):
     __tablename__ = "voice_sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[int] = mapped_column(Integer, ForeignKey("guilds.id"), nullable=False)
+    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False)
     user_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     user_tag: Mapped[str] = mapped_column(String(64), nullable=False, default="Unknown#0000")
     channel_id: Mapped[str] = mapped_column(String(32), nullable=False)

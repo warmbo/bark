@@ -24,5 +24,5 @@ async def guild_overview(request: Request, guild_id: int):
     return templates.TemplateResponse(
         request,
         "pages/guild.html",
-        {"guild": guild, "bot": bot},
+        {"guild": guild, "bot": bot, "active_page": "overview"},
     )

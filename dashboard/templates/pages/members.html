@@ -3,96 +3,279 @@
 
 {% block content %}
 {% set active_page = "members" %}
-{% include "partials/guild_header.html" %}
 
 <div class="page-container">
     <div class="page-header">
         <h1 class="page-title">{{ icon("users", 24) }} Members</h1>
-        <p class="page-subtitle">Browse, search, and manage server members</p>
+        <p class="page-subtitle">Browse, search, filter, and moderate server members</p>
     </div>
 
     <div class="member-controls">
-        <div class="search-bar">
+        <div class="search-bar filter-search-bar">
             <span class="search-icon">{{ icon("search", 14) }}</span>
-            <input type="text" class="form-input search-input" id="member-search"
-                   placeholder="Search by name or tag..." autofocus>
+            <label class="sr-only" for="member-search">Search members</label>
+            <input type="search" class="form-input search-input" id="member-search" name="member_search" placeholder="Search by name or tag..." autocomplete="off">
         </div>
-        <span class="member-count" id="member-count">Loading...</span>
+        <span class="member-count" id="member-count" role="status" aria-live="polite">Loading...</span>
+        <button type="button" class="btn btn-sm" id="filter-clear" title="Clear all filters" disabled>{{ icon("x", 14) }} Clear</button>
+
+        <div class="filter-row">
+            <label class="sr-only" for="filter-role">Filter by role</label><select class="form-select filter-select" id="filter-role" name="role"><option value="">All Roles</option></select>
+            <label class="sr-only" for="filter-age">Filter by account age</label>
+            <select class="form-select filter-select" id="filter-age" name="account_age">
+                <option value="0">Any Age</option>
+                <option value="7">New (&lt; 7 days)</option>
+                <option value="30">Recent (&lt; 30 days)</option>
+                <option value="90">Moderate (&lt; 90 days)</option>
+                <option value="365">Established (&gt; 1 year)</option>
+            </select>
+            <label class="sr-only" for="filter-sort">Sort members</label><select class="form-select filter-select" id="filter-sort" name="sort">
+                <option value="name">Sort: Name A-Z</option>
+                <option value="name_desc">Sort: Name Z-A</option>
+                <option value="joined_at">Sort: Newest First</option>
+                <option value="joined_at_asc">Sort: Oldest First</option>
+                <option value="account_age">Sort: Oldest Account</option>
+                <option value="role">Sort: Role</option>
+            </select>
+        </div>
     </div>
 
     <div class="member-grid" id="member-grid">
-        <div class="loading-spinner">{{ icon("loader-circle", 20) }} Loading members...</div>
+        <table class="member-table">
+            <caption class="sr-only">Server members</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Member</th>
+                    <th scope="col">Joined</th>
+                    <th scope="col">Roles</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="member-table-body">
+                <tr><td colspan="4"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" id="members-pagination" hidden>
+        <button type="button" class="btn btn-sm btn-block" id="members-load-more">
+            {{ icon("chevron-down", 14) }} Load More
+        </button>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    const GUILD_ID = '{{ guild.id }}';
-    let searchTimeout = null;
+const GUILD_ID = '{{ guild.id }}';
+let searchTimeout = null;
+let membersPage = 0;
+const MEMBERS_PER_PAGE = 100;
+let membersTotal = 0;
+let allMembersLoaded = false;
+let memberRequestToken = 0;
+const initialQuery = new URLSearchParams(window.location.search);
+document.getElementById('member-search').value = initialQuery.get('search') || '';
+document.getElementById('filter-age').value = initialQuery.get('age') || '0';
+document.getElementById('filter-sort').value = initialQuery.get('sort') || 'name';
 
-    async function loadMembers(search = '', page = 0) {
-        const grid = document.getElementById('member-grid');
-        const count = document.getElementById('member-count');
-        grid.innerHTML = '<div class="loading-spinner">{{ icon("loader-circle", 20) }} Loading members...</div>';
+function syncMemberQuery() {
+    const query = new URLSearchParams();
+    const search = document.getElementById('member-search').value.trim();
+    const role = document.getElementById('filter-role').value;
+    const age = document.getElementById('filter-age').value;
+    const sort = document.getElementById('filter-sort').value;
+    if (search) query.set('search', search);
+    if (role) query.set('role', role);
+    if (age !== '0') query.set('age', age);
+    if (sort !== 'name') query.set('sort', sort);
+    history.replaceState({members: true}, '', `${location.pathname}${query.size ? `?${query}` : ''}`);
+}
 
-        try {
-            const params = new URLSearchParams({search, page, limit: 100});
-            const url = `/api/v1/guilds/${GUILD_ID}/members?${params}`;
-            console.log('Fetching:', url);
-            const res = await fetch(url);
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-            }
-            const data = await res.json();
-            count.textContent = `${data.total} members`;
+async function loadMembers(page = 0, append = false) {
+    const requestToken = ++memberRequestToken;
+    const grid = document.getElementById('member-grid');
+    const tbody = document.getElementById('member-table-body');
+    const count = document.getElementById('member-count');
+    const loadMore = document.getElementById('members-load-more');
+    const pagination = document.getElementById('members-pagination');
+    if (!append) { membersTotal = 0; allMembersLoaded = false; }
+    const search = document.getElementById('member-search').value;
+    const roleId = document.getElementById('filter-role').value;
+    const ageVal = document.getElementById('filter-age').value;
+    const minAgeDays = ageVal === '365' ? '365' : '0';
+    const maxAgeDays = ageVal !== '0' && ageVal !== '365' ? ageVal : '0';
+    const sortVal = document.getElementById('filter-sort').value;
+    let sort = 'name', order = 'asc';
+    if (sortVal === 'name_desc') { sort = 'name'; order = 'desc'; }
+    else if (sortVal === 'joined_at' || sortVal === 'joined_at_asc') { sort = 'joined_at'; order = sortVal === 'joined_at' ? 'desc' : 'asc'; }
+    else if (sortVal === 'account_age') { sort = 'account_age'; order = 'desc'; }
+    else if (sortVal === 'role') { sort = 'role'; order = 'asc'; }
 
-            if (data.members.length === 0) {
-                grid.innerHTML = '<div class="empty-state"><p>No members found.</p></div>';
+    if (loadMore) { loadMore.disabled = true; loadMore.innerHTML = 'Loading...'; }
+    if (!append) {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></td></tr>';
+        count.textContent = 'Loading…';
+        if (pagination) pagination.hidden = true;
+    }
+
+    try {
+        const params = new URLSearchParams({search, page, limit: MEMBERS_PER_PAGE, role_id: roleId, min_age_days: minAgeDays, max_age_days: maxAgeDays, sort, order});
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/members?${params}`, {cache: 'no-cache'});
+        if (requestToken !== memberRequestToken) return;
+        const data = raw.data || raw;
+        membersTotal = data.total || 0;
+        count.textContent = `${membersTotal} members`;
+
+        const fragment = document.createDocumentFragment();
+        (data.members || []).forEach(m => {
+            const memberId = String(m.id ?? '');
+            const memberPathId = encodeURIComponent(memberId);
+            const avatarUrl = safeResourceUrl(m.avatar_url, '');
+            const tr = document.createElement('tr');
+            tr.className = 'member-table-row';
+            tr.dataset.id = memberId;
+            tr.innerHTML = `
+                <td class="member-cell-name">
+                    <a href="/guild/${GUILD_ID}/members/${memberPathId}" class="member-name-link">
+                        <span class="member-avatar-sm">${avatarUrl ? `<img src="${escHtml(avatarUrl)}" alt="">` : `<span class="avatar-placeholder-sm">${escHtml(String(m.name || '?').charAt(0))}</span>`}</span>
+                        <span class="member-name">${escHtml(m.name)}</span>
+                        <span class="member-tag">${escHtml(m.tag)}</span>
+                        ${m.is_bot?'<span class="badge-sm bot">BOT</span>':''}${m.is_timed_out?'<span class="badge-sm timeout">TIMEOUT</span>':''}
+                    </a>
+                </td>
+                <td class="member-cell-joined"><span class="text-tertiary">${Number.isFinite(Number(m.account_age_days)) ? Number(m.account_age_days) + 'd old' : 'Age unavailable'}</span></td>
+                <td class="member-cell-role"><span class="member-role-badge">${escHtml(m.top_role)}</span></td>
+                <td class="member-cell-actions">
+                    <div class="member-row-actions">
+                        <button type="button" class="btn btn-xs qa-warn" data-member-action="warn" data-user-id="${escHtml(memberId)}" data-user-name="${escHtml(m.name)}" aria-label="Warn ${escHtml(m.name)}" title="Warn ${escHtml(m.name)}" ${m.is_bot ? 'disabled' : ''}>${getIconSvg('alert-triangle', 13)}</button>
+                        <button type="button" class="btn btn-xs qa-timeout" data-member-action="timeout" data-user-id="${escHtml(memberId)}" data-user-name="${escHtml(m.name)}" aria-label="Timeout ${escHtml(m.name)}" title="Timeout ${escHtml(m.name)}" ${m.is_bot ? 'disabled' : ''}>${getIconSvg('clock', 13)}</button>
+                        <button type="button" class="btn btn-xs qa-kick" data-member-action="kick" data-user-id="${escHtml(memberId)}" data-user-name="${escHtml(m.name)}" aria-label="Kick ${escHtml(m.name)}" title="Kick ${escHtml(m.name)}" ${m.is_bot ? 'disabled' : ''}>${getIconSvg('log-out', 13)}</button>
+                        <button type="button" class="btn btn-xs qa-ban" data-member-action="ban" data-user-id="${escHtml(memberId)}" data-user-name="${escHtml(m.name)}" aria-label="Ban ${escHtml(m.name)}" title="Ban ${escHtml(m.name)}" ${m.is_bot ? 'disabled' : ''}>${getIconSvg('ban', 13)}</button>
+                    </div>
+                </td>`;
+            fragment.appendChild(tr);
+        });
+
+        if (append) {
+            tbody.appendChild(fragment);
+        } else {
+            tbody.innerHTML = '';
+            if (data.members.length === 0 && !search && !roleId) {
+                tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state small"><p>No members in this server.</p></div></td></tr>';
+                if (pagination) pagination.hidden = true;
+                return;
+            } else if (data.members.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state small"><p>No members match your filters. Try adjusting your search criteria.</p></div></td></tr>';
+                if (pagination) pagination.hidden = true;
                 return;
             }
-
-            grid.innerHTML = data.members.map(m => `
-                <a href="/guild/${GUILD_ID}/members/${m.id}" class="member-card">
-                    <div class="member-avatar">
-                        ${m.avatar_url
-                            ? `<img src="${m.avatar_url}" alt="">`
-                            : `<div class="avatar-placeholder">${m.name[0]}</div>`}
-                    </div>
-                    <div class="member-info">
-                        <div class="member-name-row">
-                            <span class="member-name">${escapeHtml(m.name)}</span>
-                            ${m.is_bot ? '<span class="badge-sm bot">BOT</span>' : ''}
-                            ${m.is_timed_out ? '<span class="badge-sm timeout">TIMED OUT</span>' : ''}
-                        </div>
-                        <span class="member-tag">${escapeHtml(m.tag)}</span>
-                        <div class="member-meta-row">
-                            <span class="member-role">${escapeHtml(m.top_role)}</span>
-                            ${m.voice_channel ? `<span class="member-vc">{{ icon("volume", 12) }} ${escapeHtml(m.voice_channel)}</span>` : ''}
-                        </div>
-                    </div>
-                    <div class="member-actions">
-                        <span class="card-footer-link">View {{ icon("chevron-right", 14) }}</span>
-                    </div>
-                </a>
-            `).join('');
-        } catch (e) {
-            console.error('Member fetch failed:', e);
-            grid.innerHTML = `<div class="empty-state"><p>Failed. (${e.message})<br><small>URL: /api/v1/guilds/${GUILD_ID}/members?search=&page=0&limit=100</small></p></div>`;
+            tbody.appendChild(fragment);
         }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        const loaded = grid.querySelectorAll('.member-table-row').length;
+        allMembersLoaded = loaded >= membersTotal;
+        if (pagination) pagination.hidden = allMembersLoaded;
+        if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; }
+    } catch (e) {
+        if (requestToken !== memberRequestToken) return;
+        if (!append) tbody.innerHTML = `<tr><td colspan="4"><div class="state-panel state-error" role="alert"><div><strong>Failed to load members</strong><p>${escHtml(e.message)}</p></div><button type="button" class="btn btn-sm" data-retry-members>Retry</button></div></td></tr>`;
+        else membersPage = Math.max(0, membersPage - 1);
+        count.textContent = 'Unavailable';
+        if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; }
     }
+}
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+// Pagination: load more
+document.getElementById('members-load-more')?.addEventListener('click', () => {
+    membersPage++;
+    loadMembers(membersPage, true);
+});
+
+// ── Shared viewport-level action confirmation ──
+async function executeQuick(action, userId, name, sourceButton) {
+    if (sourceButton.disabled) return;
+    const consequence = action === 'ban' ? 'This permanently removes and bans the member.' : action === 'kick' ? 'This removes the member from the server.' : `This applies a ${action} moderation action.`;
+    const confirmed = await BarkDialog.confirm({title: `${action[0].toUpperCase() + action.slice(1)} ${name}`, message: consequence, confirmLabel: `Confirm ${action}`, danger: action === 'kick' || action === 'ban'});
+    if (!confirmed) return;
+    sourceButton.disabled = true;
+    try {
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/actions/${action}`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({target_id: userId, reason: `Dashboard ${action}`})
+        });
+        const data = raw.data || raw;
+        if (data.success || raw.success) {
+            showToast(`${action} completed for ${name}`, 'success');
+            reloadMembers();
+        } else {
+            showToast(data.error || 'Action failed', 'error');
+        }
+    } catch (error) { showToast(error.message || 'Network error', 'error'); }
+    finally { sourceButton.disabled = false; }
+}
+document.getElementById('member-grid').addEventListener('click', (event) => {
+    if (event.target.closest('[data-retry-members]')) { reloadMembers(); return; }
+    const button = event.target.closest('[data-member-action]');
+    if (button) executeQuick(button.dataset.memberAction, button.dataset.userId, button.dataset.userName, button);
+});
+
+// Load roles for filter
+(async () => {
+    try {
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/roles?_=${Date.now()}`, {cache:'no-cache'});
+        const sel = document.getElementById('filter-role');
+        const roles = raw.data?.roles || raw.roles || [];
+        roles.forEach(r => {
+            const o = document.createElement('option');
+            o.value = r.id; o.textContent = r.name;
+            sel.appendChild(o);
+        });
+        const initialRole = initialQuery.get('role') || '';
+        if (initialRole) { sel.value = initialRole; reloadMembers(); }
+    } catch(e) {
+        const sel = document.getElementById('filter-role');
+        sel.innerHTML = '<option value="">Roles unavailable</option>';
+        sel.disabled = true;
     }
+})();
 
-    document.getElementById('member-search').addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => loadMembers(e.target.value), 300);
-    });
+// Reset pagination and reload on filter change
+function reloadMembers() { membersPage = 0; syncMemberQuery(); loadMembers(0, false); }
 
-    loadMembers();
+document.getElementById('member-search').addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(reloadMembers, 300);
+});
+document.getElementById('filter-role').addEventListener('change', reloadMembers);
+document.getElementById('filter-age').addEventListener('change', reloadMembers);
+document.getElementById('filter-sort').addEventListener('change', reloadMembers);
+
+loadMembers(0, false);
+
+// ── Clear button state ─────────────────────────────
+function updateClearButton() {
+    const btn = document.getElementById('filter-clear');
+    if (!btn) return;
+    const search = document.getElementById('member-search').value.trim();
+    const role = document.getElementById('filter-role').value;
+    const age = document.getElementById('filter-age').value;
+    const sort = document.getElementById('filter-sort').value;
+    const hasFilters = search || role || age !== '0' || sort !== 'name';
+    btn.disabled = !hasFilters;
+}
+document.getElementById('member-search').addEventListener('input', updateClearButton);
+document.getElementById('filter-role').addEventListener('change', updateClearButton);
+document.getElementById('filter-age').addEventListener('change', updateClearButton);
+document.getElementById('filter-sort').addEventListener('change', updateClearButton);
+document.getElementById('filter-clear').addEventListener('click', () => {
+    document.getElementById('member-search').value = '';
+    document.getElementById('filter-role').value = '';
+    document.getElementById('filter-age').value = '0';
+    document.getElementById('filter-sort').value = 'name';
+    updateClearButton();
+    reloadMembers();
+});
 </script>
 {% endblock %}

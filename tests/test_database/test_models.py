@@ -5,10 +5,10 @@ Tests for database models and engine.
 import pytest
 from sqlalchemy import select, func
 
-from database.engine import init_db, close_db, get_session, session_scope
+from database.engine import init_db, close_db, session_scope
 from database.models.guild import Guild, GuildSetting
 from database.models.module import ModuleConfig
-from database.models.moderation import ModerationCase, Warning, UserNote, AuditLog
+from database.models.moderation import ModerationCase, AuditLog
 from database.models.logging import LogConfig
 from database.models.automod import AutoModConfig
 from database.models.permissions import DashboardUser
@@ -53,7 +53,7 @@ async def test_create_guild_setting(db):
         session.add(guild)
         await session.flush()
 
-        setting = GuildSetting(guild_id=guild.id, key="mod_role", value="123")
+        setting = GuildSetting(guild_id=guild.discord_id, key="mod_role", value="123")
         session.add(setting)
         await session.commit()
 
@@ -61,7 +61,7 @@ async def test_create_guild_setting(db):
         result = await session.execute(
             select(GuildSetting).where(
                 GuildSetting.key == "mod_role",
-                GuildSetting.guild_id == guild.id,
+                GuildSetting.guild_id == guild.discord_id,
             )
         )
         saved = result.scalar_one()
@@ -71,7 +71,7 @@ async def test_create_guild_setting(db):
 @pytest.mark.asyncio
 async def test_create_moderation_case(db):
     """Test creating a moderation case with auto-incrementing case number."""
-    from sqlalchemy import select, func
+    from sqlalchemy import select
 
     async with session_scope() as session:
         guild = Guild(discord_id="m1", name="Mod Test")
@@ -81,10 +81,10 @@ async def test_create_moderation_case(db):
         # First case
         result = await session.execute(
             select(func.coalesce(func.max(ModerationCase.case_number), 0) + 1)
-            .where(ModerationCase.guild_id == guild.id)
+            .where(ModerationCase.guild_id == guild.discord_id)
         )
         case1 = ModerationCase(
-            guild_id=guild.id,
+            guild_id=guild.discord_id,
             case_number=result.scalar(),
             action_type="warn",
             target_id="111",
@@ -108,7 +108,7 @@ async def test_module_config(db):
         await session.flush()
 
         config = ModuleConfig(
-            guild_id=guild.id,
+            guild_id=guild.discord_id,
             module_name="moderation",
             enabled=True,
             priority=100,
@@ -120,7 +120,7 @@ async def test_module_config(db):
     async with session_scope() as session:
         result = await session.execute(
             select(ModuleConfig).where(
-                ModuleConfig.guild_id == guild.id,
+                ModuleConfig.guild_id == guild.discord_id,
                 ModuleConfig.module_name == "moderation",
             )
         )
@@ -138,7 +138,7 @@ async def test_log_config(db):
         await session.flush()
 
         log_cfg = LogConfig(
-            guild_id=guild.id,
+            guild_id=guild.discord_id,
             event_type="message_delete",
             channel_id="555",
             enabled=True,
@@ -149,7 +149,7 @@ async def test_log_config(db):
     async with session_scope() as session:
         result = await session.execute(
             select(LogConfig).where(
-                LogConfig.guild_id == guild.id,
+                LogConfig.guild_id == guild.discord_id,
                 LogConfig.event_type == "message_delete",
             )
         )
@@ -166,7 +166,7 @@ async def test_automod_config(db):
         await session.flush()
 
         am = AutoModConfig(
-            guild_id=guild.id,
+            guild_id=guild.discord_id,
             rule_type="spam",
             enabled=True,
             threshold=5,
@@ -179,7 +179,7 @@ async def test_automod_config(db):
     async with session_scope() as session:
         result = await session.execute(
             select(AutoModConfig).where(
-                AutoModConfig.guild_id == guild.id,
+                AutoModConfig.guild_id == guild.discord_id,
                 AutoModConfig.rule_type == "spam",
             )
         )
@@ -219,7 +219,7 @@ async def test_audit_log(db):
         await session.flush()
 
         log = AuditLog(
-            guild_id=guild.id,
+            guild_id=guild.discord_id,
             action="warn",
             actor_id="111",
             target_id="222",
@@ -230,7 +230,7 @@ async def test_audit_log(db):
 
     async with session_scope() as session:
         result = await session.execute(
-            select(AuditLog).where(AuditLog.guild_id == guild.id)
+            select(AuditLog).where(AuditLog.guild_id == guild.discord_id)
         )
         saved = result.scalar_one()
         assert saved.action == "warn"

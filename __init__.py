@@ -5,4 +5,4 @@ Dashboard-first server management. The dashboard is the primary interface;
 the Discord bot is the execution layer.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

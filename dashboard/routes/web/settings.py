@@ -7,6 +7,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
+from config import config
+
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -24,5 +26,5 @@ async def settings_page(request: Request, guild_id: int):
     return templates.TemplateResponse(
         request,
         "pages/settings.html",
-        {"guild": guild},
+        {"guild": guild, "config": config},
     )

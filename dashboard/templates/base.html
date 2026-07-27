@@ -8,102 +8,163 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Bark — {% block title %}Dashboard{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/main.css?v=4">
+    <link rel="stylesheet" href="/static/css/main.css?v=45">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@1.22.0"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
     {% block head %}{% endblock %}
+    {% if request and request.app and request.app.state.bot is defined %}
+    {% set _bot = request.app.state.bot %}
+    {% set _avatar = _bot.user.display_avatar.url if _bot and _bot.user else '' %}
+    {% else %}
+    {% set _avatar = '' %}
+    {% endif %}
+    <!-- OpenGraph -->
+    <meta property="og:site_name" content="Bark">
+    <meta property="og:title" content="{% block og_title %}Bark — {{ self.title() }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Server management platform for Bark Discord bot{% endblock %}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ config.dashboard.public_url if config is defined else '' }}{{ request.url.path if request else '' }}">
+    {% if _avatar %}<meta property="og:image" content="{{ _avatar }}">{% endif %}
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{% block twitter_title %}{{ self.og_title() }}{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}{{ self.og_description() }}{% endblock %}">
+    {% if _avatar %}<meta name="twitter:image" content="{{ _avatar }}">{% endif %}
+    <!-- Discord: prevent in-app browser app-switching -->
+    {% if config is defined and config.oauth2.client_id %}
+    <meta name="discord:client_id" content="{{ config.oauth2.client_id }}">
+    {% endif %}
+    <!-- Theme -->
+    <meta name="theme-color" content="#1e1e2e">
 </head>
 <body>
+    <!-- Skip to content link for keyboard users -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
     <div class="app-shell">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar" aria-label="Main navigation">
             <div class="sidebar-header">
-                <div class="sidebar-logo">
-                    <span class="logo-icon">◆</span>
+                <a href="/dashboard" class="sidebar-logo">
+                    <span class="logo-icon">{{ icon("radio", 20) }}</span>
                     <span class="logo-text">Bark</span>
-                </div>
-                <span class="sidebar-version">v0.2.0</span>
+                </a>
+                <span class="sidebar-version">v{% if request.app.state.version is defined %}{{ request.app.state.version }}{% else %}0.3.0{% endif %}</span>
             </div>
 
-            <nav class="sidebar-nav">
+            <nav class="sidebar-nav" id="sidebar-nav" aria-label="Server pages">
                 {% if guild is defined and guild %}
-                <div class="sidebar-section">
-                    <div class="sidebar-guild">
-                        {% if guild.icon %}
-                        <img src="{{ guild.icon.url }}" alt="" class="guild-icon-small">
-                        {% else %}
-                        <div class="guild-icon-small guild-icon-placeholder">{{ guild.name[:2] }}</div>
-                        {% endif %}
-                        <div class="sidebar-guild-info">
-                            <span class="sidebar-guild-name">{{ guild.name }}</span>
-                            <span class="sidebar-guild-members">{{ guild.member_count }} members</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="sidebar-nav-items">
-                    <a href="/guild/{{ guild.id }}" class="nav-item {% if active_page == 'overview' %}active{% endif %}">
-                        <span class="nav-icon">{{ icon("layout-dashboard", 16) }}</span>
-                        <span>Overview</span>
-                    </a>
-
-                    {% if request and request.state and request.state.bot is defined %}
-                    {% set _modules = request.state.bot.modules.get_all_modules() %}
-                    {% if _modules %}
-                    <div class="nav-section-label">Modules</div>
-                    {% for mod_name, mod in _modules.items() %}
-                    <a href="/guild/{{ guild.id }}/modules/{{ mod_name }}"
-                       class="nav-item nav-item-module {% if active_page == 'module_' + mod_name %}active{% endif %}">
-                        <span class="nav-icon">{{ icon("puzzle", 14) }}</span>
-                        <span class="nav-module-name">{{ mod_name | capitalize }}</span>
-                        <span class="nav-module-status {{ 'on' if mod.enabled else 'off' }}"></span>
-                    </a>
-                    {% endfor %}
+                <a href="/dashboard" class="sidebar-guild sidebar-guild-link" title="Switch server">
+                    <span class="sidebar-guild-icon-frame">
+                    {% if guild.icon %}
+                    <img src="{{ guild.icon.url }}" alt="" class="guild-icon-small" loading="lazy">
+                    {% else %}
+                    <div class="guild-icon-small guild-icon-placeholder">{{ guild.name[:2] }}</div>
                     {% endif %}
-                    {% endif %}
+                    </span>
+                    <span class="sidebar-guild-copy">
+                        <strong>{{ guild.name }}</strong>
+                        <small>Switch server</small>
+                    </span>
+                    {{ icon("chevrons-up-down", 14) }}
+                </a>
+                {% endif %}
 
-                    <div class="nav-section-label">Tools</div>
-                    <a href="/guild/{{ guild.id }}/members" class="nav-item {% if active_page == 'members' %}active{% endif %}">
-                        <span class="nav-icon">{{ icon("users", 16) }}</span>
-                        <span>Members</span>
-                    </a>
-                    <a href="/guild/{{ guild.id }}/moderation" class="nav-item {% if active_page == 'moderation' %}active{% endif %}">
-                        <span class="nav-icon">{{ icon("shield", 16) }}</span>
-                        <span>Moderation</span>
-                    </a>
-                    <a href="/guild/{{ guild.id }}/settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
-                        <span class="nav-icon">{{ icon("settings", 16) }}</span>
-                        <span>Settings</span>
-                    </a>
-                </div>
-                {% else %}
-                <div class="sidebar-nav-items">
-                    <a href="/dashboard" class="nav-item active">
-                        <span class="nav-icon">◉</span>
+                <div class="sidebar-nav-items" id="sidebar-nav-items">
+                    {% if guild is defined and guild %}
+                    <div class="sidebar-nav-placeholder" aria-hidden="true"></div>
+                    {% else %}
+                    <a href="/dashboard" class="nav-item active" aria-current="page">
+                        <span class="nav-icon">{{ icon("server", 16) }}</span>
                         <span>Servers</span>
                     </a>
+                    {% endif %}
                 </div>
-                {% endif %}
-            </nav>
+            </nav><!-- .sidebar-nav -->
 
             <div class="sidebar-footer">
-                <span class="sidebar-status">
-                    <span class="status-dot online"></span>
-                    Connected
-                </span>
+                {% if request.session.get('user') %}
+                <div class="sidebar-user">
+                    {% if request.session.user.avatar %}
+                    <img src="{{ request.session.user.avatar }}" alt="" class="sidebar-user-avatar">
+                    {% else %}
+                    <span class="sidebar-user-avatar sidebar-user-placeholder">{{ request.session.user.username[:1] }}</span>
+                    {% endif %}
+                    <span class="sidebar-user-copy">
+                        <strong>{{ request.session.user.username }}</strong>
+                        <small>{{ request.session.get('role', 'viewer') | capitalize }}</small>
+                    </span>
+                    <form method="post" action="/auth/logout">
+                        <button type="submit" class="sidebar-logout" aria-label="Sign out" title="Sign out">{{ icon("log-out", 14) }}</button>
+                    </form>
+                </div>
+                {% endif %}
+                <div class="sidebar-footer-top">
+                    <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener" class="sidebar-github">
+                        {{ icon("code-2", 14) }} GitHub
+                    </a>
+                    <span class="sidebar-status">
+                        <span class="status-dot online"></span>
+                        Connected
+                    </span>
+                </div>
             </div>
         </aside>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" id="main-content" tabindex="-1">
+            {% if guild is defined and guild %}
+            <div class="context-bar" aria-label="Current server context">
+                <div class="context-breadcrumb"><a href="/dashboard">Servers</a><span aria-hidden="true">/</span><strong>{{ guild.name }}</strong></div>
+                <div class="context-actions"><span class="connection-state" role="status"><span class="status-dot online" aria-hidden="true"></span>Connected</span><button type="button" class="context-palette-button" data-open-palette aria-label="Open command palette">{{ icon('search', 14) }} Search <kbd>Ctrl K</kbd></button></div>
+            </div>
+            {% else %}
+            <div class="context-bar context-bar-placeholder" aria-hidden="true"></div>
+            {% endif %}
             {% block content %}{% endblock %}
         </main>
     </div>
 
-    <script src="/static/js/main.js?v=3"></script>
-    <script>lucide.createIcons();</script>
+    <div class="palette-overlay" id="palette-overlay" aria-hidden="true">
+        <section class="palette" role="dialog" aria-modal="true" aria-labelledby="palette-title">
+            <h2 class="sr-only" id="palette-title">Navigate Bark</h2>
+            <label class="palette-input-wrapper" for="palette-input">
+                <span class="sr-only">Search pages, modules, and actions</span>
+                {{ icon("search", 18) }}
+                <input class="palette-input" id="palette-input" name="palette_query" type="search"
+                       placeholder="Search pages, modules, and actions…"
+                       autocomplete="off" aria-controls="palette-results">
+                <kbd>Esc</kbd>
+            </label>
+            <div class="palette-results" id="palette-results" role="listbox" aria-live="polite">
+                <div class="palette-empty">Start typing to navigate.</div>
+            </div>
+            <footer class="palette-footer">
+                <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span>
+                <span><kbd>Enter</kbd> Open</span>
+            </footer>
+        </section>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="context-menu" role="menu" hidden></div>
+
+    <div class="dialog-overlay" id="app-dialog-overlay" aria-hidden="true" hidden>
+        <section class="app-dialog" role="alertdialog" aria-modal="true" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message">
+            <div class="dialog-icon" aria-hidden="true">{{ icon('alert-triangle', 20) }}</div>
+            <div><h2 id="app-dialog-title" data-dialog-title>Confirm action</h2><p id="app-dialog-message" data-dialog-message></p></div>
+            <div class="dialog-actions"><button type="button" class="btn" data-dialog-cancel>Cancel</button><button type="button" class="btn btn-primary" data-dialog-confirm>Continue</button></div>
+        </section>
+    </div>
+
+    <script src="/static/js/forms.js?v=1"></script>
+    <script src="/static/js/main.js?v=21"></script>
+    <script src="/static/js/realtime.js?v=3"></script>
+    <script src="/static/js/palette.js?v=5"></script>
+    <script src="/static/js/shortcuts.js?v=3"></script>
+    <script src="https://unpkg.com/lucide@1.22.0" defer></script>
+    <script>document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });</script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

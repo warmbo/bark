@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bark"
-version = "0.1.0"
-description = "Discord bot and management platform for ZENHAWX"
+version = "0.2.0"
+description = "Dashboard-first Discord management platform for ZENHAWX"
 requires-python = ">=3.13"
 license = {text = "MIT"}
 authors = [
-    {name = "ZENHAWX Community"}
+    {name = "ZENHAWX Community"},
 ]
 
 dependencies = [
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["bark", "bark.*", "bot", "bot.*", "dashboard", "dashboard.*", "database", "database.*", "services", "services.*", "modules", "modules.*"]
+include = ["bot", "bot.*", "dashboard", "dashboard.*", "database", "database.*", "services", "services.*", "modules", "modules.*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

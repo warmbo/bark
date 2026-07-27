@@ -14,6 +14,10 @@ if [ -f .env ]; then
     set +a
 fi
 
+# Explicitly set dashboard host to 0.0.0.0 for LAN access
+export BARK_DASHBOARD_HOST="${BARK_DASHBOARD_HOST:-0.0.0.0}"
+export BARK_DASHBOARD_PORT="${BARK_DASHBOARD_PORT:-8090}"
+
 if [ -z "$BARK_BOT_TOKEN" ]; then
     echo "ERROR: BARK_BOT_TOKEN not set. Create a .env file or export it."
     echo "  echo 'BARK_BOT_TOKEN=your_token_here' > .env"
@@ -21,13 +25,13 @@ if [ -z "$BARK_BOT_TOKEN" ]; then
 fi
 
 echo "Bark v$(python -c 'import __init__; print(__init__.__version__)') — starting..."
-echo "Dashboard: http://127.0.0.1:${BARK_DASHBOARD_PORT:-8090}"
+echo "Dashboard: ${BARK_PUBLIC_URL:-https://bark.warx.org}"
 echo "Press Ctrl+C to stop"
 echo ""
 
 # Loop for auto-restart on crash
 while true; do
-    python app.py
+    python app.py --dev
     EXIT_CODE=$?
     echo "Bark exited with code $EXIT_CODE"
     if [ $EXIT_CODE -eq 0 ]; then

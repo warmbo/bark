@@ -1,0 +1,12 @@
+<article class="content-card workspace-data-card" data-section="cases">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("list", 16) }} Moderation Cases</h2><p class="card-description">Review active cases and open a case for complete details.</p></div>
+    <button type="button" class="btn btn-sm" data-refresh-section="cases" aria-label="Refresh moderation cases">{{ icon("refresh-cw", 14) }} Refresh</button>
+  </div>
+  <div id="mod-cases-content" aria-live="polite"><div class="skeleton skeleton-card"></div></div>
+  <div class="pagination" id="mod-cases-pagination" hidden>
+    <button type="button" class="pagination-btn" id="mod-cases-prev" aria-label="Previous cases page" disabled>{{ icon("chevron-left", 14) }}</button>
+    <span class="pagination-info" id="mod-cases-info">Page 1</span>
+    <button type="button" class="pagination-btn" id="mod-cases-next" aria-label="Next cases page">{{ icon("chevron-right", 14) }}</button>
+  </div>
+</article>

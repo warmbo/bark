@@ -16,7 +16,7 @@ class FileAttachment(Base):
     __tablename__ = "file_attachments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[int] = mapped_column(Integer, ForeignKey("guilds.id"), nullable=False)
+    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False)
     channel_id: Mapped[str] = mapped_column(String(32), nullable=False)
     message_id: Mapped[str] = mapped_column(String(32), nullable=False)
     author_id: Mapped[str] = mapped_column(String(32), nullable=False)

@@ -3,7 +3,6 @@
 
 {% block content %}
 {% set active_page = "modules" %}
-{% include "partials/guild_header.html" %}
 
 <div class="page-container">
     <div class="page-header">
@@ -13,38 +12,48 @@
 
     <div class="modules-grid">
         {% for name, module in modules.items() %}
-        <a href="/guild/{{ guild.id }}/modules/{{ name }}" class="module-card" data-module="{{ name }}">
+        {% set is_enabled = module_states.get(name, true) %}
+        <article class="module-card {{ 'is-enabled' if is_enabled else 'is-disabled' }}" data-module="{{ name }}">
             <div class="module-card-header">
                 <div class="module-card-title">
-                    <h3>{{ icon("puzzle", 16) }} {{ name | capitalize }}</h3>
+                    <h3><a href="/guild/{{ guild.id }}/modules/{{ name }}">{{ icon("puzzle", 16) }} {{ name | capitalize }}</a></h3>
                     <span class="module-version">v{{ module.version }}</span>
                 </div>
-                <label class="toggle-switch" onclick="event.stopPropagation();">
-                    <input type="checkbox" class="module-toggle"
-                           data-module="{{ name }}"
-                           {{ 'checked' if module.enabled else '' }}>
+                <label class="module-toggle-control" for="module-toggle-{{ name }}">
+                    <span class="module-state-label">{{ 'On' if is_enabled else 'Off' }}</span>
+                    <span class="toggle-switch">
+                    <input type="checkbox" class="module-toggle" id="module-toggle-{{ name }}" name="module_enabled"
+                           data-module="{{ name }}" aria-label="Enable {{ name | capitalize }}"
+                           {{ 'checked' if is_enabled else '' }}>
                     <span class="toggle-slider"></span>
+                    </span>
                 </label>
             </div>
             {% if module.description %}
             <p class="module-description">{{ module.description }}</p>
             {% endif %}
             <div class="module-meta">
-                <span class="module-meta-item">{{ module.get_commands() | length }} commands</span>
-                <span class="module-meta-item">{{ module.get_events() | length }} events</span>
+                {% set command_count = module.get_commands() | length %}
+                {% set event_count = module.get_events() | length %}
+                <span class="module-meta-item">{{ command_count }} command{{ '' if command_count == 1 else 's' }}</span>
+                <span class="module-meta-item">{{ event_count }} event{{ '' if event_count == 1 else 's' }}</span>
                 {% if module.get_dashboard_pages() %}
-                <span class="module-meta-item">{{ module.get_dashboard_pages() | length }} pages</span>
+                {% set page_count = module.get_dashboard_pages() | length %}
+                <span class="module-meta-item">{{ page_count }} page{{ '' if page_count == 1 else 's' }}</span>
                 {% endif %}
             </div>
             <div class="module-commands">
-                {% for cmd in module.get_commands() %}
+                {% for cmd in module.get_commands()[:4] %}
                 <code class="cmd-badge">/{{ cmd.name }}</code>
                 {% endfor %}
+                {% if module.get_commands() | length > 4 %}<span class="cmd-more">+{{ (module.get_commands() | length) - 4 }} more</span>{% endif %}
             </div>
             <div class="module-card-footer">
-                <span class="card-footer-link">Manage {{ icon("chevron-right", 14) }}</span>
+                <a href="/guild/{{ guild.id }}/modules/{{ name }}" class="card-footer-link">Configure {{ icon("arrow-right", 14) }}</a>
             </div>
-        </a>
+        </article>
+        {% else %}
+        <div class="state-panel state-empty full-width" role="status"><div><strong>No modules installed</strong><p>Install a Bark module package and restart the service.</p></div></div>
         {% endfor %}
     </div>
 </div>
@@ -56,16 +65,40 @@
         toggle.addEventListener('change', async (e) => {
             const moduleName = e.target.dataset.module;
             const enabled = e.target.checked;
+            e.target.disabled = true;
+            e.target.setAttribute('aria-busy', 'true');
             try {
-                const res = await fetch(`/api/v1/guilds/{{ guild.id }}/modules/${moduleName}/toggle`, {
+                const data = await safeFetch(`/api/v1/guilds/{{ guild.id }}/modules/${moduleName}/toggle`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({enabled})
                 });
-                const data = await res.json();
-                if (!data.success) e.target.checked = !enabled;
+                if (!data.success) {
+                    throw new Error(data.error || 'Module state was not updated');
+                } else {
+                    const card = e.target.closest('.module-card');
+                    card?.classList.toggle('is-enabled', enabled);
+                    card?.classList.toggle('is-disabled', !enabled);
+                    const stateLabel = card?.querySelector('.module-state-label');
+                    if (stateLabel) stateLabel.textContent = enabled ? 'On' : 'Off';
+                    // Re-render sidebar from fresh manifest so module nav appears/disappears
+                    const sidebarNav = document.getElementById('sidebar-nav-items');
+                    if (sidebarNav && typeof loadSidebarManifest === 'function') {
+                        loadSidebarManifest(sidebarNav);
+                    } else {
+                        // Fallback: toggle visibility directly
+                        const navItem = [...document.querySelectorAll('[data-module]')]
+                            .find((item) => item.dataset.module === moduleName);
+                        if (navItem) navItem.style.display = enabled ? '' : 'none';
+                    }
+                    showToast(`${moduleName} ${enabled ? 'enabled' : 'disabled'}`, 'success');
+                }
             } catch (err) {
                 e.target.checked = !enabled;
+                showToast(err.message || `Could not ${enabled ? 'enable' : 'disable'} ${moduleName}`, 'error');
+            } finally {
+                e.target.disabled = false;
+                e.target.removeAttribute('aria-busy');
             }
         });
     });

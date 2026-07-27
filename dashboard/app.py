@@ -32,7 +32,12 @@ class DashboardApp:
         """Run the dashboard server. Blocks until shutdown."""
         host = config.dashboard.host
         port = config.dashboard.port
-        logger.info("Dashboard starting on http://%s:%d", host, port)
+        logger.info(
+            "Dashboard starting on %s (bind %s:%d)",
+            config.dashboard.public_url,
+            host,
+            port,
+        )
 
         config_obj = uvicorn.Config(
             self.app,
@@ -43,4 +48,7 @@ class DashboardApp:
         )
         server = uvicorn.Server(config_obj)
         self._server = server
-        await server.serve()
+        try:
+            await server.serve()
+        except SystemExit:
+            logger.exception("Dashboard exited with SystemExit")

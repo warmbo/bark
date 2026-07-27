@@ -1,38 +1,160 @@
 {% extends "base.html" %}
 {% block title %}Servers{% endblock %}
+{% block og_description %}Server selection page for Bark Discord bot management dashboard{% endblock %}
+
+{% macro server_card(guild) %}
+{% if guild.access_tier == 'connected' %}
+<a href="/guild/{{ guild.id }}" class="guild-card guild-card-connected" data-server-name="{{ guild.name | lower }}">
+{% elif guild.access_tier == 'manageable' and guild.invite_url %}
+<a href="{{ guild.invite_url }}" target="_blank" rel="noopener" class="guild-card guild-card-uninstalled" data-server-name="{{ guild.name | lower }}">
+{% else %}
+<article class="guild-card guild-card-readonly" data-server-name="{{ guild.name | lower }}">
+{% endif %}
+    <div class="guild-card-icon">
+        {% if guild.icon_url %}<img src="{{ guild.icon_url }}" alt="{{ guild.name }} icon" loading="lazy">
+        {% else %}<div class="guild-initials">{{ guild.name[:2] }}</div>{% endif %}
+    </div>
+    <div class="guild-card-body">
+        <h3 class="guild-card-name">{{ guild.name }}</h3>
+        <div class="guild-card-meta">
+            {% if guild.access_tier == 'connected' %}
+            <span class="guild-state connected"><span class="status-dot online"></span>Bark connected</span>
+            {% if guild.member_count is not none %}<span>{{ guild.member_count }} members</span>{% endif %}
+            {% elif guild.access_tier == 'manageable' %}<span>Bark is not installed</span>
+            {% else %}<span>Manage Server permission required</span>{% endif %}
+        </div>
+    </div>
+    <div class="guild-card-action">
+        {% if guild.access_tier == 'connected' %}<span>Open</span>{{ icon("arrow-right", 15) }}
+        {% elif guild.access_tier == 'manageable' and guild.invite_url %}<span>Add Bark</span>{{ icon("external-link", 15) }}
+        {% else %}{{ icon("lock", 15) }}{% endif %}
+    </div>
+{% if guild.access_tier == 'connected' or (guild.access_tier == 'manageable' and guild.invite_url) %}</a>{% else %}</article>{% endif %}
+{% endmacro %}
 
 {% block content %}
+{% set connected = guilds | selectattr('access_tier', 'equalto', 'connected') | list %}
+{% set manageable = guilds | selectattr('access_tier', 'equalto', 'manageable') | list %}
+{% set other = guilds | selectattr('access_tier', 'equalto', 'other') | list %}
+{% set total = connected | length + manageable | length + other | length %}
 <div class="page-container">
-    <div class="page-header">
-        <h1 class="page-title">Servers</h1>
-        <p class="page-subtitle">Select a server to manage</p>
-    </div>
-
-    <div class="guild-grid">
+    <div class="dashboard-welcome">
+        <div class="dashboard-welcome-body">
+            {% if config.oauth2.enabled and request.session.get('user') %}
+            {% set user = request.session.user %}
+            <h1>{{ icon("radio", 22) }} Welcome back, {{ user.get('global_name', user.get('username', 'Bark user')) }}</h1>
+            <p>{{ connected | length }} server{% if connected | length != 1 %}s{% endif %} connected · {{ total }} total available</p>
+            {% else %}
+            <h1>{{ icon("radio", 22) }} Your Servers</h1>
+            <p>{{ connected | length }} connected to Bark · {{ total }} total</p>
+            {% endif %}
+        </div>
         {% if guilds %}
-            {% for guild in guilds %}
-            <a href="/guild/{{ guild.id }}" class="guild-card">
-                <div class="guild-card-icon">
-                    {% if guild.icon %}
-                    <img src="{{ guild.icon.url }}" alt="{{ guild.name }}">
-                    {% else %}
-                    <div class="guild-initials">{{ guild.name[:2] }}</div>
-                    {% endif %}
-                </div>
-                <div class="guild-card-body">
-                    <h3 class="guild-card-name">{{ guild.name }}</h3>
-                    <span class="guild-card-meta">{{ guild.member_count }} members</span>
-                </div>
-                <div class="guild-card-arrow">{{ icon("chevron-right", 18) }}</div>
-            </a>
-            {% endfor %}
-        {% else %}
-            <div class="empty-state">
-                <div class="empty-state-icon">{{ icon("radio", 48) }}</div>
-                <h3>No Servers Connected</h3>
-                <p>Invite Bark to your Discord server to get started.</p>
-            </div>
+        <label class="dashboard-server-search" for="server-search">
+            <span class="sr-only">Search servers</span>
+            {{ icon("search", 16) }}
+            <input id="server-search" name="server_search" type="search" placeholder="Search servers…" autocomplete="off">
+            <kbd>Ctrl K</kbd>
+        </label>
         {% endif %}
     </div>
+
+    {% if request.query_params.get('auth_error') %}
+    <div class="alert alert-danger" role="alert">Discord sign-in could not be completed. Please try again.</div>
+    {% endif %}
+
+    {% if guilds %}
+    <div class="dashboard-stats-strip">
+        <div class="dashboard-stat-item">
+            <div class="dashboard-stat-icon">{{ icon("wifi", 18) }}</div>
+            <div class="dashboard-stat-body">
+                <div class="dashboard-stat-value">{{ connected | length }}</div>
+                <div class="dashboard-stat-label">Connected</div>
+            </div>
+        </div>
+        <div class="dashboard-stat-item">
+            <div class="dashboard-stat-icon">{{ icon("plus-circle", 18) }}</div>
+            <div class="dashboard-stat-body">
+                <div class="dashboard-stat-value">{{ manageable | length }}</div>
+                <div class="dashboard-stat-label">Available to add</div>
+            </div>
+        </div>
+        <div class="dashboard-stat-item">
+            <div class="dashboard-stat-icon">{{ icon("users", 18) }}</div>
+            <div class="dashboard-stat-body">
+                <div class="dashboard-stat-value">{{ total }}</div>
+                <div class="dashboard-stat-label">Total servers</div>
+            </div>
+        </div>
+    </div>
+
+        {% if connected %}
+        <section class="server-group" data-server-group>
+            <header class="server-group-header">
+                <div><h2>Connected to Bark</h2><p>Ready to manage</p></div>
+                <span class="server-group-count">{{ connected | length }}</span>
+            </header>
+            <div class="guild-grid">{% for guild in connected %}{{ server_card(guild) }}{% endfor %}</div>
+        </section>
+        {% endif %}
+
+        {% if manageable %}
+        <section class="server-group" data-server-group>
+            <header class="server-group-header">
+                <div><h2>Available to add</h2><p>Servers where you can manage Bark</p></div>
+                <span class="server-group-count">{{ manageable | length }}</span>
+            </header>
+            <div class="guild-grid">{% for guild in manageable %}{{ server_card(guild) }}{% endfor %}</div>
+        </section>
+        {% endif %}
+
+        {% if other %}
+        <details class="server-group server-group-other" data-server-group>
+            <summary class="server-group-header">
+                <span><strong role="heading" aria-level="2">Other servers</strong><br><small>Manage Server permission required</small></span>
+                <span class="server-group-summary-meta"><span class="server-group-count">{{ other | length }}</span>{{ icon("chevron-down", 15) }}</span>
+            </summary>
+            <div class="guild-grid">{% for guild in other %}{{ server_card(guild) }}{% endfor %}</div>
+        </details>
+        {% endif %}
+
+        <div class="empty-state compact server-search-empty" id="server-search-empty" hidden>
+            <h3>No matching servers</h3><p>Try a different server name.</p>
+        </div>
+    {% else %}
+        <div class="empty-state full-width">
+            <div class="empty-state-icon">{{ icon("radio", 48) }}</div>
+            <h3>No Servers Connected</h3>
+            <p class="empty-state-inner">Invite Bark to your Discord server to get started.</p>
+            {% if config.dashboard.invite_url %}
+            <a href="{{ config.dashboard.invite_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+                {{ icon("external-link", 16) }} Invite to Discord
+            </a>
+            {% else %}
+            <p class="text-tertiary text-sm">Set <code>BARK_INVITE_URL</code> or create an invite link in your Discord Developer Portal.</p>
+            {% endif %}
+        </div>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('server-search')?.addEventListener('input', (event) => {
+    const query = event.target.value.trim().toLowerCase();
+    const cards = [...document.querySelectorAll('[data-server-name]')];
+    let visible = 0;
+    cards.forEach((card) => {
+        const matches = card.dataset.serverName.includes(query);
+        card.hidden = !matches;
+        if (matches) visible += 1;
+    });
+    document.querySelectorAll('[data-server-group]').forEach((group) => {
+        const hasMatch = [...group.querySelectorAll('[data-server-name]')].some((card) => !card.hidden);
+        group.hidden = !hasMatch;
+        if (query && hasMatch && group.matches('details')) group.open = true;
+    });
+    document.getElementById('server-search-empty').hidden = visible !== 0;
+});
+</script>
 {% endblock %}

@@ -1,85 +1,88 @@
 """
-Moderation actions API — bridges dashboard actions to Discord bot commands.
-These endpoints call the same underlying logic as slash commands.
+Moderation actions API — delegates to ModerationService.
+
+NO business logic lives here. This layer validates input and
+delegates to the service layer.
 """
 
-import json
+import logging
+from datetime import timedelta
 
+import discord
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
 
-from database.engine import session_scope
-from database.models.moderation import ModerationCase, Warning, AuditLog
+
+logger = logging.getLogger("bark.api.actions")
+from services.moderation_service import ModerationService
+from services.bark_context import emit_moderation_case_created
+from services.response import (
+    api_success,
+    api_error,
+    api_not_found,
+    api_forbidden,
+    check_api_permission,
+    get_module_min_role,
+)
 
 router = APIRouter(tags=["api-actions"])
 
+SERVICE = ModerationService()
 
-async def _create_case(
-    guild_id: int,
-    action_type: str,
-    target_id: str,
-    target_tag: str,
-    moderator_id: str,
-    moderator_tag: str,
-    reason: str,
-    duration: int | None = None,
-) -> int:
-    from sqlalchemy import select, func
-    async with session_scope() as session:
-        result = await session.execute(
-            select(func.coalesce(func.max(ModerationCase.case_number), 0) + 1)
-            .where(ModerationCase.guild_id == guild_id)
-        )
-        case_number = result.scalar()
-        case = ModerationCase(
-            guild_id=guild_id,
-            case_number=case_number,
-            action_type=action_type,
-            target_id=target_id,
-            target_tag=target_tag,
-            moderator_id=moderator_id,
-            moderator_tag=moderator_tag,
-            reason=reason,
-            duration=duration,
-        )
-        session.add(case)
-        await session.commit()
-    return case_number
+# Discord permission requirements for each moderation action
+_ACTION_PERMISSIONS = {
+    "warn": "moderate_members",
+    "timeout": "moderate_members",
+    "kick": "kick_members",
+    "ban": "ban_members",
+    "vc_kick": "move_members",
+    "vc_move": "move_members",
+    "vc_mute": "mute_members",
+    "vc_unmute": "mute_members",
+    "unban": "ban_members",
+}
 
 
-async def _log_audit(guild_id: int, action: str, actor_id: str, target_id: str | None, details: dict | None = None):
-    async with session_scope() as session:
-        session.add(AuditLog(
-            guild_id=guild_id,
-            action=action,
-            actor_id=actor_id,
-            target_id=target_id,
-            details=json.dumps(details or {}),
-        ))
-        await session.commit()
-
+# ── Member list / search ─────────────────────────────
 
 @router.get("/guilds/{guild_id}/members")
-async def list_members(request: Request, guild_id: int, search: str = "", page: int = 0, limit: int = 50):
-    """List and search guild members."""
+async def list_members(
+    request: Request, guild_id: str,
+    search: str = "", page: int = 0, limit: int = 100,
+    role_id: str = "", sort: str = "name", order: str = "asc",
+    min_age_days: int = 0, max_age_days: int = 0,
+):
+    """List/search guild members with filtering, sorting, and pagination."""
+    from datetime import datetime, timezone
+    gid = int(guild_id)
     bot = request.state.bot
-    guild = bot.get_guild(guild_id)
+    guild = bot.get_guild(gid)
     if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
+        return api_not_found("Guild")
 
+    now = datetime.now(timezone.utc)
+    query = search.lower()
     members = []
+
     for member in guild.members:
-        name = member.display_name.lower()
-        tag = str(member).lower()
-        query = search.lower()
-        if search and query not in name and query not in tag:
+        if search:
+            if query not in member.display_name.lower() and query not in str(member).lower():
+                continue
+        if role_id:
+            if role_id not in {str(r.id) for r in member.roles}:
+                continue
+        account_age_days = (now - member.created_at).days if member.created_at else 0
+        if min_age_days > 0 and account_age_days < min_age_days:
             continue
+        if max_age_days > 0 and account_age_days >= max_age_days:
+            continue
+
         members.append({
-            "id": str(member.id),
-            "name": member.display_name,
+            "id": str(member.id), "name": member.display_name,
             "tag": str(member),
             "avatar_url": member.display_avatar.url if member.display_avatar else None,
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "created_at": member.created_at.isoformat() if member.created_at else None,
+            "account_age_days": account_age_days,
             "roles": [{"id": str(r.id), "name": r.name} for r in member.roles[1:]],
             "top_role": member.top_role.name if member.top_role else "None",
             "is_bot": member.bot,
@@ -87,368 +90,299 @@ async def list_members(request: Request, guild_id: int, search: str = "", page: 
             "is_timed_out": member.is_timed_out(),
         })
 
+    rev = order.lower() == "desc"
+    if sort == "name": members.sort(key=lambda m: m["name"].lower(), reverse=rev)
+    elif sort == "joined_at": members.sort(key=lambda m: m["joined_at"] or "", reverse=rev)
+    elif sort == "account_age": members.sort(key=lambda m: m["account_age_days"], reverse=rev)
+    elif sort == "role": members.sort(key=lambda m: m["top_role"].lower(), reverse=rev)
+
     total = len(members)
     start = page * limit
-    end = start + limit
-    return {"members": members[start:end], "total": total, "page": page}
+    return api_success({"members": members[start:start + limit], "total": total, "page": page})
+
+
+# ── Member detail ────────────────────────────────────
+
+
+async def _get_user_notes(guild_id: int, user_id: str) -> list[dict]:
+    """Fetch notes for a specific user from the database."""
+    from sqlalchemy import select, desc
+    from database.models.moderation import UserNote
+    from database.engine import session_scope
+
+    async with session_scope() as session:
+        result = await session.execute(
+            select(UserNote)
+            .where(
+                UserNote.guild_id == str(guild_id),
+                UserNote.user_id == user_id,
+            )
+            .order_by(desc(UserNote.created_at))
+        )
+        return [
+            {
+                "id": n.id,
+                "author_id": n.author_id,
+                "content": n.content,
+                "created_at": n.created_at.isoformat(),
+            }
+            for n in result.scalars().all()
+        ]
 
 
 @router.get("/guilds/{guild_id}/members/{user_id}")
-async def get_member_detail(request: Request, guild_id: int, user_id: str):
-    """Get detailed info about a member including case history."""
+async def get_member_detail(request: Request, guild_id: str, user_id: str):
+    """Get full member detail including cases, warnings, voice sessions."""
+    gid = int(guild_id)
     bot = request.state.bot
-    guild = bot.get_guild(guild_id)
+    guild = bot.get_guild(gid)
     if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
-
+        return api_not_found("Guild")
     member = guild.get_member(int(user_id))
     if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
+        return api_not_found("Member")
 
-    from sqlalchemy import select, desc, func
+    cases = await SERVICE.get_cases(gid, limit=50)
+    member_cases = [c for c in cases if c["target_id"] == user_id]
 
-    async with session_scope() as session:
-        # Cases
-        result = await session.execute(
-            select(ModerationCase)
-            .where(ModerationCase.guild_id == guild_id, ModerationCase.target_id == user_id)
-            .order_by(desc(ModerationCase.created_at))
-            .limit(20)
-        )
-        cases = [{
-            "case_number": c.case_number,
-            "action_type": c.action_type,
-            "moderator_tag": c.moderator_tag,
-            "reason": c.reason,
-            "created_at": c.created_at.isoformat(),
-            "resolved": c.resolved,
-        } for c in result.scalars().all()]
+    warnings = await SERVICE.get_warnings(gid, user_id=str(member.id))
+    notes = await _get_user_notes(gid, str(member.id))
+    voice_sessions = await SERVICE.get_voice_sessions(gid, str(member.id))
 
-        # Active warnings
-        result = await session.execute(
-            select(Warning)
-            .where(Warning.guild_id == guild_id, Warning.user_id == user_id, Warning.active == True)
-            .order_by(desc(Warning.created_at))
-        )
-        warnings = [{
-            "id": w.id,
-            "moderator_id": w.moderator_id,
-            "reason": w.reason,
-            "created_at": w.created_at.isoformat(),
-        } for w in result.scalars().all()]
-
-        # Notes
-        from database.models.moderation import UserNote
-        result = await session.execute(
-            select(UserNote)
-            .where(UserNote.guild_id == guild_id, UserNote.user_id == user_id)
-            .order_by(desc(UserNote.created_at))
-        )
-        notes = [{
-            "id": n.id,
-            "author_id": n.author_id,
-            "content": n.content,
-            "created_at": n.created_at.isoformat(),
-        } for n in result.scalars().all()]
-
-        # Voice sessions
-        from database.models.voice import VoiceSession
-        result = await session.execute(
-            select(VoiceSession)
-            .where(VoiceSession.guild_id == guild_id, VoiceSession.user_id == user_id)
-            .order_by(desc(VoiceSession.joined_at))
-            .limit(10)
-        )
-        voice_sessions = []
-        for vs in result.scalars().all():
-            duration = vs.duration_seconds
-            dur_str = ""
-            if duration is not None:
-                m, s = divmod(duration, 60)
-                h, m = divmod(m, 60)
-                dur_str = f"{h}h {m}m {s}s" if h else f"{m}m {s}s"
-            voice_sessions.append({
-                "channel_name": vs.channel_name,
-                "joined_at": vs.joined_at.isoformat(),
-                "left_at": vs.left_at.isoformat() if vs.left_at else None,
-                "duration": dur_str,
-            })
-
-    return {
-        "id": str(member.id),
-        "name": member.display_name,
-        "tag": str(member),
+    return api_success({
+        "id": str(member.id), "name": member.display_name, "tag": str(member),
         "avatar_url": member.display_avatar.url if member.display_avatar else None,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "created_at": member.created_at.isoformat() if member.created_at else None,
         "roles": [{"id": str(r.id), "name": r.name} for r in member.roles[1:]],
         "top_role": member.top_role.name if member.top_role else "None",
-        "is_bot": member.bot,
+        "is_bot": member.bot, "is_timed_out": member.is_timed_out(),
         "voice_channel": member.voice.channel.name if member.voice and member.voice.channel else None,
-        "is_timed_out": member.is_timed_out(),
-        "cases": cases,
-        "warnings": warnings,
-        "warnings_count": len(warnings),
-        "notes": notes,
+        "cases": member_cases, "warnings": warnings, "notes": notes,
         "voice_sessions": voice_sessions,
-    }
+    })
 
+
+# ── Moderation Actions ───────────────────────────────
 
 @router.post("/guilds/{guild_id}/actions/warn")
-async def action_warn(request: Request, guild_id: int):
-    """Warn a member (dashboard action, same as /warn command)."""
-    bot = request.state.bot
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
-
-    data = await request.json()
-    target_id = data.get("target_id")
-    reason = data.get("reason", "No reason provided")
-    moderator_id = data.get("moderator_id", str(bot.user.id))
-
-    member = guild.get_member(int(target_id))
-    if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
-
-    moderator = guild.get_member(int(moderator_id)) if moderator_id else None
-    moderator_tag = str(moderator) if moderator else str(bot.user)
-
-    case_number = await _create_case(
-        guild_id=guild_id, action_type="warn",
-        target_id=target_id, target_tag=str(member),
-        moderator_id=moderator_id, moderator_tag=moderator_tag,
-        reason=reason,
-    )
-
-    async with session_scope() as session:
-        session.add(Warning(
-            guild_id=guild_id, user_id=target_id,
-            moderator_id=moderator_id, reason=reason, active=True,
-        ))
-        await session.commit()
-
-    await _log_audit(guild_id=guild_id, action="warn",
-                     actor_id=moderator_id, target_id=target_id,
-                     details={"reason": reason, "case": case_number})
-
-    return {"success": True, "case_number": case_number, "action": "warn"}
-
+async def action_warn(request: Request, guild_id: str):
+    """Warn a member — sends DM, creates warning record and case."""
+    return await _mod_action(request, guild_id, "warn", _exec_warn)
 
 @router.post("/guilds/{guild_id}/actions/timeout")
-async def action_timeout(request: Request, guild_id: int):
-    """Timeout a member (dashboard action)."""
-    bot = request.state.bot
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
-    if not guild.me.guild_permissions.moderate_members:
-        return JSONResponse({"error": "Bot lacks moderate_members permission"}, status_code=403)
-
-    data = await request.json()
-    target_id = data.get("target_id")
-    duration = data.get("duration", 10)
-    unit = data.get("unit", "minutes")
-    reason = data.get("reason", "No reason provided")
-    moderator_id = data.get("moderator_id", str(bot.user.id))
-
-    member = guild.get_member(int(target_id))
-    if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
-
-    from datetime import timedelta
-    unit_map = {"seconds": 1, "minutes": 60, "hours": 3600}
-    seconds = duration * unit_map.get(unit, 60)
-    until = discord_utcnow() + timedelta(seconds=seconds)
-    minutes = seconds // 60
-
-    try:
-        await member.timeout(until, reason=f"Dashboard timeout: {reason}")
-    except discord.Forbidden:
-        return JSONResponse({"error": "Cannot timeout this member"}, status_code=403)
-
-    moderator_tag = str(guild.get_member(int(moderator_id)) or bot.user)
-    case_number = await _create_case(
-        guild_id=guild_id, action_type="timeout",
-        target_id=target_id, target_tag=str(member),
-        moderator_id=moderator_id, moderator_tag=moderator_tag,
-        reason=reason, duration=minutes,
-    )
-
-    await _log_audit(guild_id=guild_id, action="timeout",
-                     actor_id=moderator_id, target_id=target_id,
-                     details={"duration": minutes, "reason": reason, "case": case_number})
-
-    return {"success": True, "case_number": case_number, "action": "timeout", "duration_minutes": minutes}
-
+async def action_timeout(request: Request, guild_id: str):
+    """Timeout a member — restricts channel access for duration."""
+    return await _mod_action(request, guild_id, "timeout", _exec_timeout)
 
 @router.post("/guilds/{guild_id}/actions/kick")
-async def action_kick(request: Request, guild_id: int):
-    """Kick a member (dashboard action)."""
-    bot = request.state.bot
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
-    if not guild.me.guild_permissions.kick_members:
-        return JSONResponse({"error": "Bot lacks kick_members permission"}, status_code=403)
-
-    data = await request.json()
-    target_id = data.get("target_id")
-    reason = data.get("reason", "No reason provided")
-
-    member = guild.get_member(int(target_id))
-    if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
-
-    try:
-        await member.kick(reason=f"Dashboard kick: {reason}")
-    except discord.Forbidden:
-        return JSONResponse({"error": "Cannot kick this member"}, status_code=403)
-
-    case_number = await _create_case(
-        guild_id=guild_id, action_type="kick",
-        target_id=target_id, target_tag=str(member),
-        moderator_id=str(bot.user.id), moderator_tag=str(bot.user),
-        reason=reason,
-    )
-
-    return {"success": True, "case_number": case_number, "action": "kick"}
-
+async def action_kick(request: Request, guild_id: str):
+    """Kick a member from the server."""
+    return await _mod_action(request, guild_id, "kick", _exec_kick)
 
 @router.post("/guilds/{guild_id}/actions/ban")
-async def action_ban(request: Request, guild_id: int):
-    """Ban a member (dashboard action)."""
-    bot = request.state.bot
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
-    if not guild.me.guild_permissions.ban_members:
-        return JSONResponse({"error": "Bot lacks ban_members permission"}, status_code=403)
-
-    data = await request.json()
-    target_id = data.get("target_id")
-    reason = data.get("reason", "No reason provided")
-    delete_days = data.get("delete_days", 0)
-
-    member = guild.get_member(int(target_id))
-    if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
-
-    try:
-        await member.ban(reason=f"Dashboard ban: {reason}", delete_message_days=delete_days)
-    except discord.Forbidden:
-        return JSONResponse({"error": "Cannot ban this member"}, status_code=403)
-
-    case_number = await _create_case(
-        guild_id=guild_id, action_type="ban",
-        target_id=target_id, target_tag=str(member),
-        moderator_id=str(bot.user.id), moderator_tag=str(bot.user),
-        reason=reason,
-    )
-
-    return {"success": True, "case_number": case_number, "action": "ban"}
-
+async def action_ban(request: Request, guild_id: str):
+    """Ban a member — optionally delete recent messages."""
+    return await _mod_action(request, guild_id, "ban", _exec_ban)
 
 @router.post("/guilds/{guild_id}/actions/vc_kick")
-async def action_vc_kick(request: Request, guild_id: int):
-    """Voice-disconnect a member."""
-    bot = request.state.bot
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
-
-    data = await request.json()
-    target_id = data.get("target_id")
-    reason = data.get("reason", "No reason provided")
-
-    member = guild.get_member(int(target_id))
-    if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
-    if member.voice is None or member.voice.channel is None:
-        return JSONResponse({"error": "Member not in voice"}, status_code=400)
-
-    try:
-        await member.move_to(None, reason=f"Dashboard VC kick: {reason}")
-    except discord.Forbidden:
-        return JSONResponse({"error": "Cannot disconnect this member"}, status_code=403)
-
-    case_number = await _create_case(
-        guild_id=guild_id, action_type="vc_kick",
-        target_id=target_id, target_tag=str(member),
-        moderator_id=str(bot.user.id), moderator_tag=str(bot.user),
-        reason=reason,
-    )
-
-    return {"success": True, "case_number": case_number, "action": "vc_kick"}
-
+async def action_vc_kick(request: Request, guild_id: str):
+    """Disconnect a member from voice chat."""
+    return await _mod_action(request, guild_id, "vc_kick", _exec_vc_kick)
 
 @router.post("/guilds/{guild_id}/actions/vc_move")
-async def action_vc_move(request: Request, guild_id: int):
+async def action_vc_move(request: Request, guild_id: str):
     """Move a member to another voice channel."""
-    bot = request.state.bot
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
-
-    data = await request.json()
-    target_id = data.get("target_id")
-    channel_id = data.get("channel_id")
-    reason = data.get("reason", "No reason provided")
-
-    member = guild.get_member(int(target_id))
-    if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
-
-    channel = guild.get_channel(int(channel_id))
-    if channel is None:
-        return JSONResponse({"error": "Channel not found"}, status_code=404)
-
-    try:
-        await member.move_to(channel, reason=f"Dashboard VC move: {reason}")
-    except discord.Forbidden:
-        return JSONResponse({"error": "Cannot move this member"}, status_code=403)
-
-    return {"success": True, "action": "vc_move"}
-
+    return await _mod_action(request, guild_id, "vc_move", _exec_vc_move)
 
 @router.post("/guilds/{guild_id}/actions/vc_mute")
-async def action_vc_mute(request: Request, guild_id: int):
-    """Server-mute a member in voice."""
-    return await _vc_toggle_mute(request, guild_id, mute=True)
-
+async def action_vc_mute(request: Request, guild_id: str):
+    """Server-mute a member in voice chat."""
+    return await _mod_action(request, guild_id, "vc_mute", _exec_vc_mute)
 
 @router.post("/guilds/{guild_id}/actions/vc_unmute")
-async def action_vc_unmute(request: Request, guild_id: int):
-    """Server-unmute a member in voice."""
-    return await _vc_toggle_mute(request, guild_id, mute=False)
+async def action_vc_unmute(request: Request, guild_id: str):
+    """Server-unmute a member in voice chat."""
+    return await _mod_action(request, guild_id, "vc_unmute", _exec_vc_unmute)
 
 
-async def _vc_toggle_mute(request: Request, guild_id: int, mute: bool):
+@router.post("/guilds/{guild_id}/actions/unban")
+async def action_unban(request: Request, guild_id: str):
+    """Unban a user by user ID."""
+    await get_module_min_role("moderation", guild_id)
+    if not check_api_permission(request, "moderation.unban", guild_id):
+        return api_forbidden("Insufficient permissions")
+    gid = int(guild_id)
     bot = request.state.bot
-    guild = bot.get_guild(guild_id)
+    guild = bot.get_guild(gid)
     if guild is None:
-        return JSONResponse({"error": "Guild not found"}, status_code=404)
+        return api_not_found("Guild")
 
     data = await request.json()
-    target_id = data.get("target_id")
-    reason = data.get("reason", "No reason provided")
+    user_id = data.get("target_id", "").strip()
+    reason = data.get("reason", "Unbanned via dashboard").strip()
 
-    member = guild.get_member(int(target_id))
-    if member is None:
-        return JSONResponse({"error": "Member not found"}, status_code=404)
+    if not user_id:
+        return api_error("target_id is required")
 
     try:
-        await member.edit(mute=mute, reason=f"Dashboard VC {'mute' if mute else 'unmute'}: {reason}")
+        user = await bot.fetch_user(int(user_id))
+        await guild.unban(user, reason=reason)
+    except discord.NotFound:
+        return api_error("User not found or not banned")
     except discord.Forbidden:
-        return JSONResponse({"error": "Cannot edit this member"}, status_code=403)
+        return api_forbidden("Cannot unban members")
+    except Exception as e:
+        return api_error(str(e))
 
-    return {"success": True, "action": "vc_mute" if mute else "vc_unmute"}
+    case = await SERVICE.create_case(
+        guild_id=gid, action_type="unban",
+        target_id=user_id, target_tag=str(user),
+        moderator_id="dashboard", moderator_tag="Dashboard",
+        reason=reason,
+    )
+    await emit_moderation_case_created(
+        request.state.bot.modules.event_bus,
+        guild_id=gid,
+        case_id=case,
+        action_type="unban",
+        target_tag=str(user),
+        moderator_tag="Dashboard",
+        reason=reason,
+    )
+    await SERVICE.log_audit(
+        guild_id=gid, action="unban",
+        actor_id="dashboard", actor_tag="Dashboard",
+        target_id=user_id, target_tag=str(user),
+        details={"reason": reason, "case": case},
+    )
+
+    return api_success({"case": case, "action": "unban", "target": str(user)})
 
 
-def discord_utcnow():
-    from datetime import timezone
-    from datetime import datetime
-    return datetime.now(timezone.utc)
+async def _mod_action(request: Request, guild_id: str, action: str, executor):
+    """Generic moderation action handler — delegates to service layer."""
+    # Permission check
+    await get_module_min_role("moderation", guild_id)
+    if not check_api_permission(
+        request, f"moderation.{action}", guild_id
+    ):
+        return api_forbidden("Insufficient permissions")
+
+    gid = int(guild_id)
+    bot = request.state.bot
+    guild = bot.get_guild(gid)
+    if guild is None:
+        return api_not_found("Guild")
+
+    # Verify bot has the required Discord guild permission
+    required_perm = _ACTION_PERMISSIONS.get(action)
+    if required_perm and not getattr(guild.me.guild_permissions, required_perm, False):
+        return api_forbidden(f"Bot lacks '{required_perm}' Discord permission for {action}")
+
+    data = await request.json()
+    target_id = data.get("target_id", "").strip()
+    reason = data.get("reason", "Dashboard action").strip()
+    duration = data.get("duration")
+
+    if not target_id:
+        return api_error("target_id is required")
+
+    try:
+        target_id_int = int(target_id)
+    except (ValueError, TypeError):
+        return api_error("target_id must be a valid Discord user ID (numeric)")
+
+    member = guild.get_member(target_id_int)
+    if member is None:
+        return api_not_found("Member")
+
+    # Prevent moderating bot accounts
+    if member.bot:
+        return api_error("Cannot moderate bot accounts")
+
+    # Verify the dashboard user has the required Discord permission
+    try:
+        session_user = request.session.get("user", {})
+        actor_id = session_user.get("id", "")
+        if actor_id:
+            actor_member = guild.get_member(int(actor_id))
+            if actor_member:
+                if required_perm and not getattr(actor_member.guild_permissions, required_perm, False):
+                    return api_forbidden(f"You lack '{required_perm}' Discord permission for {action}")
+                # Role hierarchy check: actor's top role must be above target's top role
+                if action in ("kick", "ban", "timeout"):
+                    actor_top = actor_member.top_role.position
+                    target_top = member.top_role.position
+                    if actor_top <= target_top and not actor_member.guild_permissions.administrator:
+                        return api_forbidden("Cannot moderate that member — their highest role is equal to or above yours")
+    except (ValueError, TypeError):
+        pass  # If actor lookup fails, proceed with bot-only check
+
+    try:
+        await executor(guild, member, reason, duration)
+    except discord.Forbidden:
+        return api_forbidden(f"Cannot {action} that member")
+    except Exception as e:
+        return api_error(str(e))
+
+    case = await SERVICE.create_case(
+        guild_id=gid, action_type=action,
+        target_id=str(member.id), target_tag=str(member),
+        moderator_id="dashboard", moderator_tag="Dashboard",
+        reason=reason, duration=duration,
+    )
+    await emit_moderation_case_created(
+        request.state.bot.modules.event_bus,
+        guild_id=gid,
+        case_id=case,
+        action_type=action,
+        target_tag=str(member),
+        moderator_tag="Dashboard",
+        reason=reason,
+    )
+    await SERVICE.log_audit(
+        guild_id=gid, action=action,
+        actor_id="dashboard", actor_tag="Dashboard",
+        target_id=str(member.id), target_tag=str(member),
+        details={"reason": reason, "case": case, "duration": duration},
+    )
+
+    return api_success({"case": case, "action": action, "target": str(member)})
 
 
-import discord
+# ── Execution helpers (delegated to Discord API) ─────
+
+async def _exec_warn(guild, member, reason, duration=None):
+    try:
+        await member.send(f"You were warned in {guild.name}.\nReason: {reason}")
+    except (discord.Forbidden, discord.HTTPException):
+        logger.warning("Could not DM warning to %s in guild %s", member, guild.id)
+    await SERVICE.add_warning(guild.id, str(member.id), "dashboard", reason)
+
+async def _exec_timeout(guild, member, reason, duration):
+    minutes = duration or 10
+    until = discord.utils.utcnow() + timedelta(minutes=minutes)
+    await member.timeout(until, reason=reason)
+
+async def _exec_kick(guild, member, reason, duration):
+    await member.kick(reason=reason)
+
+async def _exec_ban(guild, member, reason, duration):
+    await member.ban(reason=reason, delete_message_days=0)
+
+async def _exec_vc_kick(guild, member, reason, duration):
+    await member.move_to(None, reason=reason)
+
+async def _exec_vc_move(guild, member, reason, duration):
+    ch_id = duration  # Reuse duration param as channel_id for vc_move
+    if ch_id:
+        channel = guild.get_channel(int(ch_id))
+        if channel:
+            await member.move_to(channel, reason=reason)
+
+async def _exec_vc_mute(guild, member, reason, duration):
+    await member.edit(mute=True, reason=reason)
+
+async def _exec_vc_unmute(guild, member, reason, duration):
+    await member.edit(mute=False, reason=reason)

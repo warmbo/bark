@@ -1,0 +1,20 @@
+<article class="content-card workspace-data-card" data-section="wordlists">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("list-filter", 16) }} Word Lists</h2><p class="card-description">Reusable word and domain lists for banned-word and banned-domain rules.</p></div>
+    <div class="card-header-actions"><button type="button" class="btn btn-sm" data-refresh-section="wordlists" aria-label="Refresh word lists">{{ icon("refresh-cw", 14) }} Refresh</button>{% if module_data.can_manage_module %}<button type="button" class="btn btn-primary btn-sm" id="wl-new-btn">{{ icon("plus", 14) }} New list</button>{% endif %}</div>
+  </div>
+  <div id="wl-list-content" aria-live="polite"><div class="skeleton skeleton-card"></div></div>
+</article>
+{% if module_data.can_manage_module %}
+<div class="dialog-overlay workspace-modal" id="wl-modal" aria-hidden="true" hidden>
+  <form class="app-dialog workspace-dialog-form" role="dialog" aria-modal="true" aria-labelledby="wl-modal-title" id="wl-form">
+    <div class="dialog-icon" aria-hidden="true">{{ icon('list-filter', 20) }}</div>
+    <div><h2 id="wl-modal-title">New word list</h2><p>Create a reusable list, then add one entry per line.</p></div>
+    <div class="dialog-fields">
+      <div class="form-group"><label class="form-label" for="wl-modal-name">Name</label><input class="form-input" id="wl-modal-name" name="name" type="text" maxlength="100" required></div>
+      <div class="form-group"><label class="form-label" for="wl-modal-type">Type</label><select class="form-select" id="wl-modal-type" name="list_type"><option value="word">Words and phrases</option><option value="domain">Domains</option></select></div>
+    </div>
+    <div class="dialog-actions"><button type="button" class="btn" data-close-modal="wl-modal">Cancel</button><button type="submit" class="btn btn-primary" id="wl-modal-submit">Create list</button></div>
+  </form>
+</div>
+{% endif %}

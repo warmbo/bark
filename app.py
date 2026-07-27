@@ -44,11 +44,15 @@ async def main() -> None:
 
     dashboard_app = create_app(bot)
 
-    async with asyncio.TaskGroup() as tg:
-        tg.create_task(bot.start(config.bot.token))
-        tg.create_task(
-            dashboard_app.run()
-        )
+    # Use gather with return_exceptions so a bot auth failure doesn't kill the dashboard
+    results = await asyncio.gather(
+        bot.start(config.bot.token),
+        dashboard_app.run(),
+        return_exceptions=True,
+    )
+    for i, (label, res) in enumerate(zip(["bot", "dashboard"], results)):
+        if isinstance(res, Exception):
+            logger.error("%s failed: %s", label, res)
 
 
 def run() -> None:

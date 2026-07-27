@@ -8,10 +8,9 @@ Priority:
 """
 
 import os
-import json
+import secrets
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -26,11 +25,19 @@ class BotConfig:
 
 @dataclass
 class DashboardConfig:
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
     port: int = 8090
-    secret_key: str = "bark-dev-secret-change-in-production"
+    public_url: str = "https://bark.warx.org"
+    secret_key: str = ""
     session_ttl: int = 86400  # 24 hours
     cors_origins: list[str] = field(default_factory=lambda: ["*"])
+    force_https: bool = False
+    rate_limit_per_minute: int = 60
+    invite_url: str = ""
+
+    @property
+    def secure_cookies(self) -> bool:
+        return self.force_https or self.public_url.startswith("https://")
 
 
 @dataclass
@@ -42,9 +49,40 @@ class DatabaseConfig:
 
 
 @dataclass
+class OAuth2Config:
+    client_id: str = ""
+    client_secret: str = ""
+    redirect_uri: str = ""
+    owner_discord_ids: set[str] = field(default_factory=set)
+
+    @property
+    def enabled(self) -> bool:
+        """OAuth is usable only when the complete Discord flow is configured."""
+        return bool(self.client_id and self.client_secret and self.redirect_uri)
+
+
+@dataclass
 class LoggingConfig:
     level: str = "INFO"
     format: str = "[%(asctime)s] %(levelname)s %(name)s: %(message)s"
+
+
+def _get_or_generate_secret_key(data_dir: Path) -> str:
+    """Return a saved secret key, or generate and persist one."""
+    key_file = data_dir / ".secret_key"
+    if key_file.exists():
+        key_file.chmod(0o600)
+        return key_file.read_text().strip()
+    key = secrets.token_hex(32)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        key_file.chmod(0o600)
+        return key_file.read_text().strip()
+    with os.fdopen(descriptor, "w") as handle:
+        handle.write(key)
+    return key
 
 
 @dataclass
@@ -52,6 +90,7 @@ class Config:
     bot: BotConfig = field(default_factory=BotConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    oauth2: OAuth2Config = field(default_factory=OAuth2Config)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
 
     data_dir: Path = field(default_factory=lambda: Path("data"))
@@ -64,18 +103,36 @@ class Config:
         """Load config from environment variables with sensible defaults."""
         cfg = cls()
 
-        # Bot
+        # Data directory — must resolve early for secret key
+        data_dir = os.getenv("BARK_DATA_DIR", "data")
+        cfg.data_dir = Path(data_dir).resolve()
+        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+
+        # Bot — env var takes priority, then .token file
         cfg.bot.token = os.getenv("BARK_BOT_TOKEN", "")
+        if not cfg.bot.token:
+            token_path = cfg.data_dir.parent / ".token"
+            if token_path.exists():
+                cfg.bot.token = token_path.read_text().strip()
+            else:
+                token_path = Path(".token")
+                if token_path.exists():
+                    cfg.bot.token = token_path.read_text().strip()
         cfg.bot.command_prefix = os.getenv("BARK_COMMAND_PREFIX", "!")
         cfg.bot.sync_commands = os.getenv("BARK_SYNC_COMMANDS", "true").lower() == "true"
 
         # Dashboard
-        cfg.dashboard.host = os.getenv("BARK_DASHBOARD_HOST", "127.0.0.1")
+        cfg.dashboard.host = os.getenv("BARK_DASHBOARD_HOST", cfg.dashboard.host)
         try:
             cfg.dashboard.port = int(os.getenv("BARK_DASHBOARD_PORT", "8090"))
         except ValueError:
             cfg.dashboard.port = 8090
-        cfg.dashboard.secret_key = os.getenv("BARK_SECRET_KEY", "bark-dev-secret-change-in-production")
+        cfg.dashboard.force_https = os.getenv("BARK_FORCE_HTTPS", "false").lower() == "true"
+        cfg.dashboard.public_url = os.getenv(
+            "BARK_PUBLIC_URL", cfg.dashboard.public_url
+        ).rstrip("/")
+        env_key = os.getenv("BARK_SECRET_KEY", "")
+        cfg.dashboard.secret_key = env_key or _get_or_generate_secret_key(cfg.data_dir)
 
         # Database
         cfg.database.url = os.getenv("BARK_DATABASE_URL", "sqlite+aiosqlite:///bark.db")
@@ -84,12 +141,21 @@ class Config:
         # Logging
         cfg.logging.level = os.getenv("BARK_LOG_LEVEL", "INFO").upper()
 
-        # Data directory
-        data_dir = os.getenv("BARK_DATA_DIR", "data")
-        cfg.data_dir = Path(data_dir).resolve()
+        # OAuth2
+        cfg.oauth2.client_id = os.getenv("BARK_OAUTH2_CLIENT_ID", "")
+        cfg.oauth2.client_secret = os.getenv("BARK_OAUTH2_CLIENT_SECRET", "")
+        cfg.oauth2.redirect_uri = os.getenv(
+            "BARK_OAUTH2_REDIRECT_URI",
+            f"{cfg.dashboard.public_url}/auth/callback",
+        )
+        cfg.oauth2.owner_discord_ids = {
+            value.strip()
+            for value in os.getenv("BARK_OWNER_DISCORD_IDS", "").split(",")
+            if value.strip()
+        }
 
-        # Ensure data directory exists
-        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        # Invite URL
+        cfg.dashboard.invite_url = os.getenv("BARK_INVITE_URL", "")
 
         return cfg
 

@@ -3,7 +3,6 @@ Pytest configuration for Bark.
 """
 
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +22,9 @@ def setup_test_env(monkeypatch, tmp_path):
     cfg.config.bot.token = "test_token_12345"
     cfg.config.dashboard.secret_key = "test_secret_key"
     cfg.config.logging.level = "ERROR"
+
+    # High rate limit for testing — prevents throttling in persistence tests
+    cfg.config.dashboard.rate_limit_per_minute = 3000
 
     # Reset the database engine singleton so it picks up the new config
     import database.engine

@@ -1,0 +1,66 @@
+{% from "components/icons.html" import icon %}
+{% macro page_header(title, description='', icon_name='', eyebrow='') -%}
+<header class="page-header page-header-standard">
+  <div>
+    {% if eyebrow %}<p class="page-eyebrow">{{ eyebrow }}</p>{% endif %}
+    <h1 class="page-title">{% if icon_name %}{{ icon(icon_name, 24) }}{% endif %} {{ title }}</h1>
+    {% if description %}<p class="page-subtitle">{{ description }}</p>{% endif %}
+  </div>
+  {% if caller is defined %}<div class="page-actions">{{ caller() }}</div>{% endif %}
+</header>
+{%- endmacro %}
+
+{% macro state_panel(kind='empty', title='', message='', action_label='', action_id='') -%}
+<div class="state-panel state-{{ kind }}" role="{{ 'alert' if kind == 'error' else 'status' }}">
+  <span class="state-panel-icon" aria-hidden="true">{{ icon('alert-circle' if kind == 'error' else ('loader-circle' if kind == 'loading' else 'inbox'), 18) }}</span>
+  <div><strong>{{ title }}</strong>{% if message %}<p>{{ message }}</p>{% endif %}</div>
+  {% if action_label %}<button type="button" class="btn btn-sm" id="{{ action_id }}">{{ action_label }}</button>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro status_badge(label, kind='neutral') -%}
+<span class="status-badge status-{{ kind }}"><span class="status-indicator" aria-hidden="true"></span>{{ label }}</span>
+{%- endmacro %}
+
+{% macro schema_field(name, prop, value, field_id) -%}
+<div class="form-group">
+  <div class="form-label-row">
+    <label class="form-label" for="{{ field_id }}">{{ prop.title | default(name | replace('_', ' ') | title) }}</label>
+    {% if prop.type == 'boolean' %}
+    <label class="toggle-switch" aria-label="Toggle {{ prop.title | default(name) }}">
+      <input id="{{ field_id }}" type="checkbox" name="{{ name }}" data-schema-type="boolean" {{ 'checked' if value else '' }}>
+      <span class="toggle-slider"></span>
+    </label>
+    {% endif %}
+  </div>
+  {% if prop.type != 'boolean' %}
+    {% if prop.format == 'role_select' %}
+    <select id="{{ field_id }}" class="form-select api-select" name="{{ name }}" data-api="/api/v1/guilds/{guild_id}/roles" data-value-key="id" data-label-key="name" data-value="{{ value | default('') }}"><option value="">Select a role…</option></select>
+    {% elif prop.format == 'channel_select' %}
+    <select id="{{ field_id }}" class="form-select api-select" name="{{ name }}" data-api="/api/v1/guilds/{guild_id}/channels" data-value-key="id" data-label-key="name" data-group-key="parent_name" data-value="{{ value | default('') }}"><option value="">Select a channel…</option></select>
+    {% elif prop.enum %}
+    <select id="{{ field_id }}" class="form-select" name="{{ name }}">{% for option in prop.enum %}<option value="{{ option }}" {{ 'selected' if value == option else '' }}>{{ option | replace('_', ' ') | title }}</option>{% endfor %}</select>
+    {% elif prop.type == 'array' %}
+    <textarea id="{{ field_id }}" class="form-input" name="{{ name }}" rows="3" data-schema-type="array"{% if prop.description %} aria-describedby="{{ field_id }}-hint"{% endif %}>{{ value | default([]) | tojson }}</textarea>
+    {% elif prop.format == 'textarea' %}
+    {% if prop.format_toolbar %}
+    <div class="discord-toolbar" data-for="{{ field_id }}">
+      <button type="button" class="btn btn-xs" data-insert="**">B</button>
+      <button type="button" class="btn btn-xs" data-insert="*">I</button>
+      <button type="button" class="btn btn-xs" data-insert="__">U</button>
+      <button type="button" class="btn btn-xs" data-insert="~~">S</button>
+      <button type="button" class="btn btn-xs" data-insert="```">Code</button>
+      <button type="button" class="btn btn-xs" data-insert="> ">Quote</button>
+    </div>
+    {% endif %}
+    <textarea id="{{ field_id }}" class="form-input" name="{{ name }}" rows="{{ prop.rows | default(4) }}" {% if prop.maxLength is defined %}maxlength="{{ prop.maxLength }}"{% endif %} placeholder="{{ prop.placeholder | default('') }}">{{ value | default(prop.default, true) | default('', true) }}</textarea>
+    {% elif prop.type in ['integer', 'number'] %}
+    <input id="{{ field_id }}" class="form-input" type="number" name="{{ name }}" data-schema-type="{{ prop.type }}" value="{{ value | default(prop.default, true) | default('', true) }}" {% if prop.minimum is defined %}min="{{ prop.minimum }}"{% endif %} {% if prop.maximum is defined %}max="{{ prop.maximum }}"{% endif %}>
+    {% else %}
+    <input id="{{ field_id }}" class="form-input" type="{{ 'url' if prop.format == 'url' else 'text' }}" name="{{ name }}" value="{{ value | default(prop.default, true) | default('', true) }}">
+    {% endif %}
+  {% endif %}
+  {% if prop.description %}<p class="form-hint" id="{{ field_id }}-hint">{{ prop.description }}</p>{% endif %}
+  <p class="field-error" id="{{ field_id }}-error" hidden></p>
+</div>
+{%- endmacro %}

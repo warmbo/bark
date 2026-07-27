@@ -1,0 +1,236 @@
+/** Module workspace behavior. See docs/module-workspace.md. */
+(() => {
+  'use strict';
+  const root = document.querySelector('.module-workspace');
+  if (!root) return;
+  const guildId = root.dataset.guildId;
+  const moduleName = root.dataset.moduleName;
+  const configForm = root.querySelector('.module-config-form');
+  const saveButton = document.getElementById('save-config-btn');
+  const discardButton = document.getElementById('discard-config-btn');
+  const roleAccessForm = document.getElementById('module-role-access-form');
+  const roleSelect = document.getElementById('module-min-role');
+  const roleSaveButton = document.getElementById('save-role-access-btn');
+  const roleResetButton = document.getElementById('reset-role-access-btn');
+  const roleSummary = document.getElementById('role-access-summary-text');
+  const roleMenu = root.querySelector('.role-access-menu');
+  const snapshotForm = () => configForm ? [...configForm.elements]
+    .filter(field => field.name)
+    .map(field => ({field, value: field.value, checked: field.checked})) : [];
+  let baseline = snapshotForm();
+
+  const setDirty = (dirty) => {
+    if (!configForm) return;
+    configForm.dataset.dirty = String(dirty);
+    saveButton.disabled = !dirty;
+    discardButton.disabled = !dirty;
+  };
+  configForm?.addEventListener('input', () => setDirty(true));
+  configForm?.addEventListener('change', () => setDirty(true));
+  configForm?.addEventListener('api-select:loaded', () => {
+    if (configForm.dataset.dirty !== 'true') baseline = snapshotForm();
+  });
+  discardButton?.addEventListener('click', () => {
+    baseline.forEach(({field, value, checked}) => {
+      field.value = value;
+      if (field.type === 'checkbox' || field.type === 'radio') field.checked = checked;
+    });
+    setDirty(false);
+  });
+
+  configForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!configForm.reportValidity()) return;
+    const idleHtml = saveButton.innerHTML;
+    saveButton.disabled = true;
+    saveButton.setAttribute('aria-busy', 'true');
+    saveButton.textContent = 'Saving…';
+    try {
+      const config = BarkForms.serializeFields(configForm.querySelectorAll('[name]'));
+      const response = await safeFetch(`/api/v1/guilds/${guildId}/modules/${moduleName}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({config})
+      });
+      if (response.success === false) throw new Error(response.details?.join('; ') || response.error || 'Save failed');
+      baseline = snapshotForm();
+      setDirty(false);
+      showToast('Configuration saved', 'success');
+    } catch (error) {
+      showToast(error.message || 'Unable to save configuration', 'error');
+      saveButton.disabled = false;
+    } finally { saveButton.removeAttribute('aria-busy'); saveButton.innerHTML = idleHtml; }
+  });
+
+  const saveRoleAccess = async (minRole) => {
+    const reset = !minRole;
+    roleSaveButton.disabled = true;
+    roleResetButton.disabled = true;
+    roleSaveButton.setAttribute('aria-busy', 'true');
+    try {
+      await safeFetch(`/api/v1/guilds/${guildId}/modules/${moduleName}/role-access`, reset ? {
+        method: 'DELETE'
+      } : {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({min_role: minRole})
+      });
+      roleAccessForm.dataset.currentRole = minRole;
+      roleSelect.value = minRole;
+      roleResetButton.disabled = reset;
+      roleSaveButton.disabled = true;
+      if (roleSummary) {
+        const effectiveRole = minRole || 'admin';
+        roleSummary.textContent = `${effectiveRole[0].toUpperCase()}${effectiveRole.slice(1)}+`;
+      }
+      if (roleMenu) roleMenu.open = false;
+      showToast(reset ? 'Role access reset to admin default' : 'Role access saved', 'success');
+    } catch (error) {
+      roleSelect.value = roleAccessForm.dataset.currentRole;
+      roleResetButton.disabled = !roleAccessForm.dataset.currentRole;
+      showToast(error.message || 'Unable to save role access', 'error');
+    } finally {
+      roleSaveButton.disabled = roleSelect.value === roleAccessForm.dataset.currentRole;
+      roleSaveButton.removeAttribute('aria-busy');
+    }
+  };
+
+  roleAccessForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await saveRoleAccess(roleSelect.value);
+  });
+  roleSelect?.addEventListener('change', () => {
+    roleSaveButton.disabled = roleSelect.value === roleAccessForm.dataset.currentRole;
+  });
+  roleResetButton?.addEventListener('click', async () => {
+    await saveRoleAccess('');
+  });
+
+  root.querySelector('.module-toggle')?.addEventListener('change', async (event) => {
+    const enabled = event.target.checked;
+    event.target.disabled = true;
+    try {
+      await safeFetch(`/api/v1/guilds/${guildId}/modules/${moduleName}/toggle`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled})
+      });
+      const badge = document.getElementById('module-status-badge');
+      const runtime = document.getElementById('module-runtime-status');
+      if (badge) badge.innerHTML = `<span class="status-badge status-${enabled ? 'success' : 'neutral'}"><span class="status-indicator" aria-hidden="true"></span>${enabled ? 'Enabled' : 'Disabled'}</span>`;
+      if (runtime) runtime.textContent = enabled ? 'Active' : 'Paused';
+      const sidebarNav = document.getElementById('sidebar-nav-items');
+      if (sidebarNav && typeof loadSidebarManifest === 'function') {
+        try { sessionStorage.removeItem(`bark_manifest_cache_${guildId}`); } catch {}
+        loadSidebarManifest(sidebarNav);
+      }
+      showToast(`${moduleName} ${enabled ? 'enabled' : 'disabled'}`, 'success');
+    } catch (error) {
+      event.target.checked = !enabled;
+      showToast(error.message, 'error');
+    } finally {
+      event.target.disabled = false;
+      event.target.removeAttribute('aria-busy');
+    }
+  });
+
+  root.querySelector('.module-reload')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    try {
+      await safeFetch(`/api/v1/guilds/${guildId}/modules/${moduleName}/reload`, {method: 'POST'});
+      showToast('Module reloaded', 'success');
+    } catch (error) { showToast(error.message, 'error'); }
+    finally { button.disabled = false; button.removeAttribute('aria-busy'); }
+  });
+
+  root.querySelectorAll('[data-depends]').forEach((group) => {
+    const controller = [...root.querySelectorAll('[name]')]
+      .find((el) => el.name === group.dataset.depends);
+    if (!controller) return;
+    const update = () => {
+      const current = controller.type === 'checkbox' ? String(controller.checked) : controller.value;
+      group.hidden = current !== group.dataset.dependsValue;
+      group.querySelectorAll('input,select,textarea').forEach((field) => field.disabled = group.hidden);
+    };
+    controller.addEventListener('change', update); update();
+  });
+
+  root.querySelectorAll('.module-action-form').forEach((form) => {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      if (form.dataset.destructive === 'true') {
+        const confirmed = await BarkDialog.confirm({
+          title: form.dataset.label,
+          message: `This operation changes stored server data. Review the values above before continuing.`,
+          confirmLabel: form.dataset.label,
+          danger: true
+        });
+        if (!confirmed) return;
+      }
+      const button = form.querySelector('.action-submit-btn');
+      const result = form.parentElement.querySelector('.action-result');
+      const idleText = button.innerHTML;
+      button.disabled = true; button.setAttribute('aria-busy', 'true'); button.innerHTML = 'Processing…'; result.hidden = true;
+      try {
+        const payload = BarkForms.serializeFields(form.querySelectorAll('[name]:not(:disabled)'));
+        const response = await safeFetch(`/api/v1/guilds/${guildId}/modules/${moduleName}/${form.dataset.endpoint}`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+        });
+        if (response.success === false) throw new Error(response.error || 'Operation failed');
+        result.className = 'action-result success';
+        result.textContent = response.message || response.data?.message || `${form.dataset.label} completed`;
+        result.hidden = false;
+        showToast(result.textContent, 'success');
+        window.dispatchEvent(new CustomEvent('bark:module-action-complete', {detail: {moduleName, endpoint: form.dataset.endpoint}}));
+      } catch (error) {
+        result.className = 'action-result error'; result.textContent = error.message; result.hidden = false;
+        showToast(error.message || 'Operation failed', 'error');
+      } finally { button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = idleText; }
+    });
+  });
+
+  window.addEventListener('beforeunload', (event) => {
+    if (configForm?.dataset.dirty === 'true') { event.preventDefault(); event.returnValue = ''; }
+  });
+  document.addEventListener('click', (event) => {
+    if (roleMenu?.open && !roleMenu.contains(event.target)) roleMenu.open = false;
+  });
+
+  root.querySelectorAll('.discord-toolbar').forEach((toolbar) => {
+    const targetId = toolbar.dataset.for;
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    const insert = (raw) => {
+      const start = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? target.value.length;
+      const selected = target.value.slice(start, end);
+      let insertion = raw;
+      let caretOffset = 0;
+
+      if (['**', '*', '__', '~~'].includes(raw) && selected.length) {
+        insertion = raw + selected + raw;
+        caretOffset = insertion.length;
+      } else if (raw === '```') {
+        insertion = raw + '\n' + (selected || 'code') + '\n' + raw;
+        caretOffset = insertion.length;
+      } else if (raw.startsWith('>')) {
+        insertion = raw + (selected || 'quoted text');
+        caretOffset = insertion.length;
+      }
+
+      const value = target.value;
+      target.value = value.slice(0, start) + insertion + value.slice(end);
+      const newPos = Math.min(start + caretOffset, target.value.length);
+      target.setSelectionRange(newPos, newPos);
+      target.focus();
+      target.dispatchEvent(new Event('input', {bubbles: true}));
+    };
+
+    Array.from(toolbar.querySelectorAll('button[data-insert]')).forEach((btn) => {
+      btn.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        insert(btn.dataset.insert);
+      });
+    });
+  });
+})();

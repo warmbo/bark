@@ -1,399 +1,202 @@
 # Bark
 
-A dashboard-first Discord server management platform for the ZENHAWX community.
+Bark is a dashboard-first Discord management bot built for the ZENHAWX community. It runs the Discord client and a FastAPI/Jinja dashboard in one asynchronous Python process. Server operators can manage members, run moderation actions, inspect cases and warnings, configure modules, review voice history, and receive live dashboard updates without moving routine administration into chat commands.
 
-**Dashboard is the primary interface. The Discord bot is the execution layer.**
+## Features
 
-## Architecture
+- Discord slash and prefix commands powered by `discord.py`
+- FastAPI dashboard with Discord OAuth2 sessions and role-based access
+- Per-server module enablement, configuration, and access overrides
+- Moderation cases, warnings, private notes, rulesets, word lists, and voice history
+- Styled confirmation dialogs for destructive actions, inline progress, and success/error feedback
+- Server/member search, member actions, audit history, activity summaries, and SSE updates
+- SQLite by default, with asynchronous SQLAlchemy persistence
+- systemd user-service deployment
 
-```
-bark/                          # Project root
-├── app.py                     # Main entry point (bot + dashboard)
-├── config.py                  # Environment-based configuration
-├── bot/
-│   └── client.py              # BarkBot (discord.ext.commands.Bot subclass)
-├── dashboard/
-│   ├── __init__.py            # FastAPI app factory
-│   ├── app.py                 # Uvicorn server runner
-│   ├── routes/api/            # REST API endpoint handlers
-│   ├── routes/web/            # HTML page route handlers
-│   ├── static/css/            # Stylesheets
-│   ├── static/js/             # Client-side JavaScript
-│   └── templates/             # Jinja2 page templates
-├── database/
-│   ├── engine.py              # SQLAlchemy async engine + session management
-│   └── models/                # ORM models (10+ tables)
-├── modules/
-│   ├── base.py                # BarkModule abstract base class
-│   ├── moderation/            # Warn, timeout, kick, ban, voice control
-│   ├── logging/               # Message, file, member, voice event logging
-│   └── automod/               # Spam, invite, mention spam detection
-├── services/
-│   ├── module_manager.py      # Module discovery + lifecycle management
-│   └── permission_service.py  # Role-based access control
-├── tests/                     # Pytest test suite
-└── docs/
-    └── architecture.md        # Detailed architecture document
-```
+## Requirements
 
-### Core Philosophy
+- Python 3.13+
+- A Discord application and bot token
+- Discord gateway intents required by the enabled modules (including member intent for member management)
+- A reverse proxy and HTTPS for production OAuth2 deployments
 
-- **Dashboard-first** — manage everything from the web UI, not through Discord commands
-- **Modular by design** — all features are swappable modules
-- **Minimal dependencies** — Python 3.13+, discord.py, FastAPI, Jinja2, SQLAlchemy, SQLite
-- **Production-ready** — async from top to bottom, proper error handling, audit logging
-
-## Quick Start
+## Setup
 
 ```bash
-# Set up
-python3 -m venv .venv
+git clone <repository-url> bark
+cd bark
+python3.13 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e '.[dev]'
+cp .env.example .env
+```
 
-# Configure
-export BARK_BOT_TOKEN="your_discord_bot_token"
-export BARK_DASHBOARD_HOST="0.0.0.0"  # Listen on all interfaces
+Set at least the bot token in `.env`:
 
-# Run
+```dotenv
+BARK_BOT_TOKEN=replace-with-your-discord-bot-token
+BARK_PUBLIC_URL=http://127.0.0.1:8090
+BARK_DASHBOARD_HOST=127.0.0.1
+BARK_DASHBOARD_PORT=8090
+```
+
+For Discord login, add a redirect URL matching `<BARK_PUBLIC_URL>/auth/callback` in the Discord developer portal, then configure:
+
+```dotenv
+BARK_OAUTH2_CLIENT_ID=your-application-id
+BARK_OAUTH2_CLIENT_SECRET=your-client-secret
+BARK_OAUTH2_REDIRECT_URI=https://your-host.example/auth/callback
+BARK_OWNER_DISCORD_IDS=123456789012345678
+BARK_FORCE_HTTPS=true
+```
+
+Run Bark in the foreground:
+
+```bash
+source .venv/bin/activate
 python app.py
 ```
 
-Dashboard: `http://<host>:8090/dashboard`
-Bot: Connects to Discord automatically
+The dashboard listens on `BARK_DASHBOARD_HOST:BARK_DASHBOARD_PORT` (default `0.0.0.0:8090`). Health is available at `/api/v1/health`.
 
-### Configuration
+### systemd user service
 
-All config via environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BARK_BOT_TOKEN` | `""` | Discord bot token (required) |
-| `BARK_COMMAND_PREFIX` | `!` | Prefix for text commands |
-| `BARK_SYNC_COMMANDS` | `true` | Auto-sync slash commands on startup |
-| `BARK_DASHBOARD_HOST` | `127.0.0.1` | Dashboard bind address |
-| `BARK_DASHBOARD_PORT` | `8090` | Dashboard port |
-| `BARK_SECRET_KEY` | auto | Session encryption key |
-| `BARK_DATABASE_URL` | `sqlite+aiosqlite:///bark.db` | Database connection string |
-| `BARK_LOG_LEVEL` | `INFO` | Logging level |
-| `BARK_DATA_DIR` | `data/` | Runtime data directory |
-
-## Dashboard Pages
-
-| Page | URL | Description |
-|------|-----|-------------|
-| Server Selection | `/dashboard` | Pick a server to manage |
-| Guild Overview | `/guild/{id}` | Stats, module status, recent actions |
-| Members | `/guild/{id}/members` | Browse, search, moderate members |
-| Member Detail | `/guild/{id}/members/{uid}` | Full profile, cases, actions, notes |
-| Modules | `/guild/{id}/modules` | Module list with toggles |
-| Module Detail | `/guild/{id}/modules/{name}` | Config, commands, events, reload |
-| Moderation | `/guild/{id}/moderation` | Cases, warnings, bans, notes |
-| Settings | `/guild/{id}/settings` | General, logging, AutoMod config |
-
-## API Endpoints
-
-All at `/api/v1/`.
-
-### Guilds
-- `GET /guilds` — List guilds
-- `GET /guilds/{id}` — Guild details
-- `GET /guilds/{id}/stats` — Guild statistics
-
-### Members
-- `GET /guilds/{id}/members` — List/search members (query: `search`, `page`, `limit`)
-- `GET /guilds/{id}/members/{uid}` — Member detail with cases, warnings, notes, voice sessions
-
-### Moderation Actions (dashboard GUI)
-- `POST /guilds/{id}/actions/warn` — Warn a member
-- `POST /guilds/{id}/actions/timeout` — Timeout a member
-- `POST /guilds/{id}/actions/kick` — Kick a member
-- `POST /guilds/{id}/actions/ban` — Ban a member
-- `POST /guilds/{id}/actions/vc_kick` — Voice-disconnect a member
-- `POST /guilds/{id}/actions/vc_move` — Move member to another VC
-- `POST /guilds/{id}/actions/vc_mute` — Server-mute in voice
-- `POST /guilds/{id}/actions/vc_unmute` — Server-unmute in voice
-
-### Moderation Data
-- `GET /guilds/{id}/moderation/cases` — List cases
-- `GET /guilds/{id}/moderation/cases/{n}` — Single case
-- `POST /guilds/{id}/moderation/cases` — Create case
-- `GET /guilds/{id}/moderation/warnings` — List warnings
-- `GET /guilds/{id}/moderation/warnings/{uid}` — User's warnings
-- `GET /guilds/{id}/moderation/notes` — List notes
-- `POST /guilds/{id}/moderation/notes` — Create note
-
-### Modules
-- `GET /guilds/{id}/modules` — List modules with status
-- `GET /guilds/{id}/modules/{name}` — Module detail
-- `PUT /guilds/{id}/modules/{name}` — Update config
-- `POST /guilds/{id}/modules/{name}/toggle` — Enable/disable
-- `POST /guilds/{id}/modules/{name}/reload` — Hot-reload
-
-### Settings
-- `GET /guilds/{id}/settings` — All settings
-- `PUT /guilds/{id}/settings/general` — General settings
-- `GET|PUT /guilds/{id}/settings/logging` — Log channel config
-- `GET|PUT /guilds/{id}/settings/automod` — AutoMod rules
-
----
-
-# Module Development Guide
-
-Every Bark feature is a module. Modules are self-contained packages under `modules/` that define their own commands, events, config, and dashboard pages.
-
-## Creating a New Module
-
-### 1. Create the package structure
-
-```
-modules/my_module/
-├── __init__.py          # Empty or re-export
-└── module.py            # BarkModule subclass
-```
-
-### 2. Subclass `BarkModule`
-
-```python
-# modules/my_module/module.py
-from modules.base import BarkModule, CommandRegistration, EventRegistration
-from bot.client import BarkBot
-
-class MyModule(BarkModule):
-    name = "my_module"           # Unique identifier (used in DB, APIs)
-    version = "1.0.0"           # Semantic version
-    description = "What my module does"
-    author = "Your Name"
-
-    def __init__(self, bot: BarkBot) -> None:
-        super().__init__(bot)
-```
-
-### 3. Implement lifecycle methods
-
-```python
-async def enable(self) -> None:
-    """Called when module is enabled.
-    Register slash commands, event listeners, and API routes here."""
-    # Register a slash command
-    if hasattr(self.bot, "tree"):
-        self.bot.tree.add_command(self._make_my_command())
-    
-    # Register an event listener
-    self.bot.add_listener(self._on_message, "on_message")
-
-async def disable(self) -> None:
-    """Called when module is disabled.
-    Unregister everything registered in enable()."""
-    if hasattr(self.bot, "tree"):
-        self.bot.tree.remove_command("my_command")
-```
-
-### 4. Register capabilities
-
-```python
-def get_commands(self) -> list[CommandRegistration]:
-    """Slash commands this module provides."""
-    return [
-        CommandRegistration(name="my_command", description="Does something cool"),
-    ]
-
-def get_events(self) -> list[EventRegistration]:
-    """Discord events this module listens to."""
-    return [
-        EventRegistration(event_name="on_message"),
-    ]
-
-def get_settings_schema(self) -> dict:
-    """JSON Schema for the dashboard config form.
-    
-    Each field supports:
-    - title: Human-readable label
-    - description: Help text shown below the field
-    - placeholder: Example text shown inside the field
-    - type: "string", "integer", "boolean", "array", or enum via "enum" list
-    """
-    return {
-        "type": "object",
-        "properties": {
-            "my_setting": {
-                "type": "string",
-                "title": "My Setting",
-                "description": "What this setting controls",
-                "placeholder": "Enter a role ID like 123456789",
-                "default": "default_value",
-            },
-        },
-    }
-
-def get_dashboard_pages(self) -> list[PageRegistration]:
-    """Pages to show in the dashboard sidebar."""
-    return [
-        PageRegistration(
-            route="/guild/{guild_id}/my_module",
-            label="My Module",
-            icon="settings",  # Lucide icon name
-        ),
-    ]
-
-def get_permissions(self) -> list[PermissionDefinition]:
-    """Granular permissions this module defines."""
-    return [
-        PermissionDefinition(
-            name="my_module.do_thing",
-            label="Do Thing",
-            description="Permission to do the thing",
-        ),
-    ]
-```
-
-### 5. Create slash command
-
-```python
-def _make_my_command(self):
-    @discord.app_commands.command(
-        name="my_command",
-        description="Does something cool"
-    )
-    @discord.app_commands.default_permissions(manage_guild=True)
-    async def my_command(interaction: discord.Interaction, param: str):
-        await self._cmd_handler(interaction, param)
-    return my_command
-
-async def _cmd_handler(self, interaction, param):
-    await interaction.response.send_message(f"You said: {param}")
-```
-
-## Module Lifecycle
-
-```
-Discovery → __init__ → enable() → Runtime → disable()
-                ↓                        ↑
-          get_settings_schema()    get_settings_schema()
-          get_commands()           get_commands()
-          get_events()             get_events()
-          get_dashboard_pages()    get_dashboard_pages()
-```
-
-- **Discovery**: ModuleManager scans `modules/` for `BarkModule` subclasses
-- **enable()**: Register commands, events, API routes. Called on bot startup and when toggled on
-- **Runtime**: Module processes Discord events and serves dashboard pages
-- **disable()**: Unregister everything. Called on shutdown and when toggled off
-- **Reload**: disable() → enable() — hot-reload without restarting the bot
-
-## Settings Schema Reference
-
-The `get_settings_schema()` method returns a JSON Schema dict that the dashboard
-renders as a form. Supported field types:
-
-| Type | Input | Extra Properties |
-|------|-------|------------------|
-| `"string"` | Text input | `placeholder`, `default` |
-| `"integer"` | Number input | `minimum`, `maximum`, `default` |
-| `"boolean"` | Toggle switch | `default` |
-| `"array"` | Textarea (JSON) | `items.type`, `default` |
-| `"string"` with `enum` | Dropdown | `enum: ["opt1", "opt2"]` |
-
-All fields support:
-- `title` — Field label
-- `description` — Help text below the input
-- `placeholder` — Example/intro text inside the input field
-
-## Database Models
-
-Each module can use the shared database via SQLAlchemy models. Add new models
-in `database/models/` and import them in `database/models/__init__.py` so they
-register with `Base.metadata` and get created on startup.
-
-```python
-# database/models/my_model.py
-from sqlalchemy import String, Integer, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from database.engine import Base
-
-class MyRecord(Base):
-    __tablename__ = "my_records"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    guild_id: Mapped[int] = mapped_column(Integer, ForeignKey("guilds.id"))
-    # ... your fields ...
-```
-
----
-
-## Built-in Modules
-
-### Moderation (v2.0.0)
-
-Slash commands: `warn`, `timeout`, `kick`, `ban`, `unban`, `cases`, `warnings`,
-`clearwarn`, `vc_kick`, `vc_move`, `vc_mute`, `vc_unmute`, `vc_deafen`,
-`vc_undeafen`, `voice_sessions`
-
-- Full case tracking with auto-incrementing case numbers per guild
-- Audit logging for every action
-- Voice session tracking (join/leave times persisted to DB)
-- Dashboard GUI: member detail page has quick-action forms for all commands
-
-### Logging (v2.0.0)
-
-Event types: message edits, message deletes, file uploads, member joins/leaves,
-moderation actions, voice state changes
-
-- File attachment tracking with download URLs, sizes, content types
-- `/logfiles` command to search uploaded files by member or type
-- Configurable per-event log channels via settings page
-
-### AutoMod (v1.0.0)
-
-Rules: spam detection, invite filtering, mention spam
-
-- Configurable thresholds per rule type
-- Actions: warn, timeout, or delete
-- Ignored roles and channels
-- Dashboard config forms with descriptions
-
-## Permissions
-
-Three-tier RBAC:
-
-| Role | Access |
-|------|--------|
-| **admin** | Full dashboard + all moderation actions |
-| **moderator** | Cases, warnings, notes, text moderation, logging setup |
-| **viewer** | Read-only dashboard |
-
-Dashboard role is determined by `dashboard_users` table or Discord role mapping.
-
-## Database Tables
-
-| Table | Purpose |
-|-------|---------|
-| `guilds` | Server configuration |
-| `guild_settings` | Key-value settings per guild |
-| `module_configs` | Per-guild module enable/disable + config |
-| `moderation_cases` | Moderation action records |
-| `warnings` | Active warning records |
-| `user_notes` | Internal notes about users |
-| `audit_logs` | All moderation action audit trail |
-| `file_attachments` | File upload logs with download URLs |
-| `voice_sessions` | Voice channel join/leave history |
-| `log_configs` | Per-event log channel configuration |
-| `automod_configs` | AutoMod rule configuration |
-| `dashboard_users` | Dashboard user role assignments |
-
-## Testing
+`bark.service` contains deployment-specific absolute paths. Update its `WorkingDirectory`, `EnvironmentFile`, `ExecStart`, `ReadWritePaths`, and log paths before installing on another host. Then:
 
 ```bash
-pytest                    # Run all tests
-pytest -v                 # Verbose
-pytest tests/ -k "model"  # Run specific test group
+mkdir -p ~/.config/systemd/user
+cp bark.service ~/.config/systemd/user/bark.service
+systemctl --user daemon-reload
+systemctl --user enable --now bark
+systemctl --user status bark
+journalctl --user -u bark -f
 ```
 
-## Future Extension Points
+## Architecture overview
 
-The architecture supports these without restructuring:
-- **New modules**: Drop a package into `modules/` with a `BarkModule` subclass
-- **Custom auth**: Swap the session middleware for OAuth2
-- **Database backends**: Change `BARK_DATABASE_URL` for Postgres/MySQL
-- **Plugin packages**: pip-installable modules (planned)
-- **Webhook integrations**: Event bus for external services (planned)
-- **Analytics pipeline**: Decoupled from existing audit logs
+```text
+app.py
+├── bot/client.py                 Discord connection and event dispatch
+├── services/module_manager.py    Discovery, dependency order, lifecycle, reload
+├── services/permission_service.py Dashboard role checks and module overrides
+├── modules/
+│   ├── base.py                   BarkModule contract and BarkContext
+│   ├── moderation/               Cases, warnings, rulesets, voice tracking
+│   ├── logging/                  Discord event logging
+│   └── welcome/                  Member welcome automation
+├── dashboard/
+│   ├── factory.py                FastAPI construction, middleware, routers
+│   ├── routes/web/               Jinja page routes
+│   ├── routes/api/               Versioned JSON and SSE routes
+│   ├── templates/                Server-rendered shell and workspaces
+│   └── static/                   Shared CSS and dependency-free JavaScript
+└── database/
+    ├── engine.py                 Async SQLAlchemy sessions/migrations
+    └── models/                   Guild, moderation, analytics, and module data
+```
+
+A single process owns the Discord cache and dashboard, so API handlers can resolve live guilds, members, roles, channels, and voice state directly from the bot. Persistent records use asynchronous SQLAlchemy sessions. API responses use a consistent `{ "success": true, "data": ... }` envelope; failures include a machine-readable error and HTTP status.
+
+## Module system
+
+Every module subclasses `BarkModule` in `modules/base.py`. A module declares metadata and exposes commands, event handlers, configuration schema, dashboard actions, optional workspace tabs, and lifecycle hooks. Modules receive a restricted `BarkContext` rather than importing the bot internals directly.
+
+A typical module supplies:
+
+- metadata: `name`, `description`, `version`, `author`, `priority`
+- `get_commands()` and `get_events()`
+- `get_settings_schema()` for dashboard-generated fields
+- `get_dashboard_actions()` for runnable operation cards
+- `get_dashboard_tabs()` for module-specific data views
+- `on_load()` / `on_unload()` and optional health validation
+
+Create a package under `modules/<name>/`, export the module class, and ensure the package follows the existing moderation, logging, or welcome examples. Module code should keep Discord behavior in the module and reusable persistence/business logic in `services/`.
+
+### Module lifecycle
+
+`ModuleManager` discovers module packages, validates dependencies, sorts by priority, calls `on_load`, registers event handlers and commands, and tracks runtime state. Per-guild enabled/configuration state is stored separately from the Python module instance. Reload unregisters the old contribution, runs `on_unload`, reloads the package, creates the replacement, and registers it again. A failed reload is surfaced to the API and dashboard rather than reported as success.
+
+The dashboard can:
+
+- enable or disable a module for one server
+- update configuration after JSON-schema validation
+- reload module code for operators with sufficient access
+- test module health
+- set a per-module minimum dashboard role (`viewer`, `moderator`, `admin`, or `owner`)
+
+## Dashboard and module workspace
+
+`dashboard/templates/pages/module_detail.html` is the standard module workspace layout. Its compact header contains module identity, status, enable toggle, reload control, role-access summary/editor, runtime health, and tabs. The standard tabs are:
+
+- **Operate** — schema-driven dashboard actions with confirmation for destructive operations
+- **Configure** — typed module settings with dirty-state, discard, save, and validation feedback
+- **About** — module metadata, behavior summaries, and commands
+- **Module tabs** — module-owned operational data loaded with explicit loading, empty, error, and populated states
+
+The moderation module adds Cases, Warnings, Notes, Rulesets, Word Lists, and Voice tabs. Destructive retention controls for voice history, audit records, and attachments are grouped in the Voice tab's Danger Zone. Shared UI behavior lives in `static/js/main.js`; generic workspace behavior lives in `module-workspace.js`; moderation data controls live in `moderation-workspace.js`.
+
+Dashboard authorization has four ordered roles: `viewer < moderator < admin < owner`. Page and API authorization must both be enforced; hiding a button is not a substitute for checking its API route.
+
+## API routes
+
+All JSON routes use the `/api/v1` prefix.
+
+| Area | Routes |
+|---|---|
+| Health | `GET /health` |
+| Guilds | `GET /guilds`, `GET /guilds/{guild_id}`, `GET /guilds/{guild_id}/stats` |
+| Discord resources | `GET /guilds/{guild_id}/roles`, `GET /guilds/{guild_id}/channels` |
+| Members | `GET /guilds/{guild_id}/members`, `GET /guilds/{guild_id}/members/{user_id}` |
+| Actions | `POST /guilds/{guild_id}/actions/{warn|timeout|kick|ban|unban|vc_kick|vc_move|vc_mute|vc_unmute}` |
+| Modules | `GET /guilds/{guild_id}/modules`, `GET|PUT /guilds/{guild_id}/modules/{module_name}` |
+| Module runtime | `POST /guilds/{guild_id}/modules/{module_name}/{toggle|reload|test}` |
+| Module access | `GET /guilds/{guild_id}/modules/role-access`, `PATCH|DELETE /guilds/{guild_id}/modules/{module_name}/role-access` |
+| Moderation cases | `GET|POST /guilds/{guild_id}/moderation/cases`, `GET|DELETE /guilds/{guild_id}/moderation/cases/{case_number}` |
+| Warnings | `GET /guilds/{guild_id}/moderation/warnings`, `DELETE /guilds/{guild_id}/moderation/warnings/{warning_id}` |
+| Notes | `GET|POST /guilds/{guild_id}/notes`, `PATCH|DELETE /guilds/{guild_id}/notes/{note_id}` |
+| Voice/retention | `GET|DELETE /guilds/{guild_id}/moderation/voice-history`, `DELETE .../audit-logs`, `DELETE .../attachments` |
+| Settings | `GET /guilds/{guild_id}/settings`, `PUT /guilds/{guild_id}/settings/general`, logging and automod subroutes |
+| Audit | `GET /guilds/{guild_id}/audit-log`, `GET /guilds/{guild_id}/audit-log/summary` |
+| Live updates | `GET /guilds/{guild_id}/events` (server-sent events) |
+| Sidebar manifest | `GET /guilds/{guild_id}/manifest` |
+
+Module-specific routers are mounted below `/api/v1/guilds/{guild_id}/modules/{module_name}/...`; inspect each module's `get_api_routes()` for its action and data endpoints. OpenAPI route metadata is available at `/openapi.json` when enabled by the app factory.
+
+## Configuration
+
+Environment variables take precedence over defaults. Bark currently loads configuration from environment variables (commonly via `.env` when launched by the supplied systemd unit).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BARK_BOT_TOKEN` | none | Discord bot token; `.token` is a supported local fallback |
+| `BARK_COMMAND_PREFIX` | `!` | Prefix command marker |
+| `BARK_SYNC_COMMANDS` | `true` | Sync Discord application commands at startup |
+| `BARK_DASHBOARD_HOST` | `0.0.0.0` | Dashboard bind address |
+| `BARK_DASHBOARD_PORT` | `8090` | Dashboard bind port |
+| `BARK_PUBLIC_URL` | deployment default | Browser-facing origin, without trailing slash |
+| `BARK_FORCE_HTTPS` | `false` | Secure cookies and HTTPS enforcement |
+| `BARK_SECRET_KEY` | generated in data dir | Session signing secret; set explicitly in clustered deployments |
+| `BARK_DATABASE_URL` | `sqlite+aiosqlite:///bark.db` | Async SQLAlchemy database URL |
+| `BARK_DATABASE_ECHO` | `false` | SQL statement logging |
+| `BARK_DATA_DIR` | `data` | Persistent data and generated secret directory |
+| `BARK_LOG_LEVEL` | `INFO` | Python logging level |
+| `BARK_OAUTH2_CLIENT_ID` | none | Discord OAuth2 application ID |
+| `BARK_OAUTH2_CLIENT_SECRET` | none | Discord OAuth2 secret |
+| `BARK_OAUTH2_REDIRECT_URI` | `<public-url>/auth/callback` | OAuth2 callback URI |
+| `BARK_OWNER_DISCORD_IDS` | none | Comma-separated dashboard owner IDs |
+| `BARK_INVITE_URL` | none | Bot invite shown in server selection |
+
+Do not commit `.env`, `.token`, `.secret_key`, database files, OAuth secrets, or bot tokens. In production, terminate TLS at a trusted reverse proxy, set `BARK_PUBLIC_URL` to the HTTPS origin, enable `BARK_FORCE_HTTPS`, and use a persistent secret key.
+
+## Development and verification
+
+```bash
+source .venv/bin/activate
+python -m pytest -v --tb=short
+```
+
+Frontend code intentionally uses browser-native APIs and shared utilities instead of inline event handlers. When editing templates, preserve accessible labels, tab relationships, keyboard behavior, loading/empty/error states, and the `BarkDialog` confirmation pattern. Run the full test suite before restarting the service.
+
+## License
+
+MIT

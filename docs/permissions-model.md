@@ -1,0 +1,209 @@
+# Permissions Model
+
+## Role Hierarchy
+
+Defined in `services/permission_service.py`:
+
+```python
+ROLE_HIERARCHY = {
+    "viewer": 0,
+    "moderator": 1,
+    "admin": 2,
+    "owner": 3,
+}
+```
+
+Higher numeric level = more access. A user's role must be **≥** the required role for an action.
+
+## Core Action Map
+
+`PermissionService.CORE_ACTIONS` (`services/permission_service.py`) defines the minimum role required for every built-in action:
+
+### Dashboard Access
+| Action | Required Role |
+|---|---|
+| `dashboard.access` | viewer |
+
+### Guild Management
+| Action | Required Role |
+|---|---|
+| `guild.manage` | admin |
+
+### Settings
+| Action | Required Role |
+|---|---|
+| `settings.general` | admin |
+| `settings.automod` | admin |
+| `settings.logging` | moderator |
+
+### Module Management
+| Action | Required Role |
+|---|---|
+| `modules.manage` | admin |
+| `modules.configure` | admin |
+
+### Moderation Actions
+| Action | Required Role |
+|---|---|
+| `moderation.warn` | moderator |
+| `moderation.timeout` | moderator |
+| `moderation.kick` | moderator |
+| `moderation.ban` | moderator |
+| `moderation.unban` | moderator |
+| `moderation.vc_kick` | moderator |
+| `moderation.vc_move` | moderator |
+| `moderation.vc_mute` | moderator |
+| `moderation.vc_unmute` | moderator |
+| `moderation.cases.create` | moderator |
+| `moderation.cases.delete` | admin |
+| `moderation.warnings.delete` | moderator |
+| `moderation.notes.create` | moderator |
+| `moderation.notes.view` | moderator |
+| `moderation.notes.delete` | moderator |
+
+### Logging
+| Action | Required Role |
+|---|---|
+| `logging.configure` | moderator |
+
+### Roles
+| Action | Required Role |
+|---|---|
+| `roles.manage` | admin |
+
+### Dashboard Users
+| Action | Required Role |
+|---|---|
+| `dashboard.users` | admin |
+
+## Module Permission Registration
+
+Modules declare granular permissions via `BarkModule.get_permissions()` (`modules/base.py`). Each permission is a `PermissionDefinition(name, label, description)`.
+
+During module discovery, `ModuleManager.discover()` calls `PermissionService.discover_module_permissions(modules)`, which iterates every module and calls `register_module_permissions()`. Unknown module permissions default to `admin` unless they match a key in `CORE_ACTIONS`.
+
+## Permission Check Flow
+
+### 1. `check_api_permission()` (`services/response.py`)
+
+This is the central permission gate. Called by:
+- API route handlers directly (e.g. `if not check_api_permission(request, "moderation.warn", guild_id)`)
+- `AuthMiddleware` for every API mutation (via `mutation_capability()`)
+- `get_module_min_role()` is called async first to prime the sync cache
+
+Flow:
+```
+check_api_permission(request, action, guild_id)
+    │
+    ├─ OAuth2 disabled? → return True (permissive mode)
+    │
+    ├─ user_role = request.session["role"]  (default: "viewer")
+    │
+    ├─ action has "." prefix? 
+    │     → lookup _module_role_cache[(guild_id, module_name)]
+    │     → required = cached min_role or "admin"
+    │
+    ├─ no module prefix?
+    │     → required = PermissionService.get_required_role_for_action(action)
+    │
+    └─ return user_level >= required_level
+```
+
+### 2. `get_module_min_role()` (`services/response.py`)
+
+Async: queries `ModuleRoleAccess` table for `(guild_id, module_name)`, caches result in `_module_role_cache` for subsequent synchronous calls.
+
+### 3. `set_cached_module_min_role()` (`services/response.py`)
+
+Directly sets the cache — used after API writes to keep permissions consistent without waiting for the next DB read.
+
+### 4. `load_module_role_access_cache()` (`services/response.py`)
+
+Called at startup (`dashboard/__init__.py`). Loads all `ModuleRoleAccess` rows into the sync cache so `AuthMiddleware` can check permissions synchronously on every request.
+
+## AuthMiddleware Permission Enforcement
+
+Defined in `services/security.py`. The `AuthMiddleware` intercepts every request:
+
+1. **Public paths** (`/auth/*`, `/api/v1/health`, `/api/v1/ping`, `/static/*`, `/s/*`) → skip
+2. **No session** → 401 JSON (API) or 302 redirect (HTML)
+3. **Guild access check** → `user_can_manage_guild()` via `DashboardGuildAccess` table
+4. **Mutation capability** → `mutation_capability(method, path)` resolves each API mutation to a capability string, then checks via `check_api_permission()`
+
+The `mutation_capability()` function in `services/security.py` maps every API mutation path to a capability:
+
+| Path Pattern | Capability |
+|---|---|
+| `actions/warn` | `moderation.warn` |
+| `actions/kick` | `moderation.kick` |
+| `moderation/cases` | `moderation.cases.create` |
+| `moderation/cases/{id}` | `moderation.cases.delete` |
+| `moderation/warnings/{id}` | `moderation.warnings.delete` |
+| `moderation/notes` | `moderation.notes.create` |
+| `settings/general` | `settings.general` |
+| `settings/logging` | `logging.configure` |
+| `settings/automod` | `settings.automod` |
+| `modules/{name}/toggle` | `modules.manage` |
+| `modules/{name}/reload` | `modules.manage` |
+| `modules/{name}` | `modules.configure` |
+| `modules/{name}/...` | `{name}.manage` |
+| Unknown mutations | `guild.manage` (fail-closed) |
+
+## OAuth2 Auth Flow
+
+Defined in `dashboard/routes/auth.py`:
+
+1. User visits `/auth/login` → Discord OAuth2 authorize URL → user approves
+2. Discord redirects to `/auth/callback?code=...` → server exchanges code for token
+3. Server fetches user identity + guild list from Discord API
+4. Creates/updates `DashboardUser` record
+5. Syncs guild access to `DashboardGuildAccess` (determines `can_manage` via MANAGE_GUILD permission)
+6. Assigns dashboard role: `owner` if guild owner, `admin` otherwise
+7. Sets `session["user"]` and `session["role"]`
+8. `AuthMiddleware` reads `session["role"]` on every subsequent request
+
+When OAuth2 is not configured (`config.oauth2.enabled = False`), all permission checks return `True` (permissive mode).
+
+## ModuleRoleAccess Overrides
+
+Per-guild, per-module minimum role overrides stored in `ModuleRoleAccess` (`database/models/permissions.py`):
+
+| Column | Description |
+|---|---|
+| `guild_id` | Discord guild ID |
+| `module_name` | e.g. "moderation", "logging" |
+| `min_role` | "viewer", "moderator", "admin", or "owner" |
+
+API endpoints to manage overrides:
+- `GET /api/v1/guilds/{guild_id}/modules/role-access` (requires `modules.manage`)
+- `PATCH /api/v1/guilds/{guild_id}/modules/{module_name}/role-access` (requires `modules.manage`)
+- `DELETE /api/v1/guilds/{guild_id}/modules/{module_name}/role-access` (restores admin default)
+
+When no override exists, modules require `admin` role (enforced via `_module_role_cache.get(key, "admin")`).
+
+## SessionMiddleware
+
+Configured in `dashboard/__init__.py`:
+
+```python
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.dashboard.secret_key,
+    max_age=config.dashboard.session_ttl,
+    same_site="lax",
+    https_only=config.dashboard.secure_cookies,
+)
+```
+
+Session stores `{"user": {...}, "role": "viewer|moderator|admin|owner"}`. The `role` is set during OAuth login and used by all subsequent permission checks.
+
+## Security Headers
+
+`SecurityMiddleware` (`services/security.py`) applies:
+- `Content-Security-Policy` (strict — only 'self', unpkg.com, fonts.googleapis, cdn.discordapp)
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: same-origin`
+- `Strict-Transport-Security` (when `secure_cookies` enabled)
+- Cross-origin write rejection (non-GET with mismatched Origin header)
+- Per-IP token-bucket rate limiting (3× config cap for reads, ½ cap for writes, 429 on overflow)

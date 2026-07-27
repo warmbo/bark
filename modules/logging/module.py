@@ -1,15 +1,18 @@
 """
-Logging module for Bark v2.0.
+Logging module v3.0.0 — uses BarkContext + EventBus.
 
-Monitors: message edits, message deletes, file uploads, member joins/leaves,
+Monitors: message edits, deletes, file uploads, member joins/leaves,
 moderation actions, voice state changes.
+
+See docs/module-workspace.md for workspace layout contract.
+See docs/api-contracts.md#logging for API endpoint contracts.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import cast
 
 import discord
 
@@ -21,12 +24,7 @@ from modules.base import (
     PermissionDefinition,
 )
 from database.engine import session_scope
-from database.models.logging import LogConfig
 from database.models.attachments import FileAttachment
-from database.models.voice import VoiceSession
-
-if TYPE_CHECKING:
-    from bot.client import BarkBot
 
 logger = logging.getLogger("bark.modules.logging")
 
@@ -36,13 +34,11 @@ EVENT_TYPES = {
     "file_upload": "File Uploads",
     "member_join": "Member Joins",
     "member_leave": "Member Leaves",
-    "moderation": "Moderation Actions",
     "voice_state": "Voice State Changes",
 }
 
 
 def _format_size(size_bytes: int) -> str:
-    """Format byte size into human-readable string."""
     for unit in ("B", "KB", "MB", "GB"):
         if size_bytes < 1024:
             return f"{size_bytes:.1f} {unit}"
@@ -51,21 +47,12 @@ def _format_size(size_bytes: int) -> str:
 
 
 class LoggingModule(BarkModule):
-    """Comprehensive event and file logging for server activity."""
+    """Comprehensive event and file logging."""
 
     name = "logging"
-    version = "2.0.0"
-    description = (
-        "Log message edits, deletes, file uploads, member joins/leaves, "
-        "moderation actions, and voice state with full attachment tracking"
-    )
+    version = "3.0.0"
+    description = "Log message edits, deletes, file uploads, member joins/leaves, voice state"
     author = "ZENHAWX"
-
-    def __init__(self, bot: BarkBot) -> None:
-        super().__init__(bot)
-        self._listeners: dict[str, callable] = {}
-
-    # ── Registration ──────────────────────────────────
 
     def get_commands(self) -> list[CommandRegistration]:
         return [
@@ -76,43 +63,47 @@ class LoggingModule(BarkModule):
 
     def get_events(self) -> list[EventRegistration]:
         return [
-            EventRegistration(event_name="on_message"),
-            EventRegistration(event_name="on_message_edit"),
-            EventRegistration(event_name="on_message_delete"),
-            EventRegistration(event_name="on_member_join"),
-            EventRegistration(event_name="on_member_remove"),
-            EventRegistration(event_name="on_voice_state_update"),
+            EventRegistration("discord_message", handler="_on_message"),
+            EventRegistration("discord_message_edit", handler="_on_message_edit"),
+            EventRegistration("discord_message_delete", handler="_on_message_delete"),
+            EventRegistration("discord_member_join", handler="_on_member_join"),
+            EventRegistration("discord_member_remove", handler="_on_member_remove"),
+            EventRegistration("discord_voice_state", handler="_on_voice_state"),
         ]
 
     def get_dashboard_pages(self) -> list[PageRegistration]:
-        return [
-            PageRegistration(
-                route="/guild/{guild_id}/settings",
-                label="Logging Settings",
-                icon="📝",
-                parent="settings",
-            ),
-        ]
+        return [PageRegistration(route="/guild/{guild_id}/modules/logging", label="Logging", icon="scroll-text", category="moderation")]
 
     def get_permissions(self) -> list[PermissionDefinition]:
         return [
-            PermissionDefinition(
-                name="logging.configure",
-                label="Configure Logging",
-                description="Set up logging channels",
-            ),
-            PermissionDefinition(
-                name="logging.files",
-                label="View File Logs",
-                description="Search and view file upload logs",
-            ),
+            PermissionDefinition(name="logging.configure", label="Configure Logging"),
+            PermissionDefinition(name="logging.files", label="View File Logs"),
+        ]
+
+    def get_about(self) -> list[dict]:
+        return [
+            {
+                "title": "What It Does",
+                "description": "Monitors message edits, deletes, file uploads, member joins/leaves, and voice state changes. Logs are posted to configurable Discord channels in real-time."
+            },
+            {
+                "title": "Message Tracking",
+                "description": "Every edited or deleted message is logged with before/after content, author, and channel. File uploads are recorded with download links and metadata."
+            },
+            {
+                "title": "Join/Leave & Voice Tracking",
+                "description": "Member join/leave events and voice channel activity are logged. Know when members join, leave, move between voice channels, or upload files."
+            },
+            {
+                "title": "Configuration",
+                "description": "Use /logsetup command or the dashboard Configuration section to set per-event-type logging channels. Each event type (message_edit, message_delete, file_upload, member_join, member_leave, voice_state) can have its own channel."
+            },
         ]
 
     def get_settings_schema(self) -> dict:
         return {
             "type": "object",
-            "description": "Configure which server events are logged and which channels they go to. "
-                           "Each event type can be sent to a different text channel.",
+            "description": "Configure which server events are logged and which channels they go to.",
             "properties": {
                 event_type: {
                     "type": "object",
@@ -120,23 +111,20 @@ class LoggingModule(BarkModule):
                     "description": {
                         "message_edit": "Logs when a message is edited, showing before/after content.",
                         "message_delete": "Logs when a message is deleted, including content and attachments.",
-                        "file_upload": "Logs when files are uploaded (images, documents, etc.) with download URLs.",
+                        "file_upload": "Logs when files are uploaded with download URLs.",
                         "member_join": "Logs when a new member joins the server.",
-                        "member_leave": "Logs when a member leaves or is removed from the server.",
-                        "moderation": "Logs moderation actions (warn, kick, ban, etc.).",
+                        "member_leave": "Logs when a member leaves or is removed.",
                         "voice_state": "Logs voice channel joins, leaves, and moves.",
                     }.get(event_type, f"Logging config for {event_type}"),
                     "properties": {
                         "channel_id": {
-                            "type": "string",
-                            "title": "Channel ID",
-                            "placeholder": "Paste a Discord channel ID",
-                            "description": "The Discord channel ID where these logs will be posted. "
-                                           "Right-click a channel → Copy ID to get this.",
+                            "type": "string", "format": "channel_select",
+                            "title": "Channel",
+                            "placeholder": "Select a channel...",
+                            "description": "The Discord channel where these logs will be posted.",
                         },
                         "enabled": {
-                            "type": "boolean",
-                            "title": "Enabled",
+                            "type": "boolean", "title": "Enabled",
                             "description": "Turn logging for this event type on or off.",
                         },
                     },
@@ -145,42 +133,29 @@ class LoggingModule(BarkModule):
             },
         }
 
-    # ── Lifecycle ─────────────────────────────────────
+    def get_actions(self) -> list[dict]:
+        return [
+            {
+                "id": "test_log",
+                "label": "Test Log",
+                "description": "Send a test embed to each configured log channel to verify logging works.",
+                "endpoint": "test",
+                "fields": [],
+            },
+        ]
 
     async def enable(self) -> None:
         self._logger.info("Enabling logging module v%s", self.version)
 
-        self.bot.add_listener(self._on_message, "on_message")
-        self.bot.add_listener(self._on_message_edit, "on_message_edit")
-        self.bot.add_listener(self._on_message_delete, "on_message_delete")
-        self.bot.add_listener(self._on_member_join, "on_member_join")
-        self.bot.add_listener(self._on_member_remove, "on_member_remove")
-        self.bot.add_listener(self._on_voice_state_update, "on_voice_state_update")
-
-        if hasattr(self.bot, "tree"):
-            self.bot.tree.add_command(self._make_logsetup_command())
-            self.bot.tree.add_command(self._make_logstatus_command())
-            self.bot.tree.add_command(self._make_logfiles_command())
-
     async def disable(self) -> None:
         self._logger.info("Disabling logging module")
-        self._listeners.clear()
-        if hasattr(self.bot, "tree"):
-            self.bot.tree.remove_command("logsetup")
-            self.bot.tree.remove_command("logstatus")
-            self.bot.tree.remove_command("logfiles")
 
-    # ── Commands ──────────────────────────────────────
+    # ── Command factories ─────────────────────────────
 
     def _make_logsetup_command(self):
         @discord.app_commands.command(name="logsetup", description="Configure logging channel")
         @discord.app_commands.default_permissions(manage_guild=True)
-        async def logsetup(
-            interaction: discord.Interaction,
-            event_type: str,
-            channel: discord.TextChannel,
-            enabled: bool = True,
-        ):
+        async def logsetup(interaction: discord.Interaction, event_type: str, channel: discord.TextChannel, enabled: bool = True):
             await self._cmd_logsetup(interaction, event_type, channel, enabled)
         return logsetup
 
@@ -191,428 +166,197 @@ class LoggingModule(BarkModule):
         return logstatus
 
     def _make_logfiles_command(self):
-        @discord.app_commands.command(
-            name="logfiles",
-            description="Search recent file uploads by member or type",
-        )
+        @discord.app_commands.command(name="logfiles", description="Search recent file uploads")
         @discord.app_commands.default_permissions(manage_guild=True)
-        async def logfiles(
-            interaction: discord.Interaction,
-            member: discord.Member | None = None,
-            file_type: str | None = None,
-            limit: int = 10,
-        ):
+        async def logfiles(interaction: discord.Interaction, member: discord.Member | None = None, file_type: str | None = None, limit: int = 10):
             await self._cmd_logfiles(interaction, member, file_type, limit)
         return logfiles
 
-    async def _cmd_logsetup(
-        self,
-        interaction: discord.Interaction,
-        event_type: str,
-        channel: discord.TextChannel,
-        enabled: bool,
-    ) -> None:
-        if not interaction.guild:
-            return
+    async def _cmd_logsetup(self, interaction, event_type, channel, enabled):
+        if not interaction.guild: return
         await interaction.response.defer(ephemeral=True)
-
         if event_type not in EVENT_TYPES:
-            valid = ", ".join(EVENT_TYPES.keys())
-            await interaction.followup.send(
-                f"Invalid event type. Valid: {valid}", ephemeral=True
-            )
-            return
+            return await interaction.followup.send(f"Invalid. Valid: {', '.join(EVENT_TYPES.keys())}", ephemeral=True)
+        config = await self.load_dashboard_config(interaction.guild.id)
+        config[event_type] = {"channel_id": str(channel.id), "enabled": enabled}
+        await self.save_dashboard_config(interaction.guild.id, config)
+        await interaction.followup.send(f"✅ {EVENT_TYPES[event_type]} → #{channel.name}", ephemeral=True)
 
-        from sqlalchemy import select
-
-        async with session_scope() as session:
-            result = await session.execute(
-                select(LogConfig).where(
-                    LogConfig.guild_id == interaction.guild.id,
-                    LogConfig.event_type == event_type,
-                )
-            )
-            config = result.scalar_one_or_none()
-
-            if config is None:
-                config = LogConfig(
-                    guild_id=interaction.guild.id,
-                    event_type=event_type,
-                    channel_id=str(channel.id),
-                    enabled=enabled,
-                )
-                session.add(config)
-            else:
-                config.channel_id = str(channel.id)
-                config.enabled = enabled
-            await session.commit()
-
-        await interaction.followup.send(
-            f"✅ {EVENT_TYPES[event_type]} → #{channel.name} ({'enabled' if enabled else 'disabled'})",
-            ephemeral=True,
-        )
-
-    async def _cmd_logstatus(self, interaction: discord.Interaction) -> None:
-        if not interaction.guild:
-            return
+    async def _cmd_logstatus(self, interaction):
+        if not interaction.guild: return
         await interaction.response.defer(ephemeral=True)
-
         from sqlalchemy import select, func
-
         async with session_scope() as session:
-            result = await session.execute(
-                select(LogConfig).where(LogConfig.guild_id == interaction.guild.id)
-            )
-            configs = result.scalars().all()
+            fc = await session.execute(select(func.count(FileAttachment.id)).where(FileAttachment.guild_id == str(interaction.guild.id)))
+            total_files = fc.scalar() or 0
+        configs = await self.load_dashboard_config(interaction.guild.id)
+        if not configs:
+            return await interaction.followup.send("No channels configured.", ephemeral=True)
+        embed = discord.Embed(title="Logging Config", color=discord.Color.blurple())
+        for event_type, config in configs.items():
+            if not isinstance(config, dict):
+                continue
+            ch = interaction.guild.get_channel(int(config["channel_id"])) if config.get("channel_id") else None
+            embed.add_field(name=f"{'✅' if config.get('enabled') else '❌'} {EVENT_TYPES.get(event_type, event_type)}",
+                            value=f"Channel: #{ch.name if ch else 'deleted'}", inline=False)
+        if total_files: embed.set_footer(text=f"{total_files} files logged")
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
-            # Count total files logged
-            file_count = await session.execute(
-                select(func.count(FileAttachment.id))
-                .where(FileAttachment.guild_id == interaction.guild.id)
-            )
-            total_files = file_count.scalar() or 0
-
-            if not configs:
-                await interaction.followup.send(
-                    "No logging channels configured. Use `/logsetup` to set them up.",
-                    ephemeral=True,
-                )
-                return
-
-            embed = discord.Embed(
-                title="Logging Configuration",
-                color=discord.Color.blurple(),
-            )
-
-            for config in configs:
-                channel = interaction.guild.get_channel(int(config.channel_id))
-                label = EVENT_TYPES.get(config.event_type, config.event_type)
-                status = "✅" if config.enabled else "❌"
-                channel_name = f"#{channel.name}" if channel else "deleted-channel"
-                embed.add_field(
-                    name=f"{status} {label}",
-                    value=f"Channel: {channel_name}",
-                    inline=False,
-                )
-
-            if total_files:
-                embed.set_footer(text=f"{total_files} files logged to database")
-
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-    async def _cmd_logfiles(
-        self,
-        interaction: discord.Interaction,
-        member: discord.Member | None,
-        file_type: str | None,
-        limit: int,
-    ) -> None:
-        if not interaction.guild:
-            return
+    async def _cmd_logfiles(self, interaction, member, file_type, limit):
+        if not interaction.guild: return
         await interaction.response.defer(ephemeral=True)
-
-        from sqlalchemy import select, desc, and_
-
-        query = (
-            select(FileAttachment)
-            .where(FileAttachment.guild_id == interaction.guild.id)
-        )
-        if member is not None:
-            query = query.where(FileAttachment.author_id == str(member.id))
-        if file_type is not None:
-            query = query.where(FileAttachment.content_type.like(f"{file_type}%"))
+        from sqlalchemy import select, desc
+        query = select(FileAttachment).where(FileAttachment.guild_id == str(interaction.guild.id))
+        if member: query = query.where(FileAttachment.author_id == str(member.id))
+        if file_type: query = query.where(FileAttachment.content_type.like(f"{file_type}%"))
         query = query.order_by(desc(FileAttachment.created_at)).limit(min(limit, 50))
-
         async with session_scope() as session:
-            result = await session.execute(query)
-            files = result.scalars().all()
-
-            if not files:
-                await interaction.followup.send("No matching files found.", ephemeral=True)
-                return
-
-            embed = discord.Embed(
-                title=f"Recent File Uploads ({len(files)})",
-                color=discord.Color.blurple(),
-            )
-
+            files = (await session.execute(query)).scalars().all()
+            if not files: return await interaction.followup.send("No files found.", ephemeral=True)
+            embed = discord.Embed(title=f"Files ({len(files)})", color=discord.Color.blurple())
             for f in files:
-                icon = "🖼" if f.is_image else "📄"
-                embed.add_field(
-                    name=f"{icon} {f.filename}",
-                    value=(
-                        f"**By:** {f.author_tag}\n"
-                        f"**Size:** {_format_size(f.file_size)}\n"
-                        f"**Type:** `{f.content_type}`\n"
-                        f"**Uploaded:** <t:{int(f.created_at.timestamp())}:R>\n"
-                        f"**URL:** [Download]({f.file_url})"
-                    ),
-                    inline=False,
-                )
-
+                embed.add_field(name=f"{'🖼' if f.is_image else '📄'} {f.filename}",
+                                value=f"**By:** {f.author_tag}\n**Size:** {_format_size(f.file_size)}\n[Download]({f.file_url})", inline=False)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-    # ── Event Handlers ────────────────────────────────
+    # ── Canonical ModuleConfig reading ─────────────────
 
-    async def _get_log_channel(self, guild_id: int, event_type: str) -> discord.TextChannel | None:
-        from sqlalchemy import select
+    async def _get_channel(self, guild_id: int, event_type: str) -> discord.TextChannel | None:
+        config = await self.load_dashboard_config(guild_id)
+        event_config = config.get(event_type, {})
+        if event_config.get("enabled") and event_config.get("channel_id"):
+            guild = self.ctx.get_guild(guild_id)
+            if guild:
+                channel = guild.get_channel(int(event_config["channel_id"]))
+                return cast(discord.TextChannel | None, channel)
+        return None
 
-        async with session_scope() as session:
-            result = await session.execute(
-                select(LogConfig).where(
-                    LogConfig.guild_id == guild_id,
-                    LogConfig.event_type == event_type,
-                    LogConfig.enabled == True,
-                )
-            )
-            config = result.scalar_one_or_none()
-        if config is None:
-            return None
-        guild = self.bot.get_guild(guild_id)
-        if guild is None:
-            return None
-        return guild.get_channel(int(config.channel_id))
-
-    async def _send_log_embed(
-        self,
-        channel: discord.TextChannel,
-        title: str,
-        description: str,
-        color: discord.Color = discord.Color.blurple(),
-        fields: list[tuple[str, str, bool]] | None = None,
-        thumbnail: str | None = None,
-        files_to_send: list[discord.File] | None = None,
-    ) -> None:
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=color,
-            timestamp=datetime.now(timezone.utc),
-        )
+    async def _send(self, channel, title, desc, color=discord.Color.blurple(), fields=None, thumbnail=None):
+        embed = discord.Embed(title=title, description=desc, color=color, timestamp=datetime.now(timezone.utc))
         if fields:
-            for name, value, inline in fields:
-                embed.add_field(name=name, value=value, inline=inline)
-        if thumbnail:
-            embed.set_thumbnail(url=thumbnail)
+            for n, v, i in fields: embed.add_field(name=n, value=v, inline=i)
+        if thumbnail: embed.set_thumbnail(url=thumbnail)
         try:
-            kwargs = {"embed": embed}
-            if files_to_send:
-                kwargs["files"] = files_to_send
-            await channel.send(**kwargs)
+            await channel.send(embed=embed)
         except discord.Forbidden:
-            logger.warning("Cannot send log embed to channel %s", channel.id)
+            logger.warning("Cannot send log embed to %s (missing permissions)", channel)
 
-    # ── File Upload Tracking ──────────────────────────
+    # ── Event handlers ─────────────────────────────
 
-    async def _on_message(self, message: discord.Message) -> None:
-        """Track file attachments and log them."""
-        if message.author.bot or not message.guild:
+    async def _on_message(self, event_type: str, **data):
+        msg = data.get("message")
+        if not msg or msg.author.bot or not msg.guild or not msg.attachments:
             return
-        if not message.attachments:
-            return
-
-        channel = await self._get_log_channel(message.guild.id, "file_upload")
-        guild_id = message.guild.id
-
-        for attachment in message.attachments:
-            is_image = attachment.content_type and attachment.content_type.startswith("image/")
-            size_str = _format_size(attachment.size)
-
-            # Persist to database
+        ch = await self._get_channel(msg.guild.id, "file_upload")
+        for att in msg.attachments:
+            is_img = att.content_type and att.content_type.startswith("image/")
             async with session_scope() as session:
                 session.add(FileAttachment(
-                    guild_id=guild_id,
-                    channel_id=str(message.channel.id),
-                    message_id=str(message.id),
-                    author_id=str(message.author.id),
-                    author_tag=str(message.author),
-                    filename=attachment.filename,
-                    file_url=attachment.url,
-                    file_size=attachment.size,
-                    content_type=attachment.content_type or "application/octet-stream",
-                    is_image=is_image,
+                    guild_id=str(msg.guild.id), channel_id=str(msg.channel.id), message_id=str(msg.id),
+                    author_id=str(msg.author.id), author_tag=str(msg.author),
+                    filename=att.filename, file_url=att.url, file_size=att.size,
+                    content_type=att.content_type or "application/octet-stream", is_image=is_img,
                 ))
                 await session.commit()
+            if ch:
+                await self._send(ch, f"{'🖼' if is_img else '📄'} File: {att.filename}",
+                                 f"in {msg.channel.mention}", color=discord.Color.green(),
+                                 fields=[("Author", msg.author.mention, True), ("Size", _format_size(att.size), True)])
 
-            # Send log embed if configured
-            if channel is not None:
-                icon = "🖼" if is_image else "📄"
-                await self._send_log_embed(
-                    channel,
-                    f"{icon} File Uploaded",
-                    f"in {message.channel.mention}",
+    async def _on_message_edit(self, event_type: str, **data):
+        before, after = data.get("before"), data.get("after")
+        if not before or not after or before.author.bot or before.content == after.content or not before.guild:
+            return
+        ch = await self._get_channel(before.guild.id, "message_edit")
+        if not ch: return
+        fields = [("Author", before.author.mention, True), ("Channel", before.channel.mention, True)]
+        if before.content: fields.append(("Before", before.content[:1000], False))
+        if after.content: fields.append(("After", after.content[:1000], False))
+        await self._send(ch, "✏️ Edited", f"in {before.channel.mention}", discord.Color.blue(), fields)
+
+    async def _on_message_delete(self, event_type: str, **data):
+        msg = data.get("message")
+        if not msg or msg.author.bot or not msg.guild: return
+        ch = await self._get_channel(msg.guild.id, "message_delete")
+        if not ch: return
+        fields = [("Author", msg.author.mention, True), ("Channel", msg.channel.mention, True)]
+        if msg.content: fields.append(("Content", msg.content[:1000], False))
+        if msg.attachments:
+            files = "\n".join(f"[{a.filename}]({a.url})" for a in msg.attachments)
+            fields.append(("Attachments", files, False))
+        await self._send(ch, "🗑️ Deleted", f"in {msg.channel.mention}", discord.Color.red(), fields)
+
+    async def _on_member_join(self, event_type: str, **data):
+        member = data.get("member")
+        if not member: return
+        ch = await self._get_channel(member.guild.id, "member_join")
+        if not ch: return
+        age = (discord.utils.utcnow() - member.created_at).days
+        await self._send(ch, "📥 Joined", member.mention, discord.Color.green(),
+                         fields=[("User", f"{member} ({member.id})", True), ("Age", f"{age}d", True),
+                                 ("Members", str(member.guild.member_count), True)],
+                         thumbnail=member.display_avatar.url)
+
+    async def _on_member_remove(self, event_type: str, **data):
+        member = data.get("member")
+        if not member: return
+        ch = await self._get_channel(member.guild.id, "member_leave")
+        if not ch: return
+        await self._send(ch, "📤 Left", member.mention, discord.Color.orange(),
+                         fields=[("User", f"{member} ({member.id})", True),
+                                 ("Members", str(member.guild.member_count), True)],
+                         thumbnail=member.display_avatar.url)
+
+    async def _on_voice_state(self, event_type: str, **data):
+        member, before, after = data.get("member"), data.get("before"), data.get("after")
+        if not member or not member.guild: return
+        ch = await self._get_channel(member.guild.id, "voice_state")
+        if not ch: return
+        if before and before.channel is None and after and after.channel is not None:
+            await self._send(ch, "🔊 Voice Join", member.mention, discord.Color.green(),
+                             fields=[("User", f"{member} ({member.id})", True), ("Channel", after.channel.mention, True)])
+        elif before and before.channel is not None and after and after.channel is None:
+            await self._send(ch, "🔇 Voice Leave", member.mention, discord.Color.red(),
+                             fields=[("User", f"{member} ({member.id})", True), ("Channel", before.channel.mention, True)])
+        elif before and after and before.channel != after.channel:
+            await self._send(ch, "🔄 Voice Move", member.mention, discord.Color.blue(),
+                             fields=[("User", f"{member} ({member.id})", True), ("From", before.channel.mention, True), ("To", after.channel.mention, True)])
+
+    # ── API Routes (module actions) ──────────────────
+
+    def get_api_routes(self):
+        """Register API endpoints for the Logging module's dashboard actions.
+        Test log is handled via dashboard router at POST /modules/{module_name}/test."""
+        return None
+
+    async def _handle_test_action(self, guild_id: str) -> dict:
+        """Send a test embed to each configured log channel. Used by dashboard route."""
+        guild_id_int = int(guild_id)
+        from services.response import api_success, api_error
+        from services.bark_context import BarkContext
+
+        sent = 0
+        errors = 0
+        for event_type, label in EVENT_TYPES.items():
+            ch = await self._get_channel(guild_id_int, event_type)
+            if ch is None:
+                continue
+            try:
+                embed = discord.Embed(
+                    title=f"🧪 Test — {label}",
+                    description="If you can see this, logging is configured correctly.",
                     color=discord.Color.green(),
-                    fields=[
-                        ("Author", message.author.mention, True),
-                        ("Channel", message.channel.mention, True),
-                        ("Filename", attachment.filename, True),
-                        ("Size", size_str, True),
-                        ("Type", f"`{attachment.content_type or 'unknown'}`", True),
-                        ("URL", f"[Download]({attachment.url})", True),
-                    ],
-                    thumbnail=attachment.url if is_image else None,
+                    timestamp=datetime.now(timezone.utc),
                 )
+                embed.set_footer(text="Bark Logging Module")
+                await ch.send(embed=embed)
+                sent += 1
+            except Exception:
+                errors += 1
 
-    async def _on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
-        if before.author.bot or before.content == after.content:
-            return
-        if not before.guild:
-            return
-
-        channel = await self._get_log_channel(before.guild.id, "message_edit")
-        if channel is None:
-            return
-
-        fields = [
-            ("Author", before.author.mention, True),
-            ("Channel", before.channel.mention, True),
-            ("Message ID", f"`{before.id}`", True),
-        ]
-
-        # Show before/after content
-        if before.content:
-            fields.append(("Before", before.content[:1000] or "*no content*", False))
-        if after.content:
-            fields.append(("After", after.content[:1000] or "*no content*", False))
-
-        # Show attachment changes
-        if before.attachments or after.attachments:
-            before_files = ", ".join(a.filename for a in before.attachments) or "*none*"
-            after_files = ", ".join(a.filename for a in after.attachments) or "*none*"
-            if before_files != after_files:
-                fields.append(("Files Before", before_files, False))
-                fields.append(("Files After", after_files, False))
-
-        await self._send_log_embed(
-            channel, "✏️ Message Edited",
-            f"in {before.channel.mention}",
-            color=discord.Color.blue(),
-            fields=fields,
-        )
-
-    async def _on_message_delete(self, message: discord.Message) -> None:
-        if message.author.bot:
-            return
-        if not message.guild:
-            return
-
-        channel = await self._get_log_channel(message.guild.id, "message_delete")
-        if channel is None:
-            return
-
-        fields = [
-            ("Author", message.author.mention, True),
-            ("Channel", message.channel.mention, True),
-            ("Message ID", f"`{message.id}`", True),
-        ]
-
-        if message.content:
-            fields.append(("Content", message.content[:1000] or "*no content*", False))
-
-        # Include attachment info in delete logs
-        if message.attachments:
-            file_list = "\n".join(
-                f"[{a.filename}]({a.url}) ({_format_size(a.size)})"
-                for a in message.attachments
-            )
-            fields.append(("Attachments", file_list, False))
-
-        await self._send_log_embed(
-            channel, "🗑️ Message Deleted",
-            f"in {message.channel.mention}",
-            color=discord.Color.red(),
-            fields=fields,
-        )
-
-    async def _on_member_join(self, member: discord.Member) -> None:
-        channel = await self._get_log_channel(member.guild.id, "member_join")
-        if channel is None:
-            return
-
-        account_age = (discord.utils.utcnow() - member.created_at).days
-        await self._send_log_embed(
-            channel, "📥 Member Joined", member.mention,
-            color=discord.Color.green(),
-            fields=[
-                ("User", f"{member} ({member.id})", True),
-                ("Account Age", f"{account_age} days", True),
-                ("Account Created", f"<t:{int(member.created_at.timestamp())}:R>", True),
-                ("Member Count", str(member.guild.member_count), True),
-            ],
-            thumbnail=member.display_avatar.url,
-        )
-
-    async def _on_member_remove(self, member: discord.Member) -> None:
-        channel = await self._get_log_channel(member.guild.id, "member_leave")
-        if channel is None:
-            return
-
-        joined_at = member.joined_at
-        duration_str = "Unknown"
-        if joined_at:
-            days = (discord.utils.utcnow() - joined_at).days
-            duration_str = f"{days} days"
-
-        await self._send_log_embed(
-            channel, "📤 Member Left", member.mention,
-            color=discord.Color.orange(),
-            fields=[
-                ("User", f"{member} ({member.id})", True),
-                ("Joined", f"<t:{int(joined_at.timestamp())}:R>" if joined_at else "Unknown", True),
-                ("Duration", duration_str, True),
-                ("Member Count", str(member.guild.member_count), True),
-                ("Roles", ", ".join(r.mention for r in member.roles[1:5]) or "*none*", False),
-            ],
-            thumbnail=member.display_avatar.url,
-        )
-
-    async def _on_voice_state_update(
-        self,
-        member: discord.Member,
-        before: discord.VoiceState,
-        after: discord.VoiceState,
-    ) -> None:
-        channel = await self._get_log_channel(member.guild.id, "voice_state")
-        if channel is None:
-            return
-
-        # Joined a channel
-        if before.channel is None and after.channel is not None:
-            await self._send_log_embed(
-                channel, "🔊 Voice Join", member.mention,
-                color=discord.Color.green(),
-                fields=[
-                    ("User", f"{member} ({member.id})", True),
-                    ("Channel", after.channel.mention, True),
-                    ("Channel Type", str(after.channel.type).replace("_", " ").title(), True),
-                ],
-            )
-
-        # Left a channel
-        elif before.channel is not None and after.channel is None:
-            duration = (discord.utils.utcnow() - member.joined_at).seconds if member.joined_at else 0
-            m, sec = divmod(duration, 60)
-            h, m = divmod(m, 60)
-            duration_str = f"{h}h {m}m {sec}s" if h else f"{m}m {sec}s"
-
-            await self._send_log_embed(
-                channel, "🔇 Voice Leave", member.mention,
-                color=discord.Color.red(),
-                fields=[
-                    ("User", f"{member} ({member.id})", True),
-                    ("Channel", before.channel.mention, True),
-                    ("Duration", duration_str, True),
-                ],
-            )
-
-        # Moved between channels
-        elif before.channel is not None and after.channel is not None and before.channel != after.channel:
-            await self._send_log_embed(
-                channel, "🔄 Voice Move", member.mention,
-                color=discord.Color.blue(),
-                fields=[
-                    ("User", f"{member} ({member.id})", True),
-                    ("From", before.channel.mention, True),
-                    ("To", after.channel.mention, True),
-                ],
-            )
+        if sent == 0:
+            return api_error("No logging channels configured. Set up channels in the Configuration section first.", status_code=400)
+        msg = f"Sent test messages to {sent} channel(s)"
+        if errors:
+            msg += f" ({errors} failed)"
+        return api_success({"message": msg, "sent": sent, "errors": errors})

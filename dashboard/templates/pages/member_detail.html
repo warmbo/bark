@@ -3,7 +3,6 @@
 
 {% block content %}
 {% set active_page = "members" %}
-{% include "partials/guild_header.html" %}
 
 <div class="page-container">
     <div class="page-header">
@@ -11,250 +10,320 @@
     </div>
 
     <div id="member-detail-root">
-        <div class="loading-spinner">{{ icon("loader-circle", 20) }} Loading member data...</div>
+        <!-- Skeleton loading state -->
+        <div class="member-detail-header" id="skeleton-header">
+            <div class="skeleton skeleton-avatar-lg"></div>
+            <div class="skeleton-info">
+                <div class="skeleton skeleton-text-lg"></div>
+                <div class="skeleton skeleton-text-sm"></div>
+            </div>
+        </div>
+        <div class="stats-grid" id="skeleton-stats">
+            <div class="skeleton skeleton-stat"></div>
+            <div class="skeleton skeleton-stat"></div>
+            <div class="skeleton skeleton-stat"></div>
+            <div class="skeleton skeleton-stat"></div>
+        </div>
+        <div class="skeleton skeleton-card-lg"></div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    const GUILD_ID = '{{ guild.id }}';
-    const USER_ID = '{{ member.id }}';
+const GUILD_ID = '{{ guild.id }}';
+const USER_ID = '{{ member.id }}';
 
-    async function loadMember() {
-        const root = document.getElementById('member-detail-root');
-        try {
-            const res = await fetch(`/api/v1/guilds/${GUILD_ID}/members/${USER_ID}`);
-            const data = await res.json();
-            root.innerHTML = renderMember(data);
-            document.title = `Bark — ${data.name}`;
-        } catch (e) {
-            root.innerHTML = '<div class="empty-state"><p>Failed to load member data.</p></div>';
-        }
+async function loadMember() {
+    const root = document.getElementById('member-detail-root');
+    try {
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/members/${USER_ID}`, {cache: 'no-cache'});
+        const data = raw.data || raw;
+        root.innerHTML = renderMember(data);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        document.title = `Bark — ${data.name}`;
+    } catch (e) {
+        root.innerHTML = '<div class="empty-state"><p>Failed to load member data.</p><button type="button" class="btn btn-sm" data-retry-member>Retry</button></div>';
     }
+}
 
-    function renderMember(m) {
-        return `
-            <div class="member-detail-header">
-                <div class="member-detail-avatar">
-                    ${m.avatar_url
-                        ? `<img src="${m.avatar_url}" alt="">`
-                        : `<div class="avatar-placeholder large">${m.name[0]}</div>`}
-                </div>
-                <div class="member-detail-info">
-                    <h1 class="page-title">${escapeHtml(m.name)}</h1>
-                    <span class="member-tag">${escapeHtml(m.tag)}</span>
-                    <div class="member-detail-meta">
-                        <span>Top Role: <strong>${escapeHtml(m.top_role)}</strong></span>
-                        <span>Joined: ${m.joined_at ? new Date(m.joined_at).toLocaleDateString() : 'Unknown'}</span>
-                        <span>Created: ${m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Unknown'}</span>
-                        ${m.voice_channel ? `<span>In VC: <strong>${escapeHtml(m.voice_channel)}</strong></span>` : ''}
-                        ${m.is_timed_out ? '<span class="badge-sm timeout">TIMED OUT</span>' : ''}
-                        ${m.is_bot ? '<span class="badge-sm bot">BOT</span>' : ''}
-                    </div>
-                    <div class="member-role-chips">
-                        ${m.roles.map(r => `<span class="role-chip">${escapeHtml(r.name)}</span>`).join('')}
-                    </div>
-                </div>
+function renderMember(m) {
+    const warnCount = m.warnings ? (m.warnings.length || m.warnings_count || 0) : 0;
+    const memberName = String(m.name || 'Unknown member');
+    const memberIdAttr = escHtml(String(m.id ?? ''));
+    const avatarUrl = safeResourceUrl(m.avatar_url, '');
+    return `
+        <div class="member-detail-header">
+            <div class="member-detail-avatar">
+                ${avatarUrl
+                    ? `<img src="${escHtml(avatarUrl)}" alt="${escHtml(memberName)}'s avatar">`
+                    : `<div class="avatar-placeholder large">${escHtml(memberName.charAt(0))}</div>`}
             </div>
-
-            <div class="action-bar">
-                <h3>Quick Actions</h3>
-                <div class="action-buttons">
-                    <button class="btn btn-sm" onclick="showActionForm('warn', '${m.id}', '${escapeHtml(m.name)}')">Warn</button>
-                    <button class="btn btn-sm" onclick="showActionForm('timeout', '${m.id}', '${escapeHtml(m.name)}')">Timeout</button>
-                    <button class="btn btn-sm" onclick="showActionForm('kick', '${m.id}', '${escapeHtml(m.name)}')">Kick</button>
-                    <button class="btn btn-sm" onclick="showActionForm('ban', '${m.id}', '${escapeHtml(m.name)}')">Ban</button>
-                    ${m.voice_channel ? `<button class="btn btn-sm" onclick="showActionForm('vc_kick', '${m.id}', '${escapeHtml(m.name)}')">VC Kick</button>` : ''}
-                    <button class="btn btn-sm" onclick="showActionForm('note', '${m.id}', '${escapeHtml(m.name)}')">Add Note</button>
+            <div class="member-detail-info">
+                <h1 class="page-title page-title-sm">${escHtml(m.name)}</h1>
+                <span class="member-tag">${escHtml(m.tag)}</span>
+                <div class="member-detail-meta">
+                    <span>Top Role: <strong>${escHtml(m.top_role)}</strong></span>
+                    <span>Joined: ${m.joined_at ? new Date(m.joined_at).toLocaleDateString() : 'Unknown'}</span>
+                    <span>Created: ${m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Unknown'}</span>
+                    <span>Account Age: ${Number.isFinite(Number(m.account_age_days)) ? Number(m.account_age_days) + 'd' : 'Unknown'}</span>
+                    ${m.voice_channel ? `<span>In VC: <strong>${escHtml(m.voice_channel)}</strong></span>` : ''}
+                    ${m.is_timed_out ? '<span class="badge-sm timeout">TIMED OUT</span>' : ''}
+                    ${m.is_bot ? '<span class="badge-sm bot">BOT</span>' : ''}
+                </div>
+                <div class="member-role-chips">
+                    ${(m.roles || []).map(r => `<span class="role-chip">${escHtml(r.name)}</span>`).join('')}
                 </div>
             </div>
+        </div>
 
-            <div id="action-form-area" class="action-form-area hidden"></div>
-
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-label">Total Cases</div><div class="stat-value">${m.cases.length}</div></div>
-                <div class="stat-card"><div class="stat-label">Active Warnings</div><div class="stat-value">${m.warnings_count}</div></div>
-                <div class="stat-card"><div class="stat-label">Notes</div><div class="stat-value">${m.notes.length}</div></div>
-                <div class="stat-card"><div class="stat-label">Voice Sessions</div><div class="stat-value">${m.voice_sessions.length}</div></div>
+        <!-- Quick Actions Bar -->
+        <div class="action-bar">
+            <h3>${memberIconSvg('zap', 14)} Quick Actions</h3>
+            <div class="action-buttons">
+                <button type="button" class="btn btn-sm" data-member-action="warn" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Warn</button>
+                <button type="button" class="btn btn-sm" data-member-action="timeout" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Timeout</button>
+                <button type="button" class="btn btn-sm" data-member-action="kick" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Kick</button>
+                <button type="button" class="btn btn-sm" data-member-action="ban" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Ban</button>
+                ${m.voice_channel ? `<button type="button" class="btn btn-sm" data-member-action="vc_kick" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>VC Kick</button>` : ''}
+                <button type="button" class="btn btn-sm" data-member-action="note" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}">Add Note</button>
             </div>
+        </div>
 
-            <div class="content-card">
-                <div class="card-header"><h2 class="card-title">Moderation Cases</h2></div>
-                ${m.cases.length
-                    ? `<table class="data-table"><thead><tr><th>#</th><th>Type</th><th>Moderator</th><th>Reason</th><th>Date</th></tr></thead><tbody>
-                        ${m.cases.map(c => `<tr>
-                            <td>#${c.case_number}</td>
-                            <td><span class="badge badge-${c.action_type}">${c.action_type}</span></td>
-                            <td>${escapeHtml(c.moderator_tag)}</td>
-                            <td class="cell-truncate">${escapeHtml(c.reason || '-')}</td>
-                            <td>${new Date(c.created_at).toLocaleDateString()}</td>
-                        </tr>`).join('')}
-                    </tbody></table>`
-                    : '<div class="empty-state small"><p>No cases.</p></div>'}
-            </div>
+        <div id="action-form-area" class="action-form-area hidden"></div>
 
-            <div class="content-card">
-                <div class="card-header"><h2 class="card-title">Active Warnings</h2></div>
-                ${m.warnings.length
-                    ? `<table class="data-table"><thead><tr><th>ID</th><th>Reason</th><th>Date</th></tr></thead><tbody>
-                        ${m.warnings.map(w => `<tr>
-                            <td>#${w.id}</td>
-                            <td class="cell-truncate">${escapeHtml(w.reason)}</td>
-                            <td>${new Date(w.created_at).toLocaleDateString()}</td>
-                        </tr>`).join('')}
-                    </tbody></table>`
-                    : '<div class="empty-state small"><p>No active warnings.</p></div>'}
-            </div>
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card compact"><span class="stat-label">Total Cases</span><span class="stat-value stat-value-sm">${(m.cases || []).length}</span></div>
+            <div class="stat-card compact"><span class="stat-label">Active Warnings</span><span class="stat-value stat-value-sm">${warnCount}</span></div>
+            <div class="stat-card compact"><span class="stat-label">Notes</span><span class="stat-value stat-value-sm">${(m.notes || []).length}</span></div>
+            <div class="stat-card compact"><span class="stat-label">Voice Sessions</span><span class="stat-value stat-value-sm">${(m.voice_sessions || []).length}</span></div>
+        </div>
 
-            <div class="content-card">
-                <div class="card-header"><h2 class="card-title">Voice Sessions</h2></div>
-                ${m.voice_sessions.length
-                    ? `<table class="data-table"><thead><tr><th>Channel</th><th>Joined</th><th>Left</th><th>Duration</th></tr></thead><tbody>
-                        ${m.voice_sessions.map(v => `<tr>
-                            <td>${escapeHtml(v.channel_name)}</td>
-                            <td>${new Date(v.joined_at).toLocaleString()}</td>
-                            <td>${v.left_at ? new Date(v.left_at).toLocaleString() : 'Still connected'}</td>
-                            <td>${v.duration || '-'}</td>
-                        </tr>`).join('')}
-                    </tbody></table>`
-                    : '<div class="empty-state small"><p>No voice sessions recorded.</p></div>'}
-            </div>
+        <!-- Moderation Cases -->
+        <div class="content-card">
+            <div class="card-header"><h2 class="card-title">${memberIconSvg('scroll-text', 16)} Moderation Cases</h2></div>
+            ${(m.cases || []).length
+                ? `<table class="data-table"><caption class="sr-only">Moderation cases for ${escHtml(m.name)}</caption><thead><tr><th scope="col">#</th><th scope="col">Type</th><th scope="col">Moderator</th><th scope="col">Reason</th><th scope="col">Date</th></tr></thead><tbody>
+                    ${m.cases.map(c => `<tr><td>#${Number(c.case_number)}</td><td><span class="badge badge-${safeClassToken(c.action_type, 'unknown')}">${escHtml(c.action_type)}</span></td><td>${escHtml(c.moderator_tag)}</td><td class="cell-truncate">${escHtml(c.reason || '-')}</td><td class="timestamp">${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td></tr>`).join('')}
+                </tbody></table>`
+                : '<div class="empty-state small"><p>No cases.</p></div>'}
+        </div>
 
-            <div class="content-card">
-                <div class="card-header"><h2 class="card-title">Notes</h2></div>
-                ${m.notes.length
-                    ? `<div class="notes-list">${m.notes.map(n => `
-                        <div class="note-item">
-                            <div class="note-meta">By <code>${escapeHtml(n.author_id)}</code> · ${new Date(n.created_at).toLocaleDateString()}</div>
-                            <div class="note-content">${escapeHtml(n.content)}</div>
+        <!-- Active Warnings -->
+        <div class="content-card">
+            <div class="card-header"><h2 class="card-title">${memberIconSvg('alert-triangle', 16)} Active Warnings</h2></div>
+            ${(m.warnings || []).length
+                ? `<table class="data-table"><caption class="sr-only">Active warnings for ${escHtml(m.name)}</caption><thead><tr><th scope="col">ID</th><th scope="col">Reason</th><th scope="col">Date</th></tr></thead><tbody>
+                    ${m.warnings.map(w => `<tr><td>#${Number(w.id)}</td><td class="cell-truncate">${escHtml(w.reason)}</td><td class="timestamp">${w.created_at ? new Date(w.created_at).toLocaleDateString() : '-'}</td></tr>`).join('')}
+                </tbody></table>`
+                : '<div class="empty-state small"><p>No active warnings.</p></div>'}
+        </div>
+
+        <!-- Voice Sessions -->
+        <div class="content-card">
+            <div class="card-header"><h2 class="card-title">${memberIconSvg('headphones', 16)} Voice Sessions</h2></div>
+            ${(m.voice_sessions || []).length
+                ? `<table class="data-table"><caption class="sr-only">Voice sessions for ${escHtml(m.name)}</caption><thead><tr><th scope="col">Channel</th><th scope="col">Joined</th><th scope="col">Left</th><th scope="col">Duration</th></tr></thead><tbody>
+                    ${m.voice_sessions.map(v => `<tr><td>${escHtml(v.channel_name || '')}</td><td class="timestamp">${v.joined_at ? new Date(v.joined_at).toLocaleString() : '-'}</td><td class="timestamp">${v.left_at ? new Date(v.left_at).toLocaleString() : 'Now'}</td><td>${v.duration_seconds ? memberFormatDuration(v.duration_seconds) : '-'}</td></tr>`).join('')}
+                </tbody></table>`
+                : '<div class="empty-state small"><p>No voice sessions recorded.</p></div>'}
+        </div>
+
+        <!-- Notes -->
+        <div class="content-card">
+            <div class="card-header"><h2 class="card-title">${memberIconSvg('file-text', 16)} Notes</h2></div>
+            ${(m.notes || []).length
+                ? `<div class="notes-list">${m.notes.map(n => `
+                    <div class="note-item">
+                        <div class="note-meta">By <code>${escHtml(n.author_id)}</code> · ${n.created_at ? new Date(n.created_at).toLocaleDateString() : ''}
+                            <button type="button" class="btn btn-sm note-delete-btn" data-note-id="${Number(n.id)}" title="Delete note" aria-label="Delete note"><i data-lucide="trash-2" width="11" height="11"></i></button>
                         </div>
-                    `).join('')}</div>`
-                    : '<div class="empty-state small"><p>No notes.</p></div>'}
-            </div>
-        `;
+                        <div class="note-content">${escHtml(n.content)}</div>
+                    </div>`).join('')}</div>`
+                : '<div class="empty-state small"><p>No notes.</p></div>'}
+        </div>
+    `;
+}
+
+function memberFormatDuration(seconds) {
+    if (!seconds) return '-';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+function memberIconSvg(name, size) {
+    return `<i data-lucide="${name}" width="${size}" height="${size}" class="inline-icon"></i>`;
+}
+
+// ── Action Forms ──
+function showActionForm(action, userId, userName) {
+    const area = document.getElementById('action-form-area');
+    if (!area) return;
+    const userIdAttr = escHtml(String(userId ?? ''));
+    area.classList.remove('hidden');
+    const forms = {
+        warn: `<div class="action-form"><h3>Warn ${escHtml(userName)}</h3>
+            <div class="form-group"><label class="form-label" for="reason-warn">Reason</label>
+                <input type="text" class="form-input" id="reason-warn" name="reason" placeholder="Reason for warning..." value="Dashboard warning"></div>
+            <button type="button" class="btn btn-primary" data-execute-action="warn" data-user-id="${userIdAttr}">Warn Member</button>
+            <button type="button" class="btn btn-sm" data-dismiss-action>Cancel</button>
+            <span id="result-warn"></span></div>`,
+        timeout: `<div class="action-form"><h3>Timeout ${escHtml(userName)}</h3>
+            <div class="form-row"><div class="form-group"><label class="form-label" for="timeout-duration">Duration</label>
+                <input type="number" class="form-input" id="timeout-duration" name="duration" value="10" min="1"></div>
+            <div class="form-group"><label class="form-label" for="timeout-unit">Unit</label>
+                <select class="form-select" id="timeout-unit" name="unit">
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option></select></div></div>
+            <div class="form-group"><label class="form-label" for="reason-timeout">Reason</label>
+                <input type="text" class="form-input" id="reason-timeout" name="reason" placeholder="Reason..." value="Dashboard timeout"></div>
+            <button type="button" class="btn btn-primary" data-execute-action="timeout" data-user-id="${userIdAttr}">Timeout Member</button>
+            <button type="button" class="btn btn-sm" data-dismiss-action>Cancel</button>
+            <span id="result-timeout"></span></div>`,
+        kick: `<div class="action-form"><h3>Kick ${escHtml(userName)}</h3>
+            <div class="form-group"><label class="form-label" for="reason-kick">Reason</label>
+                <input type="text" class="form-input" id="reason-kick" name="reason" placeholder="Reason..." value="Dashboard kick"></div>
+            <button type="button" class="btn btn-primary" data-execute-action="kick" data-user-id="${userIdAttr}">Kick Member</button>
+            <button type="button" class="btn btn-sm" data-dismiss-action>Cancel</button>
+            <span id="result-kick"></span></div>`,
+        ban: `<div class="action-form"><h3>Ban ${escHtml(userName)}</h3>
+            <div class="form-group"><label class="form-label" for="reason-ban">Reason</label>
+                <input type="text" class="form-input" id="reason-ban" name="reason" placeholder="Reason..." value="Dashboard ban"></div>
+            <button type="button" class="btn btn-primary" data-execute-action="ban" data-user-id="${userIdAttr}">Ban Member</button>
+            <button type="button" class="btn btn-sm" data-dismiss-action>Cancel</button>
+            <span id="result-ban"></span></div>`,
+        vc_kick: `<div class="action-form"><h3>Voice Kick ${escHtml(userName)}</h3>
+            <div class="form-group"><label class="form-label" for="reason-vc_kick">Reason</label>
+                <input type="text" class="form-input" id="reason-vc_kick" name="reason" placeholder="Reason..." value="Dashboard VC kick"></div>
+            <button type="button" class="btn btn-primary" data-execute-action="vc_kick" data-user-id="${userIdAttr}">Disconnect</button>
+            <button type="button" class="btn btn-sm" data-dismiss-action>Cancel</button>
+            <span id="result-vc_kick"></span></div>`,
+        note: `<div class="action-form"><h3>Add Note for ${escHtml(userName)}</h3>
+            <div class="form-group"><label class="form-label" for="note-content">Note Content</label>
+                <textarea class="form-input" id="note-content" name="content" rows="3" placeholder="Enter note..."></textarea></div>
+            <button type="button" class="btn btn-primary" data-execute-action="note" data-user-id="${userIdAttr}">Save Note</button>
+            <button type="button" class="btn btn-sm" data-dismiss-action>Cancel</button>
+            <span id="result-note"></span></div>`,
+    };
+    area.innerHTML = forms[action] || '<p>Unknown action.</p>';
+    area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Re-render Lucide icons in the form
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function hideActionForm() {
+    document.getElementById('action-form-area').classList.add('hidden');
+    document.getElementById('action-form-area').innerHTML = '';
+}
+
+async function executeAction(action, userId) {
+    const btn = document.querySelector('#action-form-area .btn-primary');
+    const resultSpan = document.getElementById(`result-${action}`);
+    if (['kick', 'ban', 'vc_kick'].includes(action)) {
+        const confirmed = await BarkDialog.confirm({
+            title: `${action === 'vc_kick' ? 'Disconnect' : action[0].toUpperCase() + action.slice(1)} member?`,
+            message: action === 'ban' ? 'This permanently bans the member from the server.' : action === 'kick' ? 'This removes the member from the server.' : 'This disconnects the member from voice.',
+            confirmLabel: action === 'vc_kick' ? 'Disconnect' : action[0].toUpperCase() + action.slice(1),
+            danger: true,
+        });
+        if (!confirmed) return;
     }
-
-    function showActionForm(action, userId, userName) {
-        const area = document.getElementById('action-form-area');
-        area.classList.remove('hidden');
-
-        const forms = {
-            warn: `<div class="action-form"><h3>Warn ${escapeHtml(userName)}</h3>
-                <div class="form-group"><label class="form-label">Reason</label>
-                    <input type="text" class="form-input" id="reason-warn" placeholder="Reason for warning..." value="Dashboard warning"></div>
-                <button class="btn btn-primary" onclick="executeAction('warn', '${userId}')">Issue Warning</button>
-                <button class="btn btn-sm" onclick="hideActionForm()">Cancel</button>
-                <span id="result-warn"></span></div>`,
-            timeout: `<div class="action-form"><h3>Timeout ${escapeHtml(userName)}</h3>
-                <div class="form-row"><div class="form-group"><label class="form-label">Duration</label>
-                    <input type="number" class="form-input" id="timeout-duration" value="10" min="1"></div>
-                <div class="form-group"><label class="form-label">Unit</label>
-                    <select class="form-select" id="timeout-unit">
-                        <option value="minutes">Minutes</option>
-                        <option value="hours">Hours</option>
-                        <option value="seconds">Seconds</option></select></div></div>
-                <div class="form-group"><label class="form-label">Reason</label>
-                    <input type="text" class="form-input" id="reason-timeout" placeholder="Reason..." value="Dashboard timeout"></div>
-                <button class="btn btn-primary" onclick="executeAction('timeout', '${userId}')">Apply Timeout</button>
-                <button class="btn btn-sm" onclick="hideActionForm()">Cancel</button>
-                <span id="result-timeout"></span></div>`,
-            kick: `<div class="action-form"><h3>Kick ${escapeHtml(userName)}</h3>
-                <div class="form-group"><label class="form-label">Reason</label>
-                    <input type="text" class="form-input" id="reason-kick" placeholder="Reason..." value="Dashboard kick"></div>
-                <button class="btn btn-primary" onclick="executeAction('kick', '${userId}')">Kick Member</button>
-                <button class="btn btn-sm" onclick="hideActionForm()">Cancel</button>
-                <span id="result-kick"></span></div>`,
-            ban: `<div class="action-form"><h3>Ban ${escapeHtml(userName)}</h3>
-                <div class="form-group"><label class="form-label">Reason</label>
-                    <input type="text" class="form-input" id="reason-ban" placeholder="Reason..." value="Dashboard ban"></div>
-                <div class="form-group"><label class="form-label">Delete messages from (days)</label>
-                    <input type="number" class="form-input" id="ban-delete-days" value="0" min="0" max="7"></div>
-                <button class="btn btn-primary" onclick="executeAction('ban', '${userId}')">Ban Member</button>
-                <button class="btn btn-sm" onclick="hideActionForm()">Cancel</button>
-                <span id="result-ban"></span></div>`,
-            vc_kick: `<div class="action-form"><h3>Voice Kick ${escapeHtml(userName)}</h3>
-                <div class="form-group"><label class="form-label">Reason</label>
-                    <input type="text" class="form-input" id="reason-vc_kick" placeholder="Reason..." value="Dashboard VC kick"></div>
-                <button class="btn btn-primary" onclick="executeAction('vc_kick', '${userId}')">Disconnect</button>
-                <button class="btn btn-sm" onclick="hideActionForm()">Cancel</button>
-                <span id="result-vc_kick"></span></div>`,
-            note: `<div class="action-form"><h3>Add Note for ${escapeHtml(userName)}</h3>
-                <div class="form-group"><label class="form-label">Note Content</label>
-                    <textarea class="form-input" id="note-content" rows="3" placeholder="Enter note..."></textarea></div>
-                <button class="btn btn-primary" onclick="executeAction('note', '${userId}')">Save Note</button>
-                <button class="btn btn-sm" onclick="hideActionForm()">Cancel</button>
-                <span id="result-note"></span></div>`,
-        };
-        area.innerHTML = forms[action] || '<p>Unknown action.</p>';
-        area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const idleText = btn?.textContent;
+    if (btn) {
+        if (btn.disabled) return;
+        btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = 'Processing…';
     }
+    if (resultSpan) resultSpan.textContent = '';
 
-    function hideActionForm() {
-        document.getElementById('action-form-area').classList.add('hidden');
-        document.getElementById('action-form-area').innerHTML = '';
+    let body = { target_id: userId };
+    if (action === 'warn') body.reason = document.getElementById('reason-warn')?.value || 'No reason';
+    if (action === 'timeout') {
+        const duration = parseInt(document.getElementById('timeout-duration')?.value || '10', 10);
+        const unit = document.getElementById('timeout-unit')?.value || 'minutes';
+        const durationMultipliers = {minutes: 1, hours: 60};
+        body.duration = Math.max(1, duration * durationMultipliers[unit]);
+        body.reason = document.getElementById('reason-timeout')?.value || 'No reason';
     }
-
-    async function executeAction(action, userId) {
-        const btn = document.querySelector(`#action-form-area .btn-primary`);
-        const resultSpan = document.getElementById(`result-${action}`);
-        if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
-        if (resultSpan) resultSpan.textContent = '';
-
-        let body = { target_id: userId };
-        if (action === 'warn') body.reason = document.getElementById('reason-warn')?.value || 'No reason';
-        if (action === 'timeout') {
-            body.duration = parseInt(document.getElementById('timeout-duration')?.value || '10');
-            body.unit = document.getElementById('timeout-unit')?.value || 'minutes';
-            body.reason = document.getElementById('reason-timeout')?.value || 'No reason';
-        }
-        if (action === 'kick') body.reason = document.getElementById('reason-kick')?.value || 'No reason';
-        if (action === 'ban') {
-            body.reason = document.getElementById('reason-ban')?.value || 'No reason';
-            body.delete_days = parseInt(document.getElementById('ban-delete-days')?.value || '0');
-        }
-        if (action === 'vc_kick') body.reason = document.getElementById('reason-vc_kick')?.value || 'No reason';
-        if (action === 'note') {
-            const content = document.getElementById('note-content')?.value;
-            if (!content) { alert('Note content is required.'); if (btn) { btn.disabled = false; btn.textContent = 'Save Note'; } return; }
-            try {
-                const res = await fetch(`/api/v1/guilds/${GUILD_ID}/moderation/notes`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({user_id: userId, author_id: 'dashboard', content}),
-                });
-                const data = await res.json();
-                if (data.success) {
-                    if (resultSpan) { resultSpan.textContent = 'Saved!'; resultSpan.style.color = 'var(--green)'; }
-                    setTimeout(() => { hideActionForm(); loadMember(); }, 1500);
-                }
-            } catch(e) { if (resultSpan) resultSpan.textContent = 'Error saving note'; }
-            if (btn) { btn.disabled = false; btn.textContent = 'Save Note'; }
-            return;
-        }
-
+    if (action === 'kick') body.reason = document.getElementById('reason-kick')?.value || 'No reason';
+    if (action === 'ban') {
+        body.reason = document.getElementById('reason-ban')?.value || 'No reason';
+    }
+    if (action === 'vc_kick') body.reason = document.getElementById('reason-vc_kick')?.value || 'No reason';
+    if (action === 'note') {
+        const content = document.getElementById('note-content')?.value;
+        if (!content) { showToast('Note content is required.', 'error'); if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = idleText; } return; }
         try {
-            const res = await fetch(`/api/v1/guilds/${GUILD_ID}/actions/${action}`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+            const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/notes`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: userId, author_id: 'dashboard', content}),
             });
-            const data = await res.json();
-            if (data.success) {
-                if (resultSpan) { resultSpan.textContent = `Done! Case #${data.case_number || ''}`; resultSpan.style.color = 'var(--green)'; }
-                setTimeout(() => { hideActionForm(); loadMember(); }, 2000);
+            if (raw.success) {
+                if (resultSpan) { resultSpan.textContent = 'Saved!'; resultSpan.style.color = 'var(--green)'; }
+                showToast('Note saved', 'success');
+                setTimeout(() => { hideActionForm(); loadMember(); }, 1500);
             } else {
-                if (resultSpan) { resultSpan.textContent = `Failed: ${data.error || 'Unknown'}`; resultSpan.style.color = 'var(--red)'; }
+                showToast(raw.error || 'Failed to save note', 'error');
             }
-        } catch (e) {
-            if (resultSpan) { resultSpan.textContent = 'Network error'; resultSpan.style.color = 'var(--red)'; }
+        } catch(e) { showToast('Error saving note', 'error'); if (resultSpan) resultSpan.textContent = 'Error saving note'; }
+        if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = idleText; }
+        return;
+    }
+
+    try {
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/actions/${action}`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+        });
+        const data = raw.data || raw;
+        if (raw.success || data.success) {
+            if (resultSpan) { resultSpan.textContent = `Done! Case #${data.case_number || data.case || ''}`; resultSpan.style.color = 'var(--green)'; }
+            showToast(`${action} completed`, 'success');
+            setTimeout(() => { hideActionForm(); loadMember(); }, 2000);
+        } else {
+            if (resultSpan) { resultSpan.textContent = `Failed: ${raw.error || data.error || 'Unknown'}`; resultSpan.style.color = 'var(--red)'; }
         }
-        if (btn) { btn.disabled = false; btn.textContent = 'Execute'; }
+    } catch (e) {
+        if (resultSpan) { resultSpan.textContent = 'Network error'; resultSpan.style.color = 'var(--red)'; }
     }
+    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = idleText; }
+}
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+async function deleteNote(noteId, button) {
+    if (!noteId) return;
+    if (!await BarkDialog.confirm({title: 'Delete this note?', message: 'This permanently removes the private note and cannot be undone.', confirmLabel: 'Delete note', danger: true})) return;
+    if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
+    try {
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/notes/${noteId}`, {
+            method: 'DELETE',
+        });
+        if (raw.success) {
+            showToast('Note deleted', 'success');
+            loadMember();
+        } else {
+            showToast(raw.error || 'Failed to delete note', 'error');
+        }
+    } catch(e) {
+        showToast(e.message || 'Error deleting note', 'error');
+        if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
     }
+}
 
-    loadMember();
+document.getElementById('member-detail-root').addEventListener('click', (event) => {
+    const retry = event.target.closest('[data-retry-member]');
+    if (retry) { loadMember(); return; }
+    const action = event.target.closest('[data-member-action]');
+    if (action) { showActionForm(action.dataset.memberAction, action.dataset.userId, action.dataset.userName); return; }
+    const execute = event.target.closest('[data-execute-action]');
+    if (execute) { executeAction(execute.dataset.executeAction, execute.dataset.userId); return; }
+    if (event.target.closest('[data-dismiss-action]')) hideActionForm();
+    const delNote = event.target.closest('[data-note-id]');
+    if (delNote) { deleteNote(delNote.dataset.noteId, delNote); }
+});
+
+loadMember();
 </script>
 {% endblock %}

@@ -1,0 +1,14 @@
+{# Moderation workspace contract: docs/module-workspace.md#contextual-danger-zones #}
+<article class="content-card workspace-data-card" data-section="voice">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("mic", 16) }} Recent Voice History</h2><p class="card-description">The 50 most recent joins, leaves, moves, and active sessions.</p></div>
+    <button type="button" class="btn btn-sm" data-refresh-section="voice" aria-label="Refresh voice history">{{ icon("refresh-cw", 14) }} Refresh</button>
+  </div>
+  <div id="mod-voice-content" aria-live="polite"><div class="skeleton skeleton-card"></div></div>
+</article>
+{% if module_data.can_manage_module %}
+<article class="content-card danger-zone" id="voice-danger-zone">
+  <div class="card-header"><div><h2 class="card-title">{{ icon("alert-triangle", 16) }} Data retention danger zone</h2><p class="card-description">Permanent server-scoped record deletion. These actions cannot be undone.</p></div><span class="status-badge status-danger">Admin only</span></div>
+  <div class="danger-zone-list"><div class="danger-zone-row"><div><strong>Clear voice history</strong><p>Delete every stored voice session for this server.</p></div><button type="button" class="btn btn-danger btn-sm" data-purge="voice-history" data-purge-label="voice history">{{ icon("trash-2", 14) }} Clear all</button></div></div>
+</article>
+{% endif %}
