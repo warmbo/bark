@@ -1,0 +1,360 @@
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from modules.auto_voice.module import AutoVoiceModule
+
+
+class _HashableNamespace(SimpleNamespace):
+    __hash__ = object.__hash__
+
+
+class _Context:
+    def __init__(self, config):
+        self.get_module_config = AsyncMock(return_value=config)
+        self.save_module_config = AsyncMock()
+        self.bot = SimpleNamespace(user=SimpleNamespace(id=999))
+
+
+def _voice_fixture(config=None):
+    config = config or {
+        "primary_channel_id": "100",
+        "channel_name_template": "## {display_name}'s room",
+        "user_limit": 6,
+        "bitrate_kbps": 64,
+        "inherit_permissions": True,
+        "private_by_default": False,
+        "empty_delete_delay_seconds": 0,
+    }
+    ctx = _Context(config)
+    category = SimpleNamespace(id=50)
+    primary = SimpleNamespace(
+        id=100,
+        name="Join to Create",
+        category=category,
+        overwrites={"existing": "overwrite"},
+        position=4,
+    )
+    temporary = SimpleNamespace(
+        id=200,
+        name="01 Cody's room",
+        members=[],
+        category=category,
+        delete=AsyncMock(),
+        edit=AsyncMock(),
+    )
+    guild = SimpleNamespace(
+        id=10,
+        name="ZENHAWX",
+        channels=[primary],
+        default_role=_HashableNamespace(id=10),
+        me=_HashableNamespace(id=999),
+        bitrate_limit=96_000,
+        create_voice_channel=AsyncMock(return_value=temporary),
+    )
+    primary.guild = guild
+    temporary.guild = guild
+    member = _HashableNamespace(
+        id=42,
+        bot=False,
+        name="cody",
+        display_name="Cody",
+        guild=guild,
+        roles=[],
+        activities=[],
+        voice=None,
+        move_to=AsyncMock(),
+    )
+    disconnected = SimpleNamespace(channel=None)
+    joined_primary = SimpleNamespace(channel=primary)
+    return ctx, guild, member, primary, temporary, disconnected, joined_primary
+
+
+def test_schema_exposes_avc_behavior_as_dashboard_configuration():
+    module = AutoVoiceModule(_Context({}))
+
+    schema = module.get_settings_schema()
+    fields = schema["properties"]
+
+    assert fields["primary_channel_id"]["format"] == "channel_select"
+    assert fields["channel_name_template"]["default"] == "## [@@game_name@@]"
+    assert fields["user_limit"]["maximum"] == 99
+    assert fields["bitrate_kbps"]["minimum"] == 8
+    assert fields["inherit_permissions"]["type"] == "boolean"
+    assert fields["private_by_default"]["type"] == "boolean"
+    assert fields["empty_delete_delay_seconds"]["minimum"] == 0
+    assert fields["owner_can_rename"]["type"] == "boolean"
+    assert fields["owner_can_limit"]["type"] == "boolean"
+    assert fields["owner_can_lock"]["type"] == "boolean"
+
+
+@pytest.mark.asyncio
+async def test_joining_primary_creates_configured_channel_and_moves_member():
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture()
+    module = AutoVoiceModule(ctx)
+
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=disconnected, after=joined_primary
+    )
+
+    guild.create_voice_channel.assert_awaited_once()
+    kwargs = guild.create_voice_channel.await_args.kwargs
+    assert kwargs["name"] == "01 Cody's room"
+    assert kwargs["category"] is primary.category
+    assert kwargs["user_limit"] == 6
+    assert kwargs["bitrate"] == 64_000
+    assert kwargs["overwrites"] == primary.overwrites
+    member.move_to.assert_awaited_once_with(
+        temporary, reason="Bark Auto Voice: temporary channel created"
+    )
+    assert temporary.id in module.managed_channel_ids
+
+
+@pytest.mark.asyncio
+async def test_requested_bitrate_is_capped_to_the_guild_limit():
+    config = {
+        "primary_channel_id": "100",
+        "channel_name_template": "## Room",
+        "bitrate_kbps": 384,
+        "empty_delete_delay_seconds": 0,
+    }
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture(config)
+    module = AutoVoiceModule(ctx)
+
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=disconnected, after=joined_primary
+    )
+
+    assert guild.create_voice_channel.await_args.kwargs["bitrate"] == 96_000
+
+
+@pytest.mark.asyncio
+async def test_private_channels_do_not_bypass_owner_control_switches():
+    config = {
+        "primary_channel_id": "100",
+        "private_by_default": True,
+        "inherit_permissions": False,
+        "empty_delete_delay_seconds": 0,
+    }
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture(config)
+    module = AutoVoiceModule(ctx)
+
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=disconnected, after=joined_primary
+    )
+
+    overwrites = guild.create_voice_channel.await_args.kwargs["overwrites"]
+    assert overwrites[guild.default_role].connect is False
+    assert overwrites[member].connect is True
+    assert overwrites[member].manage_channels is None
+    assert overwrites[guild.me].manage_channels is True
+
+
+@pytest.mark.asyncio
+async def test_empty_managed_channel_is_deleted_when_last_member_leaves():
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture()
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+    left_temporary = SimpleNamespace(channel=temporary)
+
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=left_temporary, after=disconnected
+    )
+    temporary.delete.assert_not_awaited()
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    temporary.delete.assert_awaited_once_with(reason="Bark Auto Voice: channel empty")
+    assert temporary.id not in module.managed_channel_ids
+
+
+@pytest.mark.asyncio
+async def test_pending_deletion_is_cancelled_when_member_rejoins():
+    config = {
+        "primary_channel_id": "100",
+        "empty_delete_delay_seconds": 30,
+    }
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture(config)
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+    temporary.members = []
+
+    await module._on_voice_state_update(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=temporary),
+        after=disconnected,
+    )
+    assert temporary.id in module._delete_tasks
+
+    temporary.members = [member]
+    await module._on_voice_state_update(
+        "discord_voice_state",
+        member=member,
+        before=disconnected,
+        after=SimpleNamespace(channel=temporary),
+    )
+    await asyncio.sleep(0)
+
+    temporary.delete.assert_not_awaited()
+    assert temporary.id not in module._delete_tasks
+
+
+def test_channel_sequence_is_unique_before_discord_creation_finishes():
+    ctx, guild, member, *_ = _voice_fixture(
+        {"channel_name_template": "## Room"}
+    )
+    module = AutoVoiceModule(ctx)
+    other_member = _HashableNamespace(
+        id=43,
+        name="other",
+        display_name="Other",
+        guild=guild,
+        activities=[],
+    )
+
+    assert module._render_name(member, {"channel_name_template": "## Room"}) == "01 Room"
+    assert module._render_name(other_member, {"channel_name_template": "## Room"}) == "02 Room"
+
+
+@pytest.mark.asyncio
+async def test_non_primary_join_does_not_create_channel():
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture()
+    module = AutoVoiceModule(ctx)
+    ordinary = SimpleNamespace(id=777, guild=guild, members=[member])
+
+    await module._on_voice_state_update(
+        "discord_voice_state",
+        member=member,
+        before=disconnected,
+        after=SimpleNamespace(channel=ordinary),
+    )
+
+    guild.create_voice_channel.assert_not_awaited()
+    member.move_to.assert_not_awaited()
+
+
+def _owner_interaction(member, channel):
+    member.voice = SimpleNamespace(channel=channel)
+    return SimpleNamespace(
+        user=member,
+        guild_id=member.guild.id,
+        response=SimpleNamespace(send_message=AsyncMock()),
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_can_rename_managed_channel_when_enabled():
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
+        {"owner_can_rename": True}
+    )
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+    interaction = _owner_interaction(member, temporary)
+
+    command = module._make_voice_name_command()
+    await command.callback(interaction, "Raid Room")
+
+    temporary.edit.assert_awaited_once_with(
+        name="Raid Room", reason="Bark Auto Voice: owner rename"
+    )
+    interaction.response.send_message.assert_awaited_once_with(
+        "Channel renamed to **Raid Room**.", ephemeral=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_limit_command_honors_dashboard_switch():
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
+        {"owner_can_limit": False}
+    )
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+    interaction = _owner_interaction(member, temporary)
+
+    command = module._make_voice_limit_command()
+    await command.callback(interaction, 4)
+
+    temporary.edit.assert_not_awaited()
+    interaction.response.send_message.assert_awaited_once_with(
+        "Changing the user limit is disabled for channel owners.", ephemeral=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_can_set_user_limit_when_enabled():
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
+        {"owner_can_limit": True}
+    )
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+    interaction = _owner_interaction(member, temporary)
+
+    command = module._make_voice_limit_command()
+    await command.callback(interaction, 4)
+
+    temporary.edit.assert_awaited_once_with(
+        user_limit=4, reason="Bark Auto Voice: owner changed user limit"
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_can_lock_managed_channel_when_enabled():
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
+        {"owner_can_lock": True}
+    )
+    temporary.set_permissions = AsyncMock()
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+    interaction = _owner_interaction(member, temporary)
+
+    command = module._make_voice_lock_command()
+    await command.callback(interaction)
+
+    temporary.set_permissions.assert_awaited_once_with(
+        guild.default_role,
+        connect=False,
+        reason="Bark Auto Voice: owner locked channel",
+    )
+    interaction.response.send_message.assert_awaited_once_with(
+        "Channel locked.", ephemeral=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_can_unlock_managed_channel_when_enabled():
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
+        {"owner_can_lock": True}
+    )
+    temporary.set_permissions = AsyncMock()
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+    interaction = _owner_interaction(member, temporary)
+
+    command = module._make_voice_unlock_command()
+    await command.callback(interaction)
+
+    temporary.set_permissions.assert_awaited_once_with(
+        guild.default_role,
+        connect=None,
+        reason="Bark Auto Voice: owner unlocked channel",
+    )
+    interaction.response.send_message.assert_awaited_once_with(
+        "Channel unlocked.", ephemeral=True
+    )
