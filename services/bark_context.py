@@ -156,7 +156,29 @@ class BarkContext:
         from database.models.auto_voice import AutoVoiceChannel
 
         async with session_scope() as session:
-            return list((await session.execute(select(AutoVoiceChannel))).scalars())
+            result = await session.execute(select(AutoVoiceChannel))
+            return list(result.scalars().all())
+
+    async def normalize_voice_transition(
+        self, guild_id: int, before_channel, after_channel
+    ):
+        """Hide Auto Voice's transient join-to-create channel from consumers."""
+        config = await self.get_module_config("auto_voice", guild_id)
+        primary_id = str(config.get("primary_channel_id") or "")
+
+        def visible(channel):
+            if channel is None:
+                return None
+            is_primary = (
+                primary_id and str(getattr(channel, "id", "")) == primary_id
+            )
+            is_named_trigger = (
+                str(getattr(channel, "name", "")).strip().casefold()
+                == "new channel"
+            )
+            return None if is_primary or is_named_trigger else channel
+
+        return visible(before_channel), visible(after_channel)
 
     async def delete_auto_voice_channel(self, channel_id: int) -> None:
         from database.engine import session_scope

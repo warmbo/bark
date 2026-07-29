@@ -310,17 +310,24 @@ class LoggingModule(BarkModule):
     async def _on_voice_state(self, event_type: str, **data):
         member, before, after = data.get("member"), data.get("before"), data.get("after")
         if not member or not member.guild: return
+        before_channel, after_channel = await self.ctx.normalize_voice_transition(
+            member.guild.id,
+            before.channel if before else None,
+            after.channel if after else None,
+        )
+        if before_channel is None and after_channel is None:
+            return
         ch = await self._get_channel(member.guild.id, "voice_state")
         if not ch: return
-        if before and before.channel is None and after and after.channel is not None:
+        if before_channel is None and after_channel is not None:
             await self._send(ch, "🔊 Voice Join", member.mention, discord.Color.green(),
-                             fields=[("User", f"{member} ({member.id})", True), ("Channel", after.channel.mention, True)])
-        elif before and before.channel is not None and after and after.channel is None:
+                             fields=[("User", f"{member} ({member.id})", True), ("Channel", after_channel.mention, True)])
+        elif before_channel is not None and after_channel is None:
             await self._send(ch, "🔇 Voice Leave", member.mention, discord.Color.red(),
-                             fields=[("User", f"{member} ({member.id})", True), ("Channel", before.channel.mention, True)])
-        elif before and after and before.channel != after.channel:
+                             fields=[("User", f"{member} ({member.id})", True), ("Channel", before_channel.mention, True)])
+        elif before_channel != after_channel:
             await self._send(ch, "🔄 Voice Move", member.mention, discord.Color.blue(),
-                             fields=[("User", f"{member} ({member.id})", True), ("From", before.channel.mention, True), ("To", after.channel.mention, True)])
+                             fields=[("User", f"{member} ({member.id})", True), ("From", before_channel.mention, True), ("To", after_channel.mention, True)])
 
     # ── API Routes (module actions) ──────────────────
 

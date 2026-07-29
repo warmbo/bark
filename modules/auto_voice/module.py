@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,13 +28,14 @@ from modules.base import (
 class ManagedChannel:
     guild_id: int
     owner_id: int
+    sequence: int = 1
 
 
 class AutoVoiceModule(BarkModule):
     """Create, configure, and clean up temporary Discord voice channels."""
 
     name = "auto_voice"
-    version = "0.2.0"
+    version = "0.3.0"
     description = "AVC-compatible temporary voice channels with dashboard configuration"
     author = "ZENHAWX"
 
@@ -41,6 +43,7 @@ class AutoVoiceModule(BarkModule):
         super().__init__(ctx)
         self._managed_channels: dict[int, ManagedChannel] = {}
         self._delete_tasks: dict[int, asyncio.Task] = {}
+        self._rename_locks: dict[int, asyncio.Lock] = {}
         self._joins_in_progress: set[int] = set()
         self._channel_sequence: dict[int, int] = {}
 
@@ -49,7 +52,10 @@ class AutoVoiceModule(BarkModule):
         return frozenset(self._managed_channels)
 
     def get_events(self) -> list[EventRegistration]:
-        return [EventRegistration("discord_voice_state", handler="_on_voice_state_update")]
+        return [
+            EventRegistration("discord_voice_state", handler="_on_voice_state_update"),
+            EventRegistration("discord_presence_update", handler="_on_presence_update"),
+        ]
 
     def get_commands(self) -> list[CommandRegistration]:
         return [
@@ -211,11 +217,20 @@ class AutoVoiceModule(BarkModule):
                 await self._forget_persisted_channel(channel_id)
                 continue
 
+            sequence_match = re.search(r"#(\d+)", str(channel.name))
+            sequence = (
+                int(sequence_match.group(1))
+                if sequence_match
+                else recovered_per_guild.get(guild_id, 0) + 1
+            )
             self._managed_channels[channel_id] = ManagedChannel(
                 guild_id=guild_id,
                 owner_id=int(row.owner_id),
+                sequence=sequence,
             )
-            recovered_per_guild[guild_id] = recovered_per_guild.get(guild_id, 0) + 1
+            recovered_per_guild[guild_id] = max(
+                recovered_per_guild.get(guild_id, 0), sequence
+            )
 
             if not channel.members:
                 config = await self.ctx.get_module_config(self.name, guild_id)
@@ -235,6 +250,7 @@ class AutoVoiceModule(BarkModule):
         for task in self._delete_tasks.values():
             task.cancel()
         self._delete_tasks.clear()
+        self._rename_locks.clear()
         self._joins_in_progress.clear()
         self._logger.info("Disabled auto voice module")
 
@@ -381,9 +397,32 @@ class AutoVoiceModule(BarkModule):
         if after_channel is not None and primary_id == int(after_channel.id):
             await self._create_for_member(member, after_channel, config)
 
-        if before_channel is not None and int(before_channel.id) in self._managed_channels:
-            if not getattr(before_channel, "members", []):
-                await self._schedule_deletion(before_channel, config)
+        if (
+            before_channel is not None
+            and int(before_channel.id) in self._managed_channels
+            and not getattr(before_channel, "members", [])
+        ):
+            await self._schedule_deletion(before_channel, config)
+
+        refreshed: set[int] = set()
+        for channel in (before_channel, after_channel):
+            channel_id = int(channel.id) if channel is not None else 0
+            if (
+                channel_id in self._managed_channels
+                and channel_id not in refreshed
+                and getattr(channel, "members", [])
+            ):
+                refreshed.add(channel_id)
+                await self._refresh_channel_name(channel, config)
+
+    async def _on_presence_update(self, event_type: str, **data) -> None:
+        member = data.get("after")
+        voice = getattr(member, "voice", None)
+        channel = getattr(voice, "channel", None)
+        if channel is None or int(channel.id) not in self._managed_channels:
+            return
+        config = await self.load_dashboard_config(int(member.guild.id))
+        await self._refresh_channel_name(channel, config)
 
     async def _create_for_member(self, member, primary, config: dict[str, Any]) -> None:
         member_id = int(member.id)
@@ -395,7 +434,8 @@ class AutoVoiceModule(BarkModule):
         self._joins_in_progress.add(member_id)
         created = None
         try:
-            name = self._render_name(member, config)
+            sequence = self._next_sequence(int(member.guild.id))
+            name = self._render_name(member, config, index=sequence)
             overwrites = self._build_overwrites(member, primary, config)
             requested_bitrate = self._config_int(
                 config, "bitrate_kbps", default=64, minimum=8, maximum=384
@@ -414,7 +454,7 @@ class AutoVoiceModule(BarkModule):
                 reason="Bark Auto Voice: join-to-create",
             )
             self._managed_channels[int(created.id)] = ManagedChannel(
-                guild_id=int(member.guild.id), owner_id=member_id
+                guild_id=int(member.guild.id), owner_id=member_id, sequence=sequence
             )
             await member.move_to(
                 created, reason="Bark Auto Voice: temporary channel created"
@@ -476,6 +516,7 @@ class AutoVoiceModule(BarkModule):
             self._logger.exception("Failed to delete empty temporary voice channel %s", channel_id)
             return
         self._managed_channels.pop(channel_id, None)
+        self._rename_locks.pop(channel_id, None)
         await self._forget_persisted_channel(channel_id)
 
     async def _forget_persisted_channel(self, channel_id: int) -> None:
@@ -502,13 +543,24 @@ class AutoVoiceModule(BarkModule):
             parsed = default
         return max(minimum, min(maximum, parsed))
 
-    def _render_name(self, member, config: dict[str, Any]) -> str:
-        template = str(config.get("channel_name_template") or "## [@@game_name@@]")
-        fallback = str(config.get("fallback_name") or "General")
-        game = self._member_game(member) or fallback
-        guild_id = int(member.guild.id)
+    def _next_sequence(self, guild_id: int) -> int:
         index = self._channel_sequence.get(guild_id, 0) + 1
         self._channel_sequence[guild_id] = index
+        return index
+
+    def _render_name(
+        self,
+        member,
+        config: dict[str, Any],
+        *,
+        game: str | None = None,
+        index: int | None = None,
+    ) -> str:
+        template = str(config.get("channel_name_template") or "## [@@game_name@@]")
+        fallback = str(config.get("fallback_name") or "General")
+        game = game or self._member_game(member) or fallback
+        guild_id = int(member.guild.id)
+        index = index or self._next_sequence(guild_id)
         replacements = {
             "##": f"#{index}",
             "@@game_name@@": game,
@@ -521,6 +573,59 @@ class AutoVoiceModule(BarkModule):
             template = template.replace(token, value)
         template = self._apply_avc_transforms(template)
         return " ".join(template.split())[:100] or f"Voice {index:02d}"
+
+    async def _refresh_channel_name(self, channel, config: dict[str, Any]) -> None:
+        channel_id = int(channel.id)
+        lock = self._rename_locks.setdefault(channel_id, asyncio.Lock())
+        async with lock:
+            await self._refresh_channel_name_locked(channel, config)
+
+    async def _refresh_channel_name_locked(
+        self, channel, config: dict[str, Any]
+    ) -> None:
+        state = self._managed_channels.get(int(channel.id))
+        members = [
+            member
+            for member in (getattr(channel, "members", []) or [])
+            if not getattr(member, "bot", False)
+        ]
+        if state is None or not members:
+            return
+        owner = None
+        get_member = getattr(channel.guild, "get_member", None)
+        if callable(get_member):
+            owner = get_member(int(state.owner_id))
+        owner = owner or members[0]
+        game = self._majority_game(members) or str(
+            config.get("fallback_name") or "General"
+        )
+        desired_name = self._render_name(
+            owner,
+            config,
+            game=game,
+            index=int(getattr(state, "sequence", 1)),
+        )
+        if desired_name == str(channel.name):
+            return
+        try:
+            await channel.edit(
+                name=desired_name,
+                reason="Bark Auto Voice: majority game changed",
+            )
+            channel.name = desired_name
+        except (discord.Forbidden, discord.HTTPException):
+            self._logger.exception(
+                "Failed to update temporary voice channel %s name", channel.id
+            )
+
+    @classmethod
+    def _majority_game(cls, members) -> str | None:
+        games = [game for member in members if (game := cls._member_game(member))]
+        if not games:
+            return None
+        counts = Counter(games)
+        game, count = counts.most_common(1)[0]
+        return game if count > len(members) / 2 else None
 
     @staticmethod
     def _apply_avc_transforms(template: str) -> str:
@@ -553,6 +658,9 @@ class AutoVoiceModule(BarkModule):
     @staticmethod
     def _member_game(member) -> str | None:
         for activity in getattr(member, "activities", []) or []:
+            activity_type = getattr(activity, "type", None)
+            if activity_type not in (None, discord.ActivityType.playing):
+                continue
             name = getattr(activity, "name", None)
             if name:
                 return str(name)

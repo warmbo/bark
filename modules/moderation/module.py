@@ -556,22 +556,27 @@ class ModerationModule(BarkModule):
         guild_id = member.guild.id
         user_id = str(member.id)
         now = datetime.now(timezone.utc)
+        before_channel, after_channel = await self.ctx.normalize_voice_transition(
+            guild_id,
+            before.channel if before else None,
+            after.channel if after else None,
+        )
 
-        if before and before.channel is None and after and after.channel is not None:
+        if before_channel is None and after_channel is not None:
             async with session_scope() as session:
                 session.add(VoiceSession(
                     guild_id=str(guild_id), user_id=user_id, user_tag=str(member),
-                    channel_id=str(after.channel.id), channel_name=after.channel.name,
+                    channel_id=str(after_channel.id), channel_name=after_channel.name,
                     joined_at=now,
                 ))
                 await session.commit()
 
-        elif before and before.channel is not None and after and after.channel is None:
+        elif before_channel is not None and after_channel is None:
             async with session_scope() as session:
                 result = await session.execute(
                     select(VoiceSession)
                     .where(VoiceSession.guild_id == str(guild_id), VoiceSession.user_id == user_id,
-                           VoiceSession.channel_id == str(before.channel.id),
+                           VoiceSession.channel_id == str(before_channel.id),
                            VoiceSession.left_at.is_(None))
                     .order_by(desc(VoiceSession.joined_at)).limit(1)
                 )
@@ -581,14 +586,14 @@ class ModerationModule(BarkModule):
                     rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
                     await session.commit()
 
-        elif before and before.channel is not None and after and after.channel is not None \
-                and before.channel.id != after.channel.id:
+        elif before_channel is not None and after_channel is not None \
+                and before_channel.id != after_channel.id:
             # Member moved between voice channels — close old session, open new one
             async with session_scope() as session:
                 result = await session.execute(
                     select(VoiceSession)
                     .where(VoiceSession.guild_id == str(guild_id), VoiceSession.user_id == user_id,
-                           VoiceSession.channel_id == str(before.channel.id),
+                           VoiceSession.channel_id == str(before_channel.id),
                            VoiceSession.left_at.is_(None))
                     .order_by(desc(VoiceSession.joined_at)).limit(1)
                 )
@@ -598,7 +603,7 @@ class ModerationModule(BarkModule):
                     rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
                 session.add(VoiceSession(
                     guild_id=str(guild_id), user_id=user_id, user_tag=str(member),
-                    channel_id=str(after.channel.id), channel_name=after.channel.name,
+                    channel_id=str(after_channel.id), channel_name=after_channel.name,
                     joined_at=now,
                 ))
                 await session.commit()

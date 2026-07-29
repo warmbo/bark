@@ -223,6 +223,13 @@ class BarkBot(commands.Bot):
         await bus.emit("discord_voice_state", member=member, before=before, after=after)
         await bus.emit("voice_state_change", member=member, before=before, after=after)
 
+    async def on_presence_update(
+        self, before: discord.Member, after: discord.Member
+    ) -> None:
+        await self.modules.event_bus.emit(
+            "discord_presence_update", before=before, after=after
+        )
+
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
         bus = self.modules.event_bus
         await bus.emit("raw_reaction_add", payload=payload)

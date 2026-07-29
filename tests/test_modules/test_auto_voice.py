@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import discord
 import pytest
 
 from modules.auto_voice.module import AutoVoiceModule
@@ -172,6 +173,7 @@ async def test_enable_recovers_occupied_temporary_channels_after_restart(db):
                 primary_channel_id=str(primary.id),
             )
         )
+    temporary.name = "#7 [General]"
     temporary.members = [member]
     guild.channels.append(temporary)
     _use_database_state(ctx)
@@ -182,6 +184,8 @@ async def test_enable_recovers_occupied_temporary_channels_after_restart(db):
 
     assert module.managed_channel_ids == frozenset({temporary.id})
     assert module._managed_channels[temporary.id].owner_id == member.id
+    assert module._managed_channels[temporary.id].sequence == 7
+    assert module._channel_sequence[guild.id] == 7
     temporary.delete.assert_not_awaited()
 
 
@@ -361,6 +365,142 @@ def test_channel_sequence_is_unique_before_discord_creation_finishes():
 
     assert module._render_name(member, {"channel_name_template": "## Room"}) == "#1 Room"
     assert module._render_name(other_member, {"channel_name_template": "## Room"}) == "#2 Room"
+
+
+def test_game_detection_ignores_custom_status_before_playing_activity():
+    ctx, _guild, member, *_ = _voice_fixture()
+    member.activities = [
+        SimpleNamespace(type=discord.ActivityType.custom, name="Custom Status"),
+        SimpleNamespace(type=discord.ActivityType.playing, name="Minecraft"),
+    ]
+
+    assert AutoVoiceModule(ctx)._member_game(member) == "Minecraft"
+
+
+@pytest.mark.asyncio
+async def test_managed_channel_uses_game_played_by_majority_of_members():
+    config = {
+        "primary_channel_id": "100",
+        "channel_name_template": "## [@@game_name@@]",
+        "fallback_name": "Hangout",
+    }
+    ctx, guild, owner, _primary, temporary, disconnected, _joined = _voice_fixture(config)
+    owner.activities = [SimpleNamespace(name="Minecraft")]
+    player_two = _HashableNamespace(
+        id=43,
+        bot=False,
+        name="two",
+        display_name="Two",
+        guild=guild,
+        activities=[SimpleNamespace(name="Helldivers 2")],
+    )
+    player_three = _HashableNamespace(
+        id=44,
+        bot=False,
+        name="three",
+        display_name="Three",
+        guild=guild,
+        activities=[SimpleNamespace(name="Helldivers 2")],
+    )
+    temporary.members = [owner, player_two, player_three]
+    guild.get_member = lambda member_id: owner if member_id == owner.id else None
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=owner.id, sequence=1
+    )
+
+    await module._on_voice_state_update(
+        "discord_voice_state",
+        member=player_three,
+        before=disconnected,
+        after=SimpleNamespace(channel=temporary),
+    )
+
+    temporary.edit.assert_awaited_once_with(
+        name="#1 [Helldivers 2]",
+        reason="Bark Auto Voice: majority game changed",
+    )
+
+
+@pytest.mark.asyncio
+async def test_one_player_does_not_define_game_for_three_member_channel():
+    config = {
+        "channel_name_template": "## [@@game_name@@]",
+        "fallback_name": "Hangout",
+    }
+    ctx, guild, owner, _primary, temporary, disconnected, _joined = _voice_fixture(config)
+    owner.activities = [SimpleNamespace(name="Minecraft")]
+    idle_two = _HashableNamespace(id=43, bot=False, guild=guild, activities=[])
+    idle_three = _HashableNamespace(id=44, bot=False, guild=guild, activities=[])
+    temporary.members = [owner, idle_two, idle_three]
+    guild.get_member = lambda member_id: owner if member_id == owner.id else None
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=owner.id, sequence=1
+    )
+
+    await module._on_voice_state_update(
+        "discord_voice_state",
+        member=idle_three,
+        before=disconnected,
+        after=SimpleNamespace(channel=temporary),
+    )
+
+    temporary.edit.assert_awaited_once_with(
+        name="#1 [Hangout]",
+        reason="Bark Auto Voice: majority game changed",
+    )
+
+
+@pytest.mark.asyncio
+async def test_presence_activity_change_refreshes_managed_channel_name():
+    config = {
+        "channel_name_template": "## [@@game_name@@]",
+        "fallback_name": "Hangout",
+    }
+    ctx, guild, owner, _primary, temporary, *_ = _voice_fixture(config)
+    owner.activities = [SimpleNamespace(name="Minecraft")]
+    owner.voice = SimpleNamespace(channel=temporary)
+    temporary.members = [owner]
+    guild.get_member = lambda member_id: owner if member_id == owner.id else None
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=owner.id, sequence=1
+    )
+
+    await module._on_presence_update(
+        "discord_presence_update", before=owner, after=owner
+    )
+
+    temporary.edit.assert_awaited_once_with(
+        name="#1 [Minecraft]",
+        reason="Bark Auto Voice: majority game changed",
+    )
+
+
+@pytest.mark.asyncio
+async def test_concurrent_majority_refreshes_only_rename_channel_once():
+    config = {"channel_name_template": "## [@@game_name@@]"}
+    ctx, guild, owner, _primary, temporary, *_ = _voice_fixture(config)
+    owner.activities = [SimpleNamespace(name="Minecraft")]
+    temporary.members = [owner]
+    guild.get_member = lambda member_id: owner if member_id == owner.id else None
+
+    async def delayed_edit(**_kwargs):
+        await asyncio.sleep(0)
+
+    temporary.edit = AsyncMock(side_effect=delayed_edit)
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=owner.id, sequence=1
+    )
+
+    await asyncio.gather(
+        module._refresh_channel_name(temporary, config),
+        module._refresh_channel_name(temporary, config),
+    )
+
+    assert temporary.edit.await_count == 1
 
 
 @pytest.mark.asyncio
