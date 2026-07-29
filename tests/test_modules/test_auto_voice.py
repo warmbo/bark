@@ -15,7 +15,23 @@ class _Context:
     def __init__(self, config):
         self.get_module_config = AsyncMock(return_value=config)
         self.save_module_config = AsyncMock()
+        self.save_auto_voice_channel = AsyncMock()
+        self.list_auto_voice_channels = AsyncMock(return_value=[])
+        self.delete_auto_voice_channel = AsyncMock()
+        self.get_guild = MagicMock(return_value=None)
         self.bot = SimpleNamespace(user=SimpleNamespace(id=999))
+
+
+def _use_database_state(ctx):
+    """Bind BarkContext's real persistence methods to a lightweight test context."""
+    from services.bark_context import BarkContext
+
+    for name in (
+        "save_auto_voice_channel",
+        "list_auto_voice_channels",
+        "delete_auto_voice_channel",
+    ):
+        setattr(ctx, name, getattr(BarkContext, name).__get__(ctx, type(ctx)))
 
 
 def _voice_fixture(config=None):
@@ -78,7 +94,7 @@ def test_schema_exposes_avc_behavior_as_dashboard_configuration():
     schema = module.get_settings_schema()
     fields = schema["properties"]
 
-    assert fields["primary_channel_id"]["format"] == "channel_select"
+    assert fields["primary_channel_id"]["format"] == "voice_channel_select"
     assert fields["channel_name_template"]["default"] == "## [@@game_name@@]"
     assert fields["user_limit"]["maximum"] == 99
     assert fields["bitrate_kbps"]["minimum"] == 8
@@ -101,7 +117,7 @@ async def test_joining_primary_creates_configured_channel_and_moves_member():
 
     guild.create_voice_channel.assert_awaited_once()
     kwargs = guild.create_voice_channel.await_args.kwargs
-    assert kwargs["name"] == "01 Cody's room"
+    assert kwargs["name"] == "#1 Cody's room"
     assert kwargs["category"] is primary.category
     assert kwargs["user_limit"] == 6
     assert kwargs["bitrate"] == 64_000
@@ -110,6 +126,79 @@ async def test_joining_primary_creates_configured_channel_and_moves_member():
         temporary, reason="Bark Auto Voice: temporary channel created"
     )
     assert temporary.id in module.managed_channel_ids
+
+
+@pytest.mark.asyncio
+async def test_created_channel_is_persisted_for_restart_recovery(db):
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.auto_voice import AutoVoiceChannel
+    from database.models.guild import Guild
+
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture()
+    async with session_scope() as session:
+        session.add(Guild(discord_id=str(guild.id), name=guild.name))
+    _use_database_state(ctx)
+    module = AutoVoiceModule(ctx)
+
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=disconnected, after=joined_primary
+    )
+
+    async with session_scope() as session:
+        row = (await session.execute(select(AutoVoiceChannel))).scalar_one()
+    assert row.channel_id == str(temporary.id)
+    assert row.guild_id == str(guild.id)
+    assert row.owner_id == str(member.id)
+    assert row.primary_channel_id == str(primary.id)
+
+
+@pytest.mark.asyncio
+async def test_enable_recovers_occupied_temporary_channels_after_restart(db):
+    from database.engine import session_scope
+    from database.models.auto_voice import AutoVoiceChannel
+    from database.models.guild import Guild
+
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture()
+    async with session_scope() as session:
+        session.add(Guild(discord_id=str(guild.id), name=guild.name))
+    async with session_scope() as session:
+        session.add(
+            AutoVoiceChannel(
+                channel_id=str(temporary.id),
+                guild_id=str(guild.id),
+                owner_id=str(member.id),
+                primary_channel_id=str(primary.id),
+            )
+        )
+    temporary.members = [member]
+    guild.channels.append(temporary)
+    _use_database_state(ctx)
+    ctx.get_guild = MagicMock(return_value=guild)
+    module = AutoVoiceModule(ctx)
+
+    await module.enable()
+
+    assert module.managed_channel_ids == frozenset({temporary.id})
+    assert module._managed_channels[temporary.id].owner_id == member.id
+    temporary.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_blank_optional_numeric_settings_use_safe_defaults():
+    ctx, guild, member, primary, _temporary, disconnected, joined_primary = _voice_fixture(
+        {"primary_channel_id": "100", "user_limit": "", "bitrate_kbps": ""}
+    )
+    module = AutoVoiceModule(ctx)
+
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=disconnected, after=joined_primary
+    )
+
+    kwargs = guild.create_voice_channel.await_args.kwargs
+    assert kwargs["user_limit"] == 0
+    assert kwargs["bitrate"] == 64_000
 
 
 @pytest.mark.asyncio
@@ -173,6 +262,46 @@ async def test_empty_managed_channel_is_deleted_when_last_member_leaves():
 
 
 @pytest.mark.asyncio
+async def test_deleted_channel_is_removed_from_restart_recovery_state(db):
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.auto_voice import AutoVoiceChannel
+    from database.models.guild import Guild
+
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture()
+    async with session_scope() as session:
+        session.add(Guild(discord_id=str(guild.id), name=guild.name))
+    async with session_scope() as session:
+        session.add(
+            AutoVoiceChannel(
+                channel_id=str(temporary.id),
+                guild_id=str(guild.id),
+                owner_id=str(member.id),
+                primary_channel_id=str(primary.id),
+            )
+        )
+    _use_database_state(ctx)
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id
+    )
+
+    await module._on_voice_state_update(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=temporary),
+        after=disconnected,
+    )
+    cleanup_task = module._delete_tasks[temporary.id]
+    await cleanup_task
+
+    async with session_scope() as session:
+        rows = (await session.execute(select(AutoVoiceChannel))).scalars().all()
+    assert rows == []
+
+
+@pytest.mark.asyncio
 async def test_pending_deletion_is_cancelled_when_member_rejoins():
     config = {
         "primary_channel_id": "100",
@@ -206,6 +335,17 @@ async def test_pending_deletion_is_cancelled_when_member_rejoins():
     assert temporary.id not in module._delete_tasks
 
 
+def test_avc_numbering_and_lowercase_transform_are_compatible():
+    ctx, _guild, member, *_ = _voice_fixture()
+    member.activities = [SimpleNamespace(name="World Of Warcraft")]
+    module = AutoVoiceModule(ctx)
+
+    assert module._render_name(
+        member,
+        {"channel_name_template": '## [""lower:@@game_name@@""]'},
+    ) == "#1 [world of warcraft]"
+
+
 def test_channel_sequence_is_unique_before_discord_creation_finishes():
     ctx, guild, member, *_ = _voice_fixture(
         {"channel_name_template": "## Room"}
@@ -219,8 +359,8 @@ def test_channel_sequence_is_unique_before_discord_creation_finishes():
         activities=[],
     )
 
-    assert module._render_name(member, {"channel_name_template": "## Room"}) == "01 Room"
-    assert module._render_name(other_member, {"channel_name_template": "## Room"}) == "02 Room"
+    assert module._render_name(member, {"channel_name_template": "## Room"}) == "#1 Room"
+    assert module._render_name(other_member, {"channel_name_template": "## Room"}) == "#2 Room"
 
 
 @pytest.mark.asyncio

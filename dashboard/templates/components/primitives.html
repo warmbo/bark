@@ -38,6 +38,8 @@
     <select id="{{ field_id }}" class="form-select api-select" name="{{ name }}" data-api="/api/v1/guilds/{guild_id}/roles" data-value-key="id" data-label-key="name" data-value="{{ value | default('') }}"><option value="">Select a role…</option></select>
     {% elif prop.format == 'channel_select' %}
     <select id="{{ field_id }}" class="form-select api-select" name="{{ name }}" data-api="/api/v1/guilds/{guild_id}/channels" data-value-key="id" data-label-key="name" data-group-key="parent_name" data-value="{{ value | default('') }}"><option value="">Select a channel…</option></select>
+    {% elif prop.format == 'voice_channel_select' %}
+    <select id="{{ field_id }}" class="form-select api-select" name="{{ name }}" data-api="/api/v1/guilds/{guild_id}/channels?type=voice" data-value-key="id" data-label-key="name" data-group-key="parent_name" data-value="{{ value | default('') }}"><option value="">Select a voice channel…</option></select>
     {% elif prop.enum %}
     <select id="{{ field_id }}" class="form-select" name="{{ name }}">{% for option in prop.enum %}<option value="{{ option }}" {{ 'selected' if value == option else '' }}>{{ option | replace('_', ' ') | title }}</option>{% endfor %}</select>
     {% elif prop.type == 'array' %}

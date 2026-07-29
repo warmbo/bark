@@ -8,6 +8,7 @@ exposing the behavior through Bark's dashboard schema.
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,7 +33,7 @@ class AutoVoiceModule(BarkModule):
     """Create, configure, and clean up temporary Discord voice channels."""
 
     name = "auto_voice"
-    version = "0.1.0"
+    version = "0.2.0"
     description = "AVC-compatible temporary voice channels with dashboard configuration"
     author = "ZENHAWX"
 
@@ -101,7 +102,7 @@ class AutoVoiceModule(BarkModule):
             "properties": {
                 "primary_channel_id": {
                     "type": "string",
-                    "format": "channel_select",
+                    "format": "voice_channel_select",
                     "title": "Join-to-Create Channel",
                     "description": "Joining this voice channel creates a temporary channel.",
                     "placeholder": "Select a voice channel...",
@@ -184,6 +185,51 @@ class AutoVoiceModule(BarkModule):
 
     async def enable(self) -> None:
         self._logger.info("Enabling auto voice module v%s", self.version)
+        await self._recover_managed_channels()
+
+    async def _recover_managed_channels(self) -> None:
+        """Restore ownership and cleanup tracking after a Bark restart."""
+        rows = await self.ctx.list_auto_voice_channels()
+
+        recovered_per_guild: dict[int, int] = {}
+        for row in rows:
+            guild_id = int(row.guild_id)
+            channel_id = int(row.channel_id)
+            guild = self.ctx.get_guild(guild_id)
+            channel = None
+            if guild is not None:
+                get_channel = getattr(guild, "get_channel", None)
+                if callable(get_channel):
+                    channel = get_channel(channel_id)
+                if channel is None:
+                    channel = next(
+                        (item for item in getattr(guild, "channels", []) if int(item.id) == channel_id),
+                        None,
+                    )
+
+            if channel is None or not hasattr(channel, "members"):
+                await self._forget_persisted_channel(channel_id)
+                continue
+
+            self._managed_channels[channel_id] = ManagedChannel(
+                guild_id=guild_id,
+                owner_id=int(row.owner_id),
+            )
+            recovered_per_guild[guild_id] = recovered_per_guild.get(guild_id, 0) + 1
+
+            if not channel.members:
+                config = await self.ctx.get_module_config(self.name, guild_id)
+                await self._schedule_deletion(channel, config)
+
+        for guild_id, count in recovered_per_guild.items():
+            self._channel_sequence[guild_id] = max(
+                self._channel_sequence.get(guild_id, 0), count
+            )
+        if rows:
+            self._logger.info(
+                "Recovered %d active temporary voice channel(s)",
+                len(self._managed_channels),
+            )
 
     async def disable(self) -> None:
         for task in self._delete_tasks.values():
@@ -351,8 +397,8 @@ class AutoVoiceModule(BarkModule):
         try:
             name = self._render_name(member, config)
             overwrites = self._build_overwrites(member, primary, config)
-            requested_bitrate = max(
-                8, min(384, int(config.get("bitrate_kbps", 64)))
+            requested_bitrate = self._config_int(
+                config, "bitrate_kbps", default=64, minimum=8, maximum=384
             ) * 1000
             guild_bitrate_limit = int(
                 getattr(member.guild, "bitrate_limit", requested_bitrate)
@@ -362,7 +408,9 @@ class AutoVoiceModule(BarkModule):
                 category=getattr(primary, "category", None),
                 overwrites=overwrites,
                 bitrate=min(requested_bitrate, guild_bitrate_limit),
-                user_limit=max(0, min(99, int(config.get("user_limit", 0)))),
+                user_limit=self._config_int(
+                    config, "user_limit", default=0, minimum=0, maximum=99
+                ),
                 reason="Bark Auto Voice: join-to-create",
             )
             self._managed_channels[int(created.id)] = ManagedChannel(
@@ -371,6 +419,7 @@ class AutoVoiceModule(BarkModule):
             await member.move_to(
                 created, reason="Bark Auto Voice: temporary channel created"
             )
+            await self._persist_managed_channel(created, member, primary)
         except (discord.Forbidden, discord.HTTPException, TypeError, ValueError):
             self._logger.exception("Failed to create temporary voice channel")
             if created is not None:
@@ -382,11 +431,25 @@ class AutoVoiceModule(BarkModule):
         finally:
             self._joins_in_progress.discard(member_id)
 
+    async def _persist_managed_channel(self, channel, member, primary) -> None:
+        await self.ctx.save_auto_voice_channel(
+            channel_id=int(channel.id),
+            guild_id=int(member.guild.id),
+            owner_id=int(member.id),
+            primary_channel_id=int(primary.id),
+        )
+
     async def _schedule_deletion(self, channel, config: dict[str, Any]) -> None:
         channel_id = int(channel.id)
         if channel_id in self._delete_tasks:
             return
-        delay = max(0, min(3600, int(config.get("empty_delete_delay_seconds", 0))))
+        delay = self._config_int(
+            config,
+            "empty_delete_delay_seconds",
+            default=5,
+            minimum=0,
+            maximum=3600,
+        )
 
         async def delayed_delete() -> None:
             try:
@@ -413,11 +476,31 @@ class AutoVoiceModule(BarkModule):
             self._logger.exception("Failed to delete empty temporary voice channel %s", channel_id)
             return
         self._managed_channels.pop(channel_id, None)
+        await self._forget_persisted_channel(channel_id)
+
+    async def _forget_persisted_channel(self, channel_id: int) -> None:
+        await self.ctx.delete_auto_voice_channel(channel_id)
 
     def _cancel_deletion(self, channel_id: int) -> None:
         task = self._delete_tasks.pop(channel_id, None)
         if task is not None:
             task.cancel()
+
+    @staticmethod
+    def _config_int(
+        config: dict[str, Any],
+        key: str,
+        *,
+        default: int,
+        minimum: int,
+        maximum: int,
+    ) -> int:
+        value = config.get(key, default)
+        try:
+            parsed = int(value) if value not in (None, "") else default
+        except (TypeError, ValueError):
+            parsed = default
+        return max(minimum, min(maximum, parsed))
 
     def _render_name(self, member, config: dict[str, Any]) -> str:
         template = str(config.get("channel_name_template") or "## [@@game_name@@]")
@@ -427,7 +510,7 @@ class AutoVoiceModule(BarkModule):
         index = self._channel_sequence.get(guild_id, 0) + 1
         self._channel_sequence[guild_id] = index
         replacements = {
-            "##": f"{index:02d}",
+            "##": f"#{index}",
             "@@game_name@@": game,
             "{game}": game,
             "{display_name}": str(getattr(member, "display_name", member.name)),
@@ -436,7 +519,36 @@ class AutoVoiceModule(BarkModule):
         }
         for token, value in replacements.items():
             template = template.replace(token, value)
+        template = self._apply_avc_transforms(template)
         return " ".join(template.split())[:100] or f"Voice {index:02d}"
+
+    @staticmethod
+    def _apply_avc_transforms(template: str) -> str:
+        """Apply AVC's quoted text transforms used by legacy templates."""
+        transform = re.compile(r'""([^":]+):\s*(.*?)""')
+        operations = {
+            "caps": str.upper,
+            "upper": str.upper,
+            "lower": str.lower,
+            "title": str.title,
+            "swap": str.swapcase,
+            "acro": lambda value: "".join(
+                word[0].upper() for word in value.split() if word
+            ),
+            "spaces": lambda value: "".join(value.split()),
+        }
+
+        def replace(match: re.Match[str]) -> str:
+            value = match.group(2).strip()
+            for mode in match.group(1).split("+"):
+                operation = operations.get(mode.strip().lower())
+                if operation is not None:
+                    value = operation(value)
+            return value
+
+        while transform.search(template):
+            template = transform.sub(replace, template)
+        return template
 
     @staticmethod
     def _member_game(member) -> str | None:

@@ -126,6 +126,47 @@ class BarkContext:
             await session.commit()
             return True
 
+    # ── Auto Voice persistent runtime state ─────────────
+
+    async def save_auto_voice_channel(
+        self,
+        *,
+        channel_id: int,
+        guild_id: int,
+        owner_id: int,
+        primary_channel_id: int,
+    ) -> None:
+        from database.engine import session_scope
+        from database.models.auto_voice import AutoVoiceChannel
+
+        async with session_scope() as session:
+            await session.merge(
+                AutoVoiceChannel(
+                    channel_id=str(channel_id),
+                    guild_id=str(guild_id),
+                    owner_id=str(owner_id),
+                    primary_channel_id=str(primary_channel_id),
+                )
+            )
+
+    async def list_auto_voice_channels(self) -> list:
+        from sqlalchemy import select
+
+        from database.engine import session_scope
+        from database.models.auto_voice import AutoVoiceChannel
+
+        async with session_scope() as session:
+            return list((await session.execute(select(AutoVoiceChannel))).scalars())
+
+    async def delete_auto_voice_channel(self, channel_id: int) -> None:
+        from database.engine import session_scope
+        from database.models.auto_voice import AutoVoiceChannel
+
+        async with session_scope() as session:
+            row = await session.get(AutoVoiceChannel, str(channel_id))
+            if row is not None:
+                await session.delete(row)
+
     # ── Service-delegated operations ────────────────────
 
     async def log_audit(self, guild_id: int, action: str, actor_id: str, actor_tag: str = "",

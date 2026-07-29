@@ -141,6 +141,52 @@ async def test_list_guilds(client):
 
 
 @pytest.mark.asyncio
+async def test_guild_channel_endpoint_filters_voice_channels(client, app, monkeypatch):
+    from types import SimpleNamespace
+
+    from dashboard.routes.api import guilds as guild_routes
+
+    class FakeTextChannel:
+        pass
+
+    class FakeVoiceChannel:
+        pass
+
+    text = FakeTextChannel()
+    voice = FakeVoiceChannel()
+    for channel, channel_id, name, position in (
+        (text, 10, "general", 1),
+        (voice, 20, "Join to Create", 2),
+    ):
+        channel.id = channel_id
+        channel.name = name
+        channel.category = SimpleNamespace(name="Channels")
+        channel.position = position
+        channel.type = "text" if channel is text else "voice"
+
+    guild = app.state.bot.get_guild(1)
+    guild.channels = [text, voice]
+    monkeypatch.setattr(guild_routes.discord, "TextChannel", FakeTextChannel)
+    monkeypatch.setattr(guild_routes.discord, "VoiceChannel", FakeVoiceChannel)
+
+    text_response = await client.get("/api/v1/guilds/1/channels")
+    assert text_response.status_code == 200
+    assert [item["id"] for item in text_response.json()["data"]["channels"]] == ["10"]
+
+    response = await client.get("/api/v1/guilds/1/channels", params={"type": "voice"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["channels"] == [
+        {
+            "id": "20",
+            "name": "Join to Create",
+            "parent_name": "Channels",
+            "type": "voice",
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_module_toggle_updates_only_the_target_guild(client, app):
     from unittest.mock import AsyncMock, MagicMock
 
@@ -280,6 +326,40 @@ def test_module_config_validation_rejects_array_and_enum_type_drift():
 
     assert "ignored_roles: expected array, got str" in errors
     assert "mode: expected one of safe, strict" in errors
+
+
+@pytest.mark.asyncio
+async def test_module_voice_channel_field_uses_voice_only_endpoint(client, app):
+    from unittest.mock import AsyncMock, MagicMock
+
+    module = MagicMock()
+    module.version = "1.0.0"
+    module.description = "Auto voice"
+    module.author = "Bark"
+    module.get_settings_schema.return_value = {
+        "type": "object",
+        "properties": {
+            "primary_channel_id": {
+                "type": "string",
+                "format": "voice_channel_select",
+                "title": "Join-to-Create Channel",
+            }
+        },
+    }
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    module.get_about.return_value = []
+    module.get_actions.return_value = []
+    module.get_extra_tabs.return_value = []
+    module.load_dashboard_config = AsyncMock(return_value={})
+    app.state.bot.modules.get_module.return_value = module
+
+    response = await client.get("/guild/1/modules/auto_voice")
+
+    assert response.status_code == 200
+    assert 'data-api="/api/v1/guilds/{guild_id}/channels?type=voice"' in response.text
+    assert "Select a voice channel…" in response.text
 
 
 @pytest.mark.asyncio

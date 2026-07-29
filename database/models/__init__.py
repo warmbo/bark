@@ -10,3 +10,4 @@ from database.models.permissions import DashboardGuildAccess, DashboardUser, Mod
 from database.models.attachments import FileAttachment
 from database.models.voice import VoiceSession
 from database.models.analytics import ActivitySnapshot
+from database.models.auto_voice import AutoVoiceChannel

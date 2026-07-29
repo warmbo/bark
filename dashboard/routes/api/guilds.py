@@ -174,11 +174,20 @@ async def get_guild_roles(request: Request, guild_id: int):
 
 @router.get("/guilds/{guild_id}/channels")
 async def get_guild_channels(request: Request, guild_id: int):
-    """List all text channels in a guild for posting."""
+    """List text or voice channels in a guild for schema-backed selectors."""
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:
         return api_not_found("Guild")
+
+    channel_type = request.query_params.get("type", "text")
+    channel_classes = {
+        "text": discord.TextChannel,
+        "voice": discord.VoiceChannel,
+    }
+    channel_class = channel_classes.get(channel_type)
+    if channel_class is None:
+        return api_error("Channel type must be 'text' or 'voice'", status_code=400)
 
     return api_success({
         "channels": [
@@ -189,7 +198,7 @@ async def get_guild_channels(request: Request, guild_id: int):
                 "type": str(c.type),
             }
             for c in sorted(guild.channels, key=lambda x: (x.category.name if x.category else "", x.position))
-            if isinstance(c, discord.TextChannel)
+            if isinstance(c, channel_class)
         ]
     })
 
