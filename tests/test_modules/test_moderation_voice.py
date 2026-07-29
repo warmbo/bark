@@ -151,3 +151,52 @@ async def test_join_to_create_transition_records_only_final_channel(db):
         ]
     finally:
         await manager.disable_all()
+
+
+@pytest.mark.asyncio
+async def test_mutated_voice_state_does_not_create_duplicate_managed_session(db):
+    guild_id = 987654323
+    user_id = 123456791
+    primary = SimpleNamespace(id=100, name="new channel")
+    managed = SimpleNamespace(id=200, name="hangout")
+    guild = SimpleNamespace(id=guild_id)
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id=str(guild_id), name="Auto Voice guild", owner_id="1"))
+        session.add(
+            ModuleConfig(
+                guild_id=str(guild_id),
+                module_name="auto_voice",
+                enabled=True,
+                config=json.dumps({"primary_channel_id": str(primary.id)}),
+            )
+        )
+
+    manager = ModuleManager(_Bot(guild))  # type: ignore[arg-type]
+    manager.discover()
+    manager.load_guild_states([(guild_id, "moderation", True)])
+    assert await manager.enable_module("moderation")
+    member = SimpleNamespace(id=user_id, guild=guild)
+
+    try:
+        await manager.event_bus.emit(
+            "voice_state_change",
+            member=member,
+            before=SimpleNamespace(channel=None),
+            after=SimpleNamespace(channel=managed),
+            before_channel=None,
+            after_channel=primary,
+        )
+
+        async with session_scope() as session:
+            records = (
+                await session.execute(
+                    select(VoiceSession).where(
+                        VoiceSession.guild_id == str(guild_id),
+                        VoiceSession.user_id == str(user_id),
+                    )
+                )
+            ).scalars().all()
+        assert records == []
+    finally:
+        await manager.disable_all()

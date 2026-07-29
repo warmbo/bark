@@ -52,3 +52,39 @@ async def test_join_to_create_transition_logs_only_the_final_voice_channel():
         ("User", f"{member} ({member.id})", True),
         ("Channel", managed.mention, True),
     ]
+
+
+@pytest.mark.asyncio
+async def test_logging_uses_original_channel_snapshot_when_voice_state_is_mutated():
+    guild = SimpleNamespace(id=10)
+    member = SimpleNamespace(
+        id=42,
+        guild=guild,
+        mention="<@42>",
+        bot=False,
+    )
+    primary = SimpleNamespace(id=100, name="new channel", mention="<#100>")
+    managed = SimpleNamespace(id=200, name="hangout", mention="<#200>")
+    before = SimpleNamespace(channel=None)
+    after = SimpleNamespace(channel=managed)
+
+    ctx = BarkContext(SimpleNamespace(), EventBus())
+    ctx.get_module_config = AsyncMock(
+        side_effect=lambda module, _guild_id: (
+            {"primary_channel_id": str(primary.id)} if module == "auto_voice" else {}
+        )
+    )
+    module = LoggingModule(ctx)
+    module._get_channel = AsyncMock(return_value=SimpleNamespace())
+    module._send = AsyncMock()
+
+    await module._on_voice_state(
+        "discord_voice_state",
+        member=member,
+        before=before,
+        after=after,
+        before_channel=None,
+        after_channel=primary,
+    )
+
+    module._send.assert_not_awaited()

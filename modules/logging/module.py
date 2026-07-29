@@ -312,8 +312,8 @@ class LoggingModule(BarkModule):
         if not member or not member.guild: return
         before_channel, after_channel = await self.ctx.normalize_voice_transition(
             member.guild.id,
-            before.channel if before else None,
-            after.channel if after else None,
+            data.get("before_channel", before.channel if before else None),
+            data.get("after_channel", after.channel if after else None),
         )
         if before_channel is None and after_channel is None:
             return

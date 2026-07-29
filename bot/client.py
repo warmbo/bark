@@ -220,8 +220,18 @@ class BarkBot(commands.Bot):
         self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState
     ) -> None:
         bus = self.modules.event_bus
-        await bus.emit("discord_voice_state", member=member, before=before, after=after)
-        await bus.emit("voice_state_change", member=member, before=before, after=after)
+        # discord.py reuses the cached `after` VoiceState object and mutates it
+        # when Auto Voice's move generates the next gateway event. Snapshot the
+        # channels before any handler can await or trigger another transition.
+        payload = {
+            "member": member,
+            "before": before,
+            "after": after,
+            "before_channel": before.channel,
+            "after_channel": after.channel,
+        }
+        await bus.emit("discord_voice_state", **payload)
+        await bus.emit("voice_state_change", **payload)
 
     async def on_presence_update(
         self, before: discord.Member, after: discord.Member
