@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+  <!-- Dog silhouette - simple bark icon -->
+  <g fill="#ffffff">
+    <!-- Ear left -->
+    <path d="M152 148c-8-4-14-12-16-22l-4-18c-2-8 4-16 12-16s14 6 14 14l2 26c0 8-4 16-8 20v-4z"/>
+    <!-- Ear right -->
+    <path d="M360 148c8-4 14-12 16-22l4-18c2-8-4-16-12-16s-14 6-14 14l-2 26c0 8 4 16 8 20v-4z"/>
+    <!-- Head -->
+    <ellipse cx="256" cy="240" rx="120" ry="100"/>
+    <!-- Muzzle -->
+    <ellipse cx="256" cy="270" rx="70" ry="50"/>
+    <!-- Eyes -->
+    <ellipse cx="210" cy="222" rx="18" ry="20" fill="#1e40af"/>
+    <ellipse cx="302" cy="222" rx="18" ry="20" fill="#1e40af"/>
+    <!-- Eye highlights -->
+    <circle cx="216" cy="216" r="6" fill="#ffffff"/>
+    <circle cx="308" cy="216" r="6" fill="#ffffff"/>
+    <!-- Nose -->
+    <ellipse cx="256" cy="260" rx="14" ry="10" fill="#1e40af"/>
+    <!-- Mouth / tongue -->
+    <path d="M240 280q16 20 32 0" stroke="#ef4444" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="256" cy="292" rx="10" ry="12" fill="#ef4444"/>
+    <!-- Collar -->
+    <rect x="210" y="310" width="92" height="10" rx="4" fill="#fbbf24"/>
+    <!-- Bone -->
+    <rect x="228" y="15" width="10" height="28" rx="4" fill="#ffffff" transform="rotate(-15 233 29)"/>
+    <circle cx="225" cy="15" r="8" fill="#ffffff"/>
+    <circle cx="241" cy="15" r="8" fill="#ffffff"/>
+    <circle cx="225" cy="43" r="8" fill="#ffffff"/>
+    <circle cx="241" cy="43" r="8" fill="#ffffff"/>
+  </g>
+</svg>

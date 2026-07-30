@@ -11,3 +11,4 @@ from database.models.attachments import FileAttachment
 from database.models.voice import VoiceSession
 from database.models.analytics import ActivitySnapshot
 from database.models.auto_voice import AutoVoiceChannel
+from database.models.reputation import ReputationProfile, ReputationEvent, ReputationTier, ReputationReward, ReputationAward

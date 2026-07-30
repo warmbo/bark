@@ -1,0 +1,12 @@
+<article class="content-card workspace-data-card" data-section="thanks">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("heart", 16) }} Thanks Log</h2><p class="card-description">Recent thanks given between members.</p></div>
+    <div class="card-header-actions">
+      <button type="button" class="btn btn-sm" data-refresh-section="thanks" aria-label="Refresh thanks log">{{ icon("refresh-cw", 14) }} Refresh</button>
+      <input type="text" id="rep-thanks-search" class="form-input form-input-sm" placeholder="Filter by member..." style="width:200px" aria-label="Search thanks by member name" name="thanks_search">
+    </div>
+  </div>
+  <div id="rep-thanks-content" aria-live="polite">
+    <div class="skeleton skeleton-card"></div>
+  </div>
+</article>

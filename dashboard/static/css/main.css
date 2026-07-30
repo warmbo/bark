@@ -1029,6 +1029,17 @@ textarea:focus-visible,
     font-weight: 700;
     color: var(--text-secondary);
 }
+.rank-symbol {
+    font-size: 24px;
+    line-height: 1;
+    display: inline-block;
+    vertical-align: middle;
+}
+.member-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 
 .member-table .member-name {
     font-size: 15px;

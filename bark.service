@@ -5,18 +5,18 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/cody/Projects/bark
-EnvironmentFile=/home/cody/Projects/bark/.env
-ExecStart=/home/cody/Projects/bark/.venv/bin/python /home/cody/Projects/bark/app.py
+WorkingDirectory=/home/cody/Projects/bark-avc
+EnvironmentFile=/home/cody/Projects/bark-avc/.env
+ExecStart=/home/cody/Projects/bark-avc/.venv/bin/python /home/cody/Projects/bark-avc/app.py
 Restart=always
 RestartSec=5
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/home/cody/Projects/bark/data /home/cody/Projects/bark/bark.log
-StandardOutput=append:/home/cody/Projects/bark/bark.log
-StandardError=append:/home/cody/Projects/bark/bark.log
+ReadWritePaths=/home/cody/Projects/bark-avc/data /home/cody/Projects/bark-avc/bark.log
+StandardOutput=append:/home/cody/Projects/bark-avc/bark.log
+StandardError=append:/home/cody/Projects/bark-avc/bark.log
 
 [Install]
 WantedBy=default.target

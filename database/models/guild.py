@@ -47,6 +47,14 @@ class Guild(Base):
                             order_by="RuleSet.priority")
     word_lists = relationship("WordList", back_populates="guild", cascade="all, delete-orphan",
                               primaryjoin="WordList.guild_id == Guild.discord_id")
+    reputation_profiles = relationship("ReputationProfile", back_populates="guild", cascade="all, delete-orphan",
+                                       primaryjoin="ReputationProfile.guild_id == Guild.discord_id")
+    reputation_events = relationship("ReputationEvent", back_populates="guild", cascade="all, delete-orphan",
+                                     primaryjoin="ReputationEvent.guild_id == Guild.discord_id")
+    reputation_tiers = relationship("ReputationTier", back_populates="guild", cascade="all, delete-orphan",
+                                    primaryjoin="ReputationTier.guild_id == Guild.discord_id")
+    reputation_rewards = relationship("ReputationReward", back_populates="guild", cascade="all, delete-orphan",
+                                      primaryjoin="ReputationReward.guild_id == Guild.discord_id")
 
     def __repr__(self) -> str:
         return f"<Guild id={self.discord_id} name='{self.name}'>"

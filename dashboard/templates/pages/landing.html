@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bark — Discord Server Management</title>
+    <meta name="description" content="Bark is a dashboard-first Discord management bot — moderation, voice insights, member management, and more, all from a clean web UI.">
+
+    <!-- Open Graph -->
+    <meta property="og:site_name" content="Bark">
+    <meta property="og:title" content="Bark — Discord Server Management">
+    <meta property="og:description" content="Bark is a dashboard-first Discord management bot — moderation, voice insights, member management, and more, all from a clean web UI.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ config.dashboard.public_url }}/">
+    {% if avatar_url %}
+    <meta property="og:image" content="{{ avatar_url }}">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    {% else %}
+    <meta property="og:image" content="{{ config.dashboard.public_url }}/static/img/bark-avatar.svg">
+    {% endif %}
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Bark — Discord Server Management">
+    <meta name="twitter:description" content="Bark is a dashboard-first Discord management bot — moderation, voice insights, member management, and more, all from a clean web UI.">
+    {% if avatar_url %}
+    <meta name="twitter:image" content="{{ avatar_url }}">
+    {% endif %}
+
+    <!-- Theme -->
+    <meta name="theme-color" content="#2563eb">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* ── Reset ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0d;
+            --bg-card: rgba(18, 18, 24, 0.92);
+            --bg-card-hover: rgba(24, 24, 32, 0.95);
+            --accent: #2563eb;
+            --accent-hover: #3b82f6;
+            --accent-glow: rgba(37, 99, 235, 0.25);
+            --text-primary: #ededef;
+            --text-secondary: #a1a1aa;
+            --text-tertiary: #71717a;
+            --border-subtle: rgba(255, 255, 255, 0.05);
+            --border-card: rgba(255, 255, 255, 0.06);
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --radius: 12px;
+            --ease-out: cubic-bezier(.16, 1, .3, 1);
+        }
+
+        html {
+            background: var(--bg);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: radial-gradient(ellipse at 50% 0%, rgba(37, 99, 235, 0.06) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 100%, rgba(37, 99, 235, 0.03) 0%, transparent 50%),
+                        radial-gradient(ellipse at 20% 100%, rgba(37, 99, 235, 0.02) 0%, transparent 40%);
+        }
+
+        /* ── Landing Card ── */
+        .landing {
+            max-width: 520px;
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius);
+            padding: 56px 40px 48px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: border-color 300ms var(--ease-out);
+        }
+
+        .landing:hover {
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        /* ── Avatar ── */
+        .landing-avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            margin: 0 auto 24px;
+            display: block;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 48px var(--accent-glow);
+        }
+
+        /* ── Typography ── */
+        .landing h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #f0f0f2 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .landing .subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 36px;
+        }
+
+        .landing .subtitle strong {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* ── Feature Grid ── */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 36px;
+            text-align: left;
+        }
+
+        .feature-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 14px 16px;
+            transition: background 200ms var(--ease-out), border-color 200ms var(--ease-out);
+        }
+
+        .feature-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.07);
+        }
+
+        .feature-item .feature-icon {
+            display: inline-block;
+            font-size: 18px;
+            margin-bottom: 6px;
+            line-height: 1;
+        }
+
+        .feature-item .feature-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .feature-item .feature-desc {
+            display: block;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            line-height: 1.4;
+        }
+
+        /* ── Button ── */
+        .btn-discord {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            color: #ffffff;
+            background: #5865F2;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 200ms var(--ease-out);
+            text-decoration: none;
+        }
+
+        .btn-discord:hover {
+            background: #4752C4;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(88, 101, 242, 0.3);
+        }
+
+        .btn-discord:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .btn-discord svg {
+            flex-shrink: 0;
+        }
+
+        /* ── Footer ── */
+        .landing-footer {
+            margin-top: 24px;
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+
+        .landing-footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .landing-footer a:hover {
+            color: var(--accent-hover);
+            text-decoration: underline;
+        }
+
+        .landing-footer .dot {
+            margin: 0 8px;
+        }
+
+        /* ── Mobile ── */
+        @media (max-width: 480px) {
+            .landing {
+                padding: 40px 24px 36px;
+            }
+            .features {
+                grid-template-columns: 1fr;
+            }
+            .landing h1 {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="landing">
+        {% if avatar_url %}
+        <img class="landing-avatar" src="{{ avatar_url }}" alt="Bark avatar" width="96" height="96">
+        {% else %}
+        <img class="landing-avatar" src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
+        {% endif %}
+
+        <h1>Bark</h1>
+        <p class="subtitle">
+            A <strong>dashboard-first</strong> Discord management bot.<br>
+            Moderation, voice insights, member management &mdash; all from a clean web UI.
+        </p>
+
+        <div class="features">
+            <div class="feature-item">
+                <span class="feature-icon">🛡️</span>
+                <span class="feature-label">Moderation</span>
+                <span class="feature-desc">Cases, warnings, notes &amp; rulesets</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🔊</span>
+                <span class="feature-label">Voice Insights</span>
+                <span class="feature-desc">Activity logs &amp; analytics</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">👥</span>
+                <span class="feature-label">Members</span>
+                <span class="feature-desc">Search, inspect &amp; manage</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">⚙️</span>
+                <span class="feature-label">Modules</span>
+                <span class="feature-desc">Per-server toggle &amp; configure</span>
+            </div>
+        </div>
+
+        <a href="/auth/login" class="btn-discord">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18.942 5.152a16.728 16.728 0 0 0-4.126-1.28c-.177.322-.383.75-.524 1.095a15.572 15.572 0 0 0-4.584 0 11.894 11.894 0 0 0-.533-1.095A16.673 16.673 0 0 0 5.04 5.152c-2.608 3.894-3.32 7.692-2.965 11.434A16.748 16.748 0 0 0 8.85 19.96c.399-.545.754-1.122 1.058-1.73a10.998 10.998 0 0 1-1.668-.802l.42-.328a11.843 11.843 0 0 0 10.184 0l.42.328c-.53.321-1.09.594-1.677.806.305.608.66 1.183 1.058 1.726a16.722 16.722 0 0 0 4.775-3.374c.413-4.244-.695-7.998-2.963-11.438ZM8.678 14.274c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Zm6.126 0c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Z" fill="currentColor"/>
+            </svg>
+            Sign in with Discord
+        </a>
+
+        <div class="landing-footer">
+            <a href="{{ config.dashboard.invite_url or '#' }}" {% if config.dashboard.invite_url %}target="_blank" rel="noopener"{% else %}onclick="return false" style="pointer-events:none;opacity:0.5"{% endif %}>Add to Server</a>
+            {% if config.dashboard.invite_url %}<span class="dot">&middot;</span>{% endif %}
+            <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener">GitHub</a>
+        </div>
+    </div>
+</body>
+</html>

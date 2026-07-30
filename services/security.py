@@ -13,6 +13,7 @@ from starlette.responses import RedirectResponse
 # ── Public paths that don't require auth ─────────────
 
 PUBLIC_PATHS = {
+    "/",
     "/auth/login",
     "/auth/callback",
     "/auth/logout",

@@ -1,0 +1,16 @@
+<article class="content-card workspace-data-card" data-section="leaderboard">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("trophy", 16) }} Reputation Leaderboard</h2><p class="card-description">Top-ranked members by total reputation score.</p></div>
+    <div class="card-header-actions">
+      <button type="button" class="btn btn-sm" data-refresh-section="leaderboard" aria-label="Refresh leaderboard">{{ icon("refresh-cw", 14) }} Refresh</button>
+      <select id="rep-leaderboard-limit" class="form-select form-select-sm" aria-label="Page size" name="leaderboard_limit">
+        <option value="10">10</option>
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+      </select>
+    </div>
+  </div>
+  <div id="rep-leaderboard-content" aria-live="polite">
+    <div class="skeleton skeleton-card"></div>
+  </div>
+</article>

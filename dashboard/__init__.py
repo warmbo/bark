@@ -145,7 +145,20 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     @app.get("/")
     async def root(request: Request):
-        return RedirectResponse(url="/dashboard")
+        """Serve the Bark landing/welcome page with OG tags."""
+        avatar_url = ""
+        if bot and bot.user and bot.user.display_avatar:
+            avatar_url = bot.user.display_avatar.url
+
+        tmpl = request.app.state.templates
+        return tmpl.TemplateResponse(
+            request,
+            "pages/landing.html",
+            {
+                "config": config,
+                "avatar_url": avatar_url,
+            },
+        )
 
     @app.get("/dashboard", response_class=HTMLResponse)
     async def dashboard_home(request: Request):
