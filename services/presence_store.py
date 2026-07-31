@@ -2,6 +2,7 @@
 
 Uses a JSON file in the data directory.
 """
+
 from __future__ import annotations
 
 import json
@@ -47,10 +48,15 @@ def save_presence(data_dir: Path, activity_type: str, activity_name: str) -> Non
     path = _store_path(data_dir)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({
-            "activity_type": activity_type,
-            "activity_name": activity_name,
-        }, indent=2))
+        path.write_text(
+            json.dumps(
+                {
+                    "activity_type": activity_type,
+                    "activity_name": activity_name,
+                },
+                indent=2,
+            )
+        )
         logger.info("Presence saved: %s %s", activity_type, activity_name)
     except OSError as exc:
         logger.error("Failed to save presence: %s", exc)
@@ -59,6 +65,7 @@ def save_presence(data_dir: Path, activity_type: str, activity_name: str) -> Non
 async def restore_presence(bot) -> None:
     """Restore the bot's presence from persisted settings on startup."""
     import discord
+
     from config import config
 
     presence = load_presence(config.data_dir)

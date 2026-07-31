@@ -3,6 +3,7 @@
 This intentionally uses only the standard library so it runs in every backend CI job.
 It checks source contracts that do not require Discord/auth fixtures or a browser binary.
 """
+
 from __future__ import annotations
 
 import re
@@ -78,7 +79,9 @@ def test_rendered_page_literal_ids_are_unique_and_aria_references_resolve():
     for page in PAGES:
         html = base + "\n" + source(page)
         if page.name == "module_detail.html":
-            html += "\n" + "\n".join(source(path) for path in (TEMPLATES / "module_tabs").glob("*.html"))
+            html += "\n" + "\n".join(
+                source(path) for path in (TEMPLATES / "module_tabs").glob("*.html")
+            )
         ids = re.findall(r'\bid\s*=\s*["\']([A-Za-z][\w:.-]*)["\']', html)
         duplicates = sorted(item for item in set(ids) if ids.count(item) > 1)
         assert duplicates == [], f"{page.relative_to(ROOT)} duplicate IDs: {duplicates}"
@@ -89,7 +92,11 @@ def test_rendered_page_literal_ids_are_unique_and_aria_references_resolve():
 
 
 def test_templates_do_not_render_raw_extension_html():
-    offenders = [str(path.relative_to(ROOT)) for path in ALL_TEMPLATES if re.search(r"\|\s*safe\b", source(path))]
+    offenders = [
+        str(path.relative_to(ROOT))
+        for path in ALL_TEMPLATES
+        if re.search(r"\|\s*safe\b", source(path))
+    ]
     assert offenders == [], f"raw template rendering bypasses Jinja escaping: {offenders}"
 
 
@@ -162,15 +169,17 @@ def test_moderation_danger_zones_are_contextual_to_their_tabs():
     workspace = source(TEMPLATES / "pages" / "module_detail.html")
     voice = source(TEMPLATES / "module_tabs" / "moderation_voice.html")
     assert "moderation-retention-danger-zone" in workspace
-    assert "data-purge=\"audit-logs\"" in workspace
-    assert "data-purge=\"attachments\"" in workspace
-    assert "data-purge=\"voice-history\"" in voice
-    assert "data-purge=\"audit-logs\"" not in voice
-    assert "data-purge=\"attachments\"" not in voice
+    assert 'data-purge="audit-logs"' in workspace
+    assert 'data-purge="attachments"' in workspace
+    assert 'data-purge="voice-history"' in voice
+    assert 'data-purge="audit-logs"' not in voice
+    assert 'data-purge="attachments"' not in voice
 
 
 def test_controls_added_by_workspace_have_programmatic_names():
-    html = source(TEMPLATES / "pages" / "module_detail.html") + source(TEMPLATES / "components" / "primitives.html")
+    html = source(TEMPLATES / "pages" / "module_detail.html") + source(
+        TEMPLATES / "components" / "primitives.html"
+    )
     # Every literal workspace input/select/textarea is either associated by id/for
     # through the field macro or has an explicit accessible name.
     assert 'for="{{ field_id }}"' in html
@@ -191,7 +200,9 @@ def test_desktop_viewport_and_zoom_contract_is_present():
 
 def test_guild_images_are_intrinsic_not_fixed_height():
     css = source(STATIC / "css" / "main.css")
-    rule = re.search(r"\.guild-icon-small, \.guild-bar-icon, \.guild-card-icon img \{([^}]+)\}", css)
+    rule = re.search(
+        r"\.guild-icon-small, \.guild-bar-icon, \.guild-card-icon img \{([^}]+)\}", css
+    )
     assert rule
     declarations = rule.group(1)
     assert "width: 100%" in declarations
@@ -229,10 +240,17 @@ def test_no_window_confirm_or_alert_or_prompt():
                 if "confirm(" in line and "BarkDialog.confirm" not in line:
                     stripped = line.strip()
                     # Skip false positives in comments
-                    if stripped.startswith("//") or stripped.startswith("#") or stripped.startswith("<!--") or stripped.startswith("/*"):
+                    if (
+                        stripped.startswith("//")
+                        or stripped.startswith("#")
+                        or stripped.startswith("<!--")
+                        or stripped.startswith("/*")
+                    ):
                         continue
                     if "confirm(" in stripped:
-                        pytest.fail(f"{rel}:{i} uses window.confirm instead of BarkDialog.confirm: {stripped}")
+                        pytest.fail(
+                            f"{rel}:{i} uses window.confirm instead of BarkDialog.confirm: {stripped}"
+                        )
         if "alert(" in text:
             lines = text.split("\n")
             for i, line in enumerate(lines, 1):
@@ -299,8 +317,12 @@ def test_danger_zones_are_tab_specific():
     # Cross-contamination checks
     assert 'data-purge="audit-logs"' not in voice, "Voice tab must not have audit-logs purge"
     assert 'data-purge="attachments"' not in voice, "Voice tab must not have attachments purge"
-    assert 'data-purge="voice-history"' not in workspace, "Configure tab must not have voice-history purge"
-    assert 'data-purge-label="voice history"' not in workspace, "Configure tab must not reference voice history"
+    assert 'data-purge="voice-history"' not in workspace, (
+        "Configure tab must not have voice-history purge"
+    )
+    assert 'data-purge-label="voice history"' not in workspace, (
+        "Configure tab must not reference voice history"
+    )
 
     # Both danger zones must have admin badges
     voice_has_admin = "Admin only" in voice or "admin-only" in voice or "can_manage_module" in voice

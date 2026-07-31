@@ -65,9 +65,7 @@ async def replace_user_guild_access(
 ) -> None:
     """Replace a user's cached OAuth guild snapshot after a successful login."""
     await session.execute(
-        delete(DashboardGuildAccess).where(
-            DashboardGuildAccess.user_discord_id == discord_user_id
-        )
+        delete(DashboardGuildAccess).where(DashboardGuildAccess.user_discord_id == discord_user_id)
     )
     for guild in guilds:
         permissions = _permission_value(guild.get("permissions"))
@@ -152,9 +150,7 @@ def build_guild_catalog(
         if guild is not None and getattr(guild, "icon", None):
             icon_url = guild.icon.url
         access_tier = (
-            "connected" if guild is not None
-            else "manageable" if access.can_manage
-            else "other"
+            "connected" if guild is not None else "manageable" if access.can_manage else "other"
         )
         catalog.append(
             {

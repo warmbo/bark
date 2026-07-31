@@ -61,9 +61,7 @@ async def test_dashboard_waits_for_bot_before_listing_connected_servers(monkeypa
     bot.wait_until_ready = AsyncMock(side_effect=finish_connecting)
     app = _dashboard_app(bot)
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/dashboard")
 
     assert response.status_code == 200
@@ -99,9 +97,7 @@ def test_dashboard_owner_requires_configured_discord_id():
 @pytest.mark.asyncio
 async def test_logout_requires_post():
     app = _dashboard_app(MagicMock())
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/auth/logout")
 
     assert response.status_code == 405
@@ -120,7 +116,13 @@ async def test_oauth_guild_sync_replaces_stale_rows(db):
         await replace_user_guild_access(session, "42", first_login)
 
     second_login = [
-        {"id": "200", "name": "Beta Renamed", "icon": "bbb", "owner": False, "permissions": str(0x20)},
+        {
+            "id": "200",
+            "name": "Beta Renamed",
+            "icon": "bbb",
+            "owner": False,
+            "permissions": str(0x20),
+        },
         {"id": "300", "name": "Read Only", "icon": None, "owner": False, "permissions": "0"},
     ]
     async with session_scope() as session:
@@ -137,22 +139,53 @@ async def test_oauth_guild_sync_replaces_stale_rows(db):
 
 def test_catalog_includes_every_oauth_guild_and_marks_bot_installation():
     oauth_guilds = [
-        type("Access", (), {
-            "guild_id": "300", "name": "Read Only", "icon_hash": None,
-            "owner": False, "permissions": 0, "can_manage": False,
-        })(),
-        type("Access", (), {
-            "guild_id": "100", "name": "Connected", "icon_hash": None,
-            "owner": False, "permissions": 0x20, "can_manage": True,
-        })(),
-        type("Access", (), {
-            "guild_id": "200", "name": "Needs Bark", "icon_hash": "icon",
-            "owner": True, "permissions": 0, "can_manage": True,
-        })(),
+        type(
+            "Access",
+            (),
+            {
+                "guild_id": "300",
+                "name": "Read Only",
+                "icon_hash": None,
+                "owner": False,
+                "permissions": 0,
+                "can_manage": False,
+            },
+        )(),
+        type(
+            "Access",
+            (),
+            {
+                "guild_id": "100",
+                "name": "Connected",
+                "icon_hash": None,
+                "owner": False,
+                "permissions": 0x20,
+                "can_manage": True,
+            },
+        )(),
+        type(
+            "Access",
+            (),
+            {
+                "guild_id": "200",
+                "name": "Needs Bark",
+                "icon_hash": "icon",
+                "owner": True,
+                "permissions": 0,
+                "can_manage": True,
+            },
+        )(),
     ]
-    bot_guild = type("Guild", (), {
-        "id": 100, "name": "Connected", "member_count": 25, "icon": None,
-    })()
+    bot_guild = type(
+        "Guild",
+        (),
+        {
+            "id": 100,
+            "name": "Connected",
+            "member_count": 25,
+            "icon": None,
+        },
+    )()
 
     catalog = build_guild_catalog(oauth_guilds, [bot_guild], client_id="123")
 
@@ -194,9 +227,7 @@ async def test_dashboard_lists_all_discord_servers_after_login(db, monkeypatch):
     bot.guilds = [bot_guild]
     bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
     app = _dashboard_app(bot)
-    cookie = _session_cookie(
-        {"user": {"id": "42", "username": "Cody"}, "role": "admin"}
-    )
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "admin"})
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -213,9 +244,7 @@ async def test_dashboard_lists_all_discord_servers_after_login(db, monkeypatch):
     assert 'id="palette-overlay"' in response.text
     assert 'id="palette-input"' in response.text
     assert 'id="palette-results"' in response.text
-    assert [
-        guild["id"] for guild in api_response.json()["data"]["guilds"]
-    ] == ["100", "200", "300"]
+    assert [guild["id"] for guild in api_response.json()["data"]["guilds"]] == ["100", "200", "300"]
 
 
 @pytest.mark.asyncio
@@ -245,9 +274,7 @@ async def test_guild_routes_require_manage_guild_permission(db, monkeypatch):
     bot.guilds = [bot_guild]
     bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
     app = _dashboard_app(bot)
-    cookie = _session_cookie(
-        {"user": {"id": "42", "username": "Cody"}, "role": "admin"}
-    )
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "admin"})
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -259,9 +286,7 @@ async def test_guild_routes_require_manage_guild_permission(db, monkeypatch):
         denied = await client.get("/guild/300")
         denied_api = await client.get("/api/v1/guilds/300")
 
-    owner_cookie = _session_cookie(
-        {"user": {"id": "42", "username": "Cody"}, "role": "owner"}
-    )
+    owner_cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "owner"})
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",

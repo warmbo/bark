@@ -1,6 +1,6 @@
 """Tests for the reputation scoring service — level math, decay, caps, and tier resolution."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 
@@ -8,8 +8,8 @@ from services.reputation_service import (
     DEFAULT_DAILY_CAP,
     DEFAULT_LEVEL_CONSTANT,
     DEFAULT_MESSAGE_POINTS,
-    DEFAULT_REACTION_RECEIVED_POINTS,
     DEFAULT_REACTION_GIVEN_POINTS,
+    DEFAULT_REACTION_RECEIVED_POINTS,
     DEFAULT_THANKS_GIVEN_POINTS,
     DEFAULT_THANKS_RECEIVED_POINTS,
     DEFAULT_VOICE_POINTS_PER_MINUTE,
@@ -33,8 +33,8 @@ from services.reputation_service import (
     score_for_level,
 )
 
-
 # ── Level math ───────────────────────────────────────────────────────────
+
 
 class TestLevelMath:
     def test_score_for_level_zero(self):
@@ -105,6 +105,7 @@ class TestLevelMath:
 
 # ── Point computation ────────────────────────────────────────────────────
 
+
 class TestPointComputation:
     def test_message_points_default(self):
         assert compute_message_points({}) == DEFAULT_MESSAGE_POINTS
@@ -143,6 +144,7 @@ class TestPointComputation:
 
 # ── Caps ─────────────────────────────────────────────────────────────────
 
+
 class TestCaps:
     def test_daily_cap_below_limit(self):
         assert check_daily_cap(50, {}) == 50
@@ -170,6 +172,7 @@ class TestCaps:
 
 
 # ── Decay ─────────────────────────────────────────────────────────────────
+
 
 class TestDecay:
     def test_no_decay_under_a_week(self):
@@ -202,6 +205,7 @@ class TestDecay:
 
 # ── Tier resolution ──────────────────────────────────────────────────────
 
+
 class TestTierResolution:
     def test_empty_tiers_returns_unranked(self):
         result = resolve_tier([], 0, 0)
@@ -210,33 +214,96 @@ class TestTierResolution:
 
     def test_lowest_tier_assigned(self):
         tiers = [
-            {"name": "Bronze", "symbol": "🥉", "min_score": 50, "min_level": 1, "color_hex": "#cd7f32", "sort_order": 1},
+            {
+                "name": "Bronze",
+                "symbol": "🥉",
+                "min_score": 50,
+                "min_level": 1,
+                "color_hex": "#cd7f32",
+                "sort_order": 1,
+            },
         ]
         result = resolve_tier(tiers, 1, 60)
         assert result["name"] == "Bronze"
 
     def test_highest_tier_matched(self):
         tiers = [
-            {"name": "Bronze", "symbol": "🥉", "min_score": 50, "min_level": 1, "color_hex": "#cd7f32", "sort_order": 1},
-            {"name": "Silver", "symbol": "🥈", "min_score": 200, "min_level": 3, "color_hex": "#c0c0c0", "sort_order": 2},
-            {"name": "Gold", "symbol": "🥇", "min_score": 500, "min_level": 5, "color_hex": "#ffd700", "sort_order": 3},
+            {
+                "name": "Bronze",
+                "symbol": "🥉",
+                "min_score": 50,
+                "min_level": 1,
+                "color_hex": "#cd7f32",
+                "sort_order": 1,
+            },
+            {
+                "name": "Silver",
+                "symbol": "🥈",
+                "min_score": 200,
+                "min_level": 3,
+                "color_hex": "#c0c0c0",
+                "sort_order": 2,
+            },
+            {
+                "name": "Gold",
+                "symbol": "🥇",
+                "min_score": 500,
+                "min_level": 5,
+                "color_hex": "#ffd700",
+                "sort_order": 3,
+            },
         ]
         result = resolve_tier(tiers, 6, 600)
         assert result["name"] == "Gold"
 
     def test_not_high_enough_for_any_tier(self):
         tiers = [
-            {"name": "Bronze", "symbol": "🥉", "min_score": 50, "min_level": 1, "color_hex": "#cd7f32", "sort_order": 1},
-            {"name": "Silver", "symbol": "🥈", "min_score": 200, "min_level": 3, "color_hex": "#c0c0c0", "sort_order": 2},
+            {
+                "name": "Bronze",
+                "symbol": "🥉",
+                "min_score": 50,
+                "min_level": 1,
+                "color_hex": "#cd7f32",
+                "sort_order": 1,
+            },
+            {
+                "name": "Silver",
+                "symbol": "🥈",
+                "min_score": 200,
+                "min_level": 3,
+                "color_hex": "#c0c0c0",
+                "sort_order": 2,
+            },
         ]
         result = resolve_tier(tiers, 0, 10)
         assert result["name"] == "unranked"
 
     def test_sort_order_overrides_position(self):
         tiers = [
-            {"name": "Gold", "symbol": "🥇", "min_score": 500, "min_level": 5, "color_hex": "#ffd700", "sort_order": 3},
-            {"name": "Bronze", "symbol": "🥉", "min_score": 50, "min_level": 1, "color_hex": "#cd7f32", "sort_order": 1},
-            {"name": "Silver", "symbol": "🥈", "min_score": 200, "min_level": 3, "color_hex": "#c0c0c0", "sort_order": 2},
+            {
+                "name": "Gold",
+                "symbol": "🥇",
+                "min_score": 500,
+                "min_level": 5,
+                "color_hex": "#ffd700",
+                "sort_order": 3,
+            },
+            {
+                "name": "Bronze",
+                "symbol": "🥉",
+                "min_score": 50,
+                "min_level": 1,
+                "color_hex": "#cd7f32",
+                "sort_order": 1,
+            },
+            {
+                "name": "Silver",
+                "symbol": "🥈",
+                "min_score": 200,
+                "min_level": 3,
+                "color_hex": "#c0c0c0",
+                "sort_order": 2,
+            },
         ]
         result = resolve_tier(tiers, 5, 600)
         # Gold has highest sort_order, should win
@@ -244,6 +311,7 @@ class TestTierResolution:
 
 
 # ── Weekly / Monthly reset ───────────────────────────────────────────────
+
 
 class TestReset:
     def test_needs_weekly_reset_same_week(self):

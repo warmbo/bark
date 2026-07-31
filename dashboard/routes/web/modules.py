@@ -2,10 +2,11 @@
 Modules web routes.
 """
 
+from pathlib import Path
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pathlib import Path
 
 from database.engine import session_scope
 from database.models.module import ModuleConfig
@@ -28,12 +29,17 @@ async def modules_page(request: Request, guild_id: int):
 
     all_modules = bot.modules.get_all_modules()
     from sqlalchemy import select
+
     async with session_scope() as session:
         configs = (
-            await session.execute(
-                select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
+            (
+                await session.execute(
+                    select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     module_states = {config.module_name: config.enabled for config in configs}
 
     return templates.TemplateResponse(
@@ -120,8 +126,7 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
         ],
         "events": [e.event_name for e in module.get_events()],
         "dashboard_pages": [
-            {"route": p.route, "label": p.label}
-            for p in module.get_dashboard_pages()
+            {"route": p.route, "label": p.label} for p in module.get_dashboard_pages()
         ],
         "actions": module.get_actions(),
         "about": module.get_about(),

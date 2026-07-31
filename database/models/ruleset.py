@@ -8,7 +8,13 @@ with OR triggers, AND conditions, AND effects.
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    String, Integer, Boolean, DateTime, Text, ForeignKey, UniqueConstraint,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -135,7 +141,9 @@ class WordList(Base):
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     list_type: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="word"  # "word" or "domain"
+        String(16),
+        nullable=False,
+        default="word",  # "word" or "domain"
     )
     # JSON array of strings
     entries: Mapped[str] = mapped_column(Text, nullable=False, default="[]")

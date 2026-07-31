@@ -1,4 +1,5 @@
 """Static contracts for Bark's build-free dashboard stylesheet."""
+
 from __future__ import annotations
 
 import re

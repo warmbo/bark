@@ -41,12 +41,14 @@ class AnnouncementsModule(BarkModule):
         return []
 
     def get_dashboard_pages(self) -> list[PageRegistration]:
-        return [PageRegistration(
-            route="/guild/{guild_id}/modules/announcements",
-            label="Announcements",
-            icon="megaphone",
-            category="community",
-        )]
+        return [
+            PageRegistration(
+                route="/guild/{guild_id}/modules/announcements",
+                label="Announcements",
+                icon="megaphone",
+                category="community",
+            )
+        ]
 
     def get_commands(self) -> list[CommandRegistration]:
         return [
@@ -150,12 +152,13 @@ class AnnouncementsModule(BarkModule):
         @router.post("/guilds/{guild_id}/modules/announcements/post")
         async def post_announcement(request: Request, guild_id: str):
             from services.response import (
-                check_api_permission,
-                api_success,
                 api_error,
-                api_not_found,
                 api_forbidden,
+                api_not_found,
+                api_success,
+                check_api_permission,
             )
+
             if not check_api_permission(request, "announcements.post", guild_id):
                 return api_forbidden()
 
@@ -210,7 +213,9 @@ class AnnouncementsModule(BarkModule):
     def _make_announce_command(self):
         from discord import app_commands
 
-        @app_commands.command(name="announce", description="Send a text or embed announcement to a channel")
+        @app_commands.command(
+            name="announce", description="Send a text or embed announcement to a channel"
+        )
         @app_commands.default_permissions(manage_guild=True)
         @app_commands.describe(
             channel="Target announcement channel",
@@ -230,7 +235,9 @@ class AnnouncementsModule(BarkModule):
                 return
 
             if not channel.permissions_for(interaction.guild.me).send_messages:
-                await interaction.response.send_message("I cannot send messages to that channel.", ephemeral=True)
+                await interaction.response.send_message(
+                    "I cannot send messages to that channel.", ephemeral=True
+                )
                 return
 
             if not message.strip():
@@ -239,20 +246,23 @@ class AnnouncementsModule(BarkModule):
 
             await interaction.response.defer(ephemeral=True)
             try:
-                content = None
                 if embed:
-                    content = discord.Embed(
+                    announcement_embed = discord.Embed(
                         title=title or None,
                         description=message[:4096],
                         color=discord.Color.blurple(),
                         timestamp=datetime.now(timezone.utc),
                     )
+                    await channel.send(embed=announcement_embed)
                 else:
-                    content = message[:2000]
-                await channel.send(content)
-                await interaction.followup.send(f"Announcement sent to {channel.mention}.", ephemeral=True)
+                    await channel.send(content=message[:2000])
+                await interaction.followup.send(
+                    f"Announcement sent to {channel.mention}.", ephemeral=True
+                )
             except discord.Forbidden:
-                await interaction.followup.send("I do not have permission to send to that channel.", ephemeral=True)
+                await interaction.followup.send(
+                    "I do not have permission to send to that channel.", ephemeral=True
+                )
             except discord.HTTPException as exc:
                 await interaction.followup.send(f"Send failed: {exc.status}", ephemeral=True)
 

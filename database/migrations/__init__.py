@@ -21,9 +21,7 @@ async def _normalize_module_config_guild_ids(connection: AsyncConnection) -> Non
     if table_exists is None:
         return
 
-    guild_rows = (
-        await connection.exec_driver_sql("SELECT id, discord_id FROM guilds")
-    ).fetchall()
+    guild_rows = (await connection.exec_driver_sql("SELECT id, discord_id FROM guilds")).fetchall()
     by_internal_id = {str(row[0]): str(row[1]) for row in guild_rows}
     discord_ids = {str(row[1]) for row in guild_rows}
 
@@ -55,7 +53,14 @@ async def _normalize_module_config_guild_ids(connection: AsyncConnection) -> Non
     for row in sorted(rows, key=lambda item: (str(item[7] or item[6] or ""), item[0])):
         guild_id = normalize(row[1])
         selected[(guild_id, row[2])] = (
-            row[0], guild_id, row[2], row[3], row[4], row[5], row[6], row[7]
+            row[0],
+            guild_id,
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            row[6],
+            row[7],
         )
 
     await connection.exec_driver_sql(
@@ -97,9 +102,7 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
     if guilds_exists is None:
         return
 
-    guild_rows = (
-        await connection.exec_driver_sql("SELECT id, discord_id FROM guilds")
-    ).fetchall()
+    guild_rows = (await connection.exec_driver_sql("SELECT id, discord_id FROM guilds")).fetchall()
     internal_to_discord = {str(row[0]): str(row[1]) for row in guild_rows}
     discord_ids = {str(row[1]) for row in guild_rows}
 
@@ -113,8 +116,7 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
 
     table_rows = (
         await connection.exec_driver_sql(
-            "SELECT name, sql FROM sqlite_master "
-            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
     ).fetchall()
     excluded = {"guilds", "dashboard_guild_access", "schema_migrations"}
@@ -130,8 +132,9 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
         if "guild_id" not in columns:
             continue
 
+        # table_name regex-validated above; values never interpolated
         rows = (
-            await connection.exec_driver_sql(f'SELECT * FROM "{table_name}"')
+            await connection.exec_driver_sql(f'SELECT * FROM "{table_name}"')  # nosec B608
         ).fetchall()
         guild_index = columns.index("guild_id")
         normalized_rows: list[tuple] = []
@@ -141,8 +144,8 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
             try:
                 values[guild_index] = normalize(values[guild_index])
             except RuntimeError:
-                key = str(values[guild_index])
-                unknown[key] = unknown.get(key, 0) + 1
+                unknown_value = str(values[guild_index])
+                unknown[unknown_value] = unknown.get(unknown_value, 0) + 1
                 continue
             normalized_rows.append(tuple(values))
         if unknown:
@@ -174,9 +177,7 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
             index_columns = [
                 row[2]
                 for row in (
-                    await connection.exec_driver_sql(
-                        f'PRAGMA index_info("{index_name}")'
-                    )
+                    await connection.exec_driver_sql(f'PRAGMA index_info("{index_name}")')
                 ).fetchall()
             ]
             if "guild_id" not in index_columns:
@@ -184,8 +185,8 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
             positions = [columns.index(name) for name in index_columns]
             groups: dict[tuple, list[int]] = {}
             for row_index in retained:
-                key = tuple(normalized_rows[row_index][pos] for pos in positions)
-                groups.setdefault(key, []).append(row_index)
+                group_key = tuple(normalized_rows[row_index][pos] for pos in positions)
+                groups.setdefault(group_key, []).append(row_index)
             for group in groups.values():
                 if len(group) < 2:
                     continue
@@ -212,16 +213,15 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
                     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", child_name):
                         continue
                     for foreign_key in (
-                        await connection.exec_driver_sql(
-                            f'PRAGMA foreign_key_list("{child_name}")'
-                        )
+                        await connection.exec_driver_sql(f'PRAGMA foreign_key_list("{child_name}")')
                     ).fetchall():
                         if foreign_key[2] != table_name or foreign_key[4] != primary_name:
                             continue
                         child_column = foreign_key[3]
                         for old_id, new_id in remapped_ids:
+                            # child_name regex-validated; column from SQLite schema
                             await connection.exec_driver_sql(
-                                f'UPDATE "{child_name}" SET "{child_column}" = ? '
+                                f'UPDATE "{child_name}" SET "{child_column}" = ? '  # nosec B608
                                 f'WHERE "{child_column}" = ?',
                                 (new_id, old_id),
                             )
@@ -229,11 +229,16 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
         foreign_keys = (
             await connection.exec_driver_sql(f'PRAGMA foreign_key_list("{table_name}")')
         ).fetchall()
-        already_canonical = any(
-            row[2] == "guilds" and row[3] == "guild_id" and row[4] == "discord_id"
-            for row in foreign_keys
-        ) and "CHAR" in str(table_info[guild_index][2]).upper()
-        if already_canonical and all(tuple(row) == normalized_rows[i] for i, row in enumerate(rows)):
+        already_canonical = (
+            any(
+                row[2] == "guilds" and row[3] == "guild_id" and row[4] == "discord_id"
+                for row in foreign_keys
+            )
+            and "CHAR" in str(table_info[guild_index][2]).upper()
+        )
+        if already_canonical and all(
+            tuple(row) == normalized_rows[i] for i, row in enumerate(rows)
+        ):
             continue
 
         dependent_sql = [
@@ -278,20 +283,21 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
         if normalized_rows:
             quoted_columns = ", ".join(f'"{name}"' for name in columns)
             placeholders = ", ".join("?" for _ in columns)
+            # temp_name/columns validated + quoted; values parameterized
             await connection.exec_driver_sql(
-                f'INSERT INTO "{temp_name}" ({quoted_columns}) VALUES ({placeholders})',
+                f'INSERT INTO "{temp_name}" ({quoted_columns}) VALUES ({placeholders})',  # nosec B608
                 normalized_rows,
             )
         await connection.exec_driver_sql(f'DROP TABLE "{table_name}"')
-        await connection.exec_driver_sql(
-            f'ALTER TABLE "{temp_name}" RENAME TO "{table_name}"'
-        )
+        await connection.exec_driver_sql(f'ALTER TABLE "{temp_name}" RENAME TO "{table_name}"')
         for sql in dependent_sql:
             await connection.exec_driver_sql(sql)
 
     violations = (await connection.exec_driver_sql("PRAGMA foreign_key_check")).fetchall()
     if violations:
-        raise RuntimeError(f"Foreign-key violations remain after guild migration: {violations[:10]}")
+        raise RuntimeError(
+            f"Foreign-key violations remain after guild migration: {violations[:10]}"
+        )
 
 
 async def _add_post_delivery_state(connection: AsyncConnection) -> None:
@@ -304,9 +310,7 @@ async def _add_post_delivery_state(connection: AsyncConnection) -> None:
         return
     columns = {
         row[1]
-        for row in (
-            await connection.exec_driver_sql("PRAGMA table_info(post_messages)")
-        ).fetchall()
+        for row in (await connection.exec_driver_sql("PRAGMA table_info(post_messages)")).fetchall()
     }
     additions = {
         "retry_count": "INTEGER NOT NULL DEFAULT 0",
@@ -325,9 +329,7 @@ async def _migrate_logging_config(connection: AsyncConnection) -> None:
     tables = {
         row[0]
         for row in (
-            await connection.exec_driver_sql(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
+            await connection.exec_driver_sql("SELECT name FROM sqlite_master WHERE type = 'table'")
         ).fetchall()
     }
     if not {"log_configs", "module_configs"}.issubset(tables):

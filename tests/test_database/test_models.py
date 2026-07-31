@@ -3,14 +3,14 @@ Tests for database models and engine.
 """
 
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
-from database.engine import init_db, close_db, session_scope
-from database.models.guild import Guild, GuildSetting
-from database.models.module import ModuleConfig
-from database.models.moderation import ModerationCase, AuditLog
-from database.models.logging import LogConfig
+from database.engine import close_db, init_db, session_scope
 from database.models.automod import AutoModConfig
+from database.models.guild import Guild, GuildSetting
+from database.models.logging import LogConfig
+from database.models.moderation import AuditLog, ModerationCase
+from database.models.module import ModuleConfig
 from database.models.permissions import DashboardUser
 
 
@@ -36,9 +36,7 @@ async def test_create_guild(db):
         await session.commit()
 
     async with session_scope() as session:
-        result = await session.execute(
-            select(Guild).where(Guild.discord_id == "123456789")
-        )
+        result = await session.execute(select(Guild).where(Guild.discord_id == "123456789"))
         saved = result.scalar_one()
         assert saved.name == "Test Guild"
         assert saved.owner_id == "987654321"
@@ -80,8 +78,9 @@ async def test_create_moderation_case(db):
 
         # First case
         result = await session.execute(
-            select(func.coalesce(func.max(ModerationCase.case_number), 0) + 1)
-            .where(ModerationCase.guild_id == guild.discord_id)
+            select(func.coalesce(func.max(ModerationCase.case_number), 0) + 1).where(
+                ModerationCase.guild_id == guild.discord_id
+            )
         )
         case1 = ModerationCase(
             guild_id=guild.discord_id,
@@ -125,7 +124,7 @@ async def test_module_config(db):
             )
         )
         saved = result.scalar_one()
-        assert saved.enabled == True
+        assert saved.enabled is True
         assert saved.priority == 100
 
 

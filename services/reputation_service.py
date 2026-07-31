@@ -4,9 +4,8 @@ Pure functions: no DB access, no Discord calls.  All idempotent, all testable.
 """
 
 import math
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Any
-
 
 # ── Defaults ─────────────────────────────────────────────────────────────
 
@@ -25,9 +24,10 @@ DEFAULT_WEEKLY_DECAY_RATE = 0.05  # 5% per week
 
 # ── Level math ───────────────────────────────────────────────────────────
 
+
 def score_for_level(level: int, level_constant: float = DEFAULT_LEVEL_CONSTANT) -> float:
     """Minimum total score required to reach *level*."""
-    return level_constant * (level ** 2)
+    return level_constant * (level**2)
 
 
 def level_from_score(total_score: float, level_constant: float = DEFAULT_LEVEL_CONSTANT) -> int:
@@ -37,12 +37,15 @@ def level_from_score(total_score: float, level_constant: float = DEFAULT_LEVEL_C
 
 # ── Point math ───────────────────────────────────────────────────────────
 
+
 def compute_message_points(config: dict[str, Any]) -> float:
     return float(config.get("weights", {}).get("message", DEFAULT_MESSAGE_POINTS))
 
 
 def compute_reaction_received_points(config: dict[str, Any]) -> float:
-    return float(config.get("weights", {}).get("reaction_received", DEFAULT_REACTION_RECEIVED_POINTS))
+    return float(
+        config.get("weights", {}).get("reaction_received", DEFAULT_REACTION_RECEIVED_POINTS)
+    )
 
 
 def compute_reaction_given_points(config: dict[str, Any]) -> float:
@@ -62,28 +65,33 @@ def compute_thanks_received_points(config: dict[str, Any]) -> float:
     return float(config.get("weights", {}).get("thanks_received", DEFAULT_THANKS_RECEIVED_POINTS))
 
 
-def compute_voice_points(minutes: int, config: dict[str, Any]) -> float:
-    weight = float(config.get("weights", {}).get("voice_per_minute", DEFAULT_VOICE_POINTS_PER_MINUTE))
+def compute_voice_points(minutes: float, config: dict[str, Any]) -> float:
+    weight = float(
+        config.get("weights", {}).get("voice_per_minute", DEFAULT_VOICE_POINTS_PER_MINUTE)
+    )
     return minutes * weight
 
 
 # ── Caps ─────────────────────────────────────────────────────────────────
 
-def check_daily_cap(score: float, config: dict[str, Any]) -> float:
+
+def check_daily_cap(score: float, config: dict[str, Any], earned: float = 0.0) -> float:
     """Cap *score* contributions at the configured daily limit per member."""
     cap = float(config.get("caps", {}).get("daily", DEFAULT_DAILY_CAP))
-    return min(score, cap)
+    return min(score, max(0.0, cap - earned))
 
 
-def check_weekly_cap(score: float, config: dict[str, Any]) -> float:
+def check_weekly_cap(score: float, config: dict[str, Any], earned: float = 0.0) -> float:
     cap = float(config.get("caps", {}).get("weekly", DEFAULT_WEEKLY_CAP))
-    return min(score, cap)
+    return min(score, max(0.0, cap - earned))
 
 
 # ── Decay ────────────────────────────────────────────────────────────────
 
-def compute_decay(total_score: float, days_since_active: int,
-                  rate: float = DEFAULT_WEEKLY_DECAY_RATE) -> float:
+
+def compute_decay(
+    total_score: float, days_since_active: int, rate: float = DEFAULT_WEEKLY_DECAY_RATE
+) -> float:
     """Apply weekly-decay rate for inactive periods beyond 7 days.
 
     Returns the *new* total score after decay (never below 0).
@@ -96,6 +104,7 @@ def compute_decay(total_score: float, days_since_active: int,
 
 
 # ── Tier resolution ──────────────────────────────────────────────────────
+
 
 def resolve_tier(tiers: list[dict[str, Any]], level: int, total_score: float) -> dict[str, Any]:
     """Given sorted tiers (highest sort_order first), find the highest applicable.
@@ -117,8 +126,10 @@ def resolve_tier(tiers: list[dict[str, Any]], level: int, total_score: float) ->
 
 # ── Progress ─────────────────────────────────────────────────────────────
 
-def next_level_progress(total_score: float, level: int,
-                        level_constant: float = DEFAULT_LEVEL_CONSTANT) -> dict[str, float]:
+
+def next_level_progress(
+    total_score: float, level: int, level_constant: float = DEFAULT_LEVEL_CONSTANT
+) -> dict[str, float]:
     """Return {current, needed, progress} toward next level."""
     current_for_level = score_for_level(level, level_constant)
     next_level_needed = score_for_level(level + 1, level_constant) - current_for_level
@@ -134,6 +145,7 @@ def next_level_progress(total_score: float, level: int,
 
 
 # ── Weekly / monthly rollover ────────────────────────────────────────────
+
 
 def needs_weekly_reset(last_week_start: date, today: date | None = None) -> bool:
     """True if the weekly tracking window should be reset."""

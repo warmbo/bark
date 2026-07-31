@@ -17,7 +17,9 @@ class DashboardUser(Base):
     discord_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
     username: Mapped[str] = mapped_column(String(64), nullable=False)
     avatar_url: Mapped[str] = mapped_column(String(512), nullable=False, default="")
-    role: Mapped[str] = mapped_column(String(16), nullable=False, default="viewer")  # owner/admin/moderator/viewer
+    role: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="viewer"
+    )  # owner/admin/moderator/viewer
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     def __repr__(self) -> str:
@@ -51,15 +53,11 @@ class ModuleRoleAccess(Base):
     """Per-guild minimum dashboard role for a module."""
 
     __tablename__ = "module_role_access"
-    __table_args__ = (
-        UniqueConstraint("guild_id", "module_name", name="uq_module_role_guild"),
-    )
+    __table_args__ = (UniqueConstraint("guild_id", "module_name", name="uq_module_role_guild"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
         String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
     )
     module_name: Mapped[str] = mapped_column(String(64), nullable=False)
-    min_role: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="admin"
-    )
+    min_role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")

@@ -9,6 +9,7 @@ Provides comprehensive system health reporting:
 - Version info
 """
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request
@@ -17,6 +18,7 @@ from sqlalchemy import text
 from services.response import api_success
 
 router = APIRouter(tags=["api-health"])
+logger = logging.getLogger("bark.api.health")
 
 _start_time = datetime.now(timezone.utc)
 
@@ -43,48 +45,54 @@ async def health_check(request: Request):
                     "settings": bool(module.get_settings_schema()),
                     "actions": len(module.get_actions()) if hasattr(module, "get_actions") else 0,
                 }
-        except Exception as e:
-            modules = {"error": str(e)}
+        except Exception as exc:
+            logger.warning("Module health collection failed (%s)", type(exc).__name__)
+            modules = {}
 
     # Database health
     db_healthy = False
     try:
         from database.engine import get_engine
+
         engine = get_engine()
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
             db_healthy = True
-    except Exception as e:
-        db_healthy = str(e)
+    except Exception as exc:
+        logger.warning("Database health check failed (%s)", type(exc).__name__)
 
     uptime_seconds = int((datetime.now(timezone.utc) - _start_time).total_seconds())
     hours, remainder = divmod(uptime_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
 
-    return api_success({
-        "status": "healthy" if (bot_ready and db_healthy) else "degraded",
-        "version": getattr(request.app.state, "version", "unknown"),
-        "uptime": {
-            "seconds": uptime_seconds,
-            "display": f"{hours}h {minutes}m {seconds}s",
-            "started_at": _start_time.isoformat(),
-        },
-        "bot": {
-            "connected": bot_connected,
-            "ready": bot_ready,
-            "guilds": len(bot.guilds) if bot_ready else 0,
-            "user": str(bot.user) if bot_ready and bot.user else None,
-        },
-        "database": {
-            "healthy": db_healthy if isinstance(db_healthy, bool) else False,
-            "status": "connected" if db_healthy is True else f"error: {db_healthy}",
-        },
-        "modules": {
-            "total": len(modules),
-            "enabled": sum(1 for m in modules.values() if m.get("enabled")),
-            "list": modules,
-        },
-        "memory": {
-            "total_events": len(bot.modules.event_bus.event_types) if hasattr(bot, "modules") else 0,
-        },
-    })
+    return api_success(
+        {
+            "status": "healthy" if (bot_ready and db_healthy) else "degraded",
+            "version": getattr(request.app.state, "version", "unknown"),
+            "uptime": {
+                "seconds": uptime_seconds,
+                "display": f"{hours}h {minutes}m {seconds}s",
+                "started_at": _start_time.isoformat(),
+            },
+            "bot": {
+                "connected": bot_connected,
+                "ready": bot_ready,
+                "guilds": len(bot.guilds) if bot_ready else 0,
+                "user": str(bot.user) if bot_ready and bot.user else None,
+            },
+            "database": {
+                "healthy": db_healthy,
+                "status": "connected" if db_healthy else "unavailable",
+            },
+            "modules": {
+                "total": len(modules),
+                "enabled": sum(1 for m in modules.values() if m.get("enabled")),
+                "list": modules,
+            },
+            "memory": {
+                "total_events": len(bot.modules.event_bus.event_types)
+                if hasattr(bot, "modules")
+                else 0,
+            },
+        }
+    )

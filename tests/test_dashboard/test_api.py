@@ -2,19 +2,19 @@
 
 Uses httpx AsyncClient against the FastAPI app with a mock bot.
 """
+
 from __future__ import annotations
 
 import pytest
 import pytest_asyncio
 
-
 # ── Fixtures ──────────────────────────────────────────
+
 
 @pytest_asyncio.fixture
 async def app(db):
     """Create the FastAPI app with a minimal mock bot for testing."""
-    import discord
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import MagicMock
 
     from dashboard import create_app
     from database.engine import session_scope
@@ -86,13 +86,15 @@ async def app(db):
 @pytest_asyncio.fixture
 async def client(app):
     """HTTP client for testing."""
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
 # ── Health & Ping ─────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_health_check(client):
@@ -116,19 +118,37 @@ async def test_health_ping(client):
     assert data["data"]["status"] in ("healthy", "degraded")
 
 
+@pytest.mark.asyncio
+async def test_public_health_does_not_expose_database_error_details(client, monkeypatch):
+    from database import engine
+
+    def fail_engine():
+        raise RuntimeError("private database host and credential details")
+
+    monkeypatch.setattr(engine, "get_engine", fail_engine)
+
+    response = await client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["database"] == {
+        "healthy": False,
+        "status": "unavailable",
+    }
+    assert "private database" not in response.text
+
+
 def test_realtime_bridge_is_initialized(app):
     assert app.state.realtime_bridge is not None
 
 
 @pytest.mark.asyncio
 async def test_untrusted_host_is_rejected(client):
-    response = await client.get(
-        "/api/v1/health", headers={"Host": "evil.example"}
-    )
+    response = await client.get("/api/v1/health", headers={"Host": "evil.example"})
     assert response.status_code == 400
 
 
 # ── Guilds ────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_list_guilds(client):
@@ -201,9 +221,7 @@ async def test_module_toggle_updates_only_the_target_guild(client, app):
     )
 
     assert response.status_code == 200
-    app.state.bot.modules.set_guild_enabled.assert_awaited_once_with(
-        1, "logging", False
-    )
+    app.state.bot.modules.set_guild_enabled.assert_awaited_once_with(1, "logging", False)
 
 
 @pytest.mark.asyncio
@@ -243,9 +261,7 @@ async def test_saving_fresh_module_config_preserves_default_enabled_state(client
 
 
 @pytest.mark.asyncio
-async def test_module_role_access_override_enforces_and_resets_default(
-    client, app, monkeypatch
-):
+async def test_module_role_access_override_enforces_and_resets_default(client, app, monkeypatch):
     """Moderator access follows the override and reset restores admin-only."""
     from types import SimpleNamespace
     from unittest.mock import MagicMock
@@ -276,9 +292,7 @@ async def test_module_role_access_override_enforces_and_resets_default(
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
     monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
-    monkeypatch.setattr(
-        config.config.oauth2, "redirect_uri", "http://test/auth/callback"
-    )
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
     request.session["role"] = "moderator"
     await get_module_min_role("moderation", 1)
     assert check_api_permission(request, "moderation.warn", guild_id=1)
@@ -295,14 +309,11 @@ async def test_module_role_access_override_enforces_and_resets_default(
     assert not check_api_permission(request, "moderation.warn", guild_id=1)
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "")
-    response = await client.delete(
-        "/api/v1/guilds/1/modules/moderation/role-access"
-    )
+    response = await client.delete("/api/v1/guilds/1/modules/moderation/role-access")
     assert response.status_code == 200
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
     assert await get_module_min_role("moderation", 1) is None
     assert not check_api_permission(request, "moderation.warn", guild_id=1)
-
 
 
 def test_module_config_validation_rejects_array_and_enum_type_drift():
@@ -429,6 +440,7 @@ async def test_module_without_actions_has_no_operate_tab(client, app):
 
 # ── Moderation Cases ──────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_list_cases_empty(client):
     """GET /guilds/{id}/moderation/cases should return empty paginated result."""
@@ -440,6 +452,16 @@ async def test_list_cases_empty(client):
         assert data["success"] is True
         assert "data" in data
         assert "items" in data["data"]
+
+
+@pytest.mark.asyncio
+async def test_paginated_routes_reject_unbounded_negative_limits(client):
+    response = await client.get(
+        "/api/v1/guilds/1/moderation/cases",
+        params={"limit": -1},
+    )
+
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -476,6 +498,7 @@ async def test_delete_case_not_found(client):
 
 # ── Moderation Warnings ───────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_list_warnings(client):
     """GET /guilds/{id}/moderation/warnings should return wrapped response."""
@@ -487,6 +510,7 @@ async def test_list_warnings(client):
 
 
 # ── Moderation Notes ──────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_list_notes(client):
@@ -517,7 +541,9 @@ async def test_note_edit_and_delete_persist(client):
         assert note.content == "Original note"
         assert note.author_id == "dashboard"
 
-    updated = await client.patch(f"/api/v1/guilds/1/notes/{note_id}", json={"content": "Updated note"})
+    updated = await client.patch(
+        f"/api/v1/guilds/1/notes/{note_id}", json={"content": "Updated note"}
+    )
     assert updated.status_code == 200
     assert updated.json()["data"]["content"] == "Updated note"
     listed = await client.get("/api/v1/guilds/1/notes")
@@ -527,7 +553,9 @@ async def test_note_edit_and_delete_persist(client):
     assert deleted.status_code == 200
     assert deleted.json()["data"]["deleted"] is True
     async with session_scope() as session:
-        assert (await session.execute(select(UserNote).where(UserNote.id == note_id))).scalar_one_or_none() is None
+        assert (
+            await session.execute(select(UserNote).where(UserNote.id == note_id))
+        ).scalar_one_or_none() is None
 
 
 @pytest.mark.asyncio
@@ -547,10 +575,13 @@ async def test_note_validation_preserves_existing_record(client):
     response = await client.patch(f"/api/v1/guilds/1/notes/{note_id}", json={"content": "   "})
     assert response.status_code == 400
     async with session_scope() as session:
-        assert (await session.execute(select(UserNote.content).where(UserNote.id == note_id))).scalar_one() == "Keep me"
+        assert (
+            await session.execute(select(UserNote.content).where(UserNote.id == note_id))
+        ).scalar_one() == "Keep me"
 
 
 # ── Settings ──────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_settings(client):
@@ -563,6 +594,7 @@ async def test_get_settings(client):
 
 
 # ── Modules ───────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_list_modules(client):
@@ -577,6 +609,7 @@ async def test_list_modules(client):
 
 # ── Manifest ──────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_manifest(client):
     """GET /guilds/{id}/manifest should return structured manifest."""
@@ -590,6 +623,7 @@ async def test_manifest(client):
 
 
 # ── Stats ─────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_guild_stats(client):
@@ -611,6 +645,7 @@ async def test_guild_stats(client):
 async def test_module_toggle_on_off_persists(client, app):
     """Module toggle persists in DB across enable/disable cycles."""
     from unittest.mock import AsyncMock, MagicMock
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -622,9 +657,7 @@ async def test_module_toggle_on_off_persists(client, app):
     app.state.bot.modules.set_guild_enabled = AsyncMock(return_value=True)
 
     # Toggle on
-    resp = await client.post(
-        "/api/v1/guilds/1/modules/logging/toggle", json={"enabled": True}
-    )
+    resp = await client.post("/api/v1/guilds/1/modules/logging/toggle", json={"enabled": True})
     assert resp.status_code == 200
     async with session_scope() as session:
         row = (
@@ -639,9 +672,7 @@ async def test_module_toggle_on_off_persists(client, app):
     assert row.enabled is True
 
     # Toggle off
-    resp = await client.post(
-        "/api/v1/guilds/1/modules/logging/toggle", json={"enabled": False}
-    )
+    resp = await client.post("/api/v1/guilds/1/modules/logging/toggle", json={"enabled": False})
     assert resp.status_code == 200
     async with session_scope() as session:
         row = (
@@ -655,9 +686,7 @@ async def test_module_toggle_on_off_persists(client, app):
     assert row.enabled is False
 
     # Toggle back on — single row, state flipped
-    resp = await client.post(
-        "/api/v1/guilds/1/modules/logging/toggle", json={"enabled": True}
-    )
+    resp = await client.post("/api/v1/guilds/1/modules/logging/toggle", json={"enabled": True})
     assert resp.status_code == 200
     async with session_scope() as session:
         row_count = (
@@ -677,6 +706,7 @@ async def test_module_config_save_persists_and_updates(client, app):
     """Config save writes to DB and subsequent updates replace config."""
     import json
     from unittest.mock import AsyncMock, MagicMock
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -699,9 +729,7 @@ async def test_module_config_save_persists_and_updates(client, app):
             )
             dbc = result.scalar_one_or_none()
             if dbc is None:
-                dbc = ModuleConfig(
-                    guild_id=str(guild_id), module_name="community", enabled=True
-                )
+                dbc = ModuleConfig(guild_id=str(guild_id), module_name="community", enabled=True)
                 session.add(dbc)
             dbc.config = json.dumps(config)
             await session.commit()
@@ -753,6 +781,7 @@ async def test_module_config_save_persists_and_updates(client, app):
 async def test_role_access_save_persistence(client, app):
     """Role-access PATCH stores in DB and survives reload; DELETE removes it."""
     from unittest.mock import MagicMock
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -787,9 +816,7 @@ async def test_role_access_save_persistence(client, app):
     assert listed.json()["data"]["moderation"] == "moderator"
 
     # Delete override
-    resp = await client.delete(
-        "/api/v1/guilds/1/modules/moderation/role-access"
-    )
+    resp = await client.delete("/api/v1/guilds/1/modules/moderation/role-access")
     assert resp.status_code == 200
 
     async with session_scope() as session:
@@ -821,11 +848,7 @@ async def test_ruleset_crud_persistence(client):
     rs_id = resp.json()["data"]["id"]
 
     async with session_scope() as session:
-        row = (
-            await session.execute(
-                select(RuleSet).where(RuleSet.id == rs_id)
-            )
-        ).scalar_one()
+        row = (await session.execute(select(RuleSet).where(RuleSet.id == rs_id))).scalar_one()
     assert row.name == "Test Ruleset"
     assert row.enabled is True
     assert row.priority == 50
@@ -845,11 +868,7 @@ async def test_ruleset_crud_persistence(client):
     assert resp.status_code == 200
 
     async with session_scope() as session:
-        row = (
-            await session.execute(
-                select(RuleSet).where(RuleSet.id == rs_id)
-            )
-        ).scalar_one()
+        row = (await session.execute(select(RuleSet).where(RuleSet.id == rs_id))).scalar_one()
     assert row.name == "Updated Ruleset"
     assert row.priority == 25
 
@@ -859,9 +878,7 @@ async def test_ruleset_crud_persistence(client):
 
     async with session_scope() as session:
         row = (
-            await session.execute(
-                select(RuleSet).where(RuleSet.id == rs_id)
-            )
+            await session.execute(select(RuleSet).where(RuleSet.id == rs_id))
         ).scalar_one_or_none()
     assert row is None, "Ruleset should be deleted"
 
@@ -872,7 +889,7 @@ async def test_rule_crud_within_ruleset_persists(client):
     from sqlalchemy import select
 
     from database.engine import session_scope
-    from database.models.ruleset import Rule, RuleSet
+    from database.models.ruleset import Rule
 
     # Create parent ruleset
     resp = await client.post(
@@ -897,9 +914,7 @@ async def test_rule_crud_within_ruleset_persists(client):
 
     async with session_scope() as session:
         rule = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == rs_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == rs_id))
         ).scalar_one()
     assert rule.trigger_type == "spam"
     assert rule.effect_type == "warn"
@@ -921,30 +936,61 @@ async def test_rule_crud_within_ruleset_persists(client):
 
     async with session_scope() as session:
         rule = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == rs_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == rs_id))
         ).scalar_one()
     assert rule.trigger_type == "invite"
     assert rule.effect_type == "delete"
     assert json.loads(rule.trigger_config) == {}
 
     # ── Delete rule ─────────────────────────────────────
-    resp = await client.delete(
-        f"/api/v1/guilds/1/rulesets/{rs_id}/rules/{rule_id}"
-    )
+    resp = await client.delete(f"/api/v1/guilds/1/rulesets/{rs_id}/rules/{rule_id}")
     assert resp.status_code == 200
 
     async with session_scope() as session:
         rule = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == rs_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == rs_id))
         ).scalar_one_or_none()
     assert rule is None, "Rule should be deleted"
 
     # Cleanup: remove parent ruleset
     await client.delete(f"/api/v1/guilds/1/rulesets/{rs_id}")
+
+
+@pytest.mark.asyncio
+async def test_rule_mutations_cannot_cross_guild_boundaries(client):
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from database.models.ruleset import Rule, RuleSet
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="2", name="Other Guild"))
+        await session.flush()
+        ruleset = RuleSet(guild_id="2", name="Private Rules")
+        session.add(ruleset)
+        await session.flush()
+        rule = Rule(
+            ruleset_id=ruleset.id,
+            trigger_type="spam",
+            effect_type="warn",
+        )
+        session.add(rule)
+        await session.commit()
+        ruleset_id = ruleset.id
+        rule_id = rule.id
+
+    update = await client.patch(
+        f"/api/v1/guilds/1/rulesets/{ruleset_id}/rules/{rule_id}",
+        json={"effect_type": "ban"},
+    )
+    delete = await client.delete(f"/api/v1/guilds/1/rulesets/{ruleset_id}/rules/{rule_id}")
+
+    assert update.status_code == 404
+    assert delete.status_code == 404
+    async with session_scope() as session:
+        saved = (await session.execute(select(Rule).where(Rule.id == rule_id))).scalar_one()
+    assert saved.effect_type == "warn"
 
 
 @pytest.mark.asyncio
@@ -1012,11 +1058,7 @@ async def test_wordlist_crud_persistence(client):
     wl_id = resp.json()["data"]["id"]
 
     async with session_scope() as session:
-        wl = (
-            await session.execute(
-                select(WordList).where(WordList.id == wl_id)
-            )
-        ).scalar_one()
+        wl = (await session.execute(select(WordList).where(WordList.id == wl_id))).scalar_one()
     import json
 
     assert wl.name == "Bad Words"
@@ -1038,11 +1080,7 @@ async def test_wordlist_crud_persistence(client):
     assert resp.status_code == 200
 
     async with session_scope() as session:
-        wl = (
-            await session.execute(
-                select(WordList).where(WordList.id == wl_id)
-            )
-        ).scalar_one()
+        wl = (await session.execute(select(WordList).where(WordList.id == wl_id))).scalar_one()
     assert wl.name == "Updated List"
     assert json.loads(wl.entries) == ["word3"]
 
@@ -1052,9 +1090,7 @@ async def test_wordlist_crud_persistence(client):
 
     async with session_scope() as session:
         wl = (
-            await session.execute(
-                select(WordList).where(WordList.id == wl_id)
-            )
+            await session.execute(select(WordList).where(WordList.id == wl_id))
         ).scalar_one_or_none()
     assert wl is None, "WordList should be deleted"
 
@@ -1063,6 +1099,7 @@ async def test_wordlist_crud_persistence(client):
 async def test_warning_clear_persists(client):
     """Clearing a warning via DELETE marks it inactive in DB."""
     from datetime import datetime, timezone
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -1081,9 +1118,7 @@ async def test_warning_clear_persists(client):
         await session.commit()
         warning_id = w.id
 
-    resp = await client.delete(
-        f"/api/v1/guilds/1/moderation/warnings/{warning_id}"
-    )
+    resp = await client.delete(f"/api/v1/guilds/1/moderation/warnings/{warning_id}")
     assert resp.status_code == 200
     data = resp.json()
     assert data["data"]["deleted"] is True
@@ -1091,9 +1126,7 @@ async def test_warning_clear_persists(client):
 
     async with session_scope() as session:
         w = (
-            await session.execute(
-                select(WarningModel).where(WarningModel.id == warning_id)
-            )
+            await session.execute(select(WarningModel).where(WarningModel.id == warning_id))
         ).scalar_one()
     assert w.active is False, "Warning should be marked inactive"
 
@@ -1102,6 +1135,7 @@ async def test_warning_clear_persists(client):
 async def test_case_resolution_persists(client):
     """Deleting a case marks it resolved (soft-delete) in DB."""
     from datetime import datetime, timezone
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -1123,9 +1157,7 @@ async def test_case_resolution_persists(client):
         session.add(c)
         await session.commit()
 
-    resp = await client.delete(
-        "/api/v1/guilds/1/moderation/cases/42"
-    )
+    resp = await client.delete("/api/v1/guilds/1/moderation/cases/42")
     assert resp.status_code == 200
     data = resp.json()
     assert data["data"]["deleted"] is True

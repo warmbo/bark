@@ -17,6 +17,7 @@ def setup_test_env(monkeypatch, tmp_path):
 
     # Directly update the config singleton
     import config as cfg
+
     cfg.config.database.url = f"sqlite+aiosqlite:///{db_path}"
     cfg.config.data_dir = tmp_path
     cfg.config.bot.token = "test_token_12345"
@@ -28,6 +29,7 @@ def setup_test_env(monkeypatch, tmp_path):
 
     # Reset the database engine singleton so it picks up the new config
     import database.engine
+
     database.engine._engine = None
     database.engine._session_factory = None
 
@@ -35,7 +37,8 @@ def setup_test_env(monkeypatch, tmp_path):
 @pytest.fixture(scope="function")
 async def db():
     """Initialize test database and tear down after."""
-    from database.engine import init_db, close_db
+    from database.engine import close_db, init_db
+
     await init_db()
     yield
     await close_db()

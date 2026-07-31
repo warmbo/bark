@@ -19,9 +19,13 @@ import logging
 import re
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 import discord
+from fastapi import Request
 
+from database.engine import session_scope
+from database.models.automod import AutoModConfig
 from modules.base import (
     BarkModule,
     CommandRegistration,
@@ -29,19 +33,21 @@ from modules.base import (
     PageRegistration,
     PermissionDefinition,
 )
-from database.engine import session_scope
-from database.models.automod import AutoModConfig
 from modules.moderation.ruleset_engine import (
+    check_rule_conditions,
+    check_ruleset_conditions,
     check_trigger,
     execute_effect,
-    check_ruleset_conditions,
-    check_rule_conditions,
 )
-from fastapi import Request
+
+if TYPE_CHECKING:
+    from services.anti_raid import AntiRaidService
 
 logger = logging.getLogger("bark.modules.moderation")
 
-INVITE_REGEX = re.compile(r"(?:discord\.(?:gg|io|me|com\/invite)\/|discord\.com\/invite\/)[a-zA-Z0-9_\-]+", re.IGNORECASE)
+INVITE_REGEX = re.compile(
+    r"(?:discord\.(?:gg|io|me|com\/invite)\/|discord\.com\/invite\/)[a-zA-Z0-9_\-]+", re.IGNORECASE
+)
 RULE_TYPES: list[str] = ["spam", "invite", "mention", "content_spam"]
 
 _ANTI_RAID: "AntiRaidService | None" = None
@@ -51,6 +57,7 @@ def _get_anti_raid() -> "AntiRaidService":
     global _ANTI_RAID
     if _ANTI_RAID is None:
         from services.anti_raid import AntiRaidService
+
         _ANTI_RAID = AntiRaidService()
     return _ANTI_RAID
 
@@ -98,6 +105,7 @@ def _voice_duration_seconds(joined_at: datetime, left_at: datetime) -> int:
 
 class _RulesetStub:
     """Minimal object duck-typing a RuleSet for condition checking."""
+
     def __init__(self, data: dict):
         for k, v in data.items():
             setattr(self, k, v)
@@ -105,6 +113,7 @@ class _RulesetStub:
 
 class _RuleStub:
     """Minimal object duck-typing a Rule for condition checking."""
+
     def __init__(self, data: dict):
         for k, v in data.items():
             setattr(self, k, v)
@@ -135,8 +144,12 @@ class ModerationModule(BarkModule):
     def __init__(self, ctx) -> None:
         super().__init__(ctx)
         # AutoMod state — per-guild, per-user message/mention tracking
-        self._message_track: dict[int, dict[int, deque]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=200)))
-        self._mention_count: dict[int, dict[int, deque]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=100)))
+        self._message_track: dict[int, dict[int, deque]] = defaultdict(
+            lambda: defaultdict(lambda: deque(maxlen=200))
+        )
+        self._mention_count: dict[int, dict[int, deque]] = defaultdict(
+            lambda: defaultdict(lambda: deque(maxlen=100))
+        )
         self._config_cache: dict[int, dict[str, dict]] = {}
         self._cache_ttl: dict[int, float] = {}
         self._anti_raid = _get_anti_raid()
@@ -144,7 +157,7 @@ class ModerationModule(BarkModule):
         # Ruleset system state
         self._ruleset_cache: dict[int, list[dict]] = {}
         self._ruleset_cache_ttl: dict[int, float] = {}
-        self._dup_track: dict[int, dict[int, list]] = {}
+        self._dup_track: dict[int, dict[int, list[tuple[datetime, str]]]] = {}
         self._wordlist_cache: dict[str, list[str]] = {}
 
     # ── Registration ──────────────────────────────────
@@ -160,11 +173,15 @@ class ModerationModule(BarkModule):
             CommandRegistration(name="warnings", description="View member warnings"),
             CommandRegistration(name="clearwarn", description="Clear a warning"),
             CommandRegistration(name="vc_kick", description="Disconnect a member from voice"),
-            CommandRegistration(name="vc_move", description="Move a member to another voice channel"),
+            CommandRegistration(
+                name="vc_move", description="Move a member to another voice channel"
+            ),
             CommandRegistration(name="vc_mute", description="Server-mute a member in voice"),
             CommandRegistration(name="vc_unmute", description="Server-unmute a member in voice"),
             CommandRegistration(name="vc_deafen", description="Server-deafen a member in voice"),
-            CommandRegistration(name="vc_undeafen", description="Server-undeafen a member in voice"),
+            CommandRegistration(
+                name="vc_undeafen", description="Server-undeafen a member in voice"
+            ),
             CommandRegistration(name="voice_sessions", description="View voice session history"),
             CommandRegistration(name="automod", description="Configure AutoMod rules"),
         ]
@@ -178,7 +195,12 @@ class ModerationModule(BarkModule):
 
     def get_dashboard_pages(self) -> list[PageRegistration]:
         return [
-            PageRegistration(route="/guild/{guild_id}/modules/moderation", label="Moderation", icon="shield", category="moderation"),
+            PageRegistration(
+                route="/guild/{guild_id}/modules/moderation",
+                label="Moderation",
+                icon="shield",
+                category="moderation",
+            ),
         ]
 
     def get_settings_schema(self) -> dict:
@@ -225,9 +247,27 @@ class ModerationModule(BarkModule):
                     "description": "Rapid-join detection and auto-response.",
                     "properties": {
                         "enabled": {"type": "boolean", "title": "Enabled", "default": True},
-                        "join_threshold": {"type": "integer", "minimum": 2, "title": "Join Threshold", "description": "Joins within window to trigger raid mode.", "default": 5},
-                        "join_window_seconds": {"type": "integer", "minimum": 5, "title": "Join Window (sec)", "description": "Time window for join counting.", "default": 30},
-                        "notify_channel_id": {"type": "string", "format": "channel_select", "title": "Alert Channel", "description": "Channel to send raid alerts (empty = system channel).", "placeholder": "Select a channel..."},
+                        "join_threshold": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "title": "Join Threshold",
+                            "description": "Joins within window to trigger raid mode.",
+                            "default": 5,
+                        },
+                        "join_window_seconds": {
+                            "type": "integer",
+                            "minimum": 5,
+                            "title": "Join Window (sec)",
+                            "description": "Time window for join counting.",
+                            "default": 30,
+                        },
+                        "notify_channel_id": {
+                            "type": "string",
+                            "format": "channel_select",
+                            "title": "Alert Channel",
+                            "description": "Channel to send raid alerts (empty = system channel).",
+                            "placeholder": "Select a channel...",
+                        },
                     },
                     "default": {"enabled": True, "join_threshold": 5, "join_window_seconds": 30},
                 },
@@ -237,8 +277,19 @@ class ModerationModule(BarkModule):
                     "description": "Auto-kick/ban members with accounts younger than N days.",
                     "properties": {
                         "enabled": {"type": "boolean", "title": "Enabled", "default": False},
-                        "min_days": {"type": "integer", "minimum": 1, "title": "Minimum Age (days)", "description": "Auto-action accounts younger than this.", "default": 3},
-                        "action": {"type": "string", "enum": ["kick", "ban"], "title": "Action", "default": "kick"},
+                        "min_days": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "title": "Minimum Age (days)",
+                            "description": "Auto-action accounts younger than this.",
+                            "default": 3,
+                        },
+                        "action": {
+                            "type": "string",
+                            "enum": ["kick", "ban"],
+                            "title": "Action",
+                            "default": "kick",
+                        },
                     },
                     "default": {"enabled": False, "min_days": 3, "action": "kick"},
                 },
@@ -273,23 +324,67 @@ class ModerationModule(BarkModule):
                         "content_spam": "Detects repeated/similar message content from the same user.",
                     }.get(rule_type, f"Rule for {rule_type}"),
                     "properties": {
-                        "enabled": {"type": "boolean", "title": "Enabled", "description": "Turn this rule on or off."},
+                        "enabled": {
+                            "type": "boolean",
+                            "title": "Enabled",
+                            "description": "Turn this rule on or off.",
+                        },
                         "threshold": {
-                            "type": "integer", "minimum": 1, "title": "Threshold",
-                            "placeholder": {"spam": "Max msgs in the time window", "invite": "Not used", "mention": "Max @ per msg (e.g. 5)"}.get(rule_type, "Value"),
-                            "description": {"spam": "Max messages in the time window.", "invite": "Not used.", "mention": "Max mentions per message."}.get(rule_type, ""),
+                            "type": "integer",
+                            "minimum": 1,
+                            "title": "Threshold",
+                            "placeholder": {
+                                "spam": "Max msgs in the time window",
+                                "invite": "Not used",
+                                "mention": "Max @ per msg (e.g. 5)",
+                            }.get(rule_type, "Value"),
+                            "description": {
+                                "spam": "Max messages in the time window.",
+                                "invite": "Not used.",
+                                "mention": "Max mentions per message.",
+                            }.get(rule_type, ""),
                         },
-                        "action": {"type": "string", "enum": ["warn", "timeout", "delete"], "title": "Action"},
-                        "duration": {"type": "integer", "minimum": 1, "title": "Duration (min)", "placeholder": "Minutes (e.g. 10)"},
+                        "action": {
+                            "type": "string",
+                            "enum": ["warn", "timeout", "delete"],
+                            "title": "Action",
+                        },
+                        "duration": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "title": "Duration (min)",
+                            "placeholder": "Minutes (e.g. 10)",
+                        },
                         "window_seconds": {
-                            "type": "integer", "minimum": 2, "maximum": 120,
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 120,
                             "title": "Time Window (seconds)",
-                            "description": {"spam": "Time window for message counting (default: 10s).", "mention": "Time window for cross-message mention tracking (default: 30s).", "invite": "Not used."}.get(rule_type, ""),
+                            "description": {
+                                "spam": "Time window for message counting (default: 10s).",
+                                "mention": "Time window for cross-message mention tracking (default: 30s).",
+                                "invite": "Not used.",
+                            }.get(rule_type, ""),
                             "placeholder": {"spam": "10", "mention": "30"}.get(rule_type, "10"),
-                            "default": {"spam": 10, "mention": 30, "invite": 1, "content_spam": 10}.get(rule_type, 10),
+                            "default": {
+                                "spam": 10,
+                                "mention": 30,
+                                "invite": 1,
+                                "content_spam": 10,
+                            }.get(rule_type, 10),
                         },
-                        "ignored_roles": {"type": "array", "items": {"type": "string"}, "title": "Ignored Role IDs", "placeholder": '["role_id_1", "role_id_2"]'},
-                        "ignored_channels": {"type": "array", "items": {"type": "string"}, "title": "Ignored Channel IDs", "placeholder": '["channel_id_1", "channel_id_2"]'},
+                        "ignored_roles": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "title": "Ignored Role IDs",
+                            "placeholder": '["role_id_1", "role_id_2"]',
+                        },
+                        "ignored_channels": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "title": "Ignored Channel IDs",
+                            "placeholder": '["channel_id_1", "channel_id_2"]',
+                        },
                     },
                 }
                 for rule_type in RULE_TYPES
@@ -364,33 +459,45 @@ class ModerationModule(BarkModule):
         return [
             {
                 "title": "What It Does",
-                "description": "Warn, timeout, kick, ban, or voice-control members with full case tracking and audit logging. Every action is recorded as a numbered case for review."
+                "description": "Warn, timeout, kick, ban, or voice-control members with full case tracking and audit logging. Every action is recorded as a numbered case for review.",
             },
             {
                 "title": "Display Warnings & Timeouts",
-                "description": "When a member breaks a rule, issue a warning or timeout from the dashboard or via /warn and /timeout slash commands. The member gets a DM, a case is logged, and the dashboard shows live status."
+                "description": "When a member breaks a rule, issue a warning or timeout from the dashboard or via /warn and /timeout slash commands. The member gets a DM, a case is logged, and the dashboard shows live status.",
             },
             {
                 "title": "AutoMod — Spam & Invite Protection",
-                "description": "Configure rules for spam, invite links, excessive mentions, and duplicate content. Violations trigger automatic actions: warn, timeout, or delete."
+                "description": "Configure rules for spam, invite links, excessive mentions, and duplicate content. Violations trigger automatic actions: warn, timeout, or delete.",
             },
             {
                 "title": "Anti-Raid Protection",
-                "description": "Rapid join detection watches for X joins in Y seconds and triggers raid mode. Combined with account-age gating, new accounts can be auto-kicked or banned."
+                "description": "Rapid join detection watches for X joins in Y seconds and triggers raid mode. Combined with account-age gating, new accounts can be auto-kicked or banned.",
             },
             {
                 "title": "Usage",
-                "description": "Enable the module, then use /warn, /timeout, /kick, /ban slash commands or the dashboard Moderation page. Configure AutoMod rules and anti-raid settings in the Configuration section."
+                "description": "Enable the module, then use /warn, /timeout, /kick, /ban slash commands or the dashboard Moderation page. Configure AutoMod rules and anti-raid settings in the Configuration section.",
             },
         ]
 
     def get_extra_tabs(self) -> list[dict]:
         return [
             {"id": "cases", "label": "Cases", "template": "module_tabs/moderation_cases.html"},
-            {"id": "warnings", "label": "Warnings", "template": "module_tabs/moderation_warnings.html"},
+            {
+                "id": "warnings",
+                "label": "Warnings",
+                "template": "module_tabs/moderation_warnings.html",
+            },
             {"id": "notes", "label": "Notes", "template": "module_tabs/moderation_notes.html"},
-            {"id": "rulesets", "label": "Rulesets", "template": "module_tabs/moderation_rulesets.html"},
-            {"id": "wordlists", "label": "Word Lists", "template": "module_tabs/moderation_wordlists.html"},
+            {
+                "id": "rulesets",
+                "label": "Rulesets",
+                "template": "module_tabs/moderation_rulesets.html",
+            },
+            {
+                "id": "wordlists",
+                "label": "Word Lists",
+                "template": "module_tabs/moderation_wordlists.html",
+            },
             {"id": "voice", "label": "Voice", "template": "module_tabs/moderation_voice.html"},
         ]
 
@@ -426,34 +533,55 @@ class ModerationModule(BarkModule):
     def _make_warn_command(self):
         @discord.app_commands.command(name="warn", description="Warn a member")
         @discord.app_commands.default_permissions(moderate_members=True)
-        async def warn(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"):
+        async def warn(
+            interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"
+        ):
             await self._cmd_warn(interaction, member, reason)
+
         return warn
 
     def _make_timeout_command(self):
         @discord.app_commands.command(name="timeout", description="Timeout a member")
         @discord.app_commands.default_permissions(moderate_members=True)
-        @discord.app_commands.choices(unit=[
-            discord.app_commands.Choice(name="minutes", value="minutes"),
-            discord.app_commands.Choice(name="seconds", value="seconds"),
-            discord.app_commands.Choice(name="hours", value="hours"),
-        ])
-        async def timeout(interaction: discord.Interaction, member: discord.Member, duration: int, unit: str = "minutes", reason: str = "No reason"):
+        @discord.app_commands.choices(
+            unit=[
+                discord.app_commands.Choice(name="minutes", value="minutes"),
+                discord.app_commands.Choice(name="seconds", value="seconds"),
+                discord.app_commands.Choice(name="hours", value="hours"),
+            ]
+        )
+        async def timeout(
+            interaction: discord.Interaction,
+            member: discord.Member,
+            duration: int,
+            unit: str = "minutes",
+            reason: str = "No reason",
+        ):
             await self._cmd_timeout(interaction, member, duration, unit, reason)
+
         return timeout
 
     def _make_kick_command(self):
         @discord.app_commands.command(name="kick", description="Kick a member")
         @discord.app_commands.default_permissions(kick_members=True)
-        async def kick(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"):
+        async def kick(
+            interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"
+        ):
             await self._cmd_kick(interaction, member, reason)
+
         return kick
 
     def _make_ban_command(self):
         @discord.app_commands.command(name="ban", description="Ban a member")
         @discord.app_commands.default_permissions(ban_members=True)
-        async def ban(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason", delete_days: int = 0):
+        async def ban(
+            interaction: discord.Interaction,
+            member: discord.Member,
+            reason: str = "No reason",
+            delete_days: int = 0,
+        ):
             await self._cmd_ban(interaction, member, reason, delete_days)
+
         return ban
 
     def _make_unban_command(self):
@@ -461,18 +589,21 @@ class ModerationModule(BarkModule):
         @discord.app_commands.default_permissions(ban_members=True)
         async def unban(interaction: discord.Interaction, user_id: str, reason: str = "No reason"):
             await self._cmd_unban(interaction, user_id, reason)
+
         return unban
 
     def _make_cases_command(self):
         @discord.app_commands.command(name="cases", description="View recent moderation cases")
         async def cases(interaction: discord.Interaction, limit: int = 10):
             await self._cmd_cases(interaction, limit)
+
         return cases
 
     def _make_warnings_command(self):
         @discord.app_commands.command(name="warnings", description="View warnings for a member")
         async def warnings(interaction: discord.Interaction, member: discord.Member):
             await self._cmd_warnings(interaction, member)
+
         return warnings
 
     def _make_clearwarn_command(self):
@@ -480,62 +611,96 @@ class ModerationModule(BarkModule):
         @discord.app_commands.default_permissions(moderate_members=True)
         async def clearwarn(interaction: discord.Interaction, warning_id: int):
             await self._cmd_clearwarn(interaction, warning_id)
+
         return clearwarn
 
     def _make_vc_kick_command(self):
         @discord.app_commands.command(name="vc_kick", description="Disconnect from voice")
         @discord.app_commands.default_permissions(mute_members=True)
-        async def vc_kick(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"):
+        async def vc_kick(
+            interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"
+        ):
             await self._cmd_vc_kick(interaction, member, reason)
+
         return vc_kick
 
     def _make_vc_move_command(self):
         @discord.app_commands.command(name="vc_move", description="Move to another voice channel")
         @discord.app_commands.default_permissions(move_members=True)
-        async def vc_move(interaction: discord.Interaction, member: discord.Member, channel: discord.VoiceChannel, reason: str = "No reason"):
+        async def vc_move(
+            interaction: discord.Interaction,
+            member: discord.Member,
+            channel: discord.VoiceChannel,
+            reason: str = "No reason",
+        ):
             await self._cmd_vc_move(interaction, member, channel, reason)
+
         return vc_move
 
     def _make_vc_mute_command(self):
         @discord.app_commands.command(name="vc_mute", description="Server-mute in voice")
         @discord.app_commands.default_permissions(mute_members=True)
-        async def vc_mute(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"):
+        async def vc_mute(
+            interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"
+        ):
             await self._cmd_vc_mute(interaction, member, reason)
+
         return vc_mute
 
     def _make_vc_unmute_command(self):
         @discord.app_commands.command(name="vc_unmute", description="Server-unmute in voice")
         @discord.app_commands.default_permissions(mute_members=True)
-        async def vc_unmute(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"):
+        async def vc_unmute(
+            interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"
+        ):
             await self._cmd_vc_unmute(interaction, member, reason)
+
         return vc_unmute
 
     def _make_vc_deafen_command(self):
         @discord.app_commands.command(name="vc_deafen", description="Server-deafen in voice")
         @discord.app_commands.default_permissions(deafen_members=True)
-        async def vc_deafen(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"):
+        async def vc_deafen(
+            interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"
+        ):
             await self._cmd_vc_deafen(interaction, member, reason)
+
         return vc_deafen
 
     def _make_vc_undeafen_command(self):
         @discord.app_commands.command(name="vc_undeafen", description="Server-undeafen in voice")
         @discord.app_commands.default_permissions(deafen_members=True)
-        async def vc_undeafen(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"):
+        async def vc_undeafen(
+            interaction: discord.Interaction, member: discord.Member, reason: str = "No reason"
+        ):
             await self._cmd_vc_undeafen(interaction, member, reason)
+
         return vc_undeafen
 
     def _make_voice_sessions_command(self):
-        @discord.app_commands.command(name="voice_sessions", description="View voice session history")
+        @discord.app_commands.command(
+            name="voice_sessions", description="View voice session history"
+        )
         @discord.app_commands.default_permissions(moderate_members=True)
-        async def voice_sessions(interaction: discord.Interaction, member: discord.Member, limit: int = 5):
+        async def voice_sessions(
+            interaction: discord.Interaction, member: discord.Member, limit: int = 5
+        ):
             await self._cmd_voice_sessions(interaction, member, limit)
+
         return voice_sessions
 
     def _make_automod_command(self):
         @discord.app_commands.command(name="automod", description="Configure AutoMod rules")
         @discord.app_commands.default_permissions(manage_guild=True)
-        async def automod(interaction: discord.Interaction, rule: str = "spam", enabled: bool = None, threshold: int = None, action: str = None):
+        async def automod(
+            interaction: discord.Interaction,
+            rule: str = "spam",
+            enabled: bool | None = None,
+            threshold: int | None = None,
+            action: str | None = None,
+        ):
             await self._cmd_automod(interaction, rule, enabled, threshold, action)
+
         return automod
 
     # ── Voice State (via EventBus) ─────────────────────
@@ -549,9 +714,11 @@ class ModerationModule(BarkModule):
             return
 
         from datetime import datetime, timezone
+
+        from sqlalchemy import desc, select
+
         from database.engine import session_scope
         from database.models.voice import VoiceSession
-        from sqlalchemy import select, desc
 
         guild_id = member.guild.id
         user_id = str(member.id)
@@ -564,21 +731,30 @@ class ModerationModule(BarkModule):
 
         if before_channel is None and after_channel is not None:
             async with session_scope() as session:
-                session.add(VoiceSession(
-                    guild_id=str(guild_id), user_id=user_id, user_tag=str(member),
-                    channel_id=str(after_channel.id), channel_name=after_channel.name,
-                    joined_at=now,
-                ))
+                session.add(
+                    VoiceSession(
+                        guild_id=str(guild_id),
+                        user_id=user_id,
+                        user_tag=str(member),
+                        channel_id=str(after_channel.id),
+                        channel_name=after_channel.name,
+                        joined_at=now,
+                    )
+                )
                 await session.commit()
 
         elif before_channel is not None and after_channel is None:
             async with session_scope() as session:
                 result = await session.execute(
                     select(VoiceSession)
-                    .where(VoiceSession.guild_id == str(guild_id), VoiceSession.user_id == user_id,
-                           VoiceSession.channel_id == str(before_channel.id),
-                           VoiceSession.left_at.is_(None))
-                    .order_by(desc(VoiceSession.joined_at)).limit(1)
+                    .where(
+                        VoiceSession.guild_id == str(guild_id),
+                        VoiceSession.user_id == user_id,
+                        VoiceSession.channel_id == str(before_channel.id),
+                        VoiceSession.left_at.is_(None),
+                    )
+                    .order_by(desc(VoiceSession.joined_at))
+                    .limit(1)
                 )
                 rec = result.scalar_one_or_none()
                 if rec:
@@ -586,26 +762,38 @@ class ModerationModule(BarkModule):
                     rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
                     await session.commit()
 
-        elif before_channel is not None and after_channel is not None \
-                and before_channel.id != after_channel.id:
+        elif (
+            before_channel is not None
+            and after_channel is not None
+            and before_channel.id != after_channel.id
+        ):
             # Member moved between voice channels — close old session, open new one
             async with session_scope() as session:
                 result = await session.execute(
                     select(VoiceSession)
-                    .where(VoiceSession.guild_id == str(guild_id), VoiceSession.user_id == user_id,
-                           VoiceSession.channel_id == str(before_channel.id),
-                           VoiceSession.left_at.is_(None))
-                    .order_by(desc(VoiceSession.joined_at)).limit(1)
+                    .where(
+                        VoiceSession.guild_id == str(guild_id),
+                        VoiceSession.user_id == user_id,
+                        VoiceSession.channel_id == str(before_channel.id),
+                        VoiceSession.left_at.is_(None),
+                    )
+                    .order_by(desc(VoiceSession.joined_at))
+                    .limit(1)
                 )
                 rec = result.scalar_one_or_none()
                 if rec:
                     rec.left_at = now
                     rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
-                session.add(VoiceSession(
-                    guild_id=str(guild_id), user_id=user_id, user_tag=str(member),
-                    channel_id=str(after_channel.id), channel_name=after_channel.name,
-                    joined_at=now,
-                ))
+                session.add(
+                    VoiceSession(
+                        guild_id=str(guild_id),
+                        user_id=user_id,
+                        user_tag=str(member),
+                        channel_id=str(after_channel.id),
+                        channel_name=after_channel.name,
+                        joined_at=now,
+                    )
+                )
                 await session.commit()
 
     # ── Anti-Raid: member join handler ─────────────────---
@@ -627,10 +815,15 @@ class ModerationModule(BarkModule):
                 window=int(join_window or 30),
             )
             if in_raid:
-                self._logger.warning("RAID DETECTED in guild %s (%d users joined recently)",
-                                     member.guild.name, guild_id)
+                self._logger.warning(
+                    "RAID DETECTED in guild %s (%d users joined recently)",
+                    member.guild.name,
+                    guild_id,
+                )
                 try:
-                    channel_id = await self._get_setting(guild_id, "anti_raid", "notify_channel_id", "")
+                    channel_id = await self._get_setting(
+                        guild_id, "anti_raid", "notify_channel_id", ""
+                    )
                     if channel_id:
                         ch = member.guild.get_channel(int(channel_id))
                     else:
@@ -688,13 +881,19 @@ class ModerationModule(BarkModule):
 
         now = datetime.now(timezone.utc)
         for rule_type, cfg in configs.items():
-            if not cfg.get("enabled"): continue
+            if not cfg.get("enabled"):
+                continue
             try:
-                if rule_type == "spam": await self._check_spam(message, cfg, now)
-                elif rule_type == "invite": await self._check_invites(message, cfg)
-                elif rule_type == "mention": await self._check_mentions(message, cfg, now)
-                elif rule_type == "content_spam": await self._check_content_spam(message, cfg)
-                elif rule_type == "mention_rate": await self._check_mention_rate(message, cfg, now)
+                if rule_type == "spam":
+                    await self._check_spam(message, cfg, now)
+                elif rule_type == "invite":
+                    await self._check_invites(message, cfg)
+                elif rule_type == "mention":
+                    await self._check_mentions(message, cfg, now)
+                elif rule_type == "content_spam":
+                    await self._check_content_spam(message, cfg)
+                elif rule_type == "mention_rate":
+                    await self._check_mention_rate(message, cfg, now)
             except Exception:
                 self._logger.exception("Error in %s check", rule_type)
 
@@ -703,15 +902,18 @@ class ModerationModule(BarkModule):
     async def _get_rulesets_and_rules(self, guild_id: int) -> list[dict]:
         """Load rulesets + rules for a guild from DB, with 30s cache."""
         import time as _time
+
         now = _time.monotonic()
-        if guild_id in self._ruleset_cache and (
-            now - self._ruleset_cache_ttl.get(guild_id, 0)
-        ) < 30:
+        if (
+            guild_id in self._ruleset_cache
+            and (now - self._ruleset_cache_ttl.get(guild_id, 0)) < 30
+        ):
             return self._ruleset_cache[guild_id]
 
-        from database.engine import session_scope
-        from database.models.ruleset import RuleSet, Rule
         from sqlalchemy import select
+
+        from database.engine import session_scope
+        from database.models.ruleset import Rule, RuleSet
 
         async with session_scope() as session:
             result = await session.execute(
@@ -748,37 +950,39 @@ class ModerationModule(BarkModule):
                 rules = rules_result.scalars().all()
                 if not rules:
                     continue
-                result_data.append({
-                    "id": rs.id,
-                    "name": rs.name,
-                    "priority": rs.priority,
-                    "ignored_roles": rs.ignored_roles,
-                    "require_roles": rs.require_roles,
-                    "require_all_roles": rs.require_all_roles,
-                    "ignored_channels": rs.ignored_channels,
-                    "active_channels": rs.active_channels,
-                    "ignored_categories": rs.ignored_categories,
-                    "active_categories": rs.active_categories,
-                    "account_age_minutes_min": rs.account_age_minutes_min,
-                    "account_age_minutes_max": rs.account_age_minutes_max,
-                    "member_duration_minutes_min": rs.member_duration_minutes_min,
-                    "member_duration_minutes_max": rs.member_duration_minutes_max,
-                    "only_bots": rs.only_bots,
-                    "ignore_bots": rs.ignore_bots,
-                    "check_new_messages": rs.check_new_messages,
-                    "check_edited_messages": rs.check_edited_messages,
-                    "rules": [
-                        {
-                            "id": r.id,
-                            "trigger_type": r.trigger_type,
-                            "trigger_config": r.trigger_config,
-                            "effect_type": r.effect_type,
-                            "effect_config": r.effect_config,
-                            "conditions": r.conditions,
-                        }
-                        for r in rules
-                    ],
-                })
+                result_data.append(
+                    {
+                        "id": rs.id,
+                        "name": rs.name,
+                        "priority": rs.priority,
+                        "ignored_roles": rs.ignored_roles,
+                        "require_roles": rs.require_roles,
+                        "require_all_roles": rs.require_all_roles,
+                        "ignored_channels": rs.ignored_channels,
+                        "active_channels": rs.active_channels,
+                        "ignored_categories": rs.ignored_categories,
+                        "active_categories": rs.active_categories,
+                        "account_age_minutes_min": rs.account_age_minutes_min,
+                        "account_age_minutes_max": rs.account_age_minutes_max,
+                        "member_duration_minutes_min": rs.member_duration_minutes_min,
+                        "member_duration_minutes_max": rs.member_duration_minutes_max,
+                        "only_bots": rs.only_bots,
+                        "ignore_bots": rs.ignore_bots,
+                        "check_new_messages": rs.check_new_messages,
+                        "check_edited_messages": rs.check_edited_messages,
+                        "rules": [
+                            {
+                                "id": r.id,
+                                "trigger_type": r.trigger_type,
+                                "trigger_config": r.trigger_config,
+                                "effect_type": r.effect_type,
+                                "effect_config": r.effect_config,
+                                "conditions": r.conditions,
+                            }
+                            for r in rules
+                        ],
+                    }
+                )
 
             self._ruleset_cache[guild_id] = result_data
             self._ruleset_cache_ttl[guild_id] = now
@@ -788,17 +992,13 @@ class ModerationModule(BarkModule):
         """Iterate rulesets and their rules, checking conditions and triggers."""
         for rs in rulesets_data:
             # Check ruleset-scoped conditions
-            passed, fail_reason = check_ruleset_conditions(
-                None, message, _dict_to_ruleset_stub(rs)
-            )
+            passed, fail_reason = check_ruleset_conditions(None, message, _dict_to_ruleset_stub(rs))
             if not passed:
                 continue
 
             for rule in rs["rules"]:
                 # Check per-rule conditions
-                passed, rule_reason = check_rule_conditions(
-                    message, _dict_to_rule_stub(rule)
-                )
+                passed, rule_reason = check_rule_conditions(message, _dict_to_rule_stub(rule))
                 if not passed:
                     continue
 
@@ -831,16 +1031,15 @@ class ModerationModule(BarkModule):
     async def _ensure_default_ruleset(self, guild_id: int) -> bool:
         """Seed a default ruleset from the legacy flat config if no rulesets exist.
         Returns True if a default ruleset was created."""
+        from sqlalchemy import func, select
+
         from database.engine import session_scope
         from database.models.ruleset import RuleSet
-        from sqlalchemy import select, func
 
         async with session_scope() as session:
             count = (
                 await session.execute(
-                    select(func.count(RuleSet.id)).where(
-                        RuleSet.guild_id == str(guild_id)
-                    )
+                    select(func.count(RuleSet.id)).where(RuleSet.guild_id == str(guild_id))
                 )
             ).scalar() or 0
             if count > 0:
@@ -871,6 +1070,7 @@ class ModerationModule(BarkModule):
             await session.flush()
 
             from database.models.ruleset import Rule
+
             trigger_map = {
                 "spam": ("user_message_rate", {"threshold": 5, "window_seconds": 10}),
                 "invite": ("invite", {}),
@@ -929,7 +1129,8 @@ class ModerationModule(BarkModule):
             return
         track = self._message_track[message.guild.id][message.author.id]
         cutoff = now - timedelta(seconds=window)
-        while track and track[0] < cutoff: track.popleft()
+        while track and track[0] < cutoff:
+            track.popleft()
         track.append(now)
         if len(track) >= threshold:
             await self._take_action(message, config, f"Spam ({len(track)} msgs/{window}s)")
@@ -944,7 +1145,11 @@ class ModerationModule(BarkModule):
         if self._is_ignored(message, config):
             return
         threshold = config.get("threshold", 5)
-        count = len(message.mentions) + len(message.role_mentions) + (1 if message.mention_everyone else 0)
+        count = (
+            len(message.mentions)
+            + len(message.role_mentions)
+            + (1 if message.mention_everyone else 0)
+        )
         if count >= threshold:
             await self._take_action(message, config, f"Mention spam ({count} @)")
 
@@ -959,6 +1164,7 @@ class ModerationModule(BarkModule):
         track = self._anti_raid._recent_content[message.guild.id][message.author.id]
         for prev in list(track):
             from difflib import SequenceMatcher
+
             if SequenceMatcher(None, prev, content).ratio() >= 0.85:
                 tally += 1
                 if tally + 1 >= threshold:
@@ -974,29 +1180,41 @@ class ModerationModule(BarkModule):
             try:
                 await message.delete()
                 executed = True
-            except discord.Forbidden: pass
+            except discord.Forbidden:
+                pass
         elif action == "warn":
-            from database.models.moderation import ModerationCase, Warning as WarningModel
-            from sqlalchemy import select, func
+            from services.moderation_service import ModerationService
+
             bot_user = self.ctx.bot.user
             moderator_id = str(bot_user.id) if bot_user else ""
             moderator_tag = str(bot_user) if bot_user else "Bark"
-            async with session_scope() as session:
-                cn = (await session.execute(select(func.coalesce(func.max(ModerationCase.case_number), 0) + 1).where(ModerationCase.guild_id == str(message.guild.id)))).scalar()
-                session.add(ModerationCase(guild_id=str(message.guild.id), case_number=cn, action_type="warn", target_id=str(message.author.id), target_tag=str(message.author), moderator_id=moderator_id, moderator_tag=moderator_tag, reason=f"[AutoMod] {reason}"))
-                session.add(WarningModel(guild_id=str(message.guild.id), user_id=str(message.author.id), moderator_id=moderator_id, reason=f"[AutoMod] {reason}", active=True))
-                await session.commit()
-                executed = True
-            try: await message.channel.send(f"⚠️ {message.author.mention}, {reason}", delete_after=10)
-            except discord.Forbidden: pass
+            await ModerationService.create_case(
+                guild_id=message.guild.id,
+                action_type="warn",
+                target_id=str(message.author.id),
+                target_tag=str(message.author),
+                moderator_id=moderator_id,
+                moderator_tag=moderator_tag,
+                reason=f"[AutoMod] {reason}",
+                warning_user_id=str(message.author.id),
+            )
+            executed = True
+            try:
+                await message.channel.send(f"⚠️ {message.author.mention}, {reason}", delete_after=10)
+            except discord.Forbidden:
+                pass
         elif action == "timeout":
-            if not isinstance(message.author, discord.Member): return
+            if not isinstance(message.author, discord.Member):
+                return
             until = discord.utils.utcnow() + timedelta(minutes=duration)
             try:
                 await message.author.timeout(until, reason=f"[AutoMod] {reason}")
-                await message.channel.send(f"⏱ {message.author.mention} timed out {duration}m. {reason}", delete_after=10)
+                await message.channel.send(
+                    f"⏱ {message.author.mention} timed out {duration}m. {reason}", delete_after=10
+                )
                 executed = True
-            except discord.Forbidden: pass
+            except discord.Forbidden:
+                pass
 
         if executed:
             await self.ctx.events.emit(
@@ -1015,24 +1233,33 @@ class ModerationModule(BarkModule):
             )
             if escalation_action and escalation_action != action:
                 self._logger.info(
-                    "Escalating %s (strike %d) → %s",
-                    message.author, strikes, escalation_action
+                    "Escalating %s (strike %d) → %s", message.author, strikes, escalation_action
                 )
                 try:
                     channel = message.channel
                     if escalation_action == "timeout":
                         until = discord.utils.utcnow() + timedelta(minutes=30)
-                        await message.author.timeout(until, reason=f"[AutoMod] Escalation ({strikes} strikes)")
-                        await channel.send(f"⏱ {message.author.mention} auto-escalated to timeout (strike {strikes})", delete_after=10)
+                        await message.author.timeout(
+                            until, reason=f"[AutoMod] Escalation ({strikes} strikes)"
+                        )
+                        await channel.send(
+                            f"⏱ {message.author.mention} auto-escalated to timeout (strike {strikes})",
+                            delete_after=10,
+                        )
                     elif escalation_action == "kick":
-                        await message.author.kick(reason=f"[AutoMod] Escalation ({strikes} strikes)")
-                        await channel.send(f"👢 {message.author.mention} auto-kicked (strike {strikes})")
+                        await message.author.kick(
+                            reason=f"[AutoMod] Escalation ({strikes} strikes)"
+                        )
+                        await channel.send(
+                            f"👢 {message.author.mention} auto-kicked (strike {strikes})"
+                        )
                 except discord.Forbidden:
                     pass
 
     async def _get_configs(self, guild_id: int) -> dict:
         """Load AutoMod rules from ModuleConfig (dashboard saves), falling back to AutoModConfig (slash commands)."""
         import time as _time
+
         now = _time.monotonic()
         # Cache hit with 30s TTL
         if guild_id in self._config_cache and (now - self._cache_ttl.get(guild_id, 0)) < 30:
@@ -1050,7 +1277,12 @@ class ModerationModule(BarkModule):
                     if isinstance(rule, dict) and rule.get("enabled"):
                         result[rule_type] = {
                             "enabled": True,
-                            "threshold": rule.get("threshold", {"spam": 5, "invite": 1, "mention": 5, "content_spam": 3}.get(rule_type, 5)),
+                            "threshold": rule.get(
+                                "threshold",
+                                {"spam": 5, "invite": 1, "mention": 5, "content_spam": 3}.get(
+                                    rule_type, 5
+                                ),
+                            ),
                             "action": rule.get("action", "warn"),
                             "duration": rule.get("duration", 10),
                             "window_seconds": rule.get("window_seconds", 10),
@@ -1064,18 +1296,32 @@ class ModerationModule(BarkModule):
         if not result:
             try:
                 from sqlalchemy import select
+
                 async with session_scope() as session:
-                    configs = (await session.execute(select(AutoModConfig).where(AutoModConfig.guild_id == str(guild_id)))).scalars().all()
+                    configs = (
+                        (
+                            await session.execute(
+                                select(AutoModConfig).where(AutoModConfig.guild_id == str(guild_id))
+                            )
+                        )
+                        .scalars()
+                        .all()
+                    )
                     for c in configs:
                         if c.enabled:
                             result[c.rule_type] = {
                                 "enabled": True,
-                                "threshold": c.threshold or {"spam": 5, "mention": 5, "content_spam": 3}.get(c.rule_type, 1),
+                                "threshold": c.threshold
+                                or {"spam": 5, "mention": 5, "content_spam": 3}.get(c.rule_type, 1),
                                 "action": c.action or "warn",
                                 "duration": c.duration or 10,
                                 "window_seconds": 10,
-                                "ignored_roles": json.loads(c.ignored_roles) if c.ignored_roles else [],
-                                "ignored_channels": json.loads(c.ignored_channels) if c.ignored_channels else [],
+                                "ignored_roles": json.loads(c.ignored_roles)
+                                if c.ignored_roles
+                                else [],
+                                "ignored_channels": json.loads(c.ignored_channels)
+                                if c.ignored_channels
+                                else [],
                             }
             except Exception:
                 pass
@@ -1092,7 +1338,11 @@ class ModerationModule(BarkModule):
         window = config.get("window_seconds", 30)
         guild_id = message.guild.id
         user_id = message.author.id
-        msg_mention_count = len(message.mentions) + len(message.role_mentions) + (1 if message.mention_everyone else 0)
+        msg_mention_count = (
+            len(message.mentions)
+            + len(message.role_mentions)
+            + (1 if message.mention_everyone else 0)
+        )
         if msg_mention_count == 0:
             return
 
@@ -1105,8 +1355,9 @@ class ModerationModule(BarkModule):
         track.append((now, msg_mention_count))
         total = sum(c for _, c in track)
         if total >= threshold:
-            await self._take_action(message, config,
-                f"Mention rate ({total} @ in {window}s across {len(track)} msgs)")
+            await self._take_action(
+                message, config, f"Mention rate ({total} @ in {window}s across {len(track)} msgs)"
+            )
             track.clear()  # Reset after action
 
     # ── In-memory state cleanup task ─────────────────
@@ -1150,6 +1401,7 @@ class ModerationModule(BarkModule):
                             del self._mention_count[gid][uid]
                 # Expire config cache entries older than 5 min
                 import time as _time
+
                 now_ts = _time.monotonic()
                 stale = [g for g, t in self._cache_ttl.items() if now_ts - t > 300]
                 for g in stale:
@@ -1159,10 +1411,10 @@ class ModerationModule(BarkModule):
                 # Prune dup_track (consecutive identical message tracking)
                 for gid in list(self._dup_track.keys()):
                     for uid in list(self._dup_track[gid].keys()):
-                        track = self._dup_track[gid][uid]
-                        while track and track[0][0] < cutoff:
-                            track.pop(0)
-                        if not track:
+                        dup_track = self._dup_track[gid][uid]
+                        while dup_track and dup_track[0][0] < cutoff:
+                            dup_track.pop(0)
+                        if not dup_track:
                             del self._dup_track[gid][uid]
                     if not self._dup_track[gid]:
                         del self._dup_track[gid]
@@ -1192,43 +1444,75 @@ class ModerationModule(BarkModule):
 
     # ── Helper: shared moderation logic ────────────────
 
-    async def _act(self, interaction: discord.Interaction, action: str, member: discord.Member,
-                   reason: str, executor=None, duration: int | None = None) -> int:
+    async def _act(
+        self,
+        interaction: discord.Interaction,
+        action: str,
+        member: discord.Member,
+        reason: str,
+        executor=None,
+        duration: int | None = None,
+    ) -> int:
         """Execute a moderation action, create case, log audit."""
+        if interaction.guild is None:
+            raise ValueError("Cannot act outside a guild")
         case_number = await self.ctx.create_case(
-            guild_id=interaction.guild.id, action_type=action,
-            target_id=str(member.id), target_tag=str(member),
-            moderator_id=str(interaction.user.id), moderator_tag=str(interaction.user),
-            reason=reason, duration=duration,
+            guild_id=interaction.guild.id,
+            action_type=action,
+            target_id=str(member.id),
+            target_tag=str(member),
+            moderator_id=str(interaction.user.id),
+            moderator_tag=str(interaction.user),
+            reason=reason,
+            duration=duration,
         )
         await self.ctx.log_audit(
-            guild_id=interaction.guild.id, action=action,
-            actor_id=str(interaction.user.id), actor_tag=str(interaction.user),
-            target_id=str(member.id), target_tag=str(member),
+            guild_id=interaction.guild.id,
+            action=action,
+            actor_id=str(interaction.user.id),
+            actor_tag=str(interaction.user),
+            target_id=str(member.id),
+            target_tag=str(member),
             details={"reason": reason, "case": case_number, "duration": duration},
         )
         return case_number
 
     # ── Command handlers ──────────────────────────────
 
-    async def _cmd_warn(self, interaction: discord.Interaction, member: discord.Member, reason: str) -> None:
-        if not interaction.guild: return
+    async def _cmd_warn(
+        self, interaction: discord.Interaction, member: discord.Member, reason: str
+    ) -> None:
+        if not interaction.guild:
+            return
         if member.bot:
             return await interaction.followup.send("❌ Cannot warn bot accounts.", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
         case = await self._act(interaction, "warn", member, reason)
-        await self.ctx.add_warning(interaction.guild.id, str(member.id), str(interaction.user.id), reason)
+        await self.ctx.add_warning(
+            interaction.guild.id, str(member.id), str(interaction.user.id), reason
+        )
         await interaction.followup.send(f"⚠️ Warned {member.mention} | Case #{case}")
         try:
-            await member.send(f"You were warned in {interaction.guild.name}.\nReason: {reason}\nCase #{case}")
+            await member.send(
+                f"You were warned in {interaction.guild.name}.\nReason: {reason}\nCase #{case}"
+            )
         except discord.Forbidden:
             pass
 
-    async def _cmd_timeout(self, interaction: discord.Interaction, member: discord.Member,
-                            duration: int, unit: str, reason: str) -> None:
-        if not interaction.guild: return
+    async def _cmd_timeout(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        duration: int,
+        unit: str,
+        reason: str,
+    ) -> None:
+        if not interaction.guild:
+            return
         if member.bot:
-            return await interaction.followup.send("❌ Cannot timeout bot accounts.", ephemeral=True)
+            return await interaction.followup.send(
+                "❌ Cannot timeout bot accounts.", ephemeral=True
+            )
         await interaction.response.defer(ephemeral=True)
         if not interaction.guild.me.guild_permissions.moderate_members:
             return await interaction.followup.send("❌ Cannot timeout members.", ephemeral=True)
@@ -1241,10 +1525,15 @@ class ModerationModule(BarkModule):
         except discord.Forbidden:
             return await interaction.followup.send("❌ Cannot timeout that member.", ephemeral=True)
         case = await self._act(interaction, "timeout", member, reason, duration=minutes)
-        await interaction.followup.send(f"⏱ {member.mention} timed out {duration}{unit} | Case #{case}")
+        await interaction.followup.send(
+            f"⏱ {member.mention} timed out {duration}{unit} | Case #{case}"
+        )
 
-    async def _cmd_kick(self, interaction: discord.Interaction, member: discord.Member, reason: str) -> None:
-        if not interaction.guild: return
+    async def _cmd_kick(
+        self, interaction: discord.Interaction, member: discord.Member, reason: str
+    ) -> None:
+        if not interaction.guild:
+            return
         if member.bot:
             return await interaction.followup.send("❌ Cannot kick bot accounts.", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
@@ -1257,9 +1546,15 @@ class ModerationModule(BarkModule):
         case = await self._act(interaction, "kick", member, reason)
         await interaction.followup.send(f"👢 Kicked {member.mention} | Case #{case}")
 
-    async def _cmd_ban(self, interaction: discord.Interaction, member: discord.Member,
-                        reason: str, delete_days: int) -> None:
-        if not interaction.guild: return
+    async def _cmd_ban(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        reason: str,
+        delete_days: int,
+    ) -> None:
+        if not interaction.guild:
+            return
         if member.bot:
             return await interaction.followup.send("❌ Cannot ban bot accounts.", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
@@ -1273,7 +1568,8 @@ class ModerationModule(BarkModule):
         await interaction.followup.send(f"🔨 Banned {member.mention} | Case #{case}")
 
     async def _cmd_unban(self, interaction: discord.Interaction, user_id: str, reason: str) -> None:
-        if not interaction.guild: return
+        if not interaction.guild:
+            return
         await interaction.response.defer(ephemeral=True)
         try:
             user = await self.ctx.bot.fetch_user(int(user_id))
@@ -1281,63 +1577,95 @@ class ModerationModule(BarkModule):
         except (discord.NotFound, discord.Forbidden) as e:
             return await interaction.followup.send(f"❌ {e}", ephemeral=True)
         case = await self.ctx.create_case(
-            guild_id=interaction.guild.id, action_type="unban",
-            target_id=user_id, target_tag=str(user),
-            moderator_id=str(interaction.user.id), moderator_tag=str(interaction.user),
+            guild_id=interaction.guild.id,
+            action_type="unban",
+            target_id=user_id,
+            target_tag=str(user),
+            moderator_id=str(interaction.user.id),
+            moderator_tag=str(interaction.user),
             reason=reason,
         )
         await interaction.followup.send(f"✅ Unbanned {user.mention} | Case #{case}")
 
     async def _cmd_cases(self, interaction: discord.Interaction, limit: int) -> None:
-        if not interaction.guild: return
+        if not interaction.guild:
+            return
         await interaction.response.defer(ephemeral=True)
-        from sqlalchemy import select, desc
+        from sqlalchemy import desc, select
+
         from database.engine import session_scope
         from database.models.moderation import ModerationCase
+
         async with session_scope() as session:
             result = await session.execute(
-                select(ModerationCase).where(ModerationCase.guild_id == str(interaction.guild.id))
-                .order_by(desc(ModerationCase.created_at)).limit(min(limit, 50))
+                select(ModerationCase)
+                .where(ModerationCase.guild_id == str(interaction.guild.id))
+                .order_by(desc(ModerationCase.created_at))
+                .limit(min(limit, 50))
             )
             cases = result.scalars().all()
             if not cases:
                 return await interaction.followup.send("No cases found.", ephemeral=True)
             embed = discord.Embed(title=f"Cases ({len(cases)})", color=discord.Color.blurple())
             for c in cases[:10]:
-                embed.add_field(name=f"#{c.case_number} — {c.action_type.upper()}",
-                                value=f"**Target:** {c.target_tag}\n**Mod:** {c.moderator_tag}\n**Reason:** {c.reason or 'No reason'}\n<t:{int(c.created_at.timestamp())}:R>",
-                                inline=False)
+                embed.add_field(
+                    name=f"#{c.case_number} — {c.action_type.upper()}",
+                    value=f"**Target:** {c.target_tag}\n**Mod:** {c.moderator_tag}\n**Reason:** {c.reason or 'No reason'}\n<t:{int(c.created_at.timestamp())}:R>",
+                    inline=False,
+                )
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def _cmd_warnings(self, interaction: discord.Interaction, member: discord.Member) -> None:
-        if not interaction.guild: return
+        if not interaction.guild:
+            return
         await interaction.response.defer(ephemeral=True)
-        from sqlalchemy import select, desc
+        from sqlalchemy import desc, select
+
         from database.engine import session_scope
         from database.models.moderation import Warning
+
         async with session_scope() as session:
             result = await session.execute(
-                select(Warning).where(Warning.guild_id == str(interaction.guild.id),
-                                      Warning.user_id == str(member.id), Warning.active == True)
+                select(Warning)
+                .where(
+                    Warning.guild_id == str(interaction.guild.id),
+                    Warning.user_id == str(member.id),
+                    Warning.active.is_(True),
+                )
                 .order_by(desc(Warning.created_at))
             )
             warns = result.scalars().all()
             if not warns:
-                return await interaction.followup.send(f"{member.mention} has no warnings.", ephemeral=True)
-            embed = discord.Embed(title=f"Warnings for {member.display_name}", color=discord.Color.gold())
+                return await interaction.followup.send(
+                    f"{member.mention} has no warnings.", ephemeral=True
+                )
+            embed = discord.Embed(
+                title=f"Warnings for {member.display_name}", color=discord.Color.gold()
+            )
             embed.set_thumbnail(url=member.display_avatar.url)
             for w in warns:
-                embed.add_field(name=f"Warning #{w.id}", value=f"**Reason:** {w.reason}\n**By:** <@{w.moderator_id}>\n<t:{int(w.created_at.timestamp())}:R>", inline=False)
+                embed.add_field(
+                    name=f"Warning #{w.id}",
+                    value=f"**Reason:** {w.reason}\n**By:** <@{w.moderator_id}>\n<t:{int(w.created_at.timestamp())}:R>",
+                    inline=False,
+                )
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def _cmd_clearwarn(self, interaction: discord.Interaction, warning_id: int) -> None:
-        if not interaction.guild: return
+        if not interaction.guild:
+            return
         await interaction.response.defer(ephemeral=True)
         from sqlalchemy import select
+
         from database.engine import session_scope
         from database.models.moderation import Warning
+
         async with session_scope() as session:
-            result = await session.execute(select(Warning).where(Warning.id == warning_id, Warning.guild_id == str(interaction.guild.id)))
+            result = await session.execute(
+                select(Warning).where(
+                    Warning.id == warning_id, Warning.guild_id == str(interaction.guild.id)
+                )
+            )
             w = result.scalar_one_or_none()
             if not w:
                 return await interaction.followup.send("Warning not found.", ephemeral=True)
@@ -1345,21 +1673,35 @@ class ModerationModule(BarkModule):
             await session.commit()
         await interaction.followup.send(f"✅ Warning #{warning_id} cleared.", ephemeral=True)
 
-    async def _cmd_voice_sessions(self, interaction: discord.Interaction, member: discord.Member, limit: int) -> None:
-        if not interaction.guild: return
+    async def _cmd_voice_sessions(
+        self, interaction: discord.Interaction, member: discord.Member, limit: int
+    ) -> None:
+        if not interaction.guild:
+            return
         await interaction.response.defer(ephemeral=True)
-        from sqlalchemy import select, desc
+        from sqlalchemy import desc, select
+
         from database.engine import session_scope
         from database.models.voice import VoiceSession
+
         async with session_scope() as session:
             result = await session.execute(
-                select(VoiceSession).where(VoiceSession.guild_id == str(interaction.guild.id), VoiceSession.user_id == str(member.id))
-                .order_by(desc(VoiceSession.joined_at)).limit(min(limit, 20))
+                select(VoiceSession)
+                .where(
+                    VoiceSession.guild_id == str(interaction.guild.id),
+                    VoiceSession.user_id == str(member.id),
+                )
+                .order_by(desc(VoiceSession.joined_at))
+                .limit(min(limit, 20))
             )
             sessions = result.scalars().all()
             if not sessions:
-                return await interaction.followup.send(f"No sessions for {member.mention}.", ephemeral=True)
-            embed = discord.Embed(title=f"Voice — {member.display_name}", color=discord.Color.blurple())
+                return await interaction.followup.send(
+                    f"No sessions for {member.mention}.", ephemeral=True
+                )
+            embed = discord.Embed(
+                title=f"Voice — {member.display_name}", color=discord.Color.blurple()
+            )
             for s in sessions:
                 dur = ""
                 if s.duration_seconds:
@@ -1367,28 +1709,47 @@ class ModerationModule(BarkModule):
                     h, m_ = divmod(m, 60)
                     dur = f" ({h}h {m_}m {sec}s)" if h else f" ({m_}m {sec}s)"
                 left = f"<t:{int(s.left_at.timestamp())}:R>" if s.left_at else "Now"
-                embed.add_field(name=f"#{s.channel_name}", value=f"**Joined:** <t:{int(s.joined_at.timestamp())}:R>\n**Left:** {left}{dur}", inline=False)
+                embed.add_field(
+                    name=f"#{s.channel_name}",
+                    value=f"**Joined:** <t:{int(s.joined_at.timestamp())}:R>\n**Left:** {left}{dur}",
+                    inline=False,
+                )
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-    async def _cmd_vc_kick(self, interaction: discord.Interaction, member: discord.Member, reason: str) -> None:
-        if not interaction.guild: return
+    async def _cmd_vc_kick(
+        self, interaction: discord.Interaction, member: discord.Member, reason: str
+    ) -> None:
+        if not interaction.guild:
+            return
         if member.bot:
-            return await interaction.followup.send("❌ Cannot disconnect bot accounts from voice.", ephemeral=True)
+            return await interaction.followup.send(
+                "❌ Cannot disconnect bot accounts from voice.", ephemeral=True
+            )
         await interaction.response.defer(ephemeral=True)
         if not member.voice or not member.voice.channel:
             return await interaction.followup.send("❌ Not in voice.", ephemeral=True)
         try:
             await member.move_to(None, reason=reason)
-            await self.ctx.log_audit(interaction.guild.id, "vc_kick", str(interaction.user.id), target_id=str(member.id))
+            await self.ctx.log_audit(
+                interaction.guild.id, "vc_kick", str(interaction.user.id), target_id=str(member.id)
+            )
             await interaction.followup.send(f"🔊 Disconnected {member.mention} | {reason}")
         except discord.Forbidden:
             await interaction.followup.send("❌ Cannot disconnect.", ephemeral=True)
 
-    async def _cmd_vc_move(self, interaction: discord.Interaction, member: discord.Member,
-                            channel: discord.VoiceChannel, reason: str) -> None:
-        if not interaction.guild: return
+    async def _cmd_vc_move(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        channel: discord.VoiceChannel,
+        reason: str,
+    ) -> None:
+        if not interaction.guild:
+            return
         if member.bot:
-            return await interaction.followup.send("❌ Cannot move bot accounts in voice.", ephemeral=True)
+            return await interaction.followup.send(
+                "❌ Cannot move bot accounts in voice.", ephemeral=True
+            )
         await interaction.response.defer(ephemeral=True)
         if not member.voice or not member.voice.channel:
             return await interaction.followup.send("❌ Not in voice.", ephemeral=True)
@@ -1411,53 +1772,81 @@ class ModerationModule(BarkModule):
         await self._vc_edit(interaction, member, "deafen", False, reason)
 
     async def _vc_edit(self, interaction, member, attr, value, reason):
-        if not interaction.guild: return
+        if not interaction.guild:
+            return
         if member.bot:
-            return await interaction.followup.send("❌ Cannot modify bot accounts in voice.", ephemeral=True)
+            return await interaction.followup.send(
+                "❌ Cannot modify bot accounts in voice.", ephemeral=True
+            )
         await interaction.response.defer(ephemeral=True)
         try:
             await member.edit(**{attr: value}, reason=reason)
-            await interaction.followup.send(f"{'🔇' if value else '🔊'} {attr.capitalize()}d {member.mention}")
+            await interaction.followup.send(
+                f"{'🔇' if value else '🔊'} {attr.capitalize()}d {member.mention}"
+            )
         except discord.Forbidden:
             await interaction.followup.send(f"❌ Cannot edit {member.mention}.", ephemeral=True)
 
     async def _cmd_automod(self, interaction, rule, enabled, threshold, action):
-        if not interaction.guild: return
+        if not interaction.guild:
+            return
         await interaction.response.defer(ephemeral=True)
         if rule not in RULE_TYPES:
-            return await interaction.followup.send(f"Invalid. Valid: {', '.join(RULE_TYPES)}", ephemeral=True)
+            return await interaction.followup.send(
+                f"Invalid. Valid: {', '.join(RULE_TYPES)}", ephemeral=True
+            )
 
         # Check if rulesets exist — if so, this command is deprecated
+        from sqlalchemy import func, select
+
         from database.models.ruleset import RuleSet
-        from sqlalchemy import select, func
+
         async with session_scope() as session:
-            rs_count = (await session.execute(
-                select(func.count(RuleSet.id)).where(RuleSet.guild_id == str(interaction.guild.id))
-            )).scalar() or 0
+            rs_count = (
+                await session.execute(
+                    select(func.count(RuleSet.id)).where(
+                        RuleSet.guild_id == str(interaction.guild.id)
+                    )
+                )
+            ).scalar() or 0
 
         if rs_count > 0:
             # Migrated to rulesets — show deprecation message
             await interaction.followup.send(
-                f"⚠️ This server is using the new Ruleset system. "
-                f"Configure AutoMod rules from the dashboard **Moderation → Rulesets** tab instead. "
-                f"The `/automod` command only works with the legacy configuration.",
-                ephemeral=True
+                "⚠️ This server is using the new Ruleset system. "
+                "Configure AutoMod rules from the dashboard **Moderation → Rulesets** tab instead. "
+                "The `/automod` command only works with the legacy configuration.",
+                ephemeral=True,
             )
             return
 
         # Legacy path — pre-ruleset guilds
         from sqlalchemy import select
+
         async with session_scope() as session:
-            cfg = (await session.execute(select(AutoModConfig).where(AutoModConfig.guild_id == str(interaction.guild.id), AutoModConfig.rule_type == rule))).scalar_one_or_none()
+            cfg = (
+                await session.execute(
+                    select(AutoModConfig).where(
+                        AutoModConfig.guild_id == str(interaction.guild.id),
+                        AutoModConfig.rule_type == rule,
+                    )
+                )
+            ).scalar_one_or_none()
             if cfg is None:
                 cfg = AutoModConfig(guild_id=str(interaction.guild.id), rule_type=rule)
                 session.add(cfg)
-            if enabled is not None: cfg.enabled = enabled
-            if threshold is not None: cfg.threshold = threshold
-            if action in ("warn", "timeout", "delete"): cfg.action = action
+            if enabled is not None:
+                cfg.enabled = enabled
+            if threshold is not None:
+                cfg.threshold = threshold
+            if action in ("warn", "timeout", "delete"):
+                cfg.action = action
             await session.commit()
         self._config_cache.pop(interaction.guild.id, None)
-        await interaction.followup.send(f"✅ AutoMod `{rule}` configured. Tip: Use the dashboard Moderation → Rulesets tab for more powerful AutoMod rules.", ephemeral=True)
+        await interaction.followup.send(
+            f"✅ AutoMod `{rule}` configured. Tip: Use the dashboard Moderation → Rulesets tab for more powerful AutoMod rules.",
+            ephemeral=True,
+        )
 
     def get_actions(self) -> list[dict]:
         return self._get_operational_actions() + [
@@ -1468,8 +1857,20 @@ class ModerationModule(BarkModule):
                 "endpoint": "cleanup-archive",
                 "destructive": True,
                 "fields": [
-                    {"key": "older_than_days", "label": "Archive Cases Older Than (days)", "type": "integer", "required": True, "placeholder": "90"},
-                    {"key": "dry_run", "label": "Dry Run", "type": "boolean", "required": False, "default": True},
+                    {
+                        "key": "older_than_days",
+                        "label": "Archive Cases Older Than (days)",
+                        "type": "integer",
+                        "required": True,
+                        "placeholder": "90",
+                    },
+                    {
+                        "key": "dry_run",
+                        "label": "Dry Run",
+                        "type": "boolean",
+                        "required": False,
+                        "default": True,
+                    },
                 ],
             },
             {
@@ -1479,8 +1880,20 @@ class ModerationModule(BarkModule):
                 "endpoint": "purge-warnings",
                 "destructive": True,
                 "fields": [
-                    {"key": "older_than_days", "label": "Older Than (days)", "type": "integer", "required": True, "placeholder": "365"},
-                    {"key": "dry_run", "label": "Dry Run", "type": "boolean", "required": False, "default": True},
+                    {
+                        "key": "older_than_days",
+                        "label": "Older Than (days)",
+                        "type": "integer",
+                        "required": True,
+                        "placeholder": "365",
+                    },
+                    {
+                        "key": "dry_run",
+                        "label": "Dry Run",
+                        "type": "boolean",
+                        "required": False,
+                        "default": True,
+                    },
                 ],
             },
             {
@@ -1490,10 +1903,22 @@ class ModerationModule(BarkModule):
                 "endpoint": "archive-member",
                 "destructive": True,
                 "fields": [
-                    {"key": "target_id", "label": "Member", "type": "api_select", "required": True,
-                     "api": "/api/v1/guilds/{guild_id}/members", "value_key": "id", "label_key": "name",
-                     "placeholder": "Select a member..."},
-                    {"key": "keep_active", "label": "Keep Active Warnings", "type": "boolean", "required": False},
+                    {
+                        "key": "target_id",
+                        "label": "Member",
+                        "type": "api_select",
+                        "required": True,
+                        "api": "/api/v1/guilds/{guild_id}/members",
+                        "value_key": "id",
+                        "label_key": "name",
+                        "placeholder": "Select a member...",
+                    },
+                    {
+                        "key": "keep_active",
+                        "label": "Keep Active Warnings",
+                        "type": "boolean",
+                        "required": False,
+                    },
                 ],
             },
         ]
@@ -1503,15 +1928,17 @@ class ModerationModule(BarkModule):
     def get_api_routes(self):
         """Register API endpoints for the Moderation module's dashboard actions."""
         from fastapi import APIRouter
+
+        from services.moderation_service import ModerationService
         from services.response import (
-            api_success,
             api_error,
-            api_not_found,
             api_forbidden,
+            api_not_found,
+            api_success,
             check_api_permission,
             get_module_min_role,
         )
-        from services.moderation_service import ModerationService
+
         svc = ModerationService()
         router = APIRouter(tags=["module-moderation"])
 
@@ -1534,15 +1961,22 @@ class ModerationModule(BarkModule):
             member = guild.get_member(int(target_id))
             if member is None:
                 return api_not_found("Member")
-            case = await svc.create_case(gid, "warn", str(member.id), str(member),
-                                          "dashboard", "Dashboard", reason)
+            case = await svc.create_case(
+                gid, "warn", str(member.id), str(member), "dashboard", "Dashboard", reason
+            )
             await svc.add_warning(gid, str(member.id), "dashboard", reason)
-            await svc.log_audit(gid, "warn",
-                                 actor_id="dashboard", actor_tag="Dashboard",
-                                 target_id=str(member.id), target_tag=str(member),
-                                 details={"reason": reason, "case": case})
+            await svc.log_audit(
+                gid,
+                "warn",
+                actor_id="dashboard",
+                actor_tag="Dashboard",
+                target_id=str(member.id),
+                target_tag=str(member),
+                details={"reason": reason, "case": case},
+            )
             # Emit event for realtime bridge and logging
             from services.bark_context import emit_moderation_case_created
+
             await emit_moderation_case_created(
                 self.ctx.events,
                 guild_id=gid,
@@ -1558,9 +1992,7 @@ class ModerationModule(BarkModule):
         async def test_rule(request: Request, guild_id: str):
             """Simulate a rule trigger to test AutoMod configuration."""
             await get_module_min_role("moderation", guild_id)
-            if not check_api_permission(
-                request, "moderation.configure", guild_id
-            ):
+            if not check_api_permission(request, "moderation.configure", guild_id):
                 return api_forbidden("Insufficient permissions")
             gid = int(guild_id)
             bot = request.state.bot
@@ -1572,24 +2004,30 @@ class ModerationModule(BarkModule):
             configs = await self._get_configs(gid)
             cfg = configs.get(rule_type)
             if not cfg:
-                return api_error(f"Rule '{rule_type}' is not enabled. Enable it in the Configuration section first.", status_code=400)
-            return api_success({
-                "message": f"Rule '{rule_type}' is active. Threshold={cfg.get('threshold')}, "
-                           f"Action={cfg.get('action')}, Window={cfg.get('window_seconds')}s. "
-                           f"No simulated violations detected.",
-            })
+                return api_error(
+                    f"Rule '{rule_type}' is not enabled. Enable it in the Configuration section first.",
+                    status_code=400,
+                )
+            return api_success(
+                {
+                    "message": f"Rule '{rule_type}' is active. Threshold={cfg.get('threshold')}, "
+                    f"Action={cfg.get('action')}, Window={cfg.get('window_seconds')}s. "
+                    f"No simulated violations detected.",
+                }
+            )
 
         @router.post("/guilds/{guild_id}/modules/moderation/archive-member")
         async def archive_member(request: Request, guild_id: str):
             """Soft-archive all moderation history for a target member."""
             await get_module_min_role("moderation", guild_id)
-            if not check_api_permission(
-                request, "moderation.cases.delete", guild_id
-            ):
+            if not check_api_permission(request, "moderation.cases.delete", guild_id):
                 return api_forbidden("Insufficient permissions")
             gid = int(guild_id)
-            from sqlalchemy import select, delete
-            from database.models.moderation import ModerationCase, Warning as W
+            from sqlalchemy import delete, select
+
+            from database.models.moderation import ModerationCase
+            from database.models.moderation import Warning as WarningModel
+
             bot = request.state.bot
             guild = bot.get_guild(gid)
             if guild is None:
@@ -1600,9 +2038,18 @@ class ModerationModule(BarkModule):
             if not target_id:
                 return api_error("target_id is required")
             async with session_scope() as session:
-                cases = (await session.execute(
-                    select(ModerationCase).where(ModerationCase.guild_id == str(gid), ModerationCase.target_id == target_id)
-                )).scalars().all()
+                cases = (
+                    (
+                        await session.execute(
+                            select(ModerationCase).where(
+                                ModerationCase.guild_id == str(gid),
+                                ModerationCase.target_id == target_id,
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
                 case_count = 0
                 for case in cases:
                     if case.resolved:
@@ -1612,23 +2059,30 @@ class ModerationModule(BarkModule):
                     case.reason = f"[Archived] {case.reason or ''}"
                     case_count += 1
                 if not keep_active:
-                    await session.execute(delete(W).where(W.guild_id == str(gid), W.user_id == target_id))
+                    await session.execute(
+                        delete(WarningModel).where(
+                            WarningModel.guild_id == str(gid),
+                            WarningModel.user_id == target_id,
+                        )
+                    )
                 await session.commit()
-            return api_success({
-                "message": f"Archived {case_count} active cases for target.",
-                "archived_cases": case_count,
-            })
+            return api_success(
+                {
+                    "message": f"Archived {case_count} active cases for target.",
+                    "archived_cases": case_count,
+                }
+            )
 
         @router.post("/guilds/{guild_id}/modules/moderation/cleanup-archive")
         async def cleanup_archive(request: Request, guild_id: str):
             """Archive resolved cases older than N days."""
             await get_module_min_role("moderation", guild_id)
-            if not check_api_permission(
-                request, "moderation.cases.delete", guild_id
-            ):
+            if not check_api_permission(request, "moderation.cases.delete", guild_id):
                 return api_forbidden("Insufficient permissions")
             from sqlalchemy import select, update
+
             from database.models.moderation import ModerationCase
+
             data = await request.json()
             days = int(data.get("older_than_days", 90))
             dry_run = data.get("dry_run", False)
@@ -1637,71 +2091,78 @@ class ModerationModule(BarkModule):
                 result = await session.execute(
                     select(ModerationCase).where(
                         ModerationCase.guild_id == str(guild_id),
-                        ModerationCase.resolved == True,
+                        ModerationCase.resolved.is_(True),
                         ModerationCase.created_at <= cutoff,
                     )
                 )
                 count = len(result.scalars().all())
                 if not dry_run:
                     await session.execute(
-                        update(ModerationCase).where(
+                        update(ModerationCase)
+                        .where(
                             ModerationCase.guild_id == str(guild_id),
-                            ModerationCase.resolved == True,
+                            ModerationCase.resolved.is_(True),
                             ModerationCase.created_at <= cutoff,
-                        ).values(resolved_at=datetime.now(timezone.utc))
+                        )
+                        .values(resolved_at=datetime.now(timezone.utc))
                     )
                     await session.commit()
-            return api_success({
-                "message": f"{'Would archive' if dry_run else 'Archived'} {count} resolved cases older than {days}d.",
-                "count": count,
-                "dry_run": dry_run,
-            })
+            return api_success(
+                {
+                    "message": f"{'Would archive' if dry_run else 'Archived'} {count} resolved cases older than {days}d.",
+                    "count": count,
+                    "dry_run": dry_run,
+                }
+            )
 
         @router.post("/guilds/{guild_id}/modules/moderation/purge-warnings")
         async def purge_warnings(request: Request, guild_id: str):
             """Permanently delete inactive warnings older than N days."""
             await get_module_min_role("moderation", guild_id)
-            if not check_api_permission(
-                request, "moderation.warnings.delete", guild_id
-            ):
+            if not check_api_permission(request, "moderation.warnings.delete", guild_id):
                 return api_forbidden("Insufficient permissions")
-            from sqlalchemy import select, delete
-            from database.models.moderation import Warning as W
+            from sqlalchemy import delete, select
+
+            from database.models.moderation import Warning as WarningModel
+
             data = await request.json()
             days = int(data.get("older_than_days", 365))
             dry_run = data.get("dry_run", False)
             cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             async with session_scope() as session:
                 result = await session.execute(
-                    select(W).where(
-                        W.guild_id == str(guild_id),
-                        W.active == False,
-                        W.created_at <= cutoff,
+                    select(WarningModel).where(
+                        WarningModel.guild_id == str(guild_id),
+                        WarningModel.active.is_(False),
+                        WarningModel.created_at <= cutoff,
                     )
                 )
                 count = len(result.scalars().all())
                 if not dry_run:
                     await session.execute(
-                        delete(W).where(
-                            W.guild_id == str(guild_id),
-                            W.active == False,
-                            W.created_at <= cutoff,
+                        delete(WarningModel).where(
+                            WarningModel.guild_id == str(guild_id),
+                            WarningModel.active.is_(False),
+                            WarningModel.created_at <= cutoff,
                         )
                     )
                     await session.commit()
-            return api_success({
-                "message": f"{'Would purge' if dry_run else 'Purged'} {count} inactive warnings older than {days}d.",
-                "count": count,
-                "dry_run": dry_run,
-            })
+            return api_success(
+                {
+                    "message": f"{'Would purge' if dry_run else 'Purged'} {count} inactive warnings older than {days}d.",
+                    "count": count,
+                    "dry_run": dry_run,
+                }
+            )
 
         # ── Ruleset CRUD ──────────────────────────────────────
 
         @router.get("/guilds/{guild_id}/rulesets")
         async def list_rulesets(request: Request, guild_id: str):
             """List all rulesets for a guild with their rules."""
-            from database.models.ruleset import RuleSet, Rule
             from sqlalchemy import select
+
+            from database.models.ruleset import Rule, RuleSet
 
             async with session_scope() as session:
                 result = await session.execute(
@@ -1713,51 +2174,52 @@ class ModerationModule(BarkModule):
                 data = []
                 for rs in rulesets:
                     rules_result = await session.execute(
-                        select(Rule)
-                        .where(Rule.ruleset_id == rs.id)
-                        .order_by(Rule.priority)
+                        select(Rule).where(Rule.ruleset_id == rs.id).order_by(Rule.priority)
                     )
                     rules = rules_result.scalars().all()
-                    data.append({
-                        "id": rs.id,
-                        "name": rs.name,
-                        "enabled": rs.enabled,
-                        "priority": rs.priority,
-                        "scoped_conditions": {
-                            "ignored_roles": _json_list(rs.ignored_roles),
-                            "require_roles": _json_list(rs.require_roles),
-                            "require_all_roles": rs.require_all_roles,
-                            "ignored_channels": _json_list(rs.ignored_channels),
-                            "active_channels": _json_list(rs.active_channels),
-                            "ignored_categories": _json_list(rs.ignored_categories),
-                            "active_categories": _json_list(rs.active_categories),
-                            "account_age_minutes_min": rs.account_age_minutes_min,
-                            "account_age_minutes_max": rs.account_age_minutes_max,
-                            "member_duration_minutes_min": rs.member_duration_minutes_min,
-                            "member_duration_minutes_max": rs.member_duration_minutes_max,
-                            "only_bots": rs.only_bots,
-                            "ignore_bots": rs.ignore_bots,
-                        },
-                        "rules": [
-                            {
-                                "id": r.id,
-                                "enabled": r.enabled,
-                                "trigger_type": r.trigger_type,
-                                "trigger_config": _json_dict(r.trigger_config),
-                                "effect_type": r.effect_type,
-                                "effect_config": _json_dict(r.effect_config),
-                                "conditions": _json_dict(r.conditions),
-                                "priority": r.priority,
-                            }
-                            for r in rules
-                        ],
-                    })
+                    data.append(
+                        {
+                            "id": rs.id,
+                            "name": rs.name,
+                            "enabled": rs.enabled,
+                            "priority": rs.priority,
+                            "scoped_conditions": {
+                                "ignored_roles": _json_list(rs.ignored_roles),
+                                "require_roles": _json_list(rs.require_roles),
+                                "require_all_roles": rs.require_all_roles,
+                                "ignored_channels": _json_list(rs.ignored_channels),
+                                "active_channels": _json_list(rs.active_channels),
+                                "ignored_categories": _json_list(rs.ignored_categories),
+                                "active_categories": _json_list(rs.active_categories),
+                                "account_age_minutes_min": rs.account_age_minutes_min,
+                                "account_age_minutes_max": rs.account_age_minutes_max,
+                                "member_duration_minutes_min": rs.member_duration_minutes_min,
+                                "member_duration_minutes_max": rs.member_duration_minutes_max,
+                                "only_bots": rs.only_bots,
+                                "ignore_bots": rs.ignore_bots,
+                            },
+                            "rules": [
+                                {
+                                    "id": r.id,
+                                    "enabled": r.enabled,
+                                    "trigger_type": r.trigger_type,
+                                    "trigger_config": _json_dict(r.trigger_config),
+                                    "effect_type": r.effect_type,
+                                    "effect_config": _json_dict(r.effect_config),
+                                    "conditions": _json_dict(r.conditions),
+                                    "priority": r.priority,
+                                }
+                                for r in rules
+                            ],
+                        }
+                    )
                 return api_success({"rulesets": data})
 
         @router.post("/guilds/{guild_id}/rulesets")
         async def create_ruleset(request: Request, guild_id: str):
             """Create a new ruleset."""
             from database.models.ruleset import RuleSet
+
             data = await request.json()
             rs = RuleSet(
                 guild_id=str(guild_id),
@@ -1775,26 +2237,48 @@ class ModerationModule(BarkModule):
         @router.patch("/guilds/{guild_id}/rulesets/{ruleset_id}")
         async def update_ruleset(request: Request, guild_id: str, ruleset_id: int):
             """Update a ruleset's metadata or scoped conditions."""
-            from database.models.ruleset import RuleSet
             from sqlalchemy import select
+
+            from database.models.ruleset import RuleSet
+
             data = await request.json()
             async with session_scope() as session:
                 result = await session.execute(
-                    select(RuleSet).where(RuleSet.id == ruleset_id, RuleSet.guild_id == str(guild_id))
+                    select(RuleSet).where(
+                        RuleSet.id == ruleset_id, RuleSet.guild_id == str(guild_id)
+                    )
                 )
                 rs = result.scalar_one_or_none()
                 if not rs:
                     return api_error("Ruleset not found", status_code=404)
-                for field in ("name", "enabled", "priority", "require_all_roles",
-                              "only_bots", "ignore_bots", "check_new_messages", "check_edited_messages"):
+                for field in (
+                    "name",
+                    "enabled",
+                    "priority",
+                    "require_all_roles",
+                    "only_bots",
+                    "ignore_bots",
+                    "check_new_messages",
+                    "check_edited_messages",
+                ):
                     if field in data:
                         setattr(rs, field, data[field])
-                for field in ("ignored_roles", "require_roles", "ignored_channels",
-                              "active_channels", "ignored_categories", "active_categories"):
+                for field in (
+                    "ignored_roles",
+                    "require_roles",
+                    "ignored_channels",
+                    "active_channels",
+                    "ignored_categories",
+                    "active_categories",
+                ):
                     if field in data:
                         setattr(rs, field, json.dumps(data[field]))
-                for field in ("account_age_minutes_min", "account_age_minutes_max",
-                              "member_duration_minutes_min", "member_duration_minutes_max"):
+                for field in (
+                    "account_age_minutes_min",
+                    "account_age_minutes_max",
+                    "member_duration_minutes_min",
+                    "member_duration_minutes_max",
+                ):
                     if field in data:
                         setattr(rs, field, data[field] or 0)
                 await session.commit()
@@ -1804,11 +2288,15 @@ class ModerationModule(BarkModule):
         @router.delete("/guilds/{guild_id}/rulesets/{ruleset_id}")
         async def delete_ruleset(request: Request, guild_id: str, ruleset_id: int):
             """Delete a ruleset and all its rules."""
-            from database.models.ruleset import RuleSet
             from sqlalchemy import select
+
+            from database.models.ruleset import RuleSet
+
             async with session_scope() as session:
                 result = await session.execute(
-                    select(RuleSet).where(RuleSet.id == ruleset_id, RuleSet.guild_id == str(guild_id))
+                    select(RuleSet).where(
+                        RuleSet.id == ruleset_id, RuleSet.guild_id == str(guild_id)
+                    )
                 )
                 rs = result.scalar_one_or_none()
                 if not rs:
@@ -1823,14 +2311,17 @@ class ModerationModule(BarkModule):
         @router.post("/guilds/{guild_id}/rulesets/{ruleset_id}/rules")
         async def create_rule(request: Request, guild_id: str, ruleset_id: int):
             """Add a rule to a ruleset."""
-            from database.models.ruleset import Rule
-            from database.models.ruleset import RuleSet
             from sqlalchemy import select
+
+            from database.models.ruleset import Rule, RuleSet
+
             data = await request.json()
             async with session_scope() as session:
                 # Verify ruleset exists
                 rs_result = await session.execute(
-                    select(RuleSet).where(RuleSet.id == ruleset_id, RuleSet.guild_id == str(guild_id))
+                    select(RuleSet).where(
+                        RuleSet.id == ruleset_id, RuleSet.guild_id == str(guild_id)
+                    )
                 )
                 if not rs_result.scalar_one_or_none():
                     return api_error("Ruleset not found", status_code=404)
@@ -1853,12 +2344,20 @@ class ModerationModule(BarkModule):
         @router.patch("/guilds/{guild_id}/rulesets/{ruleset_id}/rules/{rule_id}")
         async def update_rule(request: Request, guild_id: str, ruleset_id: int, rule_id: int):
             """Update a rule within a ruleset."""
-            from database.models.ruleset import Rule
             from sqlalchemy import select
+
+            from database.models.ruleset import Rule, RuleSet
+
             data = await request.json()
             async with session_scope() as session:
                 result = await session.execute(
-                    select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == ruleset_id)
+                    select(Rule)
+                    .join(RuleSet, Rule.ruleset_id == RuleSet.id)
+                    .where(
+                        Rule.id == rule_id,
+                        Rule.ruleset_id == ruleset_id,
+                        RuleSet.guild_id == str(guild_id),
+                    )
                 )
                 rule = result.scalar_one_or_none()
                 if not rule:
@@ -1876,11 +2375,19 @@ class ModerationModule(BarkModule):
         @router.delete("/guilds/{guild_id}/rulesets/{ruleset_id}/rules/{rule_id}")
         async def delete_rule(request: Request, guild_id: str, ruleset_id: int, rule_id: int):
             """Delete a rule from a ruleset."""
-            from database.models.ruleset import Rule
             from sqlalchemy import select
+
+            from database.models.ruleset import Rule, RuleSet
+
             async with session_scope() as session:
                 result = await session.execute(
-                    select(Rule).where(Rule.id == rule_id, Rule.ruleset_id == ruleset_id)
+                    select(Rule)
+                    .join(RuleSet, Rule.ruleset_id == RuleSet.id)
+                    .where(
+                        Rule.id == rule_id,
+                        Rule.ruleset_id == ruleset_id,
+                        RuleSet.guild_id == str(guild_id),
+                    )
                 )
                 rule = result.scalar_one_or_none()
                 if not rule:
@@ -1895,8 +2402,10 @@ class ModerationModule(BarkModule):
         @router.get("/guilds/{guild_id}/wordlists")
         async def list_wordlists(request: Request, guild_id: str):
             """List word/domain lists for a guild."""
-            from database.models.ruleset import WordList
             from sqlalchemy import select
+
+            from database.models.ruleset import WordList
+
             async with session_scope() as session:
                 result = await session.execute(
                     select(WordList)
@@ -1904,22 +2413,25 @@ class ModerationModule(BarkModule):
                     .order_by(WordList.list_type, WordList.name)
                 )
                 lists = result.scalars().all()
-                return api_success({
-                    "wordlists": [
-                        {
-                            "id": wl.id,
-                            "name": wl.name,
-                            "list_type": wl.list_type,
-                            "entries": _json_list(wl.entries),
-                        }
-                        for wl in lists
-                    ]
-                })
+                return api_success(
+                    {
+                        "wordlists": [
+                            {
+                                "id": wl.id,
+                                "name": wl.name,
+                                "list_type": wl.list_type,
+                                "entries": _json_list(wl.entries),
+                            }
+                            for wl in lists
+                        ]
+                    }
+                )
 
         @router.post("/guilds/{guild_id}/wordlists")
         async def create_wordlist(request: Request, guild_id: str):
             """Create a word/domain list."""
             from database.models.ruleset import WordList
+
             data = await request.json()
             wl = WordList(
                 guild_id=str(guild_id),
@@ -1937,12 +2449,16 @@ class ModerationModule(BarkModule):
         @router.patch("/guilds/{guild_id}/wordlists/{list_id}")
         async def update_wordlist(request: Request, guild_id: str, list_id: int):
             """Update a word/domain list."""
-            from database.models.ruleset import WordList
             from sqlalchemy import select
+
+            from database.models.ruleset import WordList
+
             data = await request.json()
             async with session_scope() as session:
                 result = await session.execute(
-                    select(WordList).where(WordList.id == list_id, WordList.guild_id == str(guild_id))
+                    select(WordList).where(
+                        WordList.id == list_id, WordList.guild_id == str(guild_id)
+                    )
                 )
                 wl = result.scalar_one_or_none()
                 if not wl:
@@ -1958,11 +2474,15 @@ class ModerationModule(BarkModule):
         @router.delete("/guilds/{guild_id}/wordlists/{list_id}")
         async def delete_wordlist(request: Request, guild_id: str, list_id: int):
             """Delete a word/domain list."""
-            from database.models.ruleset import WordList
             from sqlalchemy import select
+
+            from database.models.ruleset import WordList
+
             async with session_scope() as session:
                 result = await session.execute(
-                    select(WordList).where(WordList.id == list_id, WordList.guild_id == str(guild_id))
+                    select(WordList).where(
+                        WordList.id == list_id, WordList.guild_id == str(guild_id)
+                    )
                 )
                 wl = result.scalar_one_or_none()
                 if not wl:

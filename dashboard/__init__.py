@@ -11,15 +11,16 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from bark_version import __version__
 from config import config
 from dashboard.app import DashboardApp
-from services.security import SecurityMiddleware, AuthMiddleware
+from services.security import AuthMiddleware, SecurityMiddleware
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -34,7 +35,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     """Create and configure the Bark dashboard."""
     app = FastAPI(
         title="Bark Dashboard",
-        version="0.2.0",
+        version=__version__,
         description="ZENHAWX server management platform",
         docs_url=None,
         redoc_url=None,
@@ -54,9 +55,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     public_host = urlparse(config.dashboard.public_url).hostname
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=[
-            host for host in (public_host, "localhost", "127.0.0.1", "test") if host
-        ],
+        allowed_hosts=[host for host in (public_host, "localhost", "127.0.0.1", "test") if host],
     )
 
     # Static files
@@ -67,16 +66,19 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     # Make templates available on app state
     app.state.templates = templates
+    app.state.version = __version__
 
     # Make bot available on app state
     app.state.bot = bot
 
     from services.realtime_bridge import RealtimeBridge
+
     realtime_bridge = RealtimeBridge(bot.modules.event_bus)
     app.state.realtime_bridge = realtime_bridge
     app.router.add_event_handler("startup", realtime_bridge.start)
     app.router.add_event_handler("shutdown", realtime_bridge.stop)
     from services.response import load_module_role_access_cache
+
     app.router.add_event_handler("startup", load_module_role_access_cache)
 
     # Give bot a reference to the FastAPI app for module API route registration
@@ -102,10 +104,10 @@ def create_app(bot: BarkBot) -> DashboardApp:
     # ── Web Routes ────────────────────────────────────
 
     from dashboard.routes.web.home import router as home_router
-    from dashboard.routes.web.modules import router as modules_router
-    from dashboard.routes.web.moderation import router as moderation_router
-    from dashboard.routes.web.settings import router as settings_router
     from dashboard.routes.web.members import router as members_router
+    from dashboard.routes.web.moderation import router as moderation_router
+    from dashboard.routes.web.modules import router as modules_router
+    from dashboard.routes.web.settings import router as settings_router
 
     app.include_router(home_router, prefix="")
     app.include_router(modules_router, prefix="/guild/{guild_id}")
@@ -115,17 +117,17 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     # ── API Routes ────────────────────────────────────
 
-    from dashboard.routes.api.guilds import router as guilds_api
-    from dashboard.routes.api.modules import router as modules_api
-    from dashboard.routes.api.moderation import router as moderation_api
-    from dashboard.routes.api.settings import router as settings_api
     from dashboard.routes.api.actions import router as actions_api
+    from dashboard.routes.api.audit_log import router as audit_log_api
+    from dashboard.routes.api.bot_appearance import router as bot_appearance_api
+    from dashboard.routes.api.guilds import router as guilds_api
     from dashboard.routes.api.health import router as health_api
     from dashboard.routes.api.manifest import router as manifest_api
-    from dashboard.routes.api.bot_appearance import router as bot_appearance_api
-    from dashboard.routes.api.audit_log import router as audit_log_api
-    from dashboard.routes.api.realtime import router as realtime_api
+    from dashboard.routes.api.moderation import router as moderation_api
+    from dashboard.routes.api.modules import router as modules_api
     from dashboard.routes.api.notes import router as notes_api
+    from dashboard.routes.api.realtime import router as realtime_api
+    from dashboard.routes.api.settings import router as settings_api
     from dashboard.routes.auth import router as auth_router
 
     app.include_router(guilds_api, prefix="/api/v1")

@@ -2,38 +2,57 @@
 Moderation API routes.
 """
 
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 from database.engine import session_scope
-from database.models.moderation import ModerationCase, Warning, UserNote
-from services.response import api_success, api_error, api_paginated
+from database.models.moderation import ModerationCase, Warning
 from services.bark_context import emit_moderation_case_created
+from services.moderation_service import ModerationService
+from services.response import api_error, api_paginated, api_success
 
 router = APIRouter(tags=["api-moderation"])
+
+
+def _deleted_count(result) -> int:
+    """Return affected-row count from a DML execution result."""
+    return result.rowcount or 0
 
 
 # ── Cases ────────────────────────────────────────────
 
 
 @router.get("/guilds/{guild_id}/moderation/cases")
-async def list_cases(request: Request, guild_id: str, page: int = 0, limit: int = 50):
+async def list_cases(
+    request: Request,
+    guild_id: str,
+    page: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+):
     """List moderation cases for a guild with pagination."""
     gid = int(guild_id)
-    from sqlalchemy import select, desc, func
+    from sqlalchemy import desc, func, select
+
     from database.models.moderation import ModerationCase
 
     async with session_scope() as session:
         # Total count
         total = (
             await session.execute(
-                select(func.count(ModerationCase.id)).where(ModerationCase.guild_id == str(gid), ModerationCase.resolved == False)
+                select(func.count(ModerationCase.id)).where(
+                    ModerationCase.guild_id == str(gid),
+                    ModerationCase.resolved.is_(False),
+                )
             )
         ).scalar() or 0
 
         result = await session.execute(
             select(ModerationCase)
-            .where(ModerationCase.guild_id == str(gid), ModerationCase.resolved == False)
+            .where(
+                ModerationCase.guild_id == str(gid),
+                ModerationCase.resolved.is_(False),
+            )
             .order_by(desc(ModerationCase.created_at))
             .offset(page * limit)
             .limit(limit)
@@ -65,6 +84,7 @@ async def list_cases(request: Request, guild_id: str, page: int = 0, limit: int 
 async def get_case(request: Request, guild_id: str, case_number: int):
     """Get a specific case."""
     from sqlalchemy import select
+
     gid = str(guild_id)
 
     async with session_scope() as session:
@@ -78,14 +98,21 @@ async def get_case(request: Request, guild_id: str, case_number: int):
         if case is None:
             return api_error("Case not found", status_code=404)
 
-        return api_success({"case_number": case.case_number, "action_type": case.action_type,
-            "target_id": case.target_id, "target_tag": case.target_tag,
-            "moderator_id": case.moderator_id, "moderator_tag": case.moderator_tag,
-            "reason": case.reason, "duration": case.duration,
-            "created_at": case.created_at.isoformat(),
-            "resolved": case.resolved,
-            "resolved_at": case.resolved_at.isoformat() if case.resolved_at else None,
-        })
+        return api_success(
+            {
+                "case_number": case.case_number,
+                "action_type": case.action_type,
+                "target_id": case.target_id,
+                "target_tag": case.target_tag,
+                "moderator_id": case.moderator_id,
+                "moderator_tag": case.moderator_tag,
+                "reason": case.reason,
+                "duration": case.duration,
+                "created_at": case.created_at.isoformat(),
+                "resolved": case.resolved,
+                "resolved_at": case.resolved_at.isoformat() if case.resolved_at else None,
+            }
+        )
 
 
 @router.post("/guilds/{guild_id}/moderation/cases")
@@ -95,45 +122,39 @@ async def create_case(request: Request, guild_id: str):
     if request.state.bot.get_guild(gid) is None:
         return api_error("Guild not found", status_code=404)
     data = await request.json()
+    action_type = str(data.get("action_type", "warn"))
+    target_id = str(data.get("target_id", ""))
+    target_tag = str(data.get("target_tag", "Unknown#0000"))
+    moderator_id = str(data.get("moderator_id", ""))
+    moderator_tag = str(data.get("moderator_tag", "Unknown#0000"))
+    reason = str(data.get("reason", ""))
+    duration = data.get("duration")
+    case_number = await ModerationService.create_case(
+        guild_id=gid,
+        action_type=action_type,
+        target_id=target_id,
+        target_tag=target_tag,
+        moderator_id=moderator_id,
+        moderator_tag=moderator_tag,
+        reason=reason,
+        duration=duration,
+    )
 
-    from sqlalchemy import select, func
-
-    async with session_scope() as session:
-        # Get next case number
-        result = await session.execute(
-            select(func.coalesce(func.max(ModerationCase.case_number), 0) + 1)
-            .where(ModerationCase.guild_id == str(gid))
-        )
-        next_number = result.scalar()
-
-        case = ModerationCase(
-            guild_id=str(gid),
-            case_number=next_number,
-            action_type=data.get("action_type", "warn"),
-            target_id=data.get("target_id", ""),
-            target_tag=data.get("target_tag", "Unknown#0000"),
-            moderator_id=data.get("moderator_id", ""),
-            moderator_tag=data.get("moderator_tag", "Unknown#0000"),
-            reason=data.get("reason", ""),
-            duration=data.get("duration"),
-        )
-        session.add(case)
-        await session.commit()
-
-        await emit_moderation_case_created(
-            request.state.bot.modules.event_bus,
-            guild_id=gid,
-            case_id=case.case_number,
-            action_type=case.action_type,
-            target_tag=case.target_tag,
-            moderator_tag=case.moderator_tag,
-            reason=case.reason,
-        )
-        return api_success({
+    await emit_moderation_case_created(
+        request.state.bot.modules.event_bus,
+        guild_id=gid,
+        case_id=case_number,
+        action_type=action_type,
+        target_tag=target_tag,
+        moderator_tag=moderator_tag,
+        reason=reason,
+    )
+    return api_success(
+        {
             "success": True,
-            "case_number": case.case_number,
-            "id": case.id,
-        })
+            "case_number": case_number,
+        }
+    )
 
 
 # ── Warnings ─────────────────────────────────────────
@@ -142,37 +163,41 @@ async def create_case(request: Request, guild_id: str):
 @router.get("/guilds/{guild_id}/moderation/warnings")
 async def list_warnings(request: Request, guild_id: str):
     """List all active warnings for a guild."""
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     gid = str(guild_id)
 
     async with session_scope() as session:
         result = await session.execute(
             select(Warning)
-            .where(Warning.guild_id == str(gid), Warning.active == True)
+            .where(Warning.guild_id == str(gid), Warning.active.is_(True))
             .order_by(desc(Warning.created_at))
             .limit(100)
         )
         warnings = result.scalars().all()
 
-        return api_success({
-            "warnings": [
-                {
-                    "id": w.id,
-                    "user_id": w.user_id,
-                    "moderator_id": w.moderator_id,
-                    "reason": w.reason,
-                    "created_at": w.created_at.isoformat(),
-                    "active": w.active,
-                }
-                for w in warnings
-            ]
-        })
+        return api_success(
+            {
+                "warnings": [
+                    {
+                        "id": w.id,
+                        "user_id": w.user_id,
+                        "moderator_id": w.moderator_id,
+                        "reason": w.reason,
+                        "created_at": w.created_at.isoformat(),
+                        "active": w.active,
+                    }
+                    for w in warnings
+                ]
+            }
+        )
 
 
 @router.get("/guilds/{guild_id}/moderation/warnings/{user_id}")
 async def get_user_warnings(request: Request, guild_id: str, user_id: str):
     """List warnings for a specific user."""
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     gid = str(guild_id)
 
     async with session_scope() as session:
@@ -186,27 +211,26 @@ async def get_user_warnings(request: Request, guild_id: str, user_id: str):
         )
         warnings = result.scalars().all()
 
-        return api_success({
-            "user_id": user_id,
-            "warning_count": len([w for w in warnings if w.active]),
-            "total_warnings": len(warnings),
-            "warnings": [
-                {
-                    "id": w.id,
-                    "moderator_id": w.moderator_id,
-                    "reason": w.reason,
-                    "created_at": w.created_at.isoformat(),
-                    "active": w.active,
-                }
-                for w in warnings
-            ],
-        })
+        return api_success(
+            {
+                "user_id": user_id,
+                "warning_count": len([w for w in warnings if w.active]),
+                "total_warnings": len(warnings),
+                "warnings": [
+                    {
+                        "id": w.id,
+                        "moderator_id": w.moderator_id,
+                        "reason": w.reason,
+                        "created_at": w.created_at.isoformat(),
+                        "active": w.active,
+                    }
+                    for w in warnings
+                ],
+            }
+        )
 
 
 # ── Delete ────────────────────────────────────────────
-
-
-from datetime import datetime, timezone
 
 
 @router.delete("/guilds/{guild_id}/moderation/cases/{case_number}")
@@ -217,10 +241,12 @@ async def delete_case(request: Request, guild_id: str, case_number: int):
         check_api_permission,
         get_module_min_role,
     )
+
     await get_module_min_role("moderation", guild_id)
     if not check_api_permission(request, "moderation.cases.delete", guild_id):
         return api_forbidden()
     from sqlalchemy import select
+
     gid = str(guild_id)
 
     async with session_scope() as session:
@@ -250,10 +276,12 @@ async def delete_warning(request: Request, guild_id: str, warning_id: int):
         check_api_permission,
         get_module_min_role,
     )
+
     await get_module_min_role("moderation", guild_id)
     if not check_api_permission(request, "moderation.warnings.delete", guild_id):
         return api_forbidden()
     from services.moderation_service import ModerationService
+
     success = await ModerationService.clear_warning(int(guild_id), warning_id)
     if not success:
         return api_error("Warning not found", status_code=404)
@@ -264,9 +292,14 @@ async def delete_warning(request: Request, guild_id: str, warning_id: int):
 
 
 @router.get("/guilds/{guild_id}/moderation/voice-history")
-async def guild_voice_history(request: Request, guild_id: str, limit: int = 50):
+async def guild_voice_history(
+    request: Request,
+    guild_id: str,
+    limit: int = Query(50, ge=1, le=100),
+):
     """Get recent voice session history across all users in a guild."""
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     from database.models.voice import VoiceSession
 
     gid = int(guild_id)
@@ -300,22 +333,26 @@ async def guild_voice_history(request: Request, guild_id: str, limit: int = 50):
                 if ch:
                     channel_name = ch.name
 
-            enriched.append({
-                "id": s.id,
-                "user_id": s.user_id,
-                "username": username,
-                "user_tag": user_tag,
-                "channel_id": s.channel_id,
-                "channel_name": channel_name or s.channel_name or "Unknown",
-                "channel_original_name": s.channel_name or "",
-                "joined_at": s.joined_at.isoformat() if s.joined_at else None,
-                "left_at": s.left_at.isoformat() if s.left_at else None,
-                "duration_seconds": s.duration_seconds,
-            })
+            enriched.append(
+                {
+                    "id": s.id,
+                    "user_id": s.user_id,
+                    "username": username,
+                    "user_tag": user_tag,
+                    "channel_id": s.channel_id,
+                    "channel_name": channel_name or s.channel_name or "Unknown",
+                    "channel_original_name": s.channel_name or "",
+                    "joined_at": s.joined_at.isoformat() if s.joined_at else None,
+                    "left_at": s.left_at.isoformat() if s.left_at else None,
+                    "duration_seconds": s.duration_seconds,
+                }
+            )
 
-        return api_success({
-            "sessions": enriched,
-        })
+        return api_success(
+            {
+                "sessions": enriched,
+            }
+        )
 
 
 # ── Admin Purge ─────────────────────────────────────────
@@ -325,48 +362,55 @@ async def guild_voice_history(request: Request, guild_id: str, limit: int = 50):
 async def purge_voice_history(request: Request, guild_id: str):
     """Admin-only: permanently delete all voice sessions for a guild."""
     from services.response import api_forbidden, check_api_permission
+
     if not check_api_permission(request, "guild.manage", guild_id):
         return api_forbidden("Admin only")
     from sqlalchemy import delete
+
     from database.models.voice import VoiceSession
+
     gid_str = str(guild_id)
     async with session_scope() as session:
         result = await session.execute(
             delete(VoiceSession).where(VoiceSession.guild_id == str(gid_str))
         )
         await session.commit()
-        return api_success({"deleted": result.rowcount})
+        return api_success({"deleted": _deleted_count(result)})
 
 
 @router.delete("/guilds/{guild_id}/moderation/audit-logs")
 async def purge_audit_logs(request: Request, guild_id: str):
     """Admin-only: permanently delete all audit logs for a guild."""
     from services.response import api_forbidden, check_api_permission
+
     if not check_api_permission(request, "guild.manage", guild_id):
         return api_forbidden("Admin only")
     from sqlalchemy import delete
+
     from database.models.moderation import AuditLog
+
     gid_str = str(guild_id)
     async with session_scope() as session:
-        result = await session.execute(
-            delete(AuditLog).where(AuditLog.guild_id == str(gid_str))
-        )
+        result = await session.execute(delete(AuditLog).where(AuditLog.guild_id == str(gid_str)))
         await session.commit()
-        return api_success({"deleted": result.rowcount})
+        return api_success({"deleted": _deleted_count(result)})
 
 
 @router.delete("/guilds/{guild_id}/moderation/attachments")
 async def purge_attachments(request: Request, guild_id: str):
     """Admin-only: permanently delete all file attachment records for a guild."""
     from services.response import api_forbidden, check_api_permission
+
     if not check_api_permission(request, "guild.manage", guild_id):
         return api_forbidden("Admin only")
     from sqlalchemy import delete
+
     from database.models.attachments import FileAttachment
+
     gid_str = str(guild_id)
     async with session_scope() as session:
         result = await session.execute(
             delete(FileAttachment).where(FileAttachment.guild_id == str(gid_str))
         )
         await session.commit()
-        return api_success({"deleted": result.rowcount})
+        return api_success({"deleted": _deleted_count(result)})

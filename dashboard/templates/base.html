@@ -50,7 +50,7 @@
                     <span class="logo-icon">{{ icon("radio", 20) }}</span>
                     <span class="logo-text">Bark</span>
                 </a>
-                <span class="sidebar-version">v{% if request.app.state.version is defined %}{{ request.app.state.version }}{% else %}0.3.0{% endif %}</span>
+                <span class="sidebar-version">v{{ request.app.state.version }}</span>
             </div>
 
             <nav class="sidebar-nav" id="sidebar-nav" aria-label="Server pages">

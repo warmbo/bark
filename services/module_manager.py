@@ -42,7 +42,9 @@ class ModuleManager:
         self._modules: dict[str, BarkModule] = {}
         self._page_registry: dict[str, list[PageRegistration]] = {}
         self._registered_commands: dict[str, set[str]] = {}  # module -> {command names}
-        self._registered_events: dict[str, list[tuple[str, Callable]]] = {}   # module -> [(event_type, handler)]
+        self._registered_events: dict[
+            str, list[tuple[str, Callable]]
+        ] = {}  # module -> [(event_type, handler)]
         self._registered_api_modules: set[str] = set()
         self._guild_states: dict[tuple[int, str], bool] = {}
 
@@ -61,6 +63,7 @@ class ModuleManager:
                 self._load_module_package(module_name)
 
         from services.response import get_permission_service
+
         get_permission_service().discover_module_permissions(self._modules)
 
         logger.info(
@@ -88,9 +91,7 @@ class ModuleManager:
         if pkg_path:
             for _, sub_name, _ in pkgutil.iter_modules(pkg_path):
                 try:
-                    candidates.append(
-                        importlib.import_module(f"modules.{package_name}.{sub_name}")
-                    )
+                    candidates.append(importlib.import_module(f"modules.{package_name}.{sub_name}"))
                 except Exception:
                     logger.exception(
                         "Failed to inspect submodule modules.%s.%s",
@@ -115,8 +116,7 @@ class ModuleManager:
 
         prefix = f"modules.{package_name}"
         loaded_names = [
-            name for name in sys.modules
-            if name == prefix or name.startswith(f"{prefix}.")
+            name for name in sys.modules if name == prefix or name.startswith(f"{prefix}.")
         ]
         for loaded_name in sorted(loaded_names, key=lambda value: value.count("."), reverse=True):
             importlib.reload(sys.modules[loaded_name])
@@ -169,9 +169,12 @@ class ModuleManager:
                 self._registered_events[name].append((evt.event_name, guarded_handler))
 
             module.enabled = True
-            logger.info("Module '%s' enabled (%d commands, %d events)",
-                        name, len(self._registered_commands[name]),
-                        len(self._registered_events[name]))
+            logger.info(
+                "Module '%s' enabled (%d commands, %d events)",
+                name,
+                len(self._registered_commands[name]),
+                len(self._registered_events[name]),
+            )
             return True
         except Exception:
             logger.exception("Failed to enable module '%s'", name)
@@ -285,9 +288,7 @@ class ModuleManager:
             for guild in getattr(self.bot, "guilds", [])
         )
 
-    async def set_guild_enabled(
-        self, guild_id: int, module_name: str, enabled: bool
-    ) -> bool:
+    async def set_guild_enabled(self, guild_id: int, module_name: str, enabled: bool) -> bool:
         """Update guild policy and reconcile shared module lifecycle."""
         if module_name not in self._modules:
             return False
@@ -302,9 +303,7 @@ class ModuleManager:
         @wraps(handler)
         async def guarded(event_type: str, **data):
             guild_id = self._event_guild_id(data)
-            if guild_id is not None and not self.is_enabled_for_guild(
-                guild_id, module_name
-            ):
+            if guild_id is not None and not self.is_enabled_for_guild(guild_id, module_name):
                 return None
             return await handler(event_type, **data)
 
@@ -313,9 +312,7 @@ class ModuleManager:
     def _command_enabled_check(self, module_name: str) -> Callable:
         async def enabled_for_interaction(interaction) -> bool:
             guild_id = getattr(interaction, "guild_id", None)
-            return guild_id is None or self.is_enabled_for_guild(
-                guild_id, module_name
-            )
+            return guild_id is None or self.is_enabled_for_guild(guild_id, module_name)
 
         return enabled_for_interaction
 

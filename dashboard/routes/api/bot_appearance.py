@@ -2,12 +2,13 @@
 
 See docs/api-contracts.md#bot-appearance for contract documentation.
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Request, UploadFile
 
 from services.response import (
     api_error,
@@ -91,6 +92,7 @@ async def update_presence(request: Request, guild_id: str):
         # Persist so it survives restarts
         from config import config
         from services.presence_store import save_presence
+
         save_presence(config.data_dir, activity_type, activity_name)
         logger.info("Presence updated: %s %s", activity_type, activity_name)
         return api_success({"message": f"Presence set to {activity_type} {activity_name}"})
@@ -116,10 +118,12 @@ async def update_avatar(request: Request, guild_id: str, file: UploadFile = File
 
         await bot.user.edit(avatar=image_data)
         logger.info("Bot avatar updated")
-        return api_success({
-            "message": "Avatar updated",
-            "avatar_url": bot.user.display_avatar.url,
-        })
+        return api_success(
+            {
+                "message": "Avatar updated",
+                "avatar_url": bot.user.display_avatar.url,
+            }
+        )
     except Exception as exc:
         logger.exception("Failed to update avatar")
         return api_error(f"Failed to update avatar: {exc}")
@@ -144,10 +148,12 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
 
         await bot.user.edit(banner=image_data)
         logger.info("Bot banner updated")
-        return api_success({
-            "message": "Banner updated",
-            "banner_url": bot.user.banner.url if bot.user.banner else None,
-        })
+        return api_success(
+            {
+                "message": "Banner updated",
+                "banner_url": bot.user.banner.url if bot.user.banner else None,
+            }
+        )
     except discord.Forbidden:
         return api_error("Banner requires a Discord Nitro subscription on the bot owner's account")
     except Exception as exc:

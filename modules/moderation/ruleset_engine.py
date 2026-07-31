@@ -13,12 +13,9 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import discord
-
-if TYPE_CHECKING:
-    from database.models.ruleset import Rule, RuleSet, WordList
 
 logger = logging.getLogger("bark.ruleset_engine")
 
@@ -61,7 +58,7 @@ LINK_REGEX = re.compile(
 def check_ruleset_conditions(
     member: Any | None,
     message: Any | None,
-    ruleset: RuleSet,
+    ruleset: Any,
 ) -> tuple[bool, str]:
     """Check scoped conditions on a ruleset. Returns (passes, reason_if_failed)."""
     if not message and not member:
@@ -140,28 +137,46 @@ def check_ruleset_conditions(
         if created_at and ruleset.account_age_minutes_min > 0:
             age_minutes = (datetime.now(timezone.utc) - created_at).total_seconds() / 60
             if age_minutes < ruleset.account_age_minutes_min:
-                return False, f"account too young ({age_minutes:.0f}m < {ruleset.account_age_minutes_min}m)"
+                return (
+                    False,
+                    f"account too young ({age_minutes:.0f}m < {ruleset.account_age_minutes_min}m)",
+                )
         if created_at and ruleset.account_age_minutes_max > 0:
             age_minutes = (datetime.now(timezone.utc) - created_at).total_seconds() / 60
             if age_minutes > ruleset.account_age_minutes_max:
-                return False, f"account too old ({age_minutes:.0f}m > {ruleset.account_age_minutes_max}m)"
+                return (
+                    False,
+                    f"account too old ({age_minutes:.0f}m > {ruleset.account_age_minutes_max}m)",
+                )
 
     # ── Member duration ──
     if target and guild:
         joined_at = getattr(target, "joined_at", None)
         if joined_at:
             member_minutes = (datetime.now(timezone.utc) - joined_at).total_seconds() / 60
-            if ruleset.member_duration_minutes_min > 0 and member_minutes < ruleset.member_duration_minutes_min:
-                return False, f"member too new ({member_minutes:.0f}m < {ruleset.member_duration_minutes_min}m)"
-            if ruleset.member_duration_minutes_max > 0 and member_minutes > ruleset.member_duration_minutes_max:
-                return False, f"member been here too long ({member_minutes:.0f}m > {ruleset.member_duration_minutes_max}m)"
+            if (
+                ruleset.member_duration_minutes_min > 0
+                and member_minutes < ruleset.member_duration_minutes_min
+            ):
+                return (
+                    False,
+                    f"member too new ({member_minutes:.0f}m < {ruleset.member_duration_minutes_min}m)",
+                )
+            if (
+                ruleset.member_duration_minutes_max > 0
+                and member_minutes > ruleset.member_duration_minutes_max
+            ):
+                return (
+                    False,
+                    f"member been here too long ({member_minutes:.0f}m > {ruleset.member_duration_minutes_max}m)",
+                )
 
     return True, ""
 
 
 def check_rule_conditions(
     message: Any,
-    rule: Rule,
+    rule: Any,
 ) -> tuple[bool, str]:
     """Check per-rule conditions (JSON overrides from rule.conditions)."""
     conds = _json_dict(rule.conditions)
@@ -195,10 +210,6 @@ async def check_trigger(
     module_instance,
 ) -> tuple[bool, str]:
     """Check if a message matches the given trigger. Returns (triggered, reason)."""
-    guild_id = message.guild.id
-    user_id = message.author.id
-    content = message.content or ""
-
     checks = {
         # Core triggers (keepers)
         "message_spam": _check_spam,
@@ -263,9 +274,7 @@ async def _check_mention(message, cfg, rule_id, module):
     """Excessive @mentions in a single message."""
     threshold = cfg.get("threshold", 5)
     count = (
-        len(message.mentions)
-        + len(message.role_mentions)
-        + (1 if message.mention_everyone else 0)
+        len(message.mentions) + len(message.role_mentions) + (1 if message.mention_everyone else 0)
     )
     if count >= threshold:
         return True, f"Mention spam ({count} @)"
@@ -397,12 +406,7 @@ async def _check_duplicate_message(message, cfg, rule_id, module):
     content = message.content or ""
     if not content:
         return False, ""
-    track = module._message_track[message.guild.id].get(
-        message.author.id, []
-    )
     cutoff = now - timedelta(seconds=window)
-    # We'll use a separate duplicate track stored in _message_track
-    dup_key = f"_dup_{content}"
     # Simplified: check if last N messages from this user match
     if not hasattr(module, "_dup_track"):
         module._dup_track = {}
@@ -432,9 +436,7 @@ async def _check_attachment_rate(message, cfg, rule_id, module):
     if attachments == 0:
         return False, ""
     now = datetime.now(timezone.utc)
-    track = module._message_track[message.guild.id].setdefault(
-        f"_att_{message.author.id}", []
-    )
+    track = module._message_track[message.guild.id].setdefault(f"_att_{message.author.id}", [])
     cutoff = now - timedelta(seconds=window)
     while track and track[0][0] < cutoff:
         track.pop(0)
@@ -454,9 +456,7 @@ async def _check_link_rate(message, cfg, rule_id, module):
     if link_count == 0:
         return False, ""
     now = datetime.now(timezone.utc)
-    track = module._message_track[message.guild.id].setdefault(
-        f"_link_{message.author.id}", []
-    )
+    track = module._message_track[message.guild.id].setdefault(f"_link_{message.author.id}", [])
     cutoff = now - timedelta(seconds=window)
     while track and track[0][0] < cutoff:
         track.pop(0)
@@ -478,9 +478,7 @@ async def _check_channel_message_rate(message, cfg, rule_id, module):
     window = cfg.get("window_seconds", 5)
     channel_id = message.channel.id
     now = datetime.now(timezone.utc)
-    track = module._message_track[message.guild.id].setdefault(
-        f"_ch_{channel_id}", []
-    )
+    track = module._message_track[message.guild.id].setdefault(f"_ch_{channel_id}", [])
     cutoff = now - timedelta(seconds=window)
     while track and track[0] < cutoff:
         track.pop(0)
@@ -495,9 +493,7 @@ async def _check_user_mention_rate(message, cfg, rule_id, module):
     threshold = cfg.get("threshold", 10)
     window = cfg.get("window_seconds", 10)
     mention_count = (
-        len(message.mentions)
-        + len(message.role_mentions)
-        + (1 if message.mention_everyone else 0)
+        len(message.mentions) + len(message.role_mentions) + (1 if message.mention_everyone else 0)
     )
     if mention_count == 0:
         return False, ""
@@ -518,16 +514,12 @@ async def _check_channel_mention_rate(message, cfg, rule_id, module):
     threshold = cfg.get("threshold", 20)
     window = cfg.get("window_seconds", 10)
     mention_count = (
-        len(message.mentions)
-        + len(message.role_mentions)
-        + (1 if message.mention_everyone else 0)
+        len(message.mentions) + len(message.role_mentions) + (1 if message.mention_everyone else 0)
     )
     if mention_count == 0:
         return False, ""
     now = datetime.now(timezone.utc)
-    track = module._mention_count[message.guild.id].setdefault(
-        f"_ch_{message.channel.id}", []
-    )
+    track = module._mention_count[message.guild.id].setdefault(f"_ch_{message.channel.id}", [])
     cutoff = now - timedelta(seconds=window)
     while track and track[0][0] < cutoff:
         track.pop(0)
@@ -553,6 +545,7 @@ async def _check_character_limit_max(message, cfg, rule_id, module):
         return True, f"Message too long (> {max_chars} chars)"
     return False, ""
 
+
 async def _check_scam_link(message, cfg, rule_id, module):
     """Message contains a known scam link.
     Checks per-guild configured scam domains/patterns, with built-in defaults as fallback."""
@@ -573,7 +566,7 @@ async def _check_scam_link(message, cfg, rule_id, module):
             for line in guild_patterns.split("\n"):
                 line = line.strip()
                 if line and re.search(line, content, re.IGNORECASE):
-                    return True, f"Custom scam pattern matched"
+                    return True, "Custom scam pattern matched"
     except Exception:
         pass
 
@@ -602,9 +595,7 @@ async def _check_nickname_regex(message, cfg, rule_id, module):
     pattern = cfg.get("pattern", "")
     if not pattern:
         return False, ""
-    nickname = getattr(message.author, "nick", None) or getattr(
-        message.author, "name", ""
-    )
+    nickname = getattr(message.author, "nick", None) or getattr(message.author, "name", "") or ""
     try:
         if re.search(pattern, nickname, re.IGNORECASE):
             return True, f"Nickname matched regex: {pattern}"
@@ -620,8 +611,7 @@ async def _check_nickname_word_denylist(message, cfg, rule_id, module):
     if not entries:
         return False, ""
     nickname = (
-        getattr(message.author, "nick", None)
-        or getattr(message.author, "name", "")
+        getattr(message.author, "nick", None) or getattr(message.author, "name", "") or ""
     ).lower()
     for word in entries:
         if word.lower() in nickname:
@@ -636,10 +626,9 @@ async def _check_nickname_word_allowlist(message, cfg, rule_id, module):
     if not entries:
         return False, ""
     nickname_words = set(
-        (
-            getattr(message.author, "nick", None)
-            or getattr(message.author, "name", "")
-        ).lower().split()
+        (getattr(message.author, "nick", None) or getattr(message.author, "name", "") or "")
+        .lower()
+        .split()
     )
     allowed_set = {w.lower() for w in entries}
     for w in nickname_words:
@@ -700,48 +689,24 @@ async def _effect_warn(message, cfg, reason, module):
         await message.delete()
     except Exception:
         pass
-    from database.engine import session_scope
-    from database.models.moderation import ModerationCase, Warning as WarningModel
-    from sqlalchemy import select, func
+    from services.moderation_service import ModerationService
 
     bot_user = module.ctx.bot.user
     moderator_id = str(bot_user.id) if bot_user else ""
     moderator_tag = str(bot_user) if bot_user else "Bark"
-    async with session_scope() as session:
-        cn = (
-            await session.execute(
-                select(func.coalesce(func.max(ModerationCase.case_number), 0) + 1).where(
-                    ModerationCase.guild_id == str(message.guild.id)
-                )
-            )
-        ).scalar()
-        session.add(
-            ModerationCase(
-                guild_id=str(message.guild.id),
-                case_number=cn,
-                action_type="warn",
-                target_id=str(message.author.id),
-                target_tag=str(message.author),
-                moderator_id=moderator_id,
-                moderator_tag=moderator_tag,
-                reason=f"[AutoMod] {reason}",
-            )
-        )
-        session.add(
-            WarningModel(
-                guild_id=str(message.guild.id),
-                user_id=str(message.author.id),
-                moderator_id=moderator_id,
-                reason=f"[AutoMod] {reason}",
-                active=True,
-            )
-        )
-        await session.commit()
+    await ModerationService.create_case(
+        guild_id=message.guild.id,
+        action_type="warn",
+        target_id=str(message.author.id),
+        target_tag=str(message.author),
+        moderator_id=moderator_id,
+        moderator_tag=moderator_tag,
+        reason=f"[AutoMod] {reason}",
+        warning_user_id=str(message.author.id),
+    )
 
     try:
-        await message.channel.send(
-            f"⚠️ {message.author.mention}, {reason}", delete_after=10
-        )
+        await message.channel.send(f"⚠️ {message.author.mention}, {reason}", delete_after=10)
     except Exception:
         pass
 
@@ -781,9 +746,7 @@ async def _effect_ban(message, cfg, reason, module):
         return
     delete_days = cfg.get("delete_days", 0)
     try:
-        await message.author.ban(
-            reason=f"[AutoMod] {reason}", delete_message_days=delete_days
-        )
+        await message.author.ban(reason=f"[AutoMod] {reason}", delete_message_days=delete_days)
     except Exception:
         pass
 
@@ -810,7 +773,9 @@ async def _effect_send_alert(message, cfg, reason, module):
     )
     embed.add_field(
         name="Channel",
-        value=message.channel.mention if hasattr(message.channel, "mention") else str(message.channel),
+        value=message.channel.mention
+        if hasattr(message.channel, "mention")
+        else str(message.channel),
         inline=True,
     )
     if message.content:
@@ -864,7 +829,6 @@ async def _effect_delete_multiple(message, cfg, reason, module):
 
 async def _effect_add_violation(message, cfg, reason, module):
     """Add a named violation to the user's record (for escalation)."""
-    name = cfg.get("violation_name", "automod")
     if hasattr(message.author, "id"):
         action, strikes = await module._anti_raid.record_violation(
             message.guild.id, message.author.id
@@ -872,7 +836,9 @@ async def _effect_add_violation(message, cfg, reason, module):
         if action:
             logger.info(
                 "Escalating %s (strike %d) → %s",
-                message.author, strikes, action,
+                message.author,
+                strikes,
+                action,
             )
             await _apply_escalation(message, action, strikes, reason, module)
 
@@ -880,9 +846,7 @@ async def _effect_add_violation(message, cfg, reason, module):
 async def _effect_reset_violations(message, cfg, reason, module):
     """Reset the user's violations."""
     if hasattr(message.author, "id"):
-        module._anti_raid.reset_violations(
-            message.guild.id, message.author.id
-        )
+        module._anti_raid.reset_violations(message.guild.id, message.author.id)
 
 
 async def _apply_escalation(message, action, strikes, reason, module):
@@ -890,17 +854,13 @@ async def _apply_escalation(message, action, strikes, reason, module):
     try:
         if action == "timeout":
             until = discord_utcnow() + timedelta(minutes=30)
-            await message.author.timeout(
-                until, reason=f"[AutoMod] Escalation ({strikes} strikes)"
-            )
+            await message.author.timeout(until, reason=f"[AutoMod] Escalation ({strikes} strikes)")
             await message.channel.send(
                 f"⏱ {message.author.mention} auto-escalated to timeout (strike {strikes})",
                 delete_after=10,
             )
         elif action == "kick":
-            await message.author.kick(
-                reason=f"[AutoMod] Escalation ({strikes} strikes)"
-            )
+            await message.author.kick(reason=f"[AutoMod] Escalation ({strikes} strikes)")
             await message.channel.send(
                 f"👢 {message.author.mention} auto-kicked (strike {strikes})"
             )
@@ -931,23 +891,20 @@ def _json_dict(value: str | dict) -> dict:
         return {}
 
 
-async def _get_list_entries(
-    list_id: int | None, expected_type: str, module
-) -> list[str]:
+async def _get_list_entries(list_id: int | None, expected_type: str, module) -> list[str]:
     """Fetch entries from a WordList by ID (cached via module._wordlist_cache)."""
     if list_id is None:
         return []
     cache_key = f"{list_id}_{expected_type}"
     if hasattr(module, "_wordlist_cache") and cache_key in module._wordlist_cache:
         return module._wordlist_cache[cache_key]
-    from database.engine import session_scope
-    from database.models.ruleset import WordList
     from sqlalchemy import select
 
+    from database.engine import session_scope
+    from database.models.ruleset import WordList
+
     async with session_scope() as session:
-        result = await session.execute(
-            select(WordList).where(WordList.id == list_id)
-        )
+        result = await session.execute(select(WordList).where(WordList.id == list_id))
         wl = result.scalar_one_or_none()
         if not wl or wl.list_type != expected_type:
             return []
@@ -967,6 +924,7 @@ def _extract_domains(text: str) -> list[str]:
     for url in urls:
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(url)
             domain = parsed.netloc or parsed.path.split("/")[0]
             if domain:

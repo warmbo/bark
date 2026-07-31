@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from services.event_bus import EventBus
 
@@ -19,7 +19,7 @@ logger = logging.getLogger("bark.realtime_bridge")
 
 # ── Event type mapping ────────────────────────────────
 # Map EventBus event names → SSE event names with payload extractors
-EVENT_MAP: dict[str, tuple[str, callable]] = {
+EVENT_MAP: dict[str, tuple[str, Callable[..., dict[str, Any]]]] = {
     # Moderation events
     "moderation_case_created": (
         "new_moderation_case",
@@ -54,7 +54,6 @@ EVENT_MAP: dict[str, tuple[str, callable]] = {
         },
     ),
 }
-
 
 
 class RealtimeBridge:
@@ -118,7 +117,11 @@ class RealtimeBridge:
         queue: asyncio.Queue = asyncio.Queue(maxsize=256)
         async with self._lock:
             self._queues.setdefault(str(guild_id), []).append(queue)
-        logger.debug("SSE client subscribed to guild %s (%d total)", guild_id, len(self._queues[str(guild_id)]))
+        logger.debug(
+            "SSE client subscribed to guild %s (%d total)",
+            guild_id,
+            len(self._queues[str(guild_id)]),
+        )
         return queue
 
     async def unsubscribe(self, guild_id: str, queue: asyncio.Queue) -> None:
@@ -128,7 +131,9 @@ class RealtimeBridge:
             queues = self._queues.get(gid, [])
             if queue in queues:
                 queues.remove(queue)
-                logger.debug("SSE client unsubscribed from guild %s (%d remaining)", gid, len(queues))
+                logger.debug(
+                    "SSE client unsubscribed from guild %s (%d remaining)", gid, len(queues)
+                )
             if not queues:
                 self._queues.pop(gid, None)
 
@@ -161,11 +166,6 @@ class RealtimeBridge:
             else:
                 return  # Can't route without a guild_id
 
-        sse_message = {
-            "event": sse_event_name,
-            "data": payload,
-        }
-
         async with self._lock:
             queues = list(self._queues.get(guild_id, []))
 
@@ -178,4 +178,6 @@ class RealtimeBridge:
             try:
                 queue.put_nowait(text)
             except asyncio.QueueFull:
-                logger.warning("Queue full for guild %s — dropping event %s", guild_id, sse_event_name)
+                logger.warning(
+                    "Queue full for guild %s — dropping event %s", guild_id, sse_event_name
+                )

@@ -1,7 +1,6 @@
 """Regression tests for EventBus producers and the realtime SSE bridge."""
 
 import asyncio
-from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -53,9 +52,7 @@ async def test_create_case_producer_reaches_realtime_bridge(monkeypatch):
     await bridge.start()
     ctx = BarkContext(MagicMock(), bus)
 
-    case_number = await ctx.create_case(
-        42, "warn", "10", "Target", "11", "Moderator", "Reason"
-    )
+    case_number = await ctx.create_case(42, "warn", "10", "Target", "11", "Moderator", "Reason")
     message = await _next_payload(queue)
 
     assert case_number == 12
@@ -93,5 +90,3 @@ async def test_automod_producer_emits_guild_scoped_event():
     assert '"guild_id": "42"' in delivered
     assert '"action": "delete"' in delivered
     await bridge.stop()
-
-
