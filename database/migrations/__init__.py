@@ -132,8 +132,10 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
         if "guild_id" not in columns:
             continue
 
-        # nosec B608: table_name regex-validated above; values never interpolated
-        rows = (await connection.exec_driver_sql(f'SELECT * FROM "{table_name}"')).fetchall()
+        # table_name regex-validated above; values never interpolated
+        rows = (
+            await connection.exec_driver_sql(f'SELECT * FROM "{table_name}"')  # nosec B608
+        ).fetchall()
         guild_index = columns.index("guild_id")
         normalized_rows: list[tuple] = []
         unknown: dict[str, int] = {}
@@ -217,9 +219,9 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
                             continue
                         child_column = foreign_key[3]
                         for old_id, new_id in remapped_ids:
-                            # nosec B608: child_name regex-validated; column from SQLite schema
+                            # child_name regex-validated; column from SQLite schema
                             await connection.exec_driver_sql(
-                                f'UPDATE "{child_name}" SET "{child_column}" = ? '
+                                f'UPDATE "{child_name}" SET "{child_column}" = ? '  # nosec B608
                                 f'WHERE "{child_column}" = ?',
                                 (new_id, old_id),
                             )
@@ -281,9 +283,9 @@ async def _canonicalize_feature_guild_ids(connection: AsyncConnection) -> None:
         if normalized_rows:
             quoted_columns = ", ".join(f'"{name}"' for name in columns)
             placeholders = ", ".join("?" for _ in columns)
-            # nosec B608: temp_name/columns validated + quoted; values parameterized
+            # temp_name/columns validated + quoted; values parameterized
             await connection.exec_driver_sql(
-                f'INSERT INTO "{temp_name}" ({quoted_columns}) VALUES ({placeholders})',
+                f'INSERT INTO "{temp_name}" ({quoted_columns}) VALUES ({placeholders})',  # nosec B608
                 normalized_rows,
             )
         await connection.exec_driver_sql(f'DROP TABLE "{table_name}"')

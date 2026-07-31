@@ -34,7 +34,7 @@ Behavior is preserved: no module API contract changed, no dashboard feature remo
 
 1. **Reputation daily/weekly caps were applied per-event, not per-member** (`modules/reputation/module.py`). The caps check `check_daily_cap`/`check_weekly_cap` were called with only the incoming event's points, so a user could farm unlimited events in a window. Fixed by querying the member's already-earned points in the current window and enforcing the *remaining* allowance.
 2. **Voice reputation never credited `voice_minutes`** — the voice loop accumulated points but never updated the profile's voice-minute counter, so voice time was invisible to leaderboards/stats. Fixed with a `voice_minutes` increment at award time.
-3. **Concurrent case-number allocation could collide** (`services/moderation_service.py`, `dashboard/routes/api/moderation.py`, `modules/moderation/module.py`, `modules/moderation/ruleset_engine.py`). Case numbers were allocated via `max(case_number) + 1` inside a transaction; two concurrent creates produced duplicate `(guild_id, case_number)` — a UNIQUE violation. Fixed with a per-guild asyncio lock plus bounded retry (3 attempts) on unique-constraint failure; warning creation is atomic with its case.
+3. **Concurrent case-number allocation could collide** (`services/moderation_service.py`, `dashboard/routes/api/moderation.py`, `modules/moderation/module.py`, `modules/moderation/ruleset_engine.py`). Case numbers were allocated via `max(case_number) + 1` inside a transaction; two concurrent creates produced duplicate `(guild_id, case_number)` — a UNIQUE violation. Fixed by consolidating all allocation into `ModerationService.create_case_with_retry`, which retries (bounded, 10 attempts) on unique-constraint failure. Warning creation is atomic with its case on the AutoMod warn path (`ruleset_engine._effect_warn`); the command/API warn paths create the warning in a separate transaction (pre-existing, tracked in remaining issues).
 4. **Unbounded negative `limit` query parameters** — `LIMIT -1` on SQLite returns the entire table. `dashboard/routes/api/{moderation,actions,audit_log}.py` and `modules/reputation/module.py` now use FastAPI `Query(ge=1, le=…)` bounds; negative/oversized limits return 422.
 5. **Health endpoint leaked database error details publicly** (`dashboard/routes/api/health.py`). Fixed: full error logged server-side, generic message returned.
 6. **Rule mutation endpoint lacked guild-ownership check** (`modules/moderation/module.py`) — a request could mutate a ruleset belonging to another guild. Fixed: `ruleset_id` must belong to the requesting `guild_id`.
@@ -206,6 +206,8 @@ Coverage is intentionally not near 100%: large Discord-integration paths (messag
 | 4 | `ruleset_engine` param types widened to `Any` for duck-typed stubs | Low | Introduce a `RulesetLike`/`RuleLike` Protocol so the ORM model and stub share a type |
 | 5 | `presence_store.py` and a few service helpers have 0% coverage | Low | Add unit tests when next touching presence features |
 | 6 | `run_test_server.py` E402 is per-file-ignored | Low | Optional: convert to a proper pytest fixture server |
+| 7 | `/warn` slash command and API warn path create the `Warning` in a separate transaction from the case | Medium | Make all three warn paths atomic (case + warning in one session) so a crash can't leave a case without its warning |
+| 8 | `actions.py` `guild.me.guild_permissions` can raise if `guild.me` is uncached | Low | Guard `guild.me is None` before permission reads |
 
 ---
 
