@@ -104,13 +104,16 @@ Uses `pytest_asyncio` for async fixtures. Async fixtures use `@pytest_asyncio.fi
 @pytest_asyncio.fixture
 async def app(db):
     from dashboard import create_app
+
     # ... create mock bot ...
     dashboard_app = create_app(bot)
     return dashboard_app.app
 
+
 @pytest_asyncio.fixture
 async def client(app):
     from httpx import AsyncClient, ASGITransport
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

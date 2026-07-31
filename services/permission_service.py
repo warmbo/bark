@@ -73,12 +73,10 @@ class PermissionService:
     def register_module_permissions(self, module_name: str, permission_defs: list) -> None:
         """Register permissions from a module. Called during module discovery."""
         for perm in permission_defs:
-            action_name = perm.name if hasattr(perm, 'name') else perm.get('name', '')
+            action_name = perm.name if hasattr(perm, "name") else perm.get("name", "")
             # Preserve centrally defined role levels; unknown module mutations
             # remain administrator-only unless a future definition says otherwise.
-            self._module_actions[action_name] = self.CORE_ACTIONS.get(
-                action_name, "admin"
-            )
+            self._module_actions[action_name] = self.CORE_ACTIONS.get(action_name, "admin")
 
     def discover_module_permissions(self, modules: dict) -> None:
         """Scan all modules and register their permissions."""

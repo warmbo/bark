@@ -7,21 +7,21 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Request
-from services.response import (
-    api_success,
-    api_error,
-    api_not_found,
-    api_deleted,
-    check_api_permission,
-    api_forbidden,
-    get_permission_service,
-    get_module_min_role,
-    set_cached_module_min_role,
-)
 
 from database.engine import session_scope
 from database.models.module import ModuleConfig
 from database.models.permissions import ModuleRoleAccess
+from services.response import (
+    api_deleted,
+    api_error,
+    api_forbidden,
+    api_not_found,
+    api_success,
+    check_api_permission,
+    get_module_min_role,
+    get_permission_service,
+    set_cached_module_min_role,
+)
 
 router = APIRouter(tags=["api-modules"])
 
@@ -53,7 +53,9 @@ async def list_modules(request: Request, guild_id: str):
                     "description": module.description,
                     "enabled": db_config.enabled if db_config else True,
                     "priority": db_config.priority if db_config else 100,
-                    "config": json.loads(db_config.config) if db_config and db_config.config else {},
+                    "config": json.loads(db_config.config)
+                    if db_config and db_config.config
+                    else {},
                     "commands": [c.name for c in module.get_commands()],
                     "events": [e.event_name for e in module.get_events()],
                     "settings_schema": module.get_settings_schema(),
@@ -73,12 +75,14 @@ async def list_module_role_access(request: Request, guild_id: str):
     all_modules = request.state.bot.modules.get_all_modules()
     async with session_scope() as session:
         rows = (
-            await session.execute(
-                select(ModuleRoleAccess).where(
-                    ModuleRoleAccess.guild_id == str(guild_id)
+            (
+                await session.execute(
+                    select(ModuleRoleAccess).where(ModuleRoleAccess.guild_id == str(guild_id))
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     overrides = {row.module_name: row.min_role for row in rows}
     access = {name: overrides.get(name, "admin") for name in all_modules}
     for name in all_modules:
@@ -87,9 +91,7 @@ async def list_module_role_access(request: Request, guild_id: str):
 
 
 @router.patch("/guilds/{guild_id}/modules/{module_name}/role-access")
-async def set_module_role_access(
-    request: Request, guild_id: str, module_name: str
-):
+async def set_module_role_access(request: Request, guild_id: str, module_name: str):
     """Set a module's minimum dashboard role for this guild."""
     if not check_api_permission(request, "modules.manage", guild_id):
         return api_forbidden()
@@ -100,9 +102,7 @@ async def set_module_role_access(
     min_role = data.get("min_role")
     valid_roles = set(get_permission_service().ROLE_HIERARCHY)
     if min_role not in valid_roles:
-        return api_error(
-            "min_role must be one of: viewer, moderator, admin, owner"
-        )
+        return api_error("min_role must be one of: viewer, moderator, admin, owner")
 
     from sqlalchemy import select
 
@@ -131,9 +131,7 @@ async def set_module_role_access(
 
 
 @router.delete("/guilds/{guild_id}/modules/{module_name}/role-access")
-async def delete_module_role_access(
-    request: Request, guild_id: str, module_name: str
-):
+async def delete_module_role_access(request: Request, guild_id: str, module_name: str):
     """Remove an override and restore the administrator-only default."""
     if not check_api_permission(request, "modules.manage", guild_id):
         return api_forbidden()
@@ -184,7 +182,9 @@ async def get_module(request: Request, guild_id: str, module_name: str):
                 "version": module.version,
                 "description": module.description,
                 "author": module.author,
-                "enabled": db_config.enabled if db_config else True,  # default: enabled on fresh install
+                "enabled": db_config.enabled
+                if db_config
+                else True,  # default: enabled on fresh install
                 "priority": db_config.priority if db_config else 100,
                 "config": json.loads(db_config.config) if db_config and db_config.config else {},
                 "settings_schema": module.get_settings_schema(),
@@ -193,8 +193,7 @@ async def get_module(request: Request, guild_id: str, module_name: str):
                     for c in module.get_commands()
                 ],
                 "dashboard_pages": [
-                    {"route": p.route, "label": p.label}
-                    for p in module.get_dashboard_pages()
+                    {"route": p.route, "label": p.label} for p in module.get_dashboard_pages()
                 ],
             }
         )
@@ -205,9 +204,7 @@ async def update_module_config(request: Request, guild_id: str, module_name: str
     """Update module configuration."""
     guild_id = str(guild_id)
     await get_module_min_role(module_name, guild_id)
-    if not check_api_permission(
-        request, f"{module_name}.configure", guild_id
-    ):
+    if not check_api_permission(request, f"{module_name}.configure", guild_id):
         return api_forbidden()
 
     bot = request.state.bot
@@ -326,9 +323,7 @@ async def test_module_action(request: Request, guild_id: str, module_name: str):
     own handler via get_api_routes().
     """
     await get_module_min_role(module_name, guild_id)
-    if not check_api_permission(
-        request, f"{module_name}.configure", guild_id
-    ):
+    if not check_api_permission(request, f"{module_name}.configure", guild_id):
         return api_forbidden()
 
     bot = request.state.bot
@@ -338,6 +333,7 @@ async def test_module_action(request: Request, guild_id: str, module_name: str):
 
     # Reuse the module's own test handler by calling it directly
     from modules.logging.module import LoggingModule
+
     if isinstance(module, LoggingModule):
         return await module._handle_test_action(guild_id)
 
@@ -346,6 +342,7 @@ async def test_module_action(request: Request, guild_id: str, module_name: str):
     for action in actions:
         if action.get("endpoint") == "test" or action.get("id") == "test":
             from services.response import api_success
+
             return api_success({"message": f"Test action for '{module_name}' completed"})
 
     return api_error(f"Module '{module_name}' has no test action", status_code=400)

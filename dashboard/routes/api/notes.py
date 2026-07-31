@@ -1,13 +1,14 @@
 """Member-note API. Contract: docs/moderation-workflows.md#notes."""
+
 from fastapi import APIRouter, Request
 
 from database.engine import session_scope
 from database.models.moderation import UserNote
 from services.response import (
-    api_success,
     api_error,
     api_forbidden,
     api_not_found,
+    api_success,
     check_api_permission,
     get_module_min_role,
 )
@@ -33,7 +34,8 @@ def _note_content(data: dict) -> str:
 @router.get("/guilds/{guild_id}/notes")
 async def list_notes(request: Request, guild_id: str):
     """List all user notes for a guild (most recent first)."""
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     gid = str(guild_id)
 
     async with session_scope() as session:
@@ -45,28 +47,31 @@ async def list_notes(request: Request, guild_id: str):
         )
         notes = result.scalars().all()
 
-        return api_success({
-            "notes": [
-                {
-                    "id": n.id,
-                    "user_id": n.user_id,
-                    "author_id": n.author_id,
-                    "content": n.content,
-                    "created_at": n.created_at.isoformat(),
-                }
-                for n in notes
-            ],
-            "meta": {
-                "count": len(notes),
-                "guild_id": gid,
-            },
-        })
+        return api_success(
+            {
+                "notes": [
+                    {
+                        "id": n.id,
+                        "user_id": n.user_id,
+                        "author_id": n.author_id,
+                        "content": n.content,
+                        "created_at": n.created_at.isoformat(),
+                    }
+                    for n in notes
+                ],
+                "meta": {
+                    "count": len(notes),
+                    "guild_id": gid,
+                },
+            }
+        )
 
 
 @router.get("/guilds/{guild_id}/notes/user/{user_id}")
 async def list_notes_for_user(request: Request, guild_id: str, user_id: str):
     """List notes for a specific user."""
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     gid = str(guild_id)
 
     async with session_scope() as session:
@@ -80,17 +85,19 @@ async def list_notes_for_user(request: Request, guild_id: str, user_id: str):
         )
         notes = result.scalars().all()
 
-        return api_success({
-            "notes": [
-                {
-                    "id": n.id,
-                    "author_id": n.author_id,
-                    "content": n.content,
-                    "created_at": n.created_at.isoformat(),
-                }
-                for n in notes
-            ],
-        })
+        return api_success(
+            {
+                "notes": [
+                    {
+                        "id": n.id,
+                        "author_id": n.author_id,
+                        "content": n.content,
+                        "created_at": n.created_at.isoformat(),
+                    }
+                    for n in notes
+                ],
+            }
+        )
 
 
 @router.post("/guilds/{guild_id}/notes")
@@ -119,16 +126,19 @@ async def create_note(request: Request, guild_id: str):
         session.add(note)
         await session.commit()
 
-        return api_success({
-            "success": True,
-            "id": note.id,
-        })
+        return api_success(
+            {
+                "success": True,
+                "id": note.id,
+            }
+        )
 
 
 @router.patch("/guilds/{guild_id}/notes/{note_id}")
 async def update_note(request: Request, guild_id: str, note_id: int):
     """Update a note's content."""
     from sqlalchemy import select
+
     gid = str(guild_id)
     data = await request.json()
     if not await _can_manage_notes(request, gid):
@@ -154,6 +164,7 @@ async def update_note(request: Request, guild_id: str, note_id: int):
 async def delete_note(request: Request, guild_id: str, note_id: int):
     """Delete a user note."""
     from sqlalchemy import select
+
     gid = str(guild_id)
     if not await _can_manage_notes(request, gid):
         return api_forbidden("Insufficient permissions to delete notes")

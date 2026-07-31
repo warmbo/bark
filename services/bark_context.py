@@ -86,8 +86,10 @@ class BarkContext:
 
     async def get_module_config(self, module_name: str, guild_id: int) -> dict:
         from sqlalchemy import select
+
         from database.engine import session_scope
         from database.models.module import ModuleConfig
+
         async with session_scope() as session:
             result = await session.execute(
                 select(ModuleConfig).where(
@@ -97,8 +99,10 @@ class BarkContext:
             )
             dbc = result.scalar_one_or_none()
             if dbc and dbc.config:
-                try: return json.loads(dbc.config)
-                except json.JSONDecodeError: return {}
+                try:
+                    return json.loads(dbc.config)
+                except json.JSONDecodeError:
+                    return {}
             return {}
 
     async def get_module_settings(self, module_name: str, guild_id: int) -> dict:
@@ -107,8 +111,10 @@ class BarkContext:
 
     async def save_module_config(self, module_name: str, guild_id: int, config: dict) -> bool:
         from sqlalchemy import select
+
         from database.engine import session_scope
         from database.models.module import ModuleConfig
+
         async with session_scope() as session:
             result = await session.execute(
                 select(ModuleConfig).where(
@@ -118,9 +124,7 @@ class BarkContext:
             )
             dbc = result.scalar_one_or_none()
             if dbc is None:
-                dbc = ModuleConfig(
-                    guild_id=str(guild_id), module_name=module_name, enabled=True
-                )
+                dbc = ModuleConfig(guild_id=str(guild_id), module_name=module_name, enabled=True)
                 session.add(dbc)
             dbc.config = json.dumps(config)
             await session.commit()
@@ -159,9 +163,7 @@ class BarkContext:
             result = await session.execute(select(AutoVoiceChannel))
             return list(result.scalars().all())
 
-    async def normalize_voice_transition(
-        self, guild_id: int, before_channel, after_channel
-    ):
+    async def normalize_voice_transition(self, guild_id: int, before_channel, after_channel):
         """Hide Auto Voice's transient join-to-create channel from consumers."""
         config = await self.get_module_config("auto_voice", guild_id)
         primary_id = str(config.get("primary_channel_id") or "")
@@ -169,13 +171,8 @@ class BarkContext:
         def visible(channel):
             if channel is None:
                 return None
-            is_primary = (
-                primary_id and str(getattr(channel, "id", "")) == primary_id
-            )
-            is_named_trigger = (
-                str(getattr(channel, "name", "")).strip().casefold()
-                == "new channel"
-            )
+            is_primary = primary_id and str(getattr(channel, "id", "")) == primary_id
+            is_named_trigger = str(getattr(channel, "name", "")).strip().casefold() == "new channel"
             return None if is_primary or is_named_trigger else channel
 
         return visible(before_channel), visible(after_channel)
@@ -191,15 +188,40 @@ class BarkContext:
 
     # ── Service-delegated operations ────────────────────
 
-    async def log_audit(self, guild_id: int, action: str, actor_id: str, actor_tag: str = "",
-                        target_id: str | None = None, target_tag: str = "", details: dict | None = None) -> None:
-        await _SERVICE.log_audit(guild_id, action, actor_id, actor_tag, target_id, target_tag, details)
+    async def log_audit(
+        self,
+        guild_id: int,
+        action: str,
+        actor_id: str,
+        actor_tag: str = "",
+        target_id: str | None = None,
+        target_tag: str = "",
+        details: dict | None = None,
+    ) -> None:
+        await _SERVICE.log_audit(
+            guild_id, action, actor_id, actor_tag, target_id, target_tag, details
+        )
 
-    async def create_case(self, guild_id: int, action_type: str, target_id: str, target_tag: str,
-                          moderator_id: str, moderator_tag: str, reason: str, duration: int | None = None) -> int:
+    async def create_case(
+        self,
+        guild_id: int,
+        action_type: str,
+        target_id: str,
+        target_tag: str,
+        moderator_id: str,
+        moderator_tag: str,
+        reason: str,
+        duration: int | None = None,
+    ) -> int:
         case_number = await _SERVICE.create_case(
-            guild_id, action_type, target_id, target_tag,
-            moderator_id, moderator_tag, reason, duration,
+            guild_id,
+            action_type,
+            target_id,
+            target_tag,
+            moderator_id,
+            moderator_tag,
+            reason,
+            duration,
         )
         await emit_moderation_case_created(
             self.events,

@@ -15,8 +15,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from services.bark_context import BarkContext
     from fastapi import APIRouter
+
+    from services.bark_context import BarkContext
 
 
 logger = logging.getLogger("bark.modules")
@@ -25,6 +26,7 @@ logger = logging.getLogger("bark.modules")
 @dataclass
 class CommandRegistration:
     """Describes a Discord command the module provides."""
+
     name: str
     description: str = ""
     slash: bool = True
@@ -33,6 +35,7 @@ class CommandRegistration:
 @dataclass
 class EventRegistration:
     """Describes an event the module listens to via EventBus."""
+
     event_name: str
     handler: str = ""
 
@@ -40,16 +43,20 @@ class EventRegistration:
 @dataclass
 class PageRegistration:
     """Describes a dashboard page the module contributes."""
+
     route: str
     label: str
     icon: str = ""
     parent: str = ""
-    category: str = ""  # e.g. "moderation", "community", "automation", "intelligence", "governance", "settings"
+    category: str = (
+        ""  # e.g. "moderation", "community", "automation", "intelligence", "governance", "settings"
+    )
 
 
 @dataclass
 class PermissionDefinition:
     """Describes a granular permission this module defines."""
+
     name: str
     label: str
     description: str = ""
@@ -100,9 +107,7 @@ class BarkModule(abc.ABC):
         """Load the authoritative configuration shown by the dashboard."""
         return await self.ctx.get_module_config(self.name, guild_id)
 
-    async def save_dashboard_config(
-        self, guild_id: int, config: dict[str, Any]
-    ) -> None:
+    async def save_dashboard_config(self, guild_id: int, config: dict[str, Any]) -> None:
         """Persist the authoritative dashboard configuration."""
         await self.ctx.save_module_config(self.name, guild_id, config)
 

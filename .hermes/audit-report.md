@@ -177,12 +177,14 @@ setVal(voice, intel.data?.voice?.in_voice);
 ```
 But the intelligence API endpoint (`intelligence/overview`) returns a `voice` property? Let me check... The `get_intelligence_overview` endpoint returns:
 ```python
-return api_success({
-    "members": {...},
-    "moderation": {...},
-    "activity": {...},
-    "growth_rate": ...,
-})
+return api_success(
+    {
+        "members": {...},
+        "moderation": {...},
+        "activity": {...},
+        "growth_rate": ...,
+    }
+)
 ```
 There is NO `voice` key in the response — the inline comment says `"voice": {...}` is a planned field but it's never included. The voice endpoint `collect_voice_snapshot` exists in `data_collector.py` but is NOT integrated into the intelligence/overview API. The growth indicator also references `intel.data?.members?.joins_30d` and `leaves_30d` — those ARE present in the response.
 
@@ -368,7 +370,7 @@ const notes = Array.isArray(raw.notes) ? raw.notes : Array.isArray(raw.data?.ite
 # Warnings: return as paginated
 return api_paginated(items=warnings_list, total=total_warnings)
 
-# Notes: return as paginated  
+# Notes: return as paginated
 return api_paginated(items=notes_list, total=total_notes)
 
 # Voice history: return as paginated

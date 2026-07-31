@@ -6,13 +6,12 @@ to ensure consistent structure across all endpoints.
 See docs/api-contracts.md for full API contract documentation.
 """
 
+import logging
 from typing import Any
 
 from fastapi.responses import JSONResponse
+
 from services.permission_service import PermissionService
-
-import logging
-
 
 logger = logging.getLogger("bark.services.response")
 _permission_service = PermissionService()
@@ -77,9 +76,7 @@ async def get_module_min_role(module_name: str, guild_id: int | str) -> str | No
     return min_role
 
 
-def set_cached_module_min_role(
-    module_name: str, guild_id: int | str, min_role: str | None
-) -> None:
+def set_cached_module_min_role(module_name: str, guild_id: int | str, min_role: str | None) -> None:
     """Keep permission enforcement coherent immediately after API writes."""
     _module_role_cache[(str(guild_id), module_name)] = min_role
 
@@ -106,6 +103,7 @@ def check_api_permission(request, action: str, guild_id=None) -> bool:
     actions use their per-guild override, or administrator access when unset.
     """
     from config import config
+
     if not config.oauth2.enabled:
         return True  # No OAuth2 configured — permissive
     user_role = request.session.get("role", "viewer")
@@ -116,14 +114,14 @@ def check_api_permission(request, action: str, guild_id=None) -> bool:
         guild_id = _guild_id_from_path(path)
     module_name = _module_name_for_action(request, action, guild_id)
     if module_name is not None:
-        required = _module_role_cache.get(
-            (str(guild_id), module_name), "admin"
-        ) or "admin"
+        required = _module_role_cache.get((str(guild_id), module_name), "admin") or "admin"
     else:
         required = _permission_service.get_required_role_for_action(action)
     result = _permission_service.role_has_access(user_role, required)
     if not result:
-        logger.warning("Permission denied: role=%s required=%s action=%s", user_role, required, action)
+        logger.warning(
+            "Permission denied: role=%s required=%s action=%s", user_role, required, action
+        )
     return result
 
 
@@ -133,18 +131,15 @@ def get_capabilities(request) -> dict[str, bool]:
     modules = getattr(bot, "modules", None)
     if modules is not None:
         try:
-            _permission_service.discover_module_permissions(
-                modules.get_all_modules()
-            )
+            _permission_service.discover_module_permissions(modules.get_all_modules())
         except (AttributeError, TypeError):
             logger.debug("Module capabilities unavailable for this request")
 
     from config import config
+
     if not config.oauth2.enabled:
         return {action: True for action in _permission_service.get_all_actions()}
-    return _permission_service.capabilities_for_role(
-        request.session.get("role", "viewer")
-    )
+    return _permission_service.capabilities_for_role(request.session.get("role", "viewer"))
 
 
 def api_success(data: Any = None, status_code: int = 200) -> JSONResponse:
@@ -185,9 +180,11 @@ def api_forbidden(message: str = "Insufficient permissions") -> JSONResponse:
 
 def api_paginated(items: list, total: int, page: int = 0, limit: int = 50) -> JSONResponse:
     """Return a paginated success response with standard page metadata."""
-    return api_success({
-        "items": items,
-        "total": total,
-        "page": page,
-        "pages": max(1, (total + limit - 1) // limit) if limit > 0 else 1,
-    })
+    return api_success(
+        {
+            "items": items,
+            "total": total,
+            "page": page,
+            "pages": max(1, (total + limit - 1) // limit) if limit > 0 else 1,
+        }
+    )

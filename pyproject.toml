@@ -22,15 +22,23 @@ dependencies = [
     "python-multipart>=0.0.18",
     "aiosqlite>=0.20,<1.0",
     "itsdangerous>=2.0,<3.0",
+    "httpx>=0.28,<1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0,<9.0",
-    "pytest-asyncio>=0.25,<1.0",
-    "httpx>=0.28,<1.0",
-    "watchdog>=6.0,<7.0",
+    "pytest>=9.0.3,<10.0",
+    "pytest-asyncio>=1.0,<2.0",
+    "ruff>=0.16,<0.17",
+    "mypy>=1.0,<2.0",
+    "coverage[toml]>=7.0,<8.0",
+    "bandit>=1.8,<2.0",
+    "pip-audit>=2.9,<3.0",
+    "pre-commit>=4.0,<5.0",
 ]
+
+[tool.setuptools]
+py-modules = ["app", "bark_version", "config"]
 
 [tool.setuptools.packages.find]
 include = ["bot", "bot.*", "dashboard", "dashboard.*", "database", "database.*", "services", "services.*", "modules", "modules.*"]
@@ -38,3 +46,29 @@ include = ["bot", "bot.*", "dashboard", "dashboard.*", "database", "database.*",
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+exclude = [".git", ".venv", "data"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "N"]
+ignore = ["N999"]
+
+[tool.ruff.lint.per-file-ignores]
+# Standalone script: imports must follow sys.path bootstrap
+"run_test_server.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.13"
+check_untyped_defs = true
+ignore_missing_imports = true
+exclude = ["data/"]
+
+[tool.coverage.run]
+branch = true
+source = ["bot", "dashboard", "database", "modules", "services", "app", "config", "bark_version"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

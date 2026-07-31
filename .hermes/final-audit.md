@@ -74,6 +74,7 @@ This is inconsistent with user expectations — "Reload" should mean "reload fro
 ```python
 async def reload_module(self, name: str) -> bool:
     import importlib
+
     pkg_path = f"modules.{name}.module"
     if pkg_path in sys.modules:
         importlib.reload(sys.modules[pkg_path])

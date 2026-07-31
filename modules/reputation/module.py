@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import math
 import re
 import time
 from collections import defaultdict
@@ -25,6 +24,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 import discord
+from fastapi import Query, Request
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -60,7 +60,6 @@ from services.reputation_service import (
     needs_weekly_reset,
     next_level_progress,
     resolve_tier,
-    score_for_level,
 )
 
 logger = logging.getLogger("bark.modules.reputation")
@@ -88,8 +87,12 @@ class ReputationModule(BarkModule):
         # Runtime tracking sets
         self._thanks_cooldowns: dict[tuple[int, int], float] = {}  # (actor, target) -> timestamp
         self._thanks_self_cooldowns: dict[int, float] = {}  # actor_id -> timestamp
-        self._showoff_rate_limits: dict[int, list[float]] = defaultdict(list)  # guild_id -> [timestamps]
-        self._voice_activity: dict[int, dict[int, float]] = defaultdict(dict)  # guild_id -> {user_id -> join_ts}
+        self._showoff_rate_limits: dict[int, list[float]] = defaultdict(
+            list
+        )  # guild_id -> [timestamps]
+        self._voice_activity: dict[int, dict[int, float]] = defaultdict(
+            dict
+        )  # guild_id -> {user_id -> join_ts}
         self._voice_task: asyncio.Task | None = None
         # Message dedup: guild -> set of recent message_ids (prevents double-counting)
         self._recent_messages: dict[int, set[int]] = defaultdict(set)
@@ -169,27 +172,42 @@ class ReputationModule(BarkModule):
 
     def get_extra_tabs(self) -> list[dict]:
         return [
-            {"id": "leaderboard", "label": "Leaderboard", "template": "module_tabs/reputation_leaderboard.html"},
-            {"id": "thanks", "label": "Thanks Log", "template": "module_tabs/reputation_thanks.html"},
+            {
+                "id": "leaderboard",
+                "label": "Leaderboard",
+                "template": "module_tabs/reputation_leaderboard.html",
+            },
+            {
+                "id": "thanks",
+                "label": "Thanks Log",
+                "template": "module_tabs/reputation_thanks.html",
+            },
         ]
 
     def get_api_routes(self):
         """API endpoints for reputation dashboard data."""
-        from fastapi import APIRouter, Request
+        from fastapi import APIRouter
+
         from services.response import (
-            api_success,
             api_error,
             api_not_found,
+            api_success,
             check_api_permission,
             get_module_min_role,
         )
+
         router = APIRouter(tags=["module-reputation"])
 
         @router.get("/guilds/{guild_id}/modules/reputation/leaderboard")
-        async def reputation_leaderboard(request: Request, guild_id: str, limit: int = 25):
+        async def reputation_leaderboard(
+            request: Request,
+            guild_id: str,
+            limit: int = Query(25, ge=1, le=100),
+        ):
+            """Return the leaderboard for guild_id."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.view", guild_id):
-                return api_error("Insufficient permissions")
+                return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
             bot: "BarkBot" = request.state.bot
             guild = bot.get_guild(gid)
@@ -197,22 +215,27 @@ class ReputationModule(BarkModule):
                 return api_not_found("Guild")
 
             async with session_scope() as session:
-                from sqlalchemy import select, desc
-                result = await session.execute(
+                from sqlalchemy import desc, select
+
+                profiles_result = await session.execute(
                     select(ReputationProfile)
                     .where(ReputationProfile.guild_id == str(gid))
                     .order_by(desc(ReputationProfile.total_score))
                     .limit(min(limit, 100))
                 )
-                profiles = list(result.scalars().all())
+                profiles = list(profiles_result.scalars().all())
 
             # Load tiers
             async with session_scope() as session:
-                result = await session.execute(
+                tiers_result = await session.execute(
                     select(ReputationTier).where(ReputationTier.guild_id == str(gid))
                 )
-                tier_rows = list(result.scalars().all())
-            tier_map = {t.name: {"name": t.name, "symbol": t.symbol, "color_hex": t.color_hex} for t in tier_rows}
+                tier_rows = list(tiers_result.scalars().all())
+            tier_map = {
+                t.name: {"name": t.name, "symbol": t.symbol, "color_hex": t.color_hex}
+                for t in tier_rows
+                if t.name is not None
+            }
 
             leaderboard = []
             rank = 1
@@ -220,35 +243,45 @@ class ReputationModule(BarkModule):
                 member = guild.get_member(int(p.user_id))
                 if not member:
                     continue
-                tier_info = tier_map.get(p.current_tier, {"name": "Unranked", "symbol": "⬜", "color_hex": "#99aab5"})
-                leaderboard.append({
-                    "rank": rank,
-                    "user_id": p.user_id,
-                    "tag": member.display_name,
-                    "avatar": member.display_avatar.url if member.display_avatar else None,
-                    "level": p.level,
-                    "tier": p.current_tier,
-                    "symbol": tier_info["symbol"],
-                    "color_hex": tier_info["color_hex"],
-                    "total_score": round(p.total_score, 1),
-                    "messages_count": p.messages_count,
-                    "reactions_received": p.reactions_received,
-                    "thanks_received": p.thanks_received,
-                    "voice_minutes": p.voice_minutes,
-                })
+                tier_info = tier_map.get(
+                    p.current_tier, {"name": "Unranked", "symbol": "⬜", "color_hex": "#99aab5"}
+                )
+                leaderboard.append(
+                    {
+                        "rank": rank,
+                        "user_id": p.user_id,
+                        "tag": member.display_name,
+                        "avatar": member.display_avatar.url if member.display_avatar else None,
+                        "level": p.level,
+                        "tier": p.current_tier,
+                        "symbol": tier_info["symbol"],
+                        "color_hex": tier_info["color_hex"],
+                        "total_score": round(p.total_score, 1),
+                        "messages_count": p.messages_count,
+                        "reactions_received": p.reactions_received,
+                        "thanks_received": p.thanks_received,
+                        "voice_minutes": p.voice_minutes,
+                    }
+                )
                 rank += 1
 
             return api_success({"leaderboard": leaderboard, "total": len(leaderboard)})
 
         @router.get("/guilds/{guild_id}/modules/reputation/thanks")
-        async def reputation_thanks(request: Request, guild_id: str, limit: int = 50):
+        async def reputation_thanks(
+            request: Request,
+            guild_id: str,
+            limit: int = Query(50, ge=1, le=100),
+        ):
+            """Return recent thanks."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.view", guild_id):
-                return api_error("Insufficient permissions")
+                return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
 
             async with session_scope() as session:
-                from sqlalchemy import select, desc
+                from sqlalchemy import desc, select
+
                 result = await session.execute(
                     select(ReputationEvent)
                     .where(
@@ -268,15 +301,17 @@ class ReputationModule(BarkModule):
                         meta = json.loads(ev.metadata_json)
                     except (json.JSONDecodeError, TypeError):
                         pass
-                thanks_list.append({
-                    "id": ev.id,
-                    "event_type": ev.event_type,
-                    "actor_id": ev.actor_id,
-                    "target_id": ev.target_id,
-                    "points": ev.points,
-                    "reason": meta.get("reason", ""),
-                    "created_at": ev.created_at.isoformat() if ev.created_at else None,
-                })
+                thanks_list.append(
+                    {
+                        "id": ev.id,
+                        "event_type": ev.event_type,
+                        "actor_id": ev.actor_id,
+                        "target_id": ev.target_id,
+                        "points": ev.points,
+                        "reason": meta.get("reason", ""),
+                        "created_at": ev.created_at.isoformat() if ev.created_at else None,
+                    }
+                )
 
             return api_success({"thanks": thanks_list})
 
@@ -290,6 +325,7 @@ class ReputationModule(BarkModule):
 
             async with session_scope() as session:
                 from sqlalchemy import select
+
                 result = await session.execute(
                     select(ReputationProfile).where(
                         ReputationProfile.guild_id == str(gid),
@@ -304,6 +340,7 @@ class ReputationModule(BarkModule):
 
                 # Also delete events
                 from sqlalchemy import delete
+
                 await session.execute(
                     delete(ReputationEvent).where(
                         ReputationEvent.guild_id == str(gid),
@@ -332,24 +369,69 @@ class ReputationModule(BarkModule):
                         "voice": {"type": "boolean", "title": "Voice Time", "default": True},
                         "thanks": {"type": "boolean", "title": "Thanks", "default": True},
                     },
-                    "default": {"messages": True, "reactions": True, "emoji": True, "voice": True, "thanks": True},
+                    "default": {
+                        "messages": True,
+                        "reactions": True,
+                        "emoji": True,
+                        "voice": True,
+                        "thanks": True,
+                    },
                 },
                 "weights": {
                     "type": "object",
                     "title": "Point Weights",
                     "description": "Points awarded per activity unit.",
                     "properties": {
-                        "message": {"type": "number", "title": "Per Message", "default": 1.0, "minimum": 0},
-                        "reaction_received": {"type": "number", "title": "Per Reaction Received", "default": 2.0, "minimum": 0},
-                        "reaction_given": {"type": "number", "title": "Per Reaction Given", "default": 0.5, "minimum": 0},
-                        "emoji": {"type": "number", "title": "Per Unique Emoji", "default": 1.0, "minimum": 0},
-                        "thanks_given": {"type": "number", "title": "Per Thanks Given", "default": 2.0, "minimum": 0},
-                        "thanks_received": {"type": "number", "title": "Per Thanks Received", "default": 10.0, "minimum": 0},
-                        "voice_per_minute": {"type": "number", "title": "Per Voice Minute", "default": 0.5, "minimum": 0},
+                        "message": {
+                            "type": "number",
+                            "title": "Per Message",
+                            "default": 1.0,
+                            "minimum": 0,
+                        },
+                        "reaction_received": {
+                            "type": "number",
+                            "title": "Per Reaction Received",
+                            "default": 2.0,
+                            "minimum": 0,
+                        },
+                        "reaction_given": {
+                            "type": "number",
+                            "title": "Per Reaction Given",
+                            "default": 0.5,
+                            "minimum": 0,
+                        },
+                        "emoji": {
+                            "type": "number",
+                            "title": "Per Unique Emoji",
+                            "default": 1.0,
+                            "minimum": 0,
+                        },
+                        "thanks_given": {
+                            "type": "number",
+                            "title": "Per Thanks Given",
+                            "default": 2.0,
+                            "minimum": 0,
+                        },
+                        "thanks_received": {
+                            "type": "number",
+                            "title": "Per Thanks Received",
+                            "default": 10.0,
+                            "minimum": 0,
+                        },
+                        "voice_per_minute": {
+                            "type": "number",
+                            "title": "Per Voice Minute",
+                            "default": 0.5,
+                            "minimum": 0,
+                        },
                     },
                     "default": {
-                        "message": 1.0, "reaction_received": 2.0, "reaction_given": 0.5,
-                        "emoji": 1.0, "thanks_given": 2.0, "thanks_received": 10.0,
+                        "message": 1.0,
+                        "reaction_received": 2.0,
+                        "reaction_given": 0.5,
+                        "emoji": 1.0,
+                        "thanks_given": 2.0,
+                        "thanks_received": 10.0,
                         "voice_per_minute": 0.5,
                     },
                 },
@@ -358,8 +440,18 @@ class ReputationModule(BarkModule):
                     "title": "Daily / Weekly Caps",
                     "description": "Maximum points a member can earn per period.",
                     "properties": {
-                        "daily": {"type": "number", "title": "Daily Cap", "default": 200.0, "minimum": 0},
-                        "weekly": {"type": "number", "title": "Weekly Cap", "default": 1000.0, "minimum": 0},
+                        "daily": {
+                            "type": "number",
+                            "title": "Daily Cap",
+                            "default": 200.0,
+                            "minimum": 0,
+                        },
+                        "weekly": {
+                            "type": "number",
+                            "title": "Weekly Cap",
+                            "default": 1000.0,
+                            "minimum": 0,
+                        },
                     },
                     "default": {"daily": 200.0, "weekly": 1000.0},
                 },
@@ -409,9 +501,13 @@ class ReputationModule(BarkModule):
     # ── Default tiers ────────────────────────────────────
 
     async def _ensure_default_tiers(self, guild_id: int) -> None:
-        """Create default tier records if none exist for this guild."""
+        """Create default tier records if none exist for this guild.
+
+        Every 10 levels = one tier advancement.
+        """
         async with session_scope() as session:
             from sqlalchemy import select
+
             result = await session.execute(
                 select(ReputationTier).where(ReputationTier.guild_id == str(guild_id))
             )
@@ -420,22 +516,97 @@ class ReputationModule(BarkModule):
                 return
 
             default_tiers = [
-                ReputationTier(guild_id=str(guild_id), name="Unranked", symbol="⬜", min_score=0, min_level=0,
-                               color_hex="#99aab5", is_default=True, sort_order=0),
-                ReputationTier(guild_id=str(guild_id), name="Bronze", symbol="🥉", min_score=50, min_level=1,
-                               color_hex="#cd7f32", sort_order=1),
-                ReputationTier(guild_id=str(guild_id), name="Silver", symbol="🥈", min_score=200, min_level=3,
-                               color_hex="#c0c0c0", sort_order=2),
-                ReputationTier(guild_id=str(guild_id), name="Gold", symbol="🥇", min_score=500, min_level=5,
-                               color_hex="#ffd700", sort_order=3),
-                ReputationTier(guild_id=str(guild_id), name="Platinum", symbol="💎", min_score=1200, min_level=8,
-                               color_hex="#e5e4e2", sort_order=4),
-                ReputationTier(guild_id=str(guild_id), name="Diamond", symbol="🌟", min_score=2500, min_level=12,
-                               color_hex="#b9f2ff", sort_order=5),
-                ReputationTier(guild_id=str(guild_id), name="Legend", symbol="👑", min_score=5000, min_level=18,
-                               color_hex="#ff6b6b", sort_order=6),
-                ReputationTier(guild_id=str(guild_id), name="Mythic", symbol="🌀", min_score=10000, min_level=25,
-                               color_hex="#ca9ee6", sort_order=7),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Recruit",
+                    symbol="⬜",
+                    min_level=0,
+                    min_score=0,
+                    color_hex="#99aab5",
+                    is_default=True,
+                    sort_order=0,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Scout",
+                    symbol="🥉",
+                    min_level=10,
+                    min_score=0,
+                    color_hex="#cd7f32",
+                    sort_order=1,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Warrior",
+                    symbol="🥈",
+                    min_level=20,
+                    min_score=0,
+                    color_hex="#c0c0c0",
+                    sort_order=2,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Elite",
+                    symbol="🥇",
+                    min_level=30,
+                    min_score=0,
+                    color_hex="#ffd700",
+                    sort_order=3,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Champion",
+                    symbol="💎",
+                    min_level=40,
+                    min_score=0,
+                    color_hex="#e5e4e2",
+                    sort_order=4,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Guardian",
+                    symbol="🌟",
+                    min_level=50,
+                    min_score=0,
+                    color_hex="#b9f2ff",
+                    sort_order=5,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Legend",
+                    symbol="👑",
+                    min_level=60,
+                    min_score=0,
+                    color_hex="#ff6b6b",
+                    sort_order=6,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Mythic",
+                    symbol="🌀",
+                    min_level=70,
+                    min_score=0,
+                    color_hex="#ca9ee6",
+                    sort_order=7,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Titan",
+                    symbol="⚡",
+                    min_level=80,
+                    min_score=0,
+                    color_hex="#a78bfa",
+                    sort_order=8,
+                ),
+                ReputationTier(
+                    guild_id=str(guild_id),
+                    name="Immortal",
+                    symbol="🔥",
+                    min_level=90,
+                    min_score=0,
+                    color_hex="#ef4444",
+                    sort_order=9,
+                ),
             ]
             for tier in default_tiers:
                 session.add(tier)
@@ -487,14 +658,8 @@ class ReputationModule(BarkModule):
         if config is None:
             config = await self.load_dashboard_config(guild_id)
 
-        # Caps
-        points = check_daily_cap(points, config)
-        points = check_weekly_cap(points, config)
-        if points <= 0:
-            return None
-
         async with session_scope() as session:
-            from sqlalchemy import select
+            from sqlalchemy import func, select
 
             # Get or create profile
             result = await session.execute(
@@ -524,6 +689,22 @@ class ReputationModule(BarkModule):
                 profile.monthly_score = 0.0
                 profile.month_start = today.replace(day=1)
 
+            # Apply caps to accumulated awards, not to each event in isolation.
+            day_start = datetime.combine(today, datetime.min.time())
+            daily_earned = (
+                await session.execute(
+                    select(func.coalesce(func.sum(ReputationEvent.points), 0.0)).where(
+                        ReputationEvent.guild_id == str(guild_id),
+                        ReputationEvent.target_id == str(user_id),
+                        ReputationEvent.created_at >= day_start,
+                    )
+                )
+            ).scalar_one()
+            points = check_daily_cap(points, config, float(daily_earned))
+            points = check_weekly_cap(points, config, profile.weekly_score)
+            if points <= 0:
+                return None
+
             # Decay — handle timezone-naive last_activity from SQLite
             if profile.last_activity:
                 now = datetime.now(timezone.utc)
@@ -532,7 +713,8 @@ class ReputationModule(BarkModule):
                     la = la.replace(tzinfo=timezone.utc)
                 days_inactive = (now - la).days
                 profile.total_score = compute_decay(
-                    profile.total_score, max(0, days_inactive),
+                    profile.total_score,
+                    max(0, days_inactive),
                     float(config.get("decay_rate", 0.05)),
                 )
 
@@ -555,6 +737,8 @@ class ReputationModule(BarkModule):
                 profile.reactions_received += 1
             elif event_type == "thanks":
                 profile.thanks_received += 1
+            elif event_type == "voice_minute":
+                profile.voice_minutes += max(0, int((metadata or {}).get("minutes", 0)))
 
             # Load tiers for resolution
             tiers_result = await session.execute(
@@ -563,9 +747,14 @@ class ReputationModule(BarkModule):
             tier_rows = list(tiers_result.scalars().all())
             tier_dicts = [
                 {
-                    "name": t.name, "symbol": t.symbol, "min_score": t.min_score,
-                    "min_level": t.min_level, "color_hex": t.color_hex,
-                    "sort_order": t.sort_order, "role_id": t.role_id, "assign_role": t.assign_role,
+                    "name": t.name,
+                    "symbol": t.symbol,
+                    "min_score": t.min_score,
+                    "min_level": t.min_level,
+                    "color_hex": t.color_hex,
+                    "sort_order": t.sort_order,
+                    "role_id": t.role_id,
+                    "assign_role": t.assign_role,
                 }
                 for t in tier_rows
             ]
@@ -575,7 +764,9 @@ class ReputationModule(BarkModule):
             if tier_changed:
                 profile.current_tier = new_tier_data["name"]
                 if new_tier_data.get("assign_role") and new_tier_data.get("role_id"):
-                    await self._assign_tier_role(guild_id, user_id, new_tier_data["role_id"], tier_rows)
+                    await self._assign_tier_role(
+                        guild_id, user_id, new_tier_data["role_id"], tier_rows
+                    )
 
             # Record event
             event = ReputationEvent(
@@ -605,8 +796,14 @@ class ReputationModule(BarkModule):
         # Showoff
         if (leveled_up or tier_changed or new_rewards) and config.get("showoff_channel_id"):
             await self._send_showoff(
-                guild_id, user_id, profile, new_tier_data,
-                leveled_up, tier_changed, new_rewards, config,
+                guild_id,
+                user_id,
+                profile,
+                new_tier_data,
+                leveled_up,
+                tier_changed,
+                new_rewards,
+                config,
             )
 
         return {
@@ -620,7 +817,9 @@ class ReputationModule(BarkModule):
             "new_rewards": new_rewards,
         }
 
-    async def _assign_tier_role(self, guild_id: int, user_id: int, role_id: str, tiers: list) -> None:
+    async def _assign_tier_role(
+        self, guild_id: int, user_id: int, role_id: str, tiers: list
+    ) -> None:
         """Assign the new tier role, remove lower-tier roles."""
         guild = self.ctx.get_guild(guild_id)
         if guild is None:
@@ -637,28 +836,41 @@ class ReputationModule(BarkModule):
                 if tier.assign_role and tier.role_id and str(tier.role_id) != str(role_id):
                     remove_role = guild.get_role(int(tier.role_id))
                     if remove_role and remove_role in member.roles:
-                        await member.remove_roles(remove_role, reason="Bark Reputation: tier update")
+                        await member.remove_roles(
+                            remove_role, reason="Bark Reputation: tier update"
+                        )
             await member.add_roles(role, reason="Bark Reputation: tier achieved")
         except (discord.Forbidden, discord.HTTPException):
-            self._logger.exception("Failed to assign tier role for user %s in guild %s", user_id, guild_id)
+            self._logger.exception(
+                "Failed to assign tier role for user %s in guild %s", user_id, guild_id
+            )
 
     async def _check_rewards(
-        self, guild_id: int, user_id: int, profile: ReputationProfile, config: dict,
+        self,
+        guild_id: int,
+        user_id: int,
+        profile: ReputationProfile,
+        config: dict,
     ) -> list[dict]:
         """Check for unearned rewards and auto-award them."""
         earned = []
         async with session_scope() as session:
             from sqlalchemy import select
+
             result = await session.execute(
                 select(ReputationReward).where(
                     ReputationReward.guild_id == str(guild_id),
-                    ReputationReward.auto_award == True,
+                    ReputationReward.auto_award.is_(True),
                 )
             )
             rewards = list(result.scalars().all())
 
             for reward in rewards:
-                profile_meets_tier = not reward.required_tier or reward.required_tier == "unranked" or reward.required_tier == profile.current_tier
+                profile_meets_tier = (
+                    not reward.required_tier
+                    or reward.required_tier == "unranked"
+                    or reward.required_tier == profile.current_tier
+                )
                 profile_meets_level = profile.level >= reward.required_level
                 if not profile_meets_tier or not profile_meets_level:
                     continue
@@ -673,19 +885,23 @@ class ReputationModule(BarkModule):
                 if award_check.scalar_one_or_none() is not None:
                     continue
                 # Award it
-                session.add(ReputationAward(
-                    guild_id=str(guild_id),
-                    user_id=str(user_id),
-                    reward_id=reward.id,
-                    tier_name=profile.current_tier,
-                    level_at_award=profile.level,
-                    score_at_award=profile.total_score,
-                ))
-                earned.append({
-                    "name": reward.name,
-                    "reward_type": reward.reward_type,
-                    "reward_value": reward.reward_value,
-                })
+                session.add(
+                    ReputationAward(
+                        guild_id=str(guild_id),
+                        user_id=str(user_id),
+                        reward_id=reward.id,
+                        tier_name=profile.current_tier,
+                        level_at_award=profile.level,
+                        score_at_award=profile.total_score,
+                    )
+                )
+                earned.append(
+                    {
+                        "name": reward.name,
+                        "reward_type": reward.reward_type,
+                        "reward_value": reward.reward_value,
+                    }
+                )
             if earned:
                 await session.commit()
         return earned
@@ -693,9 +909,15 @@ class ReputationModule(BarkModule):
     # ── Showoff channel ──────────────────────────────────
 
     async def _send_showoff(
-        self, guild_id: int, user_id: int, profile: ReputationProfile,
-        tier_data: dict, leveled_up: bool, tier_changed: bool,
-        new_rewards: list[dict], config: dict,
+        self,
+        guild_id: int,
+        user_id: int,
+        profile: ReputationProfile,
+        tier_data: dict,
+        leveled_up: bool,
+        tier_changed: bool,
+        new_rewards: list[dict],
+        config: dict,
     ) -> None:
         """Post an announcement to the configured showoff channel."""
         # Rate limit
@@ -752,7 +974,12 @@ class ReputationModule(BarkModule):
             pass
 
     async def _send_showoff_text(
-        self, guild_id: int, user_id: int, title: str, description: str, config: dict,
+        self,
+        guild_id: int,
+        user_id: int,
+        title: str,
+        description: str,
+        config: dict,
     ) -> None:
         """Post a plain-text showoff message (for /thanks highlights, etc.)."""
         now = time.time()
@@ -792,7 +1019,9 @@ class ReputationModule(BarkModule):
 
         # Check ignored channels
         ignored = config.get("ignored_channels", "")
-        if ignored and str(message.channel.id) in [c.strip() for c in ignored.split(",") if c.strip()]:
+        if ignored and str(message.channel.id) in [
+            c.strip() for c in ignored.split(",") if c.strip()
+        ]:
             return
 
         # Dedup
@@ -811,15 +1040,25 @@ class ReputationModule(BarkModule):
             if emoji_count:
                 emoji_points = compute_emoji_points(config) * emoji_count
                 await self._add_points(
-                    guild_id, user_id, emoji_points, "emoji",
-                    actor_id=user_id, message_id=int(message.id),
-                    channel_id=int(message.channel.id), config=config,
+                    guild_id,
+                    user_id,
+                    emoji_points,
+                    "emoji",
+                    actor_id=user_id,
+                    message_id=int(message.id),
+                    channel_id=int(message.channel.id),
+                    config=config,
                 )
 
         await self._add_points(
-            guild_id, user_id, points, "message",
-            actor_id=user_id, message_id=int(message.id),
-            channel_id=int(message.channel.id), config=config,
+            guild_id,
+            user_id,
+            points,
+            "message",
+            actor_id=user_id,
+            message_id=int(message.id),
+            channel_id=int(message.channel.id),
+            config=config,
         )
 
     async def _on_reaction_add(self, event_type: str, **data) -> None:
@@ -852,18 +1091,28 @@ class ReputationModule(BarkModule):
         if config.get("enabled_sources", {}).get("reactions", True):
             given_points = compute_reaction_given_points(config)
             await self._add_points(
-                guild_id, actor_id, given_points, "reaction_given",
-                actor_id=actor_id, target_id=target_id,
-                message_id=int(payload.message_id), channel_id=int(payload.channel_id),
+                guild_id,
+                actor_id,
+                given_points,
+                "reaction_given",
+                actor_id=actor_id,
+                target_id=target_id,
+                message_id=int(payload.message_id),
+                channel_id=int(payload.channel_id),
                 config=config,
             )
 
         # Message author gets received points
         received_points = compute_reaction_received_points(config)
         await self._add_points(
-            guild_id, target_id, received_points, "reaction",
-            actor_id=actor_id, target_id=target_id,
-            message_id=int(payload.message_id), channel_id=int(payload.channel_id),
+            guild_id,
+            target_id,
+            received_points,
+            "reaction",
+            actor_id=actor_id,
+            target_id=target_id,
+            message_id=int(payload.message_id),
+            channel_id=int(payload.channel_id),
             config=config,
         )
 
@@ -891,8 +1140,13 @@ class ReputationModule(BarkModule):
                 if minutes >= 0.5:  # At least 30 seconds to count
                     points = compute_voice_points(minutes, config)
                     await self._add_points(
-                        guild_id, user_id, points, "voice_minute",
-                        actor_id=user_id, config=config,
+                        guild_id,
+                        user_id,
+                        points,
+                        "voice_minute",
+                        actor_id=user_id,
+                        metadata={"minutes": minutes},
+                        config=config,
                     )
 
     async def _voice_tick_loop(self) -> None:
@@ -916,8 +1170,13 @@ class ReputationModule(BarkModule):
                             points = compute_voice_points(minutes, config)
                             if points > 0:
                                 await self._add_points(
-                                    guild_id, user_id, points, "voice_minute",
-                                    actor_id=user_id, config=config,
+                                    guild_id,
+                                    user_id,
+                                    points,
+                                    "voice_minute",
+                                    actor_id=user_id,
+                                    metadata={"minutes": minutes},
+                                    config=config,
                                 )
                             # Reset timer so we don't double-count
                             activity[user_id] = now
@@ -927,9 +1186,13 @@ class ReputationModule(BarkModule):
     # ── Slash commands ───────────────────────────────────
 
     def _make_reputation_command(self):
-        @discord.app_commands.command(name="reputation", description="View your rank or another member's rank")
+        @discord.app_commands.command(
+            name="reputation", description="View your rank or another member's rank"
+        )
         @discord.app_commands.describe(member="Member to look up (leave empty for yourself)")
-        async def reputation_cmd(interaction: discord.Interaction, member: discord.Member | None = None):
+        async def reputation_cmd(
+            interaction: discord.Interaction, member: discord.Member | None = None
+        ):
             if not interaction.guild:
                 return
             await interaction.response.defer(ephemeral=True)
@@ -938,6 +1201,7 @@ class ReputationModule(BarkModule):
 
             async with session_scope() as session:
                 from sqlalchemy import select
+
                 result = await session.execute(
                     select(ReputationProfile).where(
                         ReputationProfile.guild_id == str(guild_id),
@@ -955,6 +1219,7 @@ class ReputationModule(BarkModule):
             # Look up tier
             async with session_scope() as session:
                 from sqlalchemy import select
+
                 t_result = await session.execute(
                     select(ReputationTier).where(
                         ReputationTier.guild_id == str(guild_id),
@@ -968,7 +1233,8 @@ class ReputationModule(BarkModule):
             tier_name = tier.name if tier else "Unranked"
 
             progress = next_level_progress(
-                profile.total_score, profile.level,
+                profile.total_score,
+                profile.level,
                 float(await self._get_level_constant(guild_id)),
             )
             bar = self._progress_bar(progress["progress"], 12)
@@ -984,9 +1250,13 @@ class ReputationModule(BarkModule):
             )
             embed.set_thumbnail(url=target.display_avatar.url)
             embed.add_field(name="Total Score", value=f"{profile.total_score:.0f}", inline=True)
-            embed.add_field(name="Level Progress", value=f"{bar} {progress['percent']}%", inline=False)
+            embed.add_field(
+                name="Level Progress", value=f"{bar} {progress['percent']}%", inline=False
+            )
             embed.add_field(name="Messages", value=str(profile.messages_count), inline=True)
-            embed.add_field(name="Reactions Received", value=str(profile.reactions_received), inline=True)
+            embed.add_field(
+                name="Reactions Received", value=str(profile.reactions_received), inline=True
+            )
             embed.add_field(name="Thanks Received", value=str(profile.thanks_received), inline=True)
             embed.add_field(name="Voice Minutes", value=str(profile.voice_minutes), inline=True)
             embed.add_field(name="Weekly Score", value=f"{profile.weekly_score:.0f}", inline=True)
@@ -997,7 +1267,9 @@ class ReputationModule(BarkModule):
         return reputation_cmd
 
     def _make_leaderboard_command(self):
-        @discord.app_commands.command(name="leaderboard", description="Show the top ranked members in this server")
+        @discord.app_commands.command(
+            name="leaderboard", description="Show the top ranked members in this server"
+        )
         @discord.app_commands.describe(hide="Hide the response from others (default: false)")
         async def leaderboard_cmd(interaction: discord.Interaction, hide: bool = True):
             if not interaction.guild:
@@ -1006,7 +1278,8 @@ class ReputationModule(BarkModule):
             guild_id = int(interaction.guild.id)
 
             async with session_scope() as session:
-                from sqlalchemy import select, desc
+                from sqlalchemy import desc, select
+
                 result = await session.execute(
                     select(ReputationProfile)
                     .where(ReputationProfile.guild_id == str(guild_id))
@@ -1022,6 +1295,7 @@ class ReputationModule(BarkModule):
             # Load tiers for symbols
             async with session_scope() as session:
                 from sqlalchemy import select
+
                 t_result = await session.execute(
                     select(ReputationTier).where(ReputationTier.guild_id == str(guild_id))
                 )
@@ -1034,7 +1308,9 @@ class ReputationModule(BarkModule):
                 tier = tiers.get(p.current_tier)
                 symbol = tier.symbol if tier else "⬜"
                 medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"{i}.")
-                lines.append(f"{medal} {symbol} **{name}** — Level {p.level} — `{p.total_score:.0f}` pts")
+                lines.append(
+                    f"{medal} {symbol} **{name}** — Level {p.level} — `{p.total_score:.0f}` pts"
+                )
 
             embed = discord.Embed(
                 title=f"🏆 {interaction.guild.name} Leaderboard",
@@ -1049,9 +1325,15 @@ class ReputationModule(BarkModule):
         return leaderboard_cmd
 
     def _make_thanks_command(self):
-        @discord.app_commands.command(name="thanks", description="Thank another member for something")
-        @discord.app_commands.describe(member="The member you want to thank", reason="What they did")
-        async def thanks_cmd(interaction: discord.Interaction, member: discord.Member, reason: str = ""):
+        @discord.app_commands.command(
+            name="thanks", description="Thank another member for something"
+        )
+        @discord.app_commands.describe(
+            member="The member you want to thank", reason="What they did"
+        )
+        async def thanks_cmd(
+            interaction: discord.Interaction, member: discord.Member, reason: str = ""
+        ):
             if not interaction.guild:
                 return
             guild_id = int(interaction.guild.id)
@@ -1059,7 +1341,9 @@ class ReputationModule(BarkModule):
             target_id = int(member.id)
 
             if member.bot:
-                await interaction.response.send_message("Bots don't need thanks! 🤖", ephemeral=True)
+                await interaction.response.send_message(
+                    "Bots don't need thanks! 🤖", ephemeral=True
+                )
                 return
             if actor_id == target_id:
                 await interaction.response.send_message("You can't thank yourself!", ephemeral=True)
@@ -1089,17 +1373,25 @@ class ReputationModule(BarkModule):
             # Points for giver
             given_points = compute_thanks_given_points(config)
             await self._add_points(
-                guild_id, actor_id, given_points, "thanks_given",
-                actor_id=actor_id, target_id=target_id,
+                guild_id,
+                actor_id,
+                given_points,
+                "thanks_given",
+                actor_id=actor_id,
+                target_id=target_id,
                 metadata={"reason": reason, "target": str(target_id)},
                 config=config,
             )
 
             # Points for receiver
             received_points = compute_thanks_received_points(config)
-            result = await self._add_points(
-                guild_id, target_id, received_points, "thanks",
-                actor_id=actor_id, target_id=target_id,
+            await self._add_points(
+                guild_id,
+                target_id,
+                received_points,
+                "thanks",
+                actor_id=actor_id,
+                target_id=target_id,
                 metadata={"reason": reason, "giver": str(actor_id)},
                 config=config,
             )
@@ -1115,7 +1407,8 @@ class ReputationModule(BarkModule):
             # Optional showoff for thanks highlights
             if config.get("showoff_channel_id"):
                 await self._send_showoff_text(
-                    guild_id, target_id,
+                    guild_id,
+                    target_id,
                     f"🙏 {member.display_name} was thanked!",
                     f"By {interaction.user.display_name}" + (f"\n> {reason}" if reason else ""),
                     config,

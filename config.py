@@ -9,8 +9,12 @@ Priority:
 
 import os
 import secrets
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
+
+
+class ConfigurationError(ValueError):
+    """Raised when Bark configuration is missing or invalid."""
 
 
 @dataclass
@@ -25,9 +29,9 @@ class BotConfig:
 
 @dataclass
 class DashboardConfig:
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8090
-    public_url: str = "https://bark.warx.org"
+    public_url: str = "http://127.0.0.1:8090"
     secret_key: str = ""
     session_ttl: int = 86400  # 24 hours
     cors_origins: list[str] = field(default_factory=lambda: ["*"])
@@ -98,6 +102,27 @@ class Config:
     def __post_init__(self):
         self.data_dir = Path(self.data_dir).resolve()
 
+    def validate_startup(self) -> None:
+        """Validate settings required to start the complete Bark process."""
+        if not self.bot.token:
+            raise ConfigurationError(
+                "BARK_BOT_TOKEN is required (or provide a private .token file)"
+            )
+        oauth_credentials = (
+            self.oauth2.client_id,
+            self.oauth2.client_secret,
+        )
+        if any(oauth_credentials) and (not all(oauth_credentials) or not self.oauth2.redirect_uri):
+            raise ConfigurationError(
+                "Discord OAuth requires BARK_OAUTH2_CLIENT_ID, "
+                "BARK_OAUTH2_CLIENT_SECRET, and BARK_OAUTH2_REDIRECT_URI"
+            )
+        if self.dashboard.host not in {"127.0.0.1", "::1", "localhost"} and not self.oauth2.enabled:
+            raise ConfigurationError(
+                "Discord OAuth must be configured before exposing the dashboard "
+                "on a non-loopback BARK_DASHBOARD_HOST"
+            )
+
     @classmethod
     def load(cls) -> "Config":
         """Load config from environment variables with sensible defaults."""
@@ -123,14 +148,19 @@ class Config:
 
         # Dashboard
         cfg.dashboard.host = os.getenv("BARK_DASHBOARD_HOST", cfg.dashboard.host)
+        raw_port = os.getenv("BARK_DASHBOARD_PORT", "8090")
         try:
-            cfg.dashboard.port = int(os.getenv("BARK_DASHBOARD_PORT", "8090"))
-        except ValueError:
-            cfg.dashboard.port = 8090
+            cfg.dashboard.port = int(raw_port)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"BARK_DASHBOARD_PORT must be an integer, got {raw_port!r}"
+            ) from exc
+        if not 1 <= cfg.dashboard.port <= 65535:
+            raise ConfigurationError("BARK_DASHBOARD_PORT must be between 1 and 65535")
         cfg.dashboard.force_https = os.getenv("BARK_FORCE_HTTPS", "false").lower() == "true"
-        cfg.dashboard.public_url = os.getenv(
-            "BARK_PUBLIC_URL", cfg.dashboard.public_url
-        ).rstrip("/")
+        cfg.dashboard.public_url = os.getenv("BARK_PUBLIC_URL", cfg.dashboard.public_url).rstrip(
+            "/"
+        )
         env_key = os.getenv("BARK_SECRET_KEY", "")
         cfg.dashboard.secret_key = env_key or _get_or_generate_secret_key(cfg.data_dir)
 

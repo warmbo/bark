@@ -1,1 +1,1 @@
-from modules.moderation.module import ModerationModule
+from modules.moderation.module import ModerationModule as ModerationModule

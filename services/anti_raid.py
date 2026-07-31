@@ -24,18 +24,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bark.services.anti_raid")
 
 # Default config (per-guild overrides stored in module config)
-DEFAULT_JOIN_THRESHOLD = 5       # joins
-DEFAULT_JOIN_WINDOW = 30         # seconds
-DEFAULT_ACCOUNT_AGE_DAYS = 3     # min account age
-DEFAULT_ESCALATION_STRIKES = 3   # AutoMod violations before escalation
-DEFAULT_ESCALATION = {           # strike count → action
+DEFAULT_JOIN_THRESHOLD = 5  # joins
+DEFAULT_JOIN_WINDOW = 30  # seconds
+DEFAULT_ACCOUNT_AGE_DAYS = 3  # min account age
+DEFAULT_ESCALATION_STRIKES = 3  # AutoMod violations before escalation
+DEFAULT_ESCALATION = {  # strike count → action
     1: "warn",
     3: "timeout",
     5: "kick",
 }
 DEFAULT_SIMILARITY_RATIO = 0.85  # content similarity threshold
-DEFAULT_MENTION_LIMIT = 10       # mentions per 60s
-
+DEFAULT_MENTION_LIMIT = 10  # mentions per 60s
 
 
 class AntiRaidService:
@@ -57,9 +56,7 @@ class AntiRaidService:
         )
 
         # ── Escalation tracking ──
-        self._violation_count: dict[int, dict[int, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
+        self._violation_count: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
         self._escalation_cooldown: dict[int, dict[int, float]] = defaultdict(
             lambda: defaultdict(float)
         )
@@ -79,8 +76,12 @@ class AntiRaidService:
         self._join_track[guild_id].append(now)
         return self._check_raid(guild_id, threshold=threshold, window=window)
 
-    def _check_raid(self, guild_id: int, threshold: int = DEFAULT_JOIN_THRESHOLD,
-                    window: int = DEFAULT_JOIN_WINDOW) -> bool:
+    def _check_raid(
+        self,
+        guild_id: int,
+        threshold: int = DEFAULT_JOIN_THRESHOLD,
+        window: int = DEFAULT_JOIN_WINDOW,
+    ) -> bool:
         """Check if join rate exceeds threshold within time window."""
         now = datetime.now(timezone.utc)
         track = self._join_track[guild_id]
@@ -104,7 +105,9 @@ class AntiRaidService:
     # ══════════════════════════════════════════════════════
 
     @staticmethod
-    def check_account_age(member: discord.Member, min_days: int = DEFAULT_ACCOUNT_AGE_DAYS) -> tuple[bool, str]:
+    def check_account_age(
+        member: discord.Member, min_days: int = DEFAULT_ACCOUNT_AGE_DAYS
+    ) -> tuple[bool, str]:
         """Check if member account is old enough. Returns (passed, reason)."""
         if not member.created_at:
             return True, ""
@@ -117,8 +120,9 @@ class AntiRaidService:
     # CONTENT SIMILARITY SPAM
     # ══════════════════════════════════════════════════════
 
-    def check_content_spam(self, guild_id: int, user_id: int, content: str,
-                           ratio: float = DEFAULT_SIMILARITY_RATIO) -> bool:
+    def check_content_spam(
+        self, guild_id: int, user_id: int, content: str, ratio: float = DEFAULT_SIMILARITY_RATIO
+    ) -> bool:
         """Check if message content is too similar to recent messages."""
         if not content:
             return False
@@ -142,10 +146,18 @@ class AntiRaidService:
     ]
 
     SCAM_DOMAINS = [
-        "steamcommunit.ru", "discord-nitro.xyz", "discordgift.com",
-        "steam-gift.ru", "discord.xyz.gift", "free-nitro.pro",
-        "steamcommunit.com", "nitro-free.xyz", "free-discordnitro.com",
-        "givvn.com", "steamcommunity.vip", "steam-list.com",
+        "steamcommunit.ru",
+        "discord-nitro.xyz",
+        "discordgift.com",
+        "steam-gift.ru",
+        "discord.xyz.gift",
+        "free-nitro.pro",
+        "steamcommunit.com",
+        "nitro-free.xyz",
+        "free-discordnitro.com",
+        "givvn.com",
+        "steamcommunity.vip",
+        "steam-list.com",
     ]
 
     @classmethod
@@ -168,8 +180,13 @@ class AntiRaidService:
     # MASS MENTION TRACKING
     # ══════════════════════════════════════════════════════
 
-    def check_mass_mention(self, guild_id: int, user_id: int, mention_count: int,
-                           max_mentions: int = DEFAULT_MENTION_LIMIT) -> bool:
+    def check_mass_mention(
+        self,
+        guild_id: int,
+        user_id: int,
+        mention_count: int,
+        max_mentions: int = DEFAULT_MENTION_LIMIT,
+    ) -> bool:
         """Track total mentions by a user across messages within 60s window."""
         now = datetime.now(timezone.utc)
         track = self._mention_track[guild_id][user_id]

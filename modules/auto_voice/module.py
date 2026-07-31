@@ -76,11 +76,7 @@ class AutoVoiceModule(BarkModule):
         ]
 
     def get_permissions(self) -> list[PermissionDefinition]:
-        return [
-            PermissionDefinition(
-                name="auto_voice.manage", label="Manage Auto Voice Channels"
-            )
-        ]
+        return [PermissionDefinition(name="auto_voice.manage", label="Manage Auto Voice Channels")]
 
     def get_about(self) -> list[dict]:
         return [
@@ -209,7 +205,11 @@ class AutoVoiceModule(BarkModule):
                     channel = get_channel(channel_id)
                 if channel is None:
                     channel = next(
-                        (item for item in getattr(guild, "channels", []) if int(item.id) == channel_id),
+                        (
+                            item
+                            for item in getattr(guild, "channels", [])
+                            if int(item.id) == channel_id
+                        ),
                         None,
                     )
 
@@ -228,18 +228,14 @@ class AutoVoiceModule(BarkModule):
                 owner_id=int(row.owner_id),
                 sequence=sequence,
             )
-            recovered_per_guild[guild_id] = max(
-                recovered_per_guild.get(guild_id, 0), sequence
-            )
+            recovered_per_guild[guild_id] = max(recovered_per_guild.get(guild_id, 0), sequence)
 
             if not channel.members:
                 config = await self.ctx.get_module_config(self.name, guild_id)
                 await self._schedule_deletion(channel, config)
 
         for guild_id, count in recovered_per_guild.items():
-            self._channel_sequence[guild_id] = max(
-                self._channel_sequence.get(guild_id, 0), count
-            )
+            self._channel_sequence[guild_id] = max(self._channel_sequence.get(guild_id, 0), count)
         if rows:
             self._logger.info(
                 "Recovered %d active temporary voice channel(s)",
@@ -262,7 +258,8 @@ class AutoVoiceModule(BarkModule):
             channel = await self._owned_channel(interaction)
             if channel is None:
                 return
-            config = await self.load_dashboard_config(int(interaction.guild_id))
+            guild_id = int(interaction.guild_id) if interaction.guild_id else 0
+            config = await self.load_dashboard_config(guild_id)
             if not config.get("owner_can_rename", True):
                 await interaction.response.send_message(
                     "Renaming is disabled for channel owners.", ephemeral=True
@@ -275,9 +272,7 @@ class AutoVoiceModule(BarkModule):
                 )
                 return
             try:
-                await channel.edit(
-                    name=clean_name, reason="Bark Auto Voice: owner rename"
-                )
+                await channel.edit(name=clean_name, reason="Bark Auto Voice: owner rename")
             except (discord.Forbidden, discord.HTTPException):
                 await interaction.response.send_message(
                     "Bark could not rename that channel.", ephemeral=True
@@ -297,7 +292,8 @@ class AutoVoiceModule(BarkModule):
             channel = await self._owned_channel(interaction)
             if channel is None:
                 return
-            config = await self.load_dashboard_config(int(interaction.guild_id))
+            guild_id = int(interaction.guild_id) if interaction.guild_id else 0
+            config = await self.load_dashboard_config(guild_id)
             if not config.get("owner_can_limit", True):
                 await interaction.response.send_message(
                     "Changing the user limit is disabled for channel owners.",
@@ -331,9 +327,7 @@ class AutoVoiceModule(BarkModule):
     def _make_voice_access_command(self, *, locked: bool):
         command_name = "voice_lock" if locked else "voice_unlock"
         description = (
-            "Lock your temporary voice channel"
-            if locked
-            else "Unlock your temporary voice channel"
+            "Lock your temporary voice channel" if locked else "Unlock your temporary voice channel"
         )
 
         @discord.app_commands.command(name=command_name, description=description)
@@ -341,16 +335,19 @@ class AutoVoiceModule(BarkModule):
             channel = await self._owned_channel(interaction)
             if channel is None:
                 return
-            config = await self.load_dashboard_config(int(interaction.guild_id))
+            guild_id = int(interaction.guild_id) if interaction.guild_id else 0
+            config = await self.load_dashboard_config(guild_id)
             if not config.get("owner_can_lock", True):
                 await interaction.response.send_message(
                     "Locking is disabled for channel owners.", ephemeral=True
                 )
                 return
             action = "locked" if locked else "unlocked"
+            if interaction.guild is None:
+                return
             try:
                 await channel.set_permissions(
-                    interaction.user.guild.default_role,
+                    interaction.guild.default_role,
                     connect=False if locked else None,
                     reason=f"Bark Auto Voice: owner {action} channel",
                 )
@@ -360,9 +357,7 @@ class AutoVoiceModule(BarkModule):
                     ephemeral=True,
                 )
                 return
-            await interaction.response.send_message(
-                f"Channel {action}.", ephemeral=True
-            )
+            await interaction.response.send_message(f"Channel {action}.", ephemeral=True)
 
         return voice_access
 
@@ -371,6 +366,12 @@ class AutoVoiceModule(BarkModule):
         voice = getattr(user, "voice", None)
         channel = getattr(voice, "channel", None)
         state = self._managed_channels.get(int(channel.id)) if channel else None
+        if channel is None or user is None:
+            await interaction.response.send_message(
+                "You must own and be connected to a Bark temporary voice channel.",
+                ephemeral=True,
+            )
+            return None
         if state is None or int(state.owner_id) != int(user.id):
             await interaction.response.send_message(
                 "You must own and be connected to a Bark temporary voice channel.",
@@ -417,11 +418,16 @@ class AutoVoiceModule(BarkModule):
 
     async def _on_presence_update(self, event_type: str, **data) -> None:
         member = data.get("after")
+        if member is None:
+            return
         voice = getattr(member, "voice", None)
         channel = getattr(voice, "channel", None)
         if channel is None or int(channel.id) not in self._managed_channels:
             return
-        config = await self.load_dashboard_config(int(member.guild.id))
+        guild = getattr(member, "guild", None)
+        if guild is None:
+            return
+        config = await self.load_dashboard_config(int(guild.id))
         await self._refresh_channel_name(channel, config)
 
     async def _create_for_member(self, member, primary, config: dict[str, Any]) -> None:
@@ -437,28 +443,22 @@ class AutoVoiceModule(BarkModule):
             sequence = self._next_sequence(int(member.guild.id))
             name = self._render_name(member, config, index=sequence)
             overwrites = self._build_overwrites(member, primary, config)
-            requested_bitrate = self._config_int(
-                config, "bitrate_kbps", default=64, minimum=8, maximum=384
-            ) * 1000
-            guild_bitrate_limit = int(
-                getattr(member.guild, "bitrate_limit", requested_bitrate)
+            requested_bitrate = (
+                self._config_int(config, "bitrate_kbps", default=64, minimum=8, maximum=384) * 1000
             )
+            guild_bitrate_limit = int(getattr(member.guild, "bitrate_limit", requested_bitrate))
             created = await member.guild.create_voice_channel(
                 name=name,
                 category=getattr(primary, "category", None),
                 overwrites=overwrites,
                 bitrate=min(requested_bitrate, guild_bitrate_limit),
-                user_limit=self._config_int(
-                    config, "user_limit", default=0, minimum=0, maximum=99
-                ),
+                user_limit=self._config_int(config, "user_limit", default=0, minimum=0, maximum=99),
                 reason="Bark Auto Voice: join-to-create",
             )
             self._managed_channels[int(created.id)] = ManagedChannel(
                 guild_id=int(member.guild.id), owner_id=member_id, sequence=sequence
             )
-            await member.move_to(
-                created, reason="Bark Auto Voice: temporary channel created"
-            )
+            await member.move_to(created, reason="Bark Auto Voice: temporary channel created")
             await self._persist_managed_channel(created, member, primary)
         except (discord.Forbidden, discord.HTTPException, TypeError, ValueError):
             self._logger.exception("Failed to create temporary voice channel")
@@ -580,9 +580,7 @@ class AutoVoiceModule(BarkModule):
         async with lock:
             await self._refresh_channel_name_locked(channel, config)
 
-    async def _refresh_channel_name_locked(
-        self, channel, config: dict[str, Any]
-    ) -> None:
+    async def _refresh_channel_name_locked(self, channel, config: dict[str, Any]) -> None:
         state = self._managed_channels.get(int(channel.id))
         members = [
             member
@@ -596,9 +594,7 @@ class AutoVoiceModule(BarkModule):
         if callable(get_member):
             owner = get_member(int(state.owner_id))
         owner = owner or members[0]
-        game = self._majority_game(members) or str(
-            config.get("fallback_name") or "General"
-        )
+        game = self._majority_game(members) or str(config.get("fallback_name") or "General")
         desired_name = self._render_name(
             owner,
             config,
@@ -614,9 +610,7 @@ class AutoVoiceModule(BarkModule):
             )
             channel.name = desired_name
         except (discord.Forbidden, discord.HTTPException):
-            self._logger.exception(
-                "Failed to update temporary voice channel %s name", channel.id
-            )
+            self._logger.exception("Failed to update temporary voice channel %s name", channel.id)
 
     @classmethod
     def _majority_game(cls, members) -> str | None:
@@ -637,9 +631,7 @@ class AutoVoiceModule(BarkModule):
             "lower": str.lower,
             "title": str.title,
             "swap": str.swapcase,
-            "acro": lambda value: "".join(
-                word[0].upper() for word in value.split() if word
-            ),
+            "acro": lambda value: "".join(word[0].upper() for word in value.split() if word),
             "spaces": lambda value: "".join(value.split()),
         }
 
@@ -673,9 +665,7 @@ class AutoVoiceModule(BarkModule):
             overwrites = {}
         if config.get("private_by_default", False):
             overwrites[member.guild.default_role] = discord.PermissionOverwrite(connect=False)
-            overwrites[member] = discord.PermissionOverwrite(
-                view_channel=True, connect=True
-            )
+            overwrites[member] = discord.PermissionOverwrite(view_channel=True, connect=True)
             bot_member = getattr(member.guild, "me", None)
             if bot_member is not None:
                 overwrites[bot_member] = discord.PermissionOverwrite(

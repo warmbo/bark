@@ -44,9 +44,7 @@ async def test_voice_event_subscription_persists_join_and_leave(db):
 
     member = SimpleNamespace(id=user_id, guild=guild)
     channel = SimpleNamespace(id=channel_id, name="Voice test channel")
-    second_channel = SimpleNamespace(
-        id=second_channel_id, name="Second voice test channel"
-    )
+    second_channel = SimpleNamespace(id=second_channel_id, name="Second voice test channel")
     disconnected = SimpleNamespace(channel=None)
     connected = SimpleNamespace(channel=channel)
     moved = SimpleNamespace(channel=second_channel)
@@ -75,13 +73,17 @@ async def test_voice_event_subscription_persists_join_and_leave(db):
 
         async with session_scope() as session:
             records = (
-                await session.execute(
-                    select(VoiceSession).where(
-                        VoiceSession.guild_id == str(guild_id),
-                        VoiceSession.user_id == str(user_id),
+                (
+                    await session.execute(
+                        select(VoiceSession).where(
+                            VoiceSession.guild_id == str(guild_id),
+                            VoiceSession.user_id == str(user_id),
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         assert len(records) == 2
         assert {record.channel_id for record in records} == {
@@ -138,13 +140,17 @@ async def test_join_to_create_transition_records_only_final_channel(db):
 
         async with session_scope() as session:
             records = (
-                await session.execute(
-                    select(VoiceSession).where(
-                        VoiceSession.guild_id == str(guild_id),
-                        VoiceSession.user_id == str(user_id),
+                (
+                    await session.execute(
+                        select(VoiceSession).where(
+                            VoiceSession.guild_id == str(guild_id),
+                            VoiceSession.user_id == str(user_id),
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         assert [(record.channel_id, record.channel_name) for record in records] == [
             (str(managed.id), managed.name)
@@ -190,13 +196,17 @@ async def test_mutated_voice_state_does_not_create_duplicate_managed_session(db)
 
         async with session_scope() as session:
             records = (
-                await session.execute(
-                    select(VoiceSession).where(
-                        VoiceSession.guild_id == str(guild_id),
-                        VoiceSession.user_id == str(user_id),
+                (
+                    await session.execute(
+                        select(VoiceSession).where(
+                            VoiceSession.guild_id == str(guild_id),
+                            VoiceSession.user_id == str(user_id),
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         assert records == []
     finally:
         await manager.disable_all()

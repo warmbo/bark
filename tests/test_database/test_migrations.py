@@ -95,9 +95,7 @@ async def test_dashboard_guild_access_migration_upgrades_legacy_database(tmp_pat
         versions = {
             row[0]
             for row in (
-                await connection.exec_driver_sql(
-                    "SELECT version FROM schema_migrations"
-                )
+                await connection.exec_driver_sql("SELECT version FROM schema_migrations")
             ).fetchall()
         }
         await connection.exec_driver_sql(
@@ -109,9 +107,7 @@ async def test_dashboard_guild_access_migration_upgrades_legacy_database(tmp_pat
             "INSERT INTO dashboard_guild_access "
             "(user_discord_id, guild_id, name) VALUES ('42', '100', 'Guild')"
         )
-        await connection.exec_driver_sql(
-            "DELETE FROM dashboard_users WHERE discord_id = '42'"
-        )
+        await connection.exec_driver_sql("DELETE FROM dashboard_users WHERE discord_id = '42'")
         access_rows = (
             await connection.exec_driver_sql(
                 "SELECT count(*) FROM dashboard_guild_access WHERE user_discord_id = '42'"
@@ -275,21 +271,15 @@ async def test_feature_guild_id_collision_keeps_newest_and_remaps_dependents(tmp
             "(20, ?, 7, 'newest canonical row', '2026-02-01')",
             (snowflake,),
         )
-        await connection.exec_driver_sql(
-            "INSERT INTO warnings VALUES (30, 1, 10, 'dependent')"
-        )
+        await connection.exec_driver_sql("INSERT INTO warnings VALUES (30, 1, 10, 'dependent')")
 
         await apply_migrations(connection)
 
         cases = (
-            await connection.exec_driver_sql(
-                "SELECT id, guild_id, reason FROM moderation_cases"
-            )
+            await connection.exec_driver_sql("SELECT id, guild_id, reason FROM moderation_cases")
         ).fetchall()
         warning = (
-            await connection.exec_driver_sql(
-                "SELECT guild_id, case_id FROM warnings WHERE id = 30"
-            )
+            await connection.exec_driver_sql("SELECT guild_id, case_id FROM warnings WHERE id = 30")
         ).one()
         violations = (await connection.exec_driver_sql("PRAGMA foreign_key_check")).fetchall()
 
@@ -309,9 +299,7 @@ async def test_unknown_feature_guild_id_rolls_back_entire_migration(tmp_path):
         await connection.exec_driver_sql(
             "CREATE TABLE guilds (id INTEGER PRIMARY KEY, discord_id VARCHAR(32) UNIQUE NOT NULL)"
         )
-        await connection.exec_driver_sql(
-            "INSERT INTO guilds VALUES (1, '221627370375872512')"
-        )
+        await connection.exec_driver_sql("INSERT INTO guilds VALUES (1, '221627370375872512')")
         await connection.exec_driver_sql(
             "CREATE TABLE audit_logs (id INTEGER PRIMARY KEY, guild_id INTEGER NOT NULL)"
         )
@@ -326,16 +314,24 @@ async def test_unknown_feature_guild_id_rolls_back_entire_migration(tmp_path):
             await apply_migrations(connection)
 
     async with engine.connect() as connection:
-        assert (await connection.exec_driver_sql("SELECT guild_id FROM warnings")).scalar_one() == 999
+        assert (
+            await connection.exec_driver_sql("SELECT guild_id FROM warnings")
+        ).scalar_one() == 999
         audit_type = next(
             row[2]
-            for row in (await connection.exec_driver_sql("PRAGMA table_info(audit_logs)")).fetchall()
+            for row in (
+                await connection.exec_driver_sql("PRAGMA table_info(audit_logs)")
+            ).fetchall()
             if row[1] == "guild_id"
         )
-        assert (await connection.exec_driver_sql("SELECT guild_id FROM audit_logs")).scalar_one() == 1
+        assert (
+            await connection.exec_driver_sql("SELECT guild_id FROM audit_logs")
+        ).scalar_one() == 1
         versions = {
             row[0]
-            for row in (await connection.exec_driver_sql("SELECT version FROM schema_migrations")).fetchall()
+            for row in (
+                await connection.exec_driver_sql("SELECT version FROM schema_migrations")
+            ).fetchall()
         }
     await engine.dispose()
     assert audit_type == "INTEGER"

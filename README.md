@@ -57,7 +57,7 @@ source .venv/bin/activate
 python app.py
 ```
 
-The dashboard listens on `BARK_DASHBOARD_HOST:BARK_DASHBOARD_PORT` (default `0.0.0.0:8090`). Health is available at `/api/v1/health`.
+The dashboard listens on `BARK_DASHBOARD_HOST:BARK_DASHBOARD_PORT` (default `127.0.0.1:8090`). Health is available at `/api/v1/health`.
 
 ### systemd user service
 
@@ -171,9 +171,9 @@ Environment variables take precedence over defaults. Bark currently loads config
 | `BARK_BOT_TOKEN` | none | Discord bot token; `.token` is a supported local fallback |
 | `BARK_COMMAND_PREFIX` | `!` | Prefix command marker |
 | `BARK_SYNC_COMMANDS` | `true` | Sync Discord application commands at startup |
-| `BARK_DASHBOARD_HOST` | `0.0.0.0` | Dashboard bind address |
+| `BARK_DASHBOARD_HOST` | `127.0.0.1` | Dashboard bind address; set to `0.0.0.0` only behind a reverse proxy |
 | `BARK_DASHBOARD_PORT` | `8090` | Dashboard bind port |
-| `BARK_PUBLIC_URL` | deployment default | Browser-facing origin, without trailing slash |
+| `BARK_PUBLIC_URL` | `http://127.0.0.1:8090` | Browser-facing origin, without trailing slash; use `https://bark.warx.org` in production |
 | `BARK_FORCE_HTTPS` | `false` | Secure cookies and HTTPS enforcement |
 | `BARK_SECRET_KEY` | generated in data dir | Session signing secret; set explicitly in clustered deployments |
 | `BARK_DATABASE_URL` | `sqlite+aiosqlite:///bark.db` | Async SQLAlchemy database URL |

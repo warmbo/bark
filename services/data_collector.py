@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -74,16 +74,18 @@ async def collect_guild_audit_logs(guild: discord.Guild) -> list[dict]:
     try:
         async for entry in guild.audit_logs(limit=50, oldest_first=False):
             action_name = AUDIT_LOG_ACTIONS.get(entry.action, str(entry.action))
-            entries.append({
-                "id": entry.id,
-                "action": action_name,
-                "user_id": str(entry.user.id) if entry.user else None,
-                "user_tag": str(entry.user) if entry.user else "Unknown",
-                "target_id": str(entry.target.id) if entry.target else None,
-                "reason": entry.reason or "",
-                "created_at": entry.created_at.isoformat(),
-                "category": _audit_category(action_name),
-            })
+            entries.append(
+                {
+                    "id": entry.id,
+                    "action": action_name,
+                    "user_id": str(entry.user.id) if entry.user else None,
+                    "user_tag": str(entry.user) if entry.user else "Unknown",
+                    "target_id": str(entry.target.id) if entry.target else None,
+                    "reason": entry.reason or "",
+                    "created_at": entry.created_at.isoformat(),
+                    "category": _audit_category(action_name),
+                }
+            )
     except discord.Forbidden:
         pass
     except Exception:
@@ -93,12 +95,29 @@ async def collect_guild_audit_logs(guild: discord.Guild) -> list[dict]:
 
 def _audit_category(action: str) -> str:
     """Categorize audit log actions."""
-    mod_actions = {"ban", "unban", "kick", "member_update", "member_role_update",
-                   "member_move", "member_disconnect", "message_delete", "message_bulk_delete"}
-    config_actions = {"channel_create", "channel_delete", "channel_update",
-                      "role_create", "role_delete", "role_update",
-                      "webhook_create", "webhook_delete",
-                      "automod_rule_create", "automod_rule_delete"}
+    mod_actions = {
+        "ban",
+        "unban",
+        "kick",
+        "member_update",
+        "member_role_update",
+        "member_move",
+        "member_disconnect",
+        "message_delete",
+        "message_bulk_delete",
+    }
+    config_actions = {
+        "channel_create",
+        "channel_delete",
+        "channel_update",
+        "role_create",
+        "role_delete",
+        "role_update",
+        "webhook_create",
+        "webhook_delete",
+        "automod_rule_create",
+        "automod_rule_delete",
+    }
     if action in mod_actions:
         return "moderation"
     if action in config_actions:
@@ -116,6 +135,7 @@ def _audit_category(action: str) -> str:
 
 # ── Invite Tracking ──────────────────────────────────────
 
+
 async def collect_invites(guild: discord.Guild) -> list[dict]:
     """Fetch current guild invites with usage stats."""
     if not guild.me.guild_permissions.manage_guild:
@@ -124,20 +144,27 @@ async def collect_invites(guild: discord.Guild) -> list[dict]:
     invites = []
     try:
         for invite in await guild.invites():
-            invites.append({
-                "code": invite.code,
-                "channel_id": str(invite.channel.id) if invite.channel else None,
-                "channel_name": invite.channel.name if invite.channel else "Unknown",
-                "uses": invite.uses,
-                "max_uses": invite.max_uses,
-                "max_age": invite.max_age,
-                "created_at": invite.created_at.isoformat() if invite.created_at else None,
-                "inviter_id": str(invite.inviter.id) if invite.inviter else None,
-                "inviter_tag": str(invite.inviter) if invite.inviter else "Unknown",
-                "expires_at": (invite.created_at + timedelta(seconds=invite.max_age)).isoformat()
-                if invite.created_at and invite.max_age > 0 else None,
-                "temporary": invite.temporary,
-            })
+            invites.append(
+                {
+                    "code": invite.code,
+                    "channel_id": str(invite.channel.id) if invite.channel else None,
+                    "channel_name": (
+                        getattr(invite.channel, "name", "Unknown") if invite.channel else "Unknown"
+                    ),
+                    "uses": invite.uses,
+                    "max_uses": invite.max_uses,
+                    "max_age": invite.max_age,
+                    "created_at": invite.created_at.isoformat() if invite.created_at else None,
+                    "inviter_id": str(invite.inviter.id) if invite.inviter else None,
+                    "inviter_tag": str(invite.inviter) if invite.inviter else "Unknown",
+                    "expires_at": (
+                        invite.created_at + timedelta(seconds=invite.max_age)
+                    ).isoformat()
+                    if invite.created_at and invite.max_age is not None and invite.max_age > 0
+                    else None,
+                    "temporary": invite.temporary,
+                }
+            )
     except discord.Forbidden:
         pass
     except Exception:
@@ -147,9 +174,10 @@ async def collect_invites(guild: discord.Guild) -> list[dict]:
 
 # ── Channel/Thread Snapshot ──────────────────────────────
 
+
 async def collect_channel_snapshot(guild: discord.Guild) -> dict:
     """Collect a snapshot of all channels, threads, and forums."""
-    snapshot = {
+    snapshot: dict[str, Any] = {
         "total_channels": len(guild.channels),
         "text_channels": 0,
         "voice_channels": 0,
@@ -181,19 +209,22 @@ async def collect_channel_snapshot(guild: discord.Guild) -> dict:
         elif isinstance(channel, discord.StageChannel):
             snapshot["stage_channels"] += 1
 
-        snapshot["channels"].append({
-            "id": str(channel.id),
-            "name": channel.name,
-            "type": ch_type,
-            "position": channel.position,
-            "category": channel.category.name if channel.category else None,
-            "topic": getattr(channel, "topic", None),
-        })
+        snapshot["channels"].append(
+            {
+                "id": str(channel.id),
+                "name": channel.name,
+                "type": ch_type,
+                "position": channel.position,
+                "category": channel.category.name if channel.category else None,
+                "topic": getattr(channel, "topic", None),
+            }
+        )
 
     return snapshot
 
 
 # ── Emoji/Sticker Inventory ──────────────────────────────
+
 
 async def collect_emoji_inventory(guild: discord.Guild) -> dict:
     """Collect all emojis and stickers."""
@@ -225,6 +256,7 @@ async def collect_emoji_inventory(guild: discord.Guild) -> dict:
 
 # ── Voice State Snapshot ─────────────────────────────────
 
+
 async def collect_voice_snapshot(guild: discord.Guild) -> dict:
     """Collect current voice channel occupancy."""
     voice_state = {}
@@ -244,6 +276,7 @@ async def collect_voice_snapshot(guild: discord.Guild) -> dict:
 
 
 # ── Guild Snapshot (all data) ─────────────────────────────
+
 
 async def collect_full_guild_snapshot(guild: discord.Guild) -> dict:
     """Collect all available Discord data for a guild."""
@@ -290,6 +323,7 @@ async def collect_full_guild_snapshot(guild: discord.Guild) -> dict:
 
 # ── Background Collector (for the analytics service) ──────
 
+
 class GuildDataCollector:
     """Periodically collects Discord data and persists to analytics tables."""
 
@@ -321,12 +355,12 @@ class GuildDataCollector:
                 for guild in self.bot.guilds:
                     try:
                         snapshot = await collect_full_guild_snapshot(guild)
-                        self._last_snapshots[guild.id] = snapshot
 
                         # Persist activity snapshot
                         now = datetime.now(timezone.utc)
                         async with session_scope() as session:
                             from sqlalchemy import select
+
                             result = await session.execute(
                                 select(ActivitySnapshot).where(
                                     ActivitySnapshot.guild_id == str(guild.id),
@@ -335,18 +369,28 @@ class GuildDataCollector:
                             )
                             existing = result.scalar_one_or_none()
                             if existing:
+                                previous_member_count = existing.total_members
                                 existing.total_members = snapshot["member_count"]
-                                existing.new_members = max(0, snapshot["member_count"] - (
-                                    self._last_snapshots.get(guild.id, {}).get("member_count", snapshot["member_count"])
-                                ))
+                                existing.new_members += max(
+                                    0,
+                                    snapshot["member_count"] - previous_member_count,
+                                )
+                                existing.total_channels = snapshot.get("channels", {}).get(
+                                    "total_channels", 0
+                                )
                             else:
-                                session.add(ActivitySnapshot(
-                                    guild_id=str(guild.id),
-                                    snapshot_date=now.date(),
-                                    total_members=snapshot["member_count"],
-                                    total_channels=snapshot.get("channels", {}).get("total_channels", 0),
-                                ))
+                                session.add(
+                                    ActivitySnapshot(
+                                        guild_id=str(guild.id),
+                                        snapshot_date=now.date(),
+                                        total_members=snapshot["member_count"],
+                                        total_channels=snapshot.get("channels", {}).get(
+                                            "total_channels", 0
+                                        ),
+                                    )
+                                )
                             await session.commit()
+                        self._last_snapshots[guild.id] = snapshot
                     except Exception:
                         logger.exception("Error collecting data for guild %s", guild.name)
 

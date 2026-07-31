@@ -44,12 +44,14 @@ class WelcomeModule(BarkModule):
         ]
 
     def get_dashboard_pages(self) -> list[PageRegistration]:
-        return [PageRegistration(
-            route="/guild/{guild_id}/modules/welcome",
-            label="Welcome",
-            icon="hand",
-            category="community",
-        )]
+        return [
+            PageRegistration(
+                route="/guild/{guild_id}/modules/welcome",
+                label="Welcome",
+                icon="hand",
+                category="community",
+            )
+        ]
 
     def get_commands(self) -> list[CommandRegistration]:
         return [
@@ -61,24 +63,24 @@ class WelcomeModule(BarkModule):
             {
                 "title": "What It Does",
                 "description": "Sends a custom welcome message to a channel when a new member joins, "
-                               "optionally sends a welcome DM, and sends a goodbye message when they leave. "
-                               "Each message can be sent as plain text or as an embed for richer formatting.",
+                "optionally sends a welcome DM, and sends a goodbye message when they leave. "
+                "Each message can be sent as plain text or as an embed for richer formatting.",
             },
             {
                 "title": "Message Templates",
                 "description": "Use placeholders in your messages: "
-                               "`{user}` = username, `{user.mention}` = @mention, "
-                               "`{user.id}` = user ID, `{server}` = server name, `{member_count}` = current member count.",
+                "`{user}` = username, `{user.mention}` = @mention, "
+                "`{user.id}` = user ID, `{server}` = server name, `{member_count}` = current member count.",
             },
             {
                 "title": "Embeds",
                 "description": "Enable embeds to send polished welcome or goodbye embeds with your custom text. "
-                               "Embed descriptions support up to 4096 characters for longer messages.",
+                "Embed descriptions support up to 4096 characters for longer messages.",
             },
             {
                 "title": "How to Set Up",
                 "description": "Enable the module, configure channels, write longer messages if needed, "
-                               "and toggle embeds on or off per message type in the Configuration tab.",
+                "and toggle embeds on or off per message type in the Configuration tab.",
             },
         ]
 
@@ -172,11 +174,13 @@ class WelcomeModule(BarkModule):
         """Replace placeholders in a message template."""
         if not template:
             return ""
-        return template.replace("{user}", str(member)) \
-            .replace("{user.mention}", member.mention) \
-            .replace("{user.id}", str(member.id)) \
-            .replace("{server}", member.guild.name) \
+        return (
+            template.replace("{user}", str(member))
+            .replace("{user.mention}", member.mention)
+            .replace("{user.id}", str(member.id))
+            .replace("{server}", member.guild.name)
             .replace("{member_count}", str(member.guild.member_count))
+        )
 
     def _build_message(self, template: str, member: discord.Member, as_embed: bool, title: str):
         """Return either a formatted string or a Discord embed from a template."""
@@ -304,7 +308,10 @@ class WelcomeModule(BarkModule):
                 embed.add_field(name="Goodbye Channel", value="Not configured", inline=True)
 
             dm_enabled = config.get("dm_enabled", False)
-            embed.add_field(name="Welcome DM", value="✅ Enabled" if dm_enabled else "❌ Disabled", inline=True)
+            embed.add_field(
+                name="Welcome DM", value="✅ Enabled" if dm_enabled else "❌ Disabled", inline=True
+            )
 
             await interaction.followup.send(embed=embed, ephemeral=True)
+
         return welcome_cmd

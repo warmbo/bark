@@ -11,8 +11,8 @@ from database.models.automod import AutoModConfig
 from database.models.guild import GuildSetting
 from services.response import (
     api_error,
-    api_success,
     api_forbidden,
+    api_success,
     check_api_permission,
     get_module_min_role,
 )
@@ -21,18 +21,27 @@ router = APIRouter(tags=["api-settings"])
 
 # ── Config Health ─────────────────────────────────
 
+
 @router.get("/guilds/{guild_id}/settings/health")
 async def settings_health(request: Request, guild_id: int):
     """Check configuration health for all modules in this guild."""
     from sqlalchemy import select
-    from database.models.module import ModuleConfig
+
     from dashboard.routes.api.modules import _validate_config
+    from database.models.module import ModuleConfig
+
     bot = request.state.bot
     results = []
     async with session_scope() as session:
-        db_configs = (await session.execute(
-            select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
-        )).scalars().all()
+        db_configs = (
+            (
+                await session.execute(
+                    select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
+                )
+            )
+            .scalars()
+            .all()
+        )
         mapping = {c.module_name: c for c in db_configs}
         for name, module in bot.modules.get_all_modules().items():
             issues = []
@@ -49,19 +58,24 @@ async def settings_health(request: Request, guild_id: int):
                 validation_errors = _validate_config(parsed, schema.get("properties", {}))
                 issues.extend(validation_errors)
             enabled = cfg.enabled if cfg else False
-            results.append({
-                "module": name,
-                "enabled": enabled,
-                "has_config": bool(cfg),
-                "issues": issues,
-                "healthy": not issues,
-            })
+            results.append(
+                {
+                    "module": name,
+                    "enabled": enabled,
+                    "has_config": bool(cfg),
+                    "issues": issues,
+                    "healthy": not issues,
+                }
+            )
     unhealthy = [r for r in results if not r["healthy"]]
-    return api_success({
-        "healthy": len(unhealthy) == 0,
-        "modules": results,
-        "issue_count": len(unhealthy),
-    })
+    return api_success(
+        {
+            "healthy": len(unhealthy) == 0,
+            "modules": results,
+            "issue_count": len(unhealthy),
+        }
+    )
+
 
 # ── General Settings ─────────────────────────────────
 
@@ -123,17 +137,19 @@ async def get_logging_settings(request: Request, guild_id: int):
     if module is None:
         return api_error("Logging module not found", status_code=404)
     config = await module.load_dashboard_config(guild_id)
-    return api_success({
-        "log_configs": [
-            {
-                "event_type": event_type,
-                "channel_id": values.get("channel_id", ""),
-                "enabled": values.get("enabled", False),
-            }
-            for event_type, values in config.items()
-            if isinstance(values, dict)
-        ]
-    })
+    return api_success(
+        {
+            "log_configs": [
+                {
+                    "event_type": event_type,
+                    "channel_id": values.get("channel_id", ""),
+                    "enabled": values.get("enabled", False),
+                }
+                for event_type, values in config.items()
+                if isinstance(values, dict)
+            ]
+        }
+    )
 
 
 @router.put("/guilds/{guild_id}/settings/logging")
@@ -175,21 +191,23 @@ async def get_automod_settings(request: Request, guild_id: int):
         )
         configs = result.scalars().all()
 
-        return api_success({
-            "automod_configs": [
-                {
-                    "id": c.id,
-                    "rule_type": c.rule_type,
-                    "enabled": c.enabled,
-                    "threshold": c.threshold,
-                    "action": c.action,
-                    "duration": c.duration,
-                    "ignored_roles": json.loads(c.ignored_roles),
-                    "ignored_channels": json.loads(c.ignored_channels),
-                }
-                for c in configs
-            ]
-        })
+        return api_success(
+            {
+                "automod_configs": [
+                    {
+                        "id": c.id,
+                        "rule_type": c.rule_type,
+                        "enabled": c.enabled,
+                        "threshold": c.threshold,
+                        "action": c.action,
+                        "duration": c.duration,
+                        "ignored_roles": json.loads(c.ignored_roles),
+                        "ignored_channels": json.loads(c.ignored_channels),
+                    }
+                    for c in configs
+                ]
+            }
+        )
 
 
 @router.put("/guilds/{guild_id}/settings/automod")
@@ -218,7 +236,14 @@ async def update_automod_settings(request: Request, guild_id: int):
                 )
                 session.add(config)
 
-            for field in ("enabled", "threshold", "action", "duration", "ignored_roles", "ignored_channels"):
+            for field in (
+                "enabled",
+                "threshold",
+                "action",
+                "duration",
+                "ignored_roles",
+                "ignored_channels",
+            ):
                 if field in item:
                     if field in ("ignored_roles", "ignored_channels"):
                         setattr(config, field, json.dumps(item[field]))

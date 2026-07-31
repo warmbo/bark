@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI
+from uvicorn import Server
 
 from config import config
 
@@ -26,7 +27,7 @@ class DashboardApp:
     def __init__(self, app: FastAPI, bot: BarkBot) -> None:
         self.app = app
         self.bot = bot
-        self._server = None
+        self._server: Server | None = None
 
     async def run(self) -> None:
         """Run the dashboard server. Blocks until shutdown."""

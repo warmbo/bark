@@ -21,6 +21,7 @@ from database.engine import session_scope
 from database.models.guild import Guild
 
 if TYPE_CHECKING:
+    from services.data_collector import GuildDataCollector
     from services.module_manager import ModuleManager
 
 logger = logging.getLogger("bark.bot")
@@ -52,7 +53,7 @@ class BarkBot(commands.Bot):
 
         self._module_manager: ModuleManager | None = None
         self._app = None  # FastAPI app, set by dashboard at creation
-        self._data_collector = None
+        self._data_collector: GuildDataCollector | None = None
         self._initialized_once = False
 
     # ── Properties ────────────────────────────────────
@@ -61,6 +62,7 @@ class BarkBot(commands.Bot):
     def modules(self) -> ModuleManager:
         if self._module_manager is None:
             from services.module_manager import ModuleManager
+
             self._module_manager = ModuleManager(self)
         return self._module_manager
 
@@ -75,6 +77,9 @@ class BarkBot(commands.Bot):
     # ── Lifecycle ─────────────────────────────────────
 
     async def on_ready(self) -> None:
+        if self.user is None:
+            logger.warning("on_ready fired without a logged-in user; skipping init")
+            return
         logger.info(
             "Bot connected as %s (ID: %s) — %d guilds",
             self.user,
@@ -91,10 +96,12 @@ class BarkBot(commands.Bot):
             self.modules.register_api_routes(self._app)
             logger.info("Module API routes registered")
         # Load module states from DB — only enable those the user has enabled
-        from database.models.module import ModuleConfig
         from database.engine import session_scope
+        from database.models.module import ModuleConfig
+
         async with session_scope() as session:
             from sqlalchemy import select
+
             result = await session.execute(
                 select(ModuleConfig).where(
                     ModuleConfig.guild_id.in_([str(g.id) for g in self.guilds])
@@ -102,10 +109,7 @@ class BarkBot(commands.Bot):
             )
             module_configs = list(result.scalars())
         self.modules.load_guild_states(
-            (
-                (row.guild_id, row.module_name, row.enabled)
-                for row in module_configs
-            )
+            ((row.guild_id, row.module_name, row.enabled) for row in module_configs)
         )
         for name in list(self.modules.get_all_modules().keys()):
             if self.modules.should_run_globally(name):
@@ -124,10 +128,13 @@ class BarkBot(commands.Bot):
         # not close sessions opened by this process.
         if not self._initialized_once:
             try:
-                from database.models.voice import VoiceSession
-                from database.engine import session_scope
-                from sqlalchemy import update
                 import datetime
+
+                from sqlalchemy import update
+
+                from database.engine import session_scope
+                from database.models.voice import VoiceSession
+
                 now_ts = datetime.datetime.now(datetime.timezone.utc)
                 async with session_scope() as session:
                     await session.execute(
@@ -144,6 +151,7 @@ class BarkBot(commands.Bot):
         # Restore persisted presence settings
         try:
             from services.presence_store import restore_presence
+
             await restore_presence(self)
         except Exception:
             logger.exception("Failed to restore presence")
@@ -151,6 +159,7 @@ class BarkBot(commands.Bot):
         # Start data collector for analytics
         try:
             from services.data_collector import GuildDataCollector
+
             if self._data_collector is None:
                 self._data_collector = GuildDataCollector(self, interval_minutes=15)
             await self._data_collector.start()
@@ -168,6 +177,7 @@ class BarkBot(commands.Bot):
     async def _register_guild(self, guild: discord.Guild) -> None:
         async with session_scope() as session:
             from sqlalchemy import select
+
             result = await session.execute(select(Guild).where(Guild.discord_id == str(guild.id)))
             existing = result.scalar_one_or_none()
             if existing:
@@ -233,12 +243,8 @@ class BarkBot(commands.Bot):
         await bus.emit("discord_voice_state", **payload)
         await bus.emit("voice_state_change", **payload)
 
-    async def on_presence_update(
-        self, before: discord.Member, after: discord.Member
-    ) -> None:
-        await self.modules.event_bus.emit(
-            "discord_presence_update", before=before, after=after
-        )
+    async def on_presence_update(self, before: discord.Member, after: discord.Member) -> None:
+        await self.modules.event_bus.emit("discord_presence_update", before=before, after=after)
 
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
         bus = self.modules.event_bus

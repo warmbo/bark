@@ -8,10 +8,11 @@ import asyncio
 import logging
 import sys
 
-from config import config
+from bark_version import __version__
 from bot.client import BarkBot
+from config import config
 from dashboard import create_app
-from database.engine import init_db, close_db
+from database.engine import close_db, init_db
 
 logger = logging.getLogger("bark")
 
@@ -32,8 +33,9 @@ def setup_logging() -> None:
 
 async def main() -> None:
     setup_logging()
+    config.validate_startup()
 
-    logger.info("Bark v0.2.0 starting up...")
+    logger.info("Bark v%s starting up...", __version__)
 
     # Initialize database
     await init_db()
@@ -44,15 +46,22 @@ async def main() -> None:
 
     dashboard_app = create_app(bot)
 
-    # Use gather with return_exceptions so a bot auth failure doesn't kill the dashboard
-    results = await asyncio.gather(
-        bot.start(config.bot.token),
-        dashboard_app.run(),
-        return_exceptions=True,
-    )
-    for i, (label, res) in enumerate(zip(["bot", "dashboard"], results)):
-        if isinstance(res, Exception):
-            logger.error("%s failed: %s", label, res)
+    try:
+        # Keep the dashboard available for diagnostics if Discord authentication
+        # fails, but report each service failure explicitly.
+        results = await asyncio.gather(
+            bot.start(config.bot.token),
+            dashboard_app.run(),
+            return_exceptions=True,
+        )
+        for label, result in zip(("bot", "dashboard"), results, strict=True):
+            if isinstance(result, Exception):
+                logger.error("%s failed: %s", label, result)
+    finally:
+        try:
+            await bot.close()
+        finally:
+            await close_db()
 
 
 def run() -> None:

@@ -85,6 +85,7 @@ async def guild_events_sse(request: Request, guild_id: str):
     guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
     if guild is None:
         from services.response import api_not_found
+
         return api_not_found("Guild")
 
     return StreamingResponse(

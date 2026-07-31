@@ -1,8 +1,18 @@
 """Reputation/ranking models — points, tiers, rewards, and credit events."""
 
-from datetime import UTC, date, datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, Date, ForeignKey, UniqueConstraint, Text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.engine import Base
@@ -15,7 +25,9 @@ class ReputationProfile(Base):
     __table_args__ = (UniqueConstraint("guild_id", "user_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     user_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     total_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -29,9 +41,13 @@ class ReputationProfile(Base):
     last_activity: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     week_start: Mapped[date] = mapped_column(Date, nullable=False)
     month_start: Mapped[date] = mapped_column(Date, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     guild = relationship("Guild", back_populates="reputation_profiles")
@@ -45,11 +61,15 @@ class ReputationEvent(Base):
 
     __tablename__ = "reputation_events"
     __table_args__ = (
-        UniqueConstraint("guild_id", "event_type", "actor_id", "message_id", name="uq_reputation_event"),
+        UniqueConstraint(
+            "guild_id", "event_type", "actor_id", "message_id", name="uq_reputation_event"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     actor_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     target_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -75,7 +95,9 @@ class ReputationTier(Base):
     __table_args__ = (UniqueConstraint("guild_id", "name"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     symbol: Mapped[str] = mapped_column(String(16), nullable=False, default="★")
     min_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
@@ -101,7 +123,9 @@ class ReputationReward(Base):
     __tablename__ = "reputation_rewards"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     reward_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -129,9 +153,13 @@ class ReputationAward(Base):
     __table_args__ = (UniqueConstraint("guild_id", "user_id", "reward_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     user_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    reward_id: Mapped[int] = mapped_column(Integer, ForeignKey("reputation_rewards.id"), nullable=False)
+    reward_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("reputation_rewards.id"), nullable=False
+    )
     tier_name: Mapped[str] = mapped_column(String(64), nullable=False)
     level_at_award: Mapped[int] = mapped_column(Integer, nullable=False)
     score_at_award: Mapped[float] = mapped_column(Float, nullable=False)
@@ -142,4 +170,6 @@ class ReputationAward(Base):
     reward = relationship("ReputationReward")
 
     def __repr__(self) -> str:
-        return f"<ReputationAward guild={self.guild_id} user={self.user_id} reward={self.reward_id}>"
+        return (
+            f"<ReputationAward guild={self.guild_id} user={self.user_id} reward={self.reward_id}>"
+        )

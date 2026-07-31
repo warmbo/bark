@@ -80,21 +80,16 @@ class EventBus:
             try:
                 await handler(event_type, **data)
             except Exception:
-                logger.exception(
-                    "Handler %s failed for event '%s'", handler.__name__, event_type
-                )
+                logger.exception("Handler %s failed for event '%s'", handler.__name__, event_type)
 
     # ── Introspection ──────────────────────────────────
 
     def get_subscribers(self, event_type: str | None = None) -> dict[str, list[str]]:
         """Return subscriber info for debugging."""
         if event_type:
-            return {
-                event_type: [h.__name__ for _, h in self._subscribers.get(event_type, [])]
-            }
+            return {event_type: [h.__name__ for _, h in self._subscribers.get(event_type, [])]}
         return {
-            evt: [h.__name__ for _, h in handlers]
-            for evt, handlers in self._subscribers.items()
+            evt: [h.__name__ for _, h in handlers] for evt, handlers in self._subscribers.items()
         }
 
     @property

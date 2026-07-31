@@ -1,1 +1,1 @@
-from modules.announcements.module import AnnouncementsModule
+from modules.announcements.module import AnnouncementsModule as AnnouncementsModule

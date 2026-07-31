@@ -3,6 +3,7 @@ Discord OAuth2 authentication routes.
 
 Only enabled when BARK_OAUTH2_CLIENT_ID is set.
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,6 +14,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 
 from config import config
 from database.engine import session_scope
@@ -23,7 +25,6 @@ from services.dashboard_access import (
     replace_user_guild_access,
     resolve_dashboard_role,
 )
-from sqlalchemy import select
 
 logger = logging.getLogger("bark.dashboard.auth")
 
@@ -52,19 +53,23 @@ async def login(request: Request):
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
 
-    params = urllib.parse.urlencode({
-        "response_type": "code",
-        "client_id": config.oauth2.client_id,
-        "redirect_uri": config.oauth2.redirect_uri,
-        "scope": SCOPES,
-        "state": state,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "response_type": "code",
+            "client_id": config.oauth2.client_id,
+            "redirect_uri": config.oauth2.redirect_uri,
+            "scope": SCOPES,
+            "state": state,
+        }
+    )
     redirect_url = f"{DISCORD_AUTHORIZE_URL}?{params}"
     return RedirectResponse(url=redirect_url)
 
 
 @router.get("/callback")
-async def callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+async def callback(
+    request: Request, code: str | None = None, state: str | None = None, error: str | None = None
+):
     """Handle Discord OAuth2 callback, exchange code for token, create session."""
     if not _oauth_enabled():
         return RedirectResponse(url="/dashboard")
@@ -138,9 +143,7 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 
     bot_from_state = getattr(request.app.state, "bot", None)
     bot_guild_ids = (
-        {str(g.id) for g in bot_from_state.guilds}
-        if bot_from_state is not None
-        else set()
+        {str(g.id) for g in bot_from_state.guilds} if bot_from_state is not None else set()
     )
     derived_role = derive_dashboard_role(guilds, bot_guild_ids)
 
@@ -168,13 +171,15 @@ async def callback(request: Request, code: str | None = None, state: str | None 
             existing.last_login = datetime.now(timezone.utc)
             existing.role = role
         else:
-            session.add(DashboardUser(
-                discord_id=user["id"],
-                username=user.get("global_name") or user["username"],
-                avatar_url=_avatar_url(user) or "",
-                role=role,
-                last_login=datetime.now(timezone.utc),
-            ))
+            session.add(
+                DashboardUser(
+                    discord_id=user["id"],
+                    username=user.get("global_name") or user["username"],
+                    avatar_url=_avatar_url(user) or "",
+                    role=role,
+                    last_login=datetime.now(timezone.utc),
+                )
+            )
             await session.flush()
 
         # Keep the complete guild snapshot server-side. Cookie sessions are too
@@ -199,6 +204,7 @@ async def me(request: Request):
     """Return current user info from session."""
     if not _oauth_enabled():
         from services.response import api_success
+
         return api_success({"authenticated": False})
     user = request.session.get("user")
     guilds = []
@@ -219,13 +225,16 @@ async def me(request: Request):
             for row in rows
         ]
     from services.response import api_success, get_capabilities
-    return api_success({
-        "authenticated": user is not None,
-        "user": user,
-        "role": request.session.get("role", "viewer"),
-        "guilds": guilds,
-        "capabilities": get_capabilities(request),
-    })
+
+    return api_success(
+        {
+            "authenticated": user is not None,
+            "user": user,
+            "role": request.session.get("role", "viewer"),
+            "guilds": guilds,
+            "capabilities": get_capabilities(request),
+        }
+    )
 
 
 def _avatar_url(user: dict) -> str | None:

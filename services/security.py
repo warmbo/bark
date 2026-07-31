@@ -9,7 +9,6 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse
 
-
 # ── Public paths that don't require auth ─────────────
 
 PUBLIC_PATHS = {
@@ -35,9 +34,7 @@ def _is_public(path: str) -> bool:
 
 
 _GUILD_PATH = re.compile(r"^/(?:api/v1/)?guilds?/(\d+)(?:/|$)")
-_MODULE_ACTION_PATH = re.compile(
-    r"^/api/v1/guilds/(\d+)/modules/([a-z0-9_-]+)/(.+)$"
-)
+_MODULE_ACTION_PATH = re.compile(r"^/api/v1/guilds/(\d+)/modules/([a-z0-9_-]+)/(.+)$")
 _API_GUILD_MUTATION_PATH = re.compile(r"^/api/v1/guilds/\d+/(.+)$")
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -74,6 +71,8 @@ def mutation_capability(method: str, path: str) -> str | None:
         return "moderation.cases.create"
     if tail == "moderation/notes":
         return "moderation.notes.create"
+    if tail == "notes" or re.fullmatch(r"notes/\d+", tail):
+        return "moderation.notes.create"
     if re.fullmatch(r"moderation/cases/\d+", tail):
         return "moderation.cases.delete"
     if re.fullmatch(r"moderation/warnings/\d+", tail):
@@ -84,9 +83,7 @@ def mutation_capability(method: str, path: str) -> str | None:
         return "logging.configure"
     if tail == "settings/automod":
         return "settings.automod"
-    module_match = re.fullmatch(
-        r"modules/([a-z0-9_-]+)(?:/(toggle|reload))?", tail
-    )
+    module_match = re.fullmatch(r"modules/([a-z0-9_-]+)(?:/(toggle|reload))?", tail)
     if module_match:
         return "modules.manage" if module_match.group(2) else "modules.configure"
     module_action_match = re.match(r"modules/([a-z0-9_-]+)/", tail)
@@ -120,6 +117,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # API requests get JSON 401
             if path.startswith("/api/"):
                 from fastapi.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=401,
                     content={"success": False, "error": "Authentication required"},
@@ -173,6 +171,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 # ── In-Memory Token Bucket Rate Limiter ──────────────
 
+
 class RateLimiter:
     """Simple in-memory token bucket rate limiter per IP."""
 
@@ -202,14 +201,17 @@ def _get_limiters() -> tuple[RateLimiter, RateLimiter]:
     global _read_limiter, _write_limiter
     if _read_limiter is None:
         from config import config as cfg
+
         base = cfg.dashboard.rate_limit_per_minute
         _read_limiter = RateLimiter(max(base * 3, 120))
         _write_limiter = RateLimiter(max(base // 2, 20))
-    assert _read_limiter is not None and _write_limiter is not None
+    if _read_limiter is None or _write_limiter is None:
+        raise RuntimeError("Rate limiter initialization failed")
     return _read_limiter, _write_limiter
 
 
 # ── Middleware ────────────────────────────────────────
+
 
 class SecurityMiddleware(BaseHTTPMiddleware):
     """Adds CSP headers, rate limiting, and HTTPS enforcement."""
@@ -224,10 +226,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         origin = request.headers.get("origin")
         if (
-            (
-                request.url.path.startswith("/api/")
-                or request.url.path == "/auth/logout"
-            )
+            (request.url.path.startswith("/api/") or request.url.path == "/auth/logout")
             and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
             and origin
             and origin.rstrip("/") != config.dashboard.public_url
@@ -247,9 +246,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             guild_id, module_name, _ = module_action
             bot = getattr(request.app.state, "bot", None)
             manager = getattr(bot, "modules", None)
-            if manager is not None and not manager.is_enabled_for_guild(
-                guild_id, module_name
-            ):
+            if manager is not None and not manager.is_enabled_for_guild(guild_id, module_name):
                 from fastapi.responses import JSONResponse
 
                 return JSONResponse(
@@ -269,9 +266,13 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             limiter = read_lim if method == "GET" else write_lim
             if not limiter.check(ip):
                 from fastapi.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=429,
-                    content={"success": False, "error": "Too many requests. Try again in 60 seconds."},
+                    content={
+                        "success": False,
+                        "error": "Too many requests. Try again in 60 seconds.",
+                    },
                     headers={"Retry-After": "60"},
                 )
 
@@ -293,8 +294,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
         if config.dashboard.secure_cookies:
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         return response

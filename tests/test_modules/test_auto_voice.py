@@ -249,9 +249,7 @@ async def test_private_channels_do_not_bypass_owner_control_switches():
 async def test_empty_managed_channel_is_deleted_when_last_member_leaves():
     ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture()
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
     left_temporary = SimpleNamespace(channel=temporary)
 
     await module._on_voice_state_update(
@@ -287,9 +285,7 @@ async def test_deleted_channel_is_removed_from_restart_recovery_state(db):
         )
     _use_database_state(ctx)
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
 
     await module._on_voice_state_update(
         "discord_voice_state",
@@ -313,9 +309,7 @@ async def test_pending_deletion_is_cancelled_when_member_rejoins():
     }
     ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture(config)
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
     temporary.members = []
 
     await module._on_voice_state_update(
@@ -344,16 +338,17 @@ def test_avc_numbering_and_lowercase_transform_are_compatible():
     member.activities = [SimpleNamespace(name="World Of Warcraft")]
     module = AutoVoiceModule(ctx)
 
-    assert module._render_name(
-        member,
-        {"channel_name_template": '## [""lower:@@game_name@@""]'},
-    ) == "#1 [world of warcraft]"
+    assert (
+        module._render_name(
+            member,
+            {"channel_name_template": '## [""lower:@@game_name@@""]'},
+        )
+        == "#1 [world of warcraft]"
+    )
 
 
 def test_channel_sequence_is_unique_before_discord_creation_finishes():
-    ctx, guild, member, *_ = _voice_fixture(
-        {"channel_name_template": "## Room"}
-    )
+    ctx, guild, member, *_ = _voice_fixture({"channel_name_template": "## Room"})
     module = AutoVoiceModule(ctx)
     other_member = _HashableNamespace(
         id=43,
@@ -468,9 +463,7 @@ async def test_presence_activity_change_refreshes_managed_channel_name():
         guild_id=guild.id, owner_id=owner.id, sequence=1
     )
 
-    await module._on_presence_update(
-        "discord_presence_update", before=owner, after=owner
-    )
+    await module._on_presence_update("discord_presence_update", before=owner, after=owner)
 
     temporary.edit.assert_awaited_once_with(
         name="#1 [Minecraft]",
@@ -524,6 +517,7 @@ def _owner_interaction(member, channel):
     member.voice = SimpleNamespace(channel=channel)
     return SimpleNamespace(
         user=member,
+        guild=member.guild,
         guild_id=member.guild.id,
         response=SimpleNamespace(send_message=AsyncMock()),
     )
@@ -531,13 +525,9 @@ def _owner_interaction(member, channel):
 
 @pytest.mark.asyncio
 async def test_owner_can_rename_managed_channel_when_enabled():
-    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
-        {"owner_can_rename": True}
-    )
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture({"owner_can_rename": True})
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
     interaction = _owner_interaction(member, temporary)
 
     command = module._make_voice_name_command()
@@ -553,13 +543,9 @@ async def test_owner_can_rename_managed_channel_when_enabled():
 
 @pytest.mark.asyncio
 async def test_owner_limit_command_honors_dashboard_switch():
-    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
-        {"owner_can_limit": False}
-    )
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture({"owner_can_limit": False})
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
     interaction = _owner_interaction(member, temporary)
 
     command = module._make_voice_limit_command()
@@ -573,13 +559,9 @@ async def test_owner_limit_command_honors_dashboard_switch():
 
 @pytest.mark.asyncio
 async def test_owner_can_set_user_limit_when_enabled():
-    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
-        {"owner_can_limit": True}
-    )
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture({"owner_can_limit": True})
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
     interaction = _owner_interaction(member, temporary)
 
     command = module._make_voice_limit_command()
@@ -592,14 +574,10 @@ async def test_owner_can_set_user_limit_when_enabled():
 
 @pytest.mark.asyncio
 async def test_owner_can_lock_managed_channel_when_enabled():
-    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
-        {"owner_can_lock": True}
-    )
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture({"owner_can_lock": True})
     temporary.set_permissions = AsyncMock()
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
     interaction = _owner_interaction(member, temporary)
 
     command = module._make_voice_lock_command()
@@ -610,21 +588,15 @@ async def test_owner_can_lock_managed_channel_when_enabled():
         connect=False,
         reason="Bark Auto Voice: owner locked channel",
     )
-    interaction.response.send_message.assert_awaited_once_with(
-        "Channel locked.", ephemeral=True
-    )
+    interaction.response.send_message.assert_awaited_once_with("Channel locked.", ephemeral=True)
 
 
 @pytest.mark.asyncio
 async def test_owner_can_unlock_managed_channel_when_enabled():
-    ctx, guild, member, primary, temporary, *_ = _voice_fixture(
-        {"owner_can_lock": True}
-    )
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture({"owner_can_lock": True})
     temporary.set_permissions = AsyncMock()
     module = AutoVoiceModule(ctx)
-    module._managed_channels[temporary.id] = SimpleNamespace(
-        guild_id=guild.id, owner_id=member.id
-    )
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
     interaction = _owner_interaction(member, temporary)
 
     command = module._make_voice_unlock_command()
@@ -635,6 +607,4 @@ async def test_owner_can_unlock_managed_channel_when_enabled():
         connect=None,
         reason="Bark Auto Voice: owner unlocked channel",
     )
-    interaction.response.send_message.assert_awaited_once_with(
-        "Channel unlocked.", ephemeral=True
-    )
+    interaction.response.send_message.assert_awaited_once_with("Channel unlocked.", ephemeral=True)

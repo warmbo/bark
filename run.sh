@@ -24,8 +24,8 @@ if [ -z "$BARK_BOT_TOKEN" ]; then
     exit 1
 fi
 
-echo "Bark v$(python -c 'import __init__; print(__init__.__version__)') — starting..."
-echo "Dashboard: ${BARK_PUBLIC_URL:-https://bark.warx.org}"
+echo "Bark v$(python -c 'from bark_version import __version__; print(__version__)') — starting..."
+echo "Dashboard: ${BARK_PUBLIC_URL:-http://127.0.0.1:8090}"
 echo "Press Ctrl+C to stop"
 echo ""
 
