@@ -436,7 +436,7 @@ class LoggingModule(BarkModule):
                 discord.Color.green(),
                 fields=[
                     ("User", f"{member} ({member.id})", True),
-                    ("Channel", after_channel.mention, True),
+                    ("Channel", self._voice_channel_label(after_channel), True),
                 ],
             )
         elif before_channel is not None and after_channel is None:
@@ -447,7 +447,7 @@ class LoggingModule(BarkModule):
                 discord.Color.red(),
                 fields=[
                     ("User", f"{member} ({member.id})", True),
-                    ("Channel", before_channel.mention, True),
+                    ("Channel", self._voice_channel_label(before_channel), True),
                 ],
             )
         elif before_channel != after_channel:
@@ -458,10 +458,24 @@ class LoggingModule(BarkModule):
                 discord.Color.blue(),
                 fields=[
                     ("User", f"{member} ({member.id})", True),
-                    ("From", before_channel.mention, True),
-                    ("To", after_channel.mention, True),
+                    ("From", self._voice_channel_label(before_channel), True),
+                    ("To", self._voice_channel_label(after_channel), True),
                 ],
             )
+
+    @staticmethod
+    def _voice_channel_label(channel) -> str:
+        """Render a stable channel label for voice log embeds.
+
+        Uses the channel's name text instead of a ``<#id>`` mention so the log
+        keeps showing the name as it was even after the channel is deleted
+        (Auto Voice temporary channels are removed seconds after a leave).
+        """
+        name = getattr(channel, "name", None)
+        if name:
+            return f"#{name}"
+        mention = getattr(channel, "mention", None)
+        return mention or "Unknown"
 
     # ── API Routes (module actions) ──────────────────
 

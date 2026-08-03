@@ -760,6 +760,10 @@ class ModerationModule(BarkModule):
                 if rec:
                     rec.left_at = now
                     rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
+                    # Record the channel name as it was when the member left.
+                    # Auto Voice temporary channels are deleted right after the
+                    # last member leaves, so the cached name is the only copy.
+                    rec.channel_name = getattr(before_channel, "name", None) or rec.channel_name
                     await session.commit()
 
         elif (
@@ -784,6 +788,7 @@ class ModerationModule(BarkModule):
                 if rec:
                     rec.left_at = now
                     rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
+                    rec.channel_name = getattr(before_channel, "name", None) or rec.channel_name
                 session.add(
                     VoiceSession(
                         guild_id=str(guild_id),

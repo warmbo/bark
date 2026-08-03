@@ -1,0 +1,46 @@
+<article class="content-card workspace-data-card" data-section="rules">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("badge-check", 16) }} Role Rules</h2><p class="card-description">Rules that automatically assign or release roles. Each rule watches one trigger; when the trigger is true the role is added, and when it stops being true the role is removed.</p></div>
+    <div class="card-header-actions">
+      <button type="button" class="btn btn-sm" data-refresh-section="rules" aria-label="Refresh role rules">{{ icon("refresh-cw", 14) }} Refresh</button>
+      {% if module_data.can_manage_module %}<button type="button" class="btn btn-primary btn-sm" id="rm-new-rule-btn">{{ icon("plus", 14) }} New rule</button>{% endif %}
+    </div>
+  </div>
+
+  <details class="behavior-guide" open>
+    <summary>{{ icon("book-open", 14) }} How each rule type behaves</summary>
+    <div class="behavior-guide-grid">
+      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("user-plus", 15) }}</span><div><strong>Welcome</strong><p>When a member joins the server, the role is added immediately. The role is never removed automatically — it is a one-way welcome grant.</p></div></div>
+      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("calendar-days", 15) }}</span><div><strong>Tenure</strong><p>When a member has been in the server for at least the configured number of days, the role is added. The module checks every few minutes and grants the role to anyone who has crossed the milestone since the last check.</p></div></div>
+      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("headphones", 15) }}</span><div><strong>Voice</strong><p>While a member is connected to any voice channel, the role is added. As soon as they leave (or disconnect), the role is removed. Useful for "in call" badges.</p></div></div>
+      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("radio", 15) }}</span><div><strong>Stream</strong><p>While a member is live on <strong>Twitch</strong>, the role is added. When their stream ends or they switch to a different activity, the role is removed. Bark detects this from the member's Discord presence — the member must have linked their Twitch account to Discord. Streams on other platforms (e.g. YouTube) do <em>not</em> trigger it.</p></div></div>
+      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("smile", 15) }}</span><div><strong>Reaction</strong><p>Members react to a message with the configured emoji to claim the role themselves. Un-reacting removes it. You can scope the rule to a single pinned message (by message ID) or let any message in the channel work. Supports both unicode emoji (🎮) and custom server emoji (<code>&lt;:name:1234&gt;</code>).</p></div></div>
+    </div>
+    <p class="behavior-footnote"><strong>Note:</strong> the bot can only manage roles that sit below its own highest role in the server's role list. Rules pointing at a higher role are skipped, and a warning is logged instead of failing.</p>
+  </details>
+
+  {% if module_data.can_manage_module %}
+  <form class="config-body inline-editor-form" id="rm-rule-form" hidden>
+    <input type="hidden" id="rm-rule-id" name="rule_id">
+    <div class="form-grid form-grid-2">
+      <div class="form-group"><label class="form-label" for="rm-rule-name">Rule name <span aria-hidden="true">*</span></label><input class="form-input" id="rm-rule-name" name="name" type="text" maxlength="128" placeholder="e.g. Announcement ping" required><p class="form-hint">A short label so you can tell rules apart in this list.</p></div>
+      <div class="form-group"><label class="form-label" for="rm-rule-type">Trigger <span aria-hidden="true">*</span></label><select class="form-select" id="rm-rule-type" name="rule_type" required>
+        <option value="welcome">Welcome — add on join, never removed</option>
+        <option value="tenure">Tenure — add after N days in server</option>
+        <option value="voice">Voice — add while in voice chat, remove on leave</option>
+        <option value="stream">Stream — add while live on Twitch, remove when offline</option>
+        <option value="reaction">Reaction — members claim by reacting, release by un-reacting</option>
+      </select><p class="form-hint" id="rm-rule-type-hint">Choose what event this rule reacts to.</p></div>
+      <div class="form-group"><label class="form-label" for="rm-rule-role">Role to manage <span aria-hidden="true">*</span></label><select class="form-select api-select" id="rm-rule-role" name="role_id" data-api="/api/v1/guilds/{guild_id}/roles" data-value-key="id" data-label-key="name" required><option value="">Loading roles…</option></select><p class="form-hint">Pick the role the bot adds and removes. Only roles below the bot's highest role appear reliably.</p></div>
+      <div class="form-group" id="rm-tenure-days-group" hidden><label class="form-label" for="rm-tenure-days">Days required</label><input class="form-input" id="rm-tenure-days" name="days_required" type="number" min="1" max="3650" value="30"><p class="form-hint">Role is granted once the member has been here at least this many days.</p></div>
+      <div class="form-group" id="rm-reaction-channel-group" hidden><label class="form-label" for="rm-reaction-channel">Reaction channel <span aria-hidden="true">*</span></label><select class="form-select api-select" id="rm-reaction-channel" name="channel_id" data-api="/api/v1/guilds/{guild_id}/channels" data-value-key="id" data-label-key="name"><option value="">Loading channels…</option></select><p class="form-hint">The channel that holds the message(s) members react to.</p></div>
+      <div class="form-group" id="rm-reaction-message-group" hidden><label class="form-label" for="rm-reaction-message">Message ID (optional)</label><input class="form-input" id="rm-reaction-message" name="message_id" type="text" inputmode="numeric" maxlength="32" placeholder="e.g. 123456789012345678"><p class="form-hint">Leave empty to accept reactions on any message in the channel. To scope to one message: enable Developer Mode in Discord, right-click the message, and choose "Copy Message ID".</p></div>
+      <div class="form-group" id="rm-reaction-emoji-group" hidden><label class="form-label" for="rm-reaction-emoji">Reaction emoji <span aria-hidden="true">*</span></label><input class="form-input" id="rm-reaction-emoji" name="emoji" type="text" maxlength="64" placeholder="e.g. 🎮 or <:game:123456789012345678>"><p class="form-hint">A unicode emoji (🎮) or a custom server emoji. To use a custom emoji, paste it here — Discord renders it as <code>&lt;:name:id&gt;</code>.</p></div>
+      <div class="form-group"><label class="form-check" for="rm-rule-enabled"><input type="checkbox" id="rm-rule-enabled" name="enabled" aria-label="Rule enabled" checked><span>Enabled</span></label><p class="form-hint">Uncheck to pause the rule without deleting it.</p></div>
+      <div class="form-group" id="rm-rule-remove-group"><label class="form-check" for="rm-rule-remove"><input type="checkbox" id="rm-rule-remove" name="remove_when_inactive" aria-label="Remove when inactive" checked><span>Remove when inactive</span></label><p class="form-hint">When the trigger stops (leaves voice, goes offline, un-reacts), remove the role. Turn off to only ever add, never remove. Only shown for Voice, Stream, and Reaction triggers.</p></div>
+    </div>
+    <div class="form-actions form-actions-static"><button type="button" class="btn" id="rm-rule-cancel">Cancel</button><button type="submit" class="btn btn-primary" id="rm-rule-save">{{ icon("save", 14) }} Save rule</button></div>
+  </form>
+  {% endif %}
+  <div id="rm-rules-content" aria-live="polite"><div class="skeleton skeleton-card"></div></div>
+</article>

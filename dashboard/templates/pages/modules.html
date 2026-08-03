@@ -16,14 +16,14 @@
         <article class="module-card {{ 'is-enabled' if is_enabled else 'is-disabled' }}" data-module="{{ name }}">
             <div class="module-card-header">
                 <div class="module-card-title">
-                    <h3><a href="/guild/{{ guild.id }}/modules/{{ name }}">{{ icon("puzzle", 16) }} {{ name | capitalize }}</a></h3>
+                    <h3><a href="/guild/{{ guild.id }}/modules/{{ name }}">{{ icon("puzzle", 16) }} {{ name | replace('_', ' ') | title }}</a></h3>
                     <span class="module-version">v{{ module.version }}</span>
                 </div>
                 <label class="module-toggle-control" for="module-toggle-{{ name }}">
                     <span class="module-state-label">{{ 'On' if is_enabled else 'Off' }}</span>
                     <span class="toggle-switch">
                     <input type="checkbox" class="module-toggle" id="module-toggle-{{ name }}" name="module_enabled"
-                           data-module="{{ name }}" aria-label="Enable {{ name | capitalize }}"
+                           data-module="{{ name }}" aria-label="Enable {{ name | replace('_', ' ') | title }}"
                            {{ 'checked' if is_enabled else '' }}>
                     <span class="toggle-slider"></span>
                     </span>

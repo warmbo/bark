@@ -326,10 +326,12 @@ async def guild_voice_history(
                     username = member.display_name
                     user_tag = str(member)
 
-            # Resolve channel name (guild may have renamed it since the session)
+            # Prefer the recorded name ("as it was" when the member left). Auto
+            # Voice temporary channels are deleted after the last member leaves,
+            # and live lookup only applies when no name was recorded.
             channel_name = s.channel_name
-            if guild:
-                ch = guild.get_channel(int(s.channel_id)) if s.channel_id else None
+            if not channel_name and guild and s.channel_id:
+                ch = guild.get_channel(int(s.channel_id))
                 if ch:
                     channel_name = ch.name
 

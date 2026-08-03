@@ -50,7 +50,44 @@ async def test_join_to_create_transition_logs_only_the_final_voice_channel():
     assert args[1] == "🔊 Voice Join"
     assert module._send.await_args.kwargs["fields"] == [
         ("User", f"{member} ({member.id})", True),
-        ("Channel", managed.mention, True),
+        ("Channel", f"#{managed.name}", True),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_voice_leave_log_records_channel_name_not_mention():
+    """A deleted Auto Voice channel must not degrade the leave log to
+    '#deleted-channel' — the embed records the name as it was."""
+    guild_id = 221627370375872512
+    managed = SimpleNamespace(id=200, name="hangout", mention="<#200>")
+    guild = SimpleNamespace(id=guild_id)
+    member = SimpleNamespace(
+        id=42,
+        guild=guild,
+        mention="@cody",
+        __str__=lambda self: "cody",
+    )
+    bot = MagicMock()
+    bot.get_guild.return_value = guild
+    ctx = BarkContext(bot, EventBus())
+    ctx.get_module_config = AsyncMock(return_value={})
+    module = LoggingModule(ctx)
+    module._get_channel = AsyncMock(return_value=SimpleNamespace())
+    module._send = AsyncMock()
+
+    await module._on_voice_state(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=managed),
+        after=SimpleNamespace(channel=None),
+    )
+
+    module._send.assert_awaited_once()
+    args = module._send.await_args.args
+    assert args[1] == "🔇 Voice Leave"
+    assert module._send.await_args.kwargs["fields"] == [
+        ("User", f"{member} ({member.id})", True),
+        ("Channel", "#hangout", True),
     ]
 
 

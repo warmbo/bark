@@ -160,6 +160,68 @@ async def test_join_to_create_transition_records_only_final_channel(db):
 
 
 @pytest.mark.asyncio
+async def test_leave_records_channel_name_as_it_was_when_left(db):
+    """Closing a session captures the channel name at leave time.
+
+    Auto Voice temporary channels are deleted moments after the last member
+    leaves, so the stored name must reflect the channel as it was at leave time
+    (including any majority-game rename while the member was inside).
+    """
+    guild_id = 987654324
+    user_id = 123456792
+    guild = SimpleNamespace(id=guild_id)
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id=str(guild_id), name="Auto Voice guild", owner_id="1"))
+
+    manager = ModuleManager(_Bot(guild))  # type: ignore[arg-type]
+    manager.discover()
+    manager.load_guild_states([(guild_id, "moderation", True)])
+    assert await manager.enable_module("moderation")
+    member = SimpleNamespace(id=user_id, guild=guild)
+    disconnected = SimpleNamespace(channel=None)
+
+    joined = SimpleNamespace(id=200, name="hangout")
+    renamed = SimpleNamespace(id=200, name="raid room")
+
+    try:
+        await manager.event_bus.emit(
+            "voice_state_change",
+            member=member,
+            before=disconnected,
+            after=SimpleNamespace(channel=joined),
+        )
+        # The channel was renamed while the member was inside and will be
+        # deleted right after the leave; the recorded name must be preserved.
+        await manager.event_bus.emit(
+            "voice_state_change",
+            member=member,
+            before=SimpleNamespace(channel=renamed),
+            after=disconnected,
+        )
+
+        async with session_scope() as session:
+            records = (
+                (
+                    await session.execute(
+                        select(VoiceSession).where(
+                            VoiceSession.guild_id == str(guild_id),
+                            VoiceSession.user_id == str(user_id),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+        assert len(records) == 1
+        assert records[0].channel_name == "raid room"
+        assert records[0].left_at is not None
+    finally:
+        await manager.disable_all()
+
+
+@pytest.mark.asyncio
 async def test_mutated_voice_state_does_not_create_duplicate_managed_session(db):
     guild_id = 987654323
     user_id = 123456791

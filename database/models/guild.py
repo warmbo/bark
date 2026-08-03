@@ -109,6 +109,12 @@ class Guild(Base):
         cascade="all, delete-orphan",
         primaryjoin="ReputationReward.guild_id == Guild.discord_id",
     )
+    role_rules = relationship(
+        "RoleRule",
+        back_populates="guild",
+        cascade="all, delete-orphan",
+        primaryjoin="RoleRule.guild_id == Guild.discord_id",
+    )
 
     def __repr__(self) -> str:
         return f"<Guild id={self.discord_id} name='{self.name}'>"

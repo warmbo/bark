@@ -1,7 +1,7 @@
 {# Module workspace contract: docs/module-workspace.md #}
 {% extends "base.html" %}
 {% from "components/primitives.html" import schema_field, state_panel, status_badge %}
-{% block title %}{{ module_name | capitalize }} — {{ guild.name }}{% endblock %}
+{% block title %}{{ module_name | replace('_', ' ') | title }} — {{ guild.name }}{% endblock %}
 
 {% block content %}
 {% set active_page = 'module_' + module_name %}
@@ -11,7 +11,7 @@
     <div class="module-heading">
       <a href="/guild/{{ guild.id }}/modules" class="back-link">{{ icon('arrow-left', 14) }} All modules</a>
       <p class="page-eyebrow">Module workspace</p>
-      <h1 class="page-title">{{ module_name | capitalize }}</h1>
+      <h1 class="page-title">{{ module_name | replace('_', ' ') | title }}</h1>
       <p class="page-subtitle">{{ module_data.description }}</p>
     </div>
     <div class="page-actions">
@@ -52,11 +52,11 @@
     <div><span class="health-label">Commands</span><strong>{{ module_data.commands | length }}</strong></div>
   </section>
 
-  <div class="tabs workspace-tabs" role="tablist" aria-label="{{ module_name | capitalize }} workspace">
+  <div class="tabs workspace-tabs" role="tablist" aria-label="{{ module_name | replace('_', ' ') | title }} workspace">
     {% if has_operations %}<button id="workspace-tab-operate" class="tab active" type="button" role="tab" aria-controls="tab-operate" aria-selected="true">Operate</button>{% endif %}
     <button id="workspace-tab-configure" class="tab {{ '' if has_operations else 'active' }}" type="button" role="tab" aria-controls="tab-configure" aria-selected="{{ 'false' if has_operations else 'true' }}" {{ 'tabindex="-1"' if has_operations else '' }}>Configure</button>
-    <button id="workspace-tab-about" class="tab" type="button" role="tab" aria-controls="tab-about" aria-selected="false" tabindex="-1">About</button>
     {% for tab in module_data.extra_tabs %}<button id="workspace-tab-{{ tab.id }}" class="tab" type="button" role="tab" aria-controls="tab-{{ tab.id }}" aria-selected="false" tabindex="-1">{{ tab.label }}</button>{% endfor %}
+    <button id="workspace-tab-about" class="tab" type="button" role="tab" aria-controls="tab-about" aria-selected="false" tabindex="-1">About</button>
   </div>
 
   {% if has_operations %}<section class="tab-panel active" id="tab-operate" role="tabpanel" aria-labelledby="workspace-tab-operate" tabindex="0">
@@ -128,6 +128,8 @@
     {% endif %}
   </section>
 
+  {% for tab in module_data.extra_tabs %}<section class="tab-panel" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" hidden>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
+
   <section class="tab-panel" id="tab-about" role="tabpanel" aria-labelledby="workspace-tab-about" tabindex="0" hidden>
     <div class="about-grid">
       <article class="content-card">
@@ -143,13 +145,13 @@
       {% if module_data.commands %}<article class="content-card"><div class="card-header"><h2 class="card-title">{{ icon('terminal', 16) }} Commands</h2></div><div class="commands-list">{% for cmd in module_data.commands %}<div class="command-item"><div class="command-header"><code class="command-name">/{{ cmd.name }}</code>{% if cmd.slash %}<span class="badge-sm slash">slash</span>{% endif %}</div><span class="command-desc">{{ cmd.description }}</span></div>{% endfor %}</div></article>{% endif %}
     </div>
   </section>
-
-  {% for tab in module_data.extra_tabs %}<section class="tab-panel" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" hidden>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/module-workspace.js?v=9"></script>
+{% if module_name == 'auto_voice' %}<script src="/static/js/auto-voice-workspace.js?v=1"></script>{% endif %}
 {% if module_name == 'moderation' %}<script src="/static/js/moderation-workspace.js?v=7"></script>{% endif %}
 {% if module_name == 'reputation' %}<script src="/static/js/reputation-workspace.js?v=1"></script>{% endif %}
+{% if module_name == 'role_manager' %}<script src="/static/js/role-manager-workspace.js?v=3"></script>{% endif %}
 {% endblock %}

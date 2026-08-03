@@ -371,6 +371,86 @@ async def test_module_voice_channel_field_uses_voice_only_endpoint(client, app):
     assert response.status_code == 200
     assert 'data-api="/api/v1/guilds/{guild_id}/channels?type=voice"' in response.text
     assert "Select a voice channel…" in response.text
+    # Module slug renders as a human name (not "Auto_voice")
+    assert "Auto Voice" in response.text
+    assert "Auto_voice" not in response.text
+    # Live name-template preview script is registered
+    assert "auto-voice-workspace.js" in response.text
+
+
+@pytest.mark.asyncio
+async def test_modules_grid_renders_human_module_names(client, app):
+    """The Modules grid must show 'Auto Voice', not the raw slug 'Auto_voice'."""
+    from unittest.mock import MagicMock
+
+    module = MagicMock()
+    module.version = "0.3.0"
+    module.description = "AVC-compatible temporary voice channels"
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    app.state.bot.modules.get_all_modules.return_value = {"auto_voice": module}
+
+    response = await client.get("/guild/1/modules")
+
+    assert response.status_code == 200
+    assert "Auto Voice" in response.text
+    assert "Auto_voice" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_voice_history_prefers_recorded_channel_name(client, app):
+    """Voice history shows the name recorded at leave time even when the live
+    channel is gone (Auto Voice deletes temporary channels after a leave)."""
+    from database.engine import session_scope
+    from database.models.voice import VoiceSession
+
+    mock_guild = app.state.bot.get_guild(1)
+    mock_guild.get_member.return_value = None
+    mock_guild.get_channel.return_value = None
+
+    async with session_scope() as session:
+        session.add(
+            VoiceSession(
+                guild_id="1",
+                user_id="42",
+                user_tag="cody#0001",
+                channel_id="200",
+                channel_name="hangout",
+            )
+        )
+        await session.commit()
+
+    resp = await client.get("/api/v1/guilds/1/moderation/voice-history")
+
+    assert resp.status_code == 200
+    sessions = resp.json()["data"]["sessions"]
+    assert len(sessions) == 1
+    assert sessions[0]["channel_name"] == "hangout"
+    assert sessions[0]["channel_original_name"] == "hangout"
+
+
+@pytest.mark.asyncio
+async def test_role_manager_create_rule_accepts_json_body(app, client):
+    """Regression: Request-typed POST handlers must not be treated as query
+    params (would return 422). Register the role_manager router and POST."""
+    from modules.role_manager.module import RoleManagerModule
+    from services.bark_context import BarkContext
+
+    bot = app.state.bot
+    ctx = BarkContext(bot, bot.modules.event_bus)
+    router = RoleManagerModule(ctx).get_api_routes()
+    assert router is not None
+    app.include_router(router, prefix="/api/v1")
+
+    resp = await client.post(
+        "/api/v1/guilds/1/modules/role_manager/rules",
+        json={"name": "Welcome", "rule_type": "welcome", "role_id": "555"},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"]["id"] > 0
 
 
 @pytest.mark.asyncio

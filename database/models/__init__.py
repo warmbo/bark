@@ -16,6 +16,7 @@ from database.models.reputation import (
     ReputationReward,
     ReputationTier,
 )
+from database.models.role_manager import RoleAssignment, RoleRule
 from database.models.ruleset import Rule, RuleSet, WordList
 from database.models.voice import VoiceSession
 
@@ -38,6 +39,8 @@ __all__ = [
     "ReputationProfile",
     "ReputationReward",
     "ReputationTier",
+    "RoleAssignment",
+    "RoleRule",
     "Rule",
     "RuleSet",
     "UserNote",

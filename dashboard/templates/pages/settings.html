@@ -23,7 +23,7 @@
                 <a href="/guild/{{ guild.id }}/modules/{{ mod_name }}" class="module-nav-item">
                     <div class="module-nav-icon">{{ icon("puzzle", 20) }}</div>
                     <div class="module-nav-body">
-                        <span class="module-nav-name">{{ mod_name | capitalize }}</span>
+                        <span class="module-nav-name">{{ mod_name | replace('_', ' ') | title }}</span>
                         <span class="module-nav-desc">{{ mod.description or 'Configure this module' }}</span>
                     </div>
                     <span class="module-nav-status {{ 'enabled' if mod.enabled else 'disabled' }}">

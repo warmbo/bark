@@ -185,7 +185,7 @@ def test_controls_added_by_workspace_have_programmatic_names():
     assert 'for="{{ field_id }}"' in html
     assert 'id="{{ field_id }}"' in html
     assert 'for="module-enabled"' in html
-    assert 'aria-label="{{ module_name | capitalize }} workspace"' in html
+    assert 'aria-label="{{ module_name | replace(\'_\', \' \') | title }} workspace"' in html
 
 
 def test_desktop_viewport_and_zoom_contract_is_present():

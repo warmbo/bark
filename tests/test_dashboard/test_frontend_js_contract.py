@@ -88,6 +88,21 @@ def test_realtime_connection_has_bfcache_lifecycle_cleanup():
     assert "clearInterval(pathWatchTimer)" in js
 
 
+def test_auto_voice_workspace_registers_live_template_preview():
+    """Auto Voice's name-template demo must be wired into the module page and
+    mirror the backend token/transform rendering."""
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
+    av = source(JS / "auto-voice-workspace.js")
+
+    assert "auto-voice-workspace.js" in detail
+    assert "config-channel_name_template" in av
+    assert "config-fallback_name" in av
+    assert "template-preview" in av
+    assert "@@game_name@@" in av
+    assert "applyAvcTransforms" in av
+    assert "aria-live" in av
+
+
 def test_inline_api_renderers_escape_dynamic_attributes_and_refresh_icons():
     guild = source(TEMPLATES / "pages" / "guild.html")
     members = source(TEMPLATES / "pages" / "members.html")
