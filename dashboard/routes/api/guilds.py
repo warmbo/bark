@@ -244,7 +244,10 @@ async def get_guild_activity(request: Request, guild_id: int):
     def member_name(user_id: str | None, fallback: str | None = None) -> str:
         """Resolve a Discord user ID to a display name via the guild cache."""
         if user_id:
-            member = guild.get_member(int(user_id))
+            try:
+                member = guild.get_member(int(user_id))
+            except (TypeError, ValueError):
+                member = None  # non-numeric actor IDs like "dashboard"
             if member is not None:
                 return str(getattr(member, "display_name", None) or member)
         return fallback or user_id or "Unknown"

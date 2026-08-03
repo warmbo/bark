@@ -743,6 +743,11 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
                     guild_id="1", user_id="901", moderator_id="800", reason="nope", active=True,
                     created_at=now - timedelta(minutes=2),
                 ),
+                # Non-numeric actor ID (dashboard) must not crash name resolution.
+                WarningModel(
+                    guild_id="1", user_id="907", moderator_id="dashboard", reason="spam", active=True,
+                    created_at=now - timedelta(seconds=15),
+                ),
                 ReputationEvent(
                     guild_id="1", actor_id="800", target_id="902", event_type="thanks",
                     points=2.0, created_at=now - timedelta(minutes=3),
