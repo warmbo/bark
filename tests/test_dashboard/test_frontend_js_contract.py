@@ -19,6 +19,53 @@ def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def test_inline_template_scripts_have_no_interpolation_in_single_quoted_strings():
+    """Inline <script> bodies must not use `${...}` inside single-quoted strings.
+
+    Regression: members.html/member_detail.html empty-state markup used
+    `${getIconSvg('users', 18)}` inside a single-quoted JS string, which broke
+    the page with 'Unexpected identifier'. Single-quoted strings do not
+    interpolate — the interpolation opener inside one is a literal quote that
+    terminates the string early.
+
+    Only the single-quote context is a syntax error: ``${...}`` inside backtick
+    template literals (the normal case) and inside double-quoted strings
+    (rendered literally but valid) are both fine. The scanner walks the script
+    and remembers the last unescaped quote delimiter that opened the current
+    string; a ``${`` seen while that delimiter is a single quote is a bug.
+    """
+    offenders = []
+    for path in (TEMPLATES / "pages").glob("*.html"):
+        html = source(path)
+        for match in re.finditer(r"<script>(.*?)</script>", html, re.S):
+            body = match.group(1)
+            line = html[: match.start()].count("\n") + 1
+            delimiter: str | None = None
+            escaped = False
+            for i, ch in enumerate(body):
+                if escaped:
+                    escaped = False
+                    continue
+                if ch == "\\":
+                    escaped = True
+                    continue
+                if delimiter:
+                    if ch == delimiter:
+                        delimiter = None
+                    continue
+                if ch in ("'", '"', "`"):
+                    delimiter = ch
+                    continue
+                if ch == "$" and body[i + 1 : i + 2] == "{":
+                    # Interpolation inside a single-quoted string is a parse
+                    # error (the quote terminates the string early).
+                    if delimiter == "'":
+                        offenders.append(f"{path.relative_to(ROOT)}:{line}")
+    assert offenders == [], (
+        f"${'{...}'} interpolation inside a single-quoted JS string breaks the page: {offenders}"
+    )
+
+
 def test_module_toggle_releases_busy_state_after_success_or_failure():
     js = source(JS / "module-workspace.js")
     handler = js[

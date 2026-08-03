@@ -161,11 +161,11 @@ async function loadMembers(page = 0, append = false) {
         } else {
             tbody.innerHTML = '';
             if (data.members.length === 0 && !search && !roleId) {
-                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${getIconSvg('users', 18)}</span><div><strong>No members in this server</strong><p>Invite members or check back later.</p></div></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + getIconSvg('users', 18) + '</span><div><strong>No members in this server</strong><p>Invite members or check back later.</p></div></div></td></tr>';
                 if (pagination) pagination.hidden = true;
                 return;
             } else if (data.members.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${getIconSvg('filter', 18)}</span><div><strong>No matching members</strong><p>Try adjusting your search or filters.</p></div></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + getIconSvg('filter', 18) + '</span><div><strong>No matching members</strong><p>Try adjusting your search or filters.</p></div></div></td></tr>';
                 if (pagination) pagination.hidden = true;
                 return;
             }

@@ -16,9 +16,6 @@
   const RULE_LABELS = {
     welcome: 'Welcome', tenure: 'Tenure', voice: 'Voice', stream: 'Stream', reaction: 'Reaction',
   };
-  const RULE_ICONS = {
-    welcome: 'user-plus', tenure: 'calendar-days', voice: 'headphones', stream: 'radio', reaction: 'smile',
-  };
   const RULE_ORDER = ['welcome', 'tenure', 'voice', 'stream', 'reaction'];
 
   // Rules -----------------------------------------------------------------
@@ -76,53 +73,41 @@
     try {
       const raw = await safeFetch(api('rules'), {cache: 'no-cache'});
       rules = raw.data?.rules || raw.rules || [];
-      const summary = renderRuleSummary(rules);
       if (!rules.length) {
-        container.innerHTML = summary + state('empty', 'No role rules', canManage ? 'Create a rule to start managing roles automatically.' : 'An administrator can create role rules here.', 'rules');
+        container.innerHTML = state('empty', 'No role rules', canManage ? 'Create a rule to start managing roles automatically.' : 'An administrator can create role rules here.', 'rules');
         refreshIcons(); return;
       }
-      const cards = rules.map(r => renderRuleCard(r)).join('');
-      container.innerHTML = summary + `<div class="rules-grid">${cards}</div>`;
+      const rows = rules.map(r => renderRuleRow(r)).join('');
+      container.innerHTML = renderDataTable(['Rule', 'Trigger', 'Role', 'Behavior', 'Release', 'Status', 'Actions'], rows);
       refreshIcons();
     } catch (error) {
       container.innerHTML = state('error', 'Rules unavailable', error.message || 'Could not load role rules.', 'rules');
       refreshIcons();
     }
   }
-  function renderRuleSummary(items) {
-    const counts = {};
-    items.forEach(r => { counts[r.rule_type] = (counts[r.rule_type] || 0) + 1; });
-    const active = items.filter(r => r.enabled).length;
-    const chips = RULE_ORDER
-      .filter(t => counts[t])
-      .map(t => `<span class="rule-summary-chip"><span class="chip-dot chip-${String(t).replace(/[^a-z0-9_-]/gi, '')}"></span>${escHtml(RULE_LABELS[t] || t)} <strong>${counts[t]}</strong></span>`)
-      .join('');
-    return `<div class="rule-summary"><div class="rule-summary-total"><strong>${items.length}</strong><span>rules</span></div><div class="rule-summary-total"><strong>${active}</strong><span>active</span></div>${chips}</div>`;
-  }
-  function renderRuleCard(r) {
+  function renderRuleRow(r) {
     const type = String(r.rule_type).replace(/[^a-z0-9_-]/gi, '');
     const cfg = r.trigger_config || {};
     const paused = r.enabled === false;
     const behavior = ruleBehavior(r, cfg);
     const remove = ['welcome', 'tenure'].includes(r.rule_type)
       ? 'Not applicable'
-      : (r.remove_when_inactive !== false ? 'Yes — removed when condition ends' : 'No — add only');
+      : (r.remove_when_inactive !== false ? 'Removed when condition ends' : 'Add only');
+    const status = paused
+      ? '<span class="status-badge status-warning"><span class="status-indicator" aria-hidden="true"></span>Paused</span>'
+      : '<span class="status-badge status-success"><span class="status-indicator" aria-hidden="true"></span>Enabled</span>';
     const actions = canManage
-      ? `<div class="rule-card-actions"><button type="button" class="btn btn-sm" data-edit-rule="${Number(r.id)}">${icon('edit-3')} Edit</button><button type="button" class="btn btn-sm btn-danger" data-delete-rule="${Number(r.id)}" aria-label="Delete rule ${escHtml(r.name)}">${icon('trash-2')}</button></div>`
-      : '';
-    return `<div class="rule-card ${paused ? 'rule-paused' : ''}">
-      <div class="rule-card-head">
-        <span class="rule-card-icon rule-icon-${type}" aria-hidden="true">${icon(RULE_ICONS[r.rule_type] || 'badge-check', 17)}</span>
-        <div class="rule-card-title"><strong>${escHtml(r.name)}</strong><span class="badge badge-sm">${escHtml(RULE_LABELS[r.rule_type] || r.rule_type)}</span></div>
-        <span class="rule-status-pill ${paused ? 'rule-status-paused' : 'rule-status-ok'}">${paused ? 'Paused' : 'Enabled'}</span>
-      </div>
-      <div class="rule-card-body">
-        <div class="rule-meta"><span class="rule-meta-label">Role</span><code>${escHtml(r.role_id)}</code></div>
-        <div class="rule-meta"><span class="rule-meta-label">Behavior</span><span>${behavior}</span></div>
-        <div class="rule-meta"><span class="rule-meta-label">Release</span><span>${escHtml(remove)}</span></div>
-      </div>
-      ${actions}
-    </div>`;
+      ? `<div class="table-actions"><button type="button" class="btn btn-sm" data-edit-rule="${Number(r.id)}">${icon('edit-3')} Edit</button><button type="button" class="btn btn-sm btn-danger" data-delete-rule="${Number(r.id)}" aria-label="Delete rule ${escHtml(r.name)}">${icon('trash-2')}</button></div>`
+      : '—';
+    return `<tr>
+      <td><strong>${escHtml(r.name)}</strong></td>
+      <td><span class="badge badge-sm">${escHtml(RULE_LABELS[r.rule_type] || r.rule_type)}</span></td>
+      <td><code>${escHtml(r.role_id)}</code></td>
+      <td class="cell-truncate" title="${escHtml(String(behavior).replace(/<[^>]*>/g, ''))}">${behavior}</td>
+      <td>${escHtml(remove)}</td>
+      <td>${status}</td>
+      <td>${actions}</td>
+    </tr>`;
   }
   function ruleBehavior(r, cfg) {
     if (r.rule_type === 'tenure') return `Add after <strong>${cfg.days_required || 30} days</strong> in the server`;

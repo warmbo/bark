@@ -1381,3 +1381,82 @@ async def test_case_resolution_persists(client):
         ).scalar_one()
     assert c.resolved is True, "Case should be marked resolved"
     assert c.resolved_at is not None, "Case should have resolved_at timestamp"
+
+
+@pytest.mark.asyncio
+async def test_logging_logs_endpoint_returns_audit_entries(app, client):
+    """Logging module Logs tab reads Bark's own audit-log table.
+
+    Regression guard: modules/logging/module.py get_api_routes() must expose
+    GET /guilds/{guild_id}/modules/logging/logs and return recorded audit
+    entries (message edits/deletes/links, joins, voice state).
+    """
+    from database.engine import session_scope
+    from database.models.moderation import AuditLog
+    from modules.logging.module import LoggingModule
+    from services.bark_context import BarkContext
+
+    # Seed an audit entry the way the module records one.
+    async with session_scope() as session:
+        session.add(
+            AuditLog(
+                guild_id="1",
+                action="message_edit",
+                actor_id="42",
+                target_id="99",
+                details='{"actor_tag":"cody#0001","channel":"#general","before":"old","after":"new"}',
+            )
+        )
+        await session.commit()
+
+    bot = app.state.bot
+    mock_guild = bot.get_guild(1)
+    mock_guild.get_member.return_value = None
+
+    ctx = BarkContext(bot, bot.modules.event_bus)
+    router = LoggingModule(ctx).get_api_routes()
+    assert router is not None
+    app.include_router(router, prefix="/api/v1")
+
+    resp = await client.get("/api/v1/guilds/1/modules/logging/logs?limit=10")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    entries = body["data"]["entries"]
+    assert len(entries) == 1
+    assert entries[0]["action"] == "message_edit"
+    assert entries[0]["actor"] == "cody#0001"  # member cache empty → falls back to stored tag
+    assert entries[0]["channel"] == "#general"
+    assert entries[0]["details"]["before"] == "old"
+
+
+@pytest.mark.asyncio
+async def test_logging_workspace_has_logs_tab(client, app):
+    """The Logging module workspace registers a Logs tab with its template."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    module = MagicMock()
+    module.version = "3.0.0"
+    module.description = "Log message edits, deletes, file uploads"
+    module.author = "Bark"
+    module.get_settings_schema.return_value = {}
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    module.get_about.return_value = []
+    module.get_actions.return_value = [
+        {"id": "test_log", "label": "Test Log", "endpoint": "test", "fields": []}
+    ]
+    module.get_extra_tabs.return_value = [
+        {"id": "logs", "label": "Logs", "template": "module_tabs/logging_logs.html"}
+    ]
+    module.load_dashboard_config = AsyncMock(return_value={})
+    app.state.bot.modules.get_module.return_value = module
+
+    resp = await client.get("/guild/1/modules/logging")
+    assert resp.status_code == 200
+    assert 'id="workspace-tab-logs"' in resp.text
+    assert 'data-section="logs"' in resp.text
+    assert "logging-logs-content" in resp.text
+    # Workspace JS must be registered on the logging module page
+    assert "logging-workspace.js" in resp.text

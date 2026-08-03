@@ -10,12 +10,14 @@ See docs/api-contracts.md#logging for API endpoint contracts.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime, timezone
 from typing import cast
 
 import discord
+from fastapi import Query, Request
 from fastapi.responses import JSONResponse
 
 from database.engine import session_scope
@@ -87,6 +89,7 @@ class LoggingModule(BarkModule):
         return [
             PermissionDefinition(name="logging.configure", label="Configure Logging"),
             PermissionDefinition(name="logging.files", label="View File Logs"),
+            PermissionDefinition(name="logging.view", label="View Logs"),
         ]
 
     def get_about(self) -> list[dict]:
@@ -152,6 +155,15 @@ class LoggingModule(BarkModule):
                 "description": "Send a test embed to each configured log channel to verify logging works.",
                 "endpoint": "test",
                 "fields": [],
+            },
+        ]
+
+    def get_extra_tabs(self) -> list[dict]:
+        return [
+            {
+                "id": "logs",
+                "label": "Logs",
+                "template": "module_tabs/logging_logs.html",
             },
         ]
 
@@ -529,8 +541,88 @@ class LoggingModule(BarkModule):
 
     def get_api_routes(self):
         """Register API endpoints for the Logging module's dashboard actions.
-        Test log is handled via dashboard router at POST /modules/{module_name}/test."""
-        return None
+        Test log is handled via dashboard router at POST /modules/{module_name}/test.
+        ``GET /modules/logging/logs`` returns Bark's own audit-log entries
+        (message edits/deletes/links, member joins/leaves, voice state).
+        """
+        from fastapi import APIRouter
+
+        from services.response import (
+            api_error,
+            api_not_found,
+            api_success,
+            check_api_permission,
+            get_module_min_role,
+        )
+
+        router = APIRouter(tags=["module-logging"])
+
+        @router.get("/guilds/{guild_id}/modules/logging/logs")
+        async def list_logs(
+            request: Request,
+            guild_id: str,
+            limit: int = Query(50, ge=1, le=200),
+        ):
+            """Return recent audit-log entries recorded for this guild."""
+            await get_module_min_role("logging", guild_id)
+            if not check_api_permission(request, "logging.view", guild_id):
+                return api_error("Insufficient permissions", status_code=403)
+            gid = int(guild_id)
+            bot = request.state.bot
+            guild = bot.get_guild(gid)
+            if guild is None:
+                return api_not_found("Guild")
+
+            from sqlalchemy import desc, select
+
+            from database.models.moderation import AuditLog
+
+            async with session_scope() as session:
+                result = await session.execute(
+                    select(AuditLog)
+                    .where(AuditLog.guild_id == str(gid))
+                    .order_by(desc(AuditLog.created_at))
+                    .limit(min(limit, 200))
+                )
+                rows = list(result.scalars().all())
+
+            def member_name(user_id: str | None, fallback: str | None = None) -> str:
+                if user_id:
+                    try:
+                        member = guild.get_member(int(user_id))
+                    except (TypeError, ValueError):
+                        member = None
+                    if member is not None:
+                        return str(getattr(member, "display_name", None) or member)
+                return fallback or user_id or "Unknown"
+
+            entries = []
+            for row in rows:
+                details = {}
+                try:
+                    details = json.loads(row.details) if row.details else {}
+                except (json.JSONDecodeError, TypeError):
+                    details = {}
+                actor = member_name(row.actor_id, details.get("actor_tag"))
+                target = member_name(row.target_id, details.get("target_tag"))
+                channel = details.get("channel") or ""
+                entries.append(
+                    {
+                        "id": row.id,
+                        "action": row.action,
+                        "actor_id": row.actor_id,
+                        "actor": actor,
+                        "target_id": row.target_id,
+                        "target": target,
+                        "channel": channel,
+                        "details": details,
+                        "created_at": row.created_at.isoformat() if row.created_at else None,
+                    }
+                )
+
+            return api_success({"entries": entries, "total": len(entries)})
+
+        return router
 
     async def _handle_test_action(self, guild_id: str) -> JSONResponse:
         """Send a test embed to each configured log channel. Used by dashboard route."""

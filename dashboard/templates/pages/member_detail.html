@@ -43,7 +43,7 @@ async function loadMember() {
         if (typeof lucide !== 'undefined') lucide.createIcons();
         document.title = `Bark — ${data.name}`;
     } catch (e) {
-        root.innerHTML = '<div class="state-panel state-error" role="alert"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("alert-circle", 18)}</span><div><strong>Failed to load member data</strong><p>The member profile could not be loaded.</p></div><button type="button" class="btn btn-sm" data-retry-member>Retry</button></div>';
+        root.innerHTML = '<div class="state-panel state-error" role="alert"><span class="state-panel-icon" aria-hidden="true">' + memberIconSvg('alert-circle', 18) + '</span><div><strong>Failed to load member data</strong><p>The member profile could not be loaded.</p></div><button type="button" class="btn btn-sm" data-retry-member>Retry</button></div>';
     }
 }
 

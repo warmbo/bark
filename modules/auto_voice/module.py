@@ -114,15 +114,9 @@ class AutoVoiceModule(BarkModule):
                     "title": "Channel Name Template",
                     "description": (
                         "Template used to name every new temporary channel. "
-                        "## becomes the channel number (e.g. #2); @@game_name@@ "
-                        "and {game} become the most-played game in the channel "
-                        "(or the fallback name below); {display_name}, "
-                        "{username}, and {guild} become the owner's display "
-                        "name, username, and server name. AVC-style quoted "
-                        'transforms (""caps: text"", ""upper: text"", '
-                        '""lower: text"", ""title: text"", ""acro: '
-                        'text"", ""spaces: text"") are also supported. '
-                        "Watch the live preview below as you type."
+                        "Tokens, AVC transforms, and examples are listed in the "
+                        "Name template reference below this field. Watch the "
+                        "live preview as you type."
                     ),
                     "default": "## [@@game_name@@]",
                     "maxLength": 100,
