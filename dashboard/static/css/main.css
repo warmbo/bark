@@ -984,11 +984,11 @@ textarea:focus-visible,
 .member-table thead { border-bottom: 1px solid var(--glass-border); }
 
 .member-table th {
-    padding: 14px 18px;
+    padding: 12px 16px;
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.5px;
     color: var(--text-tertiary);
     text-align: left;
     white-space: nowrap;
@@ -999,9 +999,13 @@ textarea:focus-visible,
 .member-table-row + .member-table-row { border-top: 1px solid var(--border-subtle); }
 
 .member-table td {
-    padding: 12px 18px;
+    padding: 12px 16px;
     vertical-align: middle;
 }
+
+/* Zebra rows match the shared .data-table treatment */
+.member-table tr:nth-child(even) td { background: var(--glass-tint); }
+.member-table tr:hover td { background: var(--glass-tint-strong); }
 
 .member-cell-name { min-width: 200px; }
 
@@ -1104,7 +1108,7 @@ textarea:focus-visible,
 
 .member-count { font-size: 14px; color: var(--text-tertiary); margin-left: auto; }
 
-.filter-row { display: flex; gap: 8px; width: 100%; margin-top: 8px; }
+.filter-row { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; margin-top: 8px; }
 
 /* Generic text color utilities */
 .text-tertiary { color: var(--text-tertiary); }
@@ -1572,11 +1576,28 @@ textarea:focus-visible,
 
 textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--font-mono); font-size: 13px; }
 
-.md-toolbar { display: flex; gap: 2px; padding: 5px 6px; background: var(--bg-elevated); border: 1px solid var(--border-input); border-bottom: 0; flex-wrap: wrap; }
-.md-toolbar button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 26px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 14px; font-weight: 600; transition: background var(--transition-fast), color var(--transition-fast); }
-.md-toolbar button:hover { background: var(--bg-card); color: var(--text-primary); }
-.md-toolbar .sep { width: 1px; background: var(--border-subtle); margin: 2px 4px; }
-.md-toolbar-textarea { border-top: 0; }
+/* ── Field width categories ──
+   Compact / Standard / Wide / Full-width — apply these instead of
+   inventing per-template input widths. */
+.field-width-compact { max-width: 200px; }
+.field-width-standard { max-width: 360px; }
+.field-width-wide { max-width: 560px; }
+
+/* Compact form controls for card-header toolbars (refresh + control rows) */
+.form-input-sm, .form-select-sm {
+    padding: 4px 10px;
+    font-size: 13px;
+    min-height: 28px;
+    width: auto;
+}
+.form-input-sm { height: 28px; }
+.form-select-sm { height: 28px; }
+
+.discord-toolbar { display: flex; gap: 2px; padding: 5px 6px; background: var(--bg-elevated); border: 1px solid var(--border-input); border-bottom: 0; flex-wrap: wrap; }
+.discord-toolbar button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 26px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 14px; font-weight: 600; transition: background var(--transition-fast), color var(--transition-fast); }
+.discord-toolbar button:hover { background: var(--bg-card); color: var(--text-primary); }
+.discord-toolbar .sep { width: 1px; background: var(--border-subtle); margin: 2px 4px; }
+.discord-toolbar + textarea.form-input { border-top: 0; }
 
 /* ── Buttons ──────────────────────────────────────────── */
 
@@ -1978,6 +1999,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 }
 
 .empty-state.small { padding: 32px 16px; }
+.empty-state.compact { padding: 20px 16px; }
 
 .empty-state-icon { margin-bottom: 16px; color: var(--text-tertiary); opacity: 0.4; }
 
@@ -2010,7 +2032,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 /* ── Settings Form ──────────────────────────────────── */
 
-.settings-form { padding: var(--space-lg) var(--space-xl); }
+.settings-form { padding: 16px 20px; }
 
 
 /* ── Bot Appearance ──────────────────────────────────── */
@@ -2156,6 +2178,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .skeleton-text { height: 14px; margin-bottom: 8px; width: 100%; }
 .skeleton-text.short { width: 60%; }
 .skeleton-text.tiny { width: 30%; }
+.skeleton-row { height: 34px; margin-bottom: 8px; }
 .skeleton-avatar { width: 40px; height: 40px; }
 .skeleton-card { height: 80px; }
 .skeleton-stat { height: 60px; }

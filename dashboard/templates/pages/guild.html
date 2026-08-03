@@ -6,6 +6,12 @@
 {% set active_page = "overview" %}
 
 <div class="page-container">
+    <!-- Standard page header (matches Members / Modules / Settings) -->
+    <div class="page-header">
+        <h1 class="page-title">{{ icon("layout-dashboard", 24) }} Overview</h1>
+        <p class="page-subtitle">Server overview with activity, stats, and quick actions</p>
+    </div>
+
     <!-- Health Score + Growth Row -->
     <div class="stats-grid">
         <div class="stat-card">
@@ -67,16 +73,16 @@
                 <a href="/guild/{{ guild.id }}/moderation" class="card-action" aria-label="Open recent moderation activity">{{ icon("chevron-right", 14) }}</a>
             </div>
             <div class="activity-feed" id="activity-feed">
-                <div class="empty-state compact">
-                    <p>No recent activity to display. Activity will appear here as moderation actions are taken.</p>
-                </div>
+                <div class="skeleton skeleton-text"></div>
+                <div class="skeleton skeleton-text"></div>
+                <div class="skeleton skeleton-text"></div>
             </div>
         </div>
 
         <!-- Right Column -->
         <div>
             <!-- Quick Actions -->
-            <div class="content-card qa-card-wrapper">
+            <div class="content-card">
                 <div class="card-header">
                     <h2 class="card-title">{{ icon("zap", 16) }} Quick Actions</h2>
                 </div>
@@ -135,7 +141,7 @@ const GUILD_ID = '{{ guild.id }}';
         const feed = document.getElementById('activity-feed');
         const items = activityData?.data?.activity || activityData?.activity || [];
         if (items.length === 0) {
-            feed.innerHTML = '<div class="empty-state small"><p>No recent activity.</p></div>';
+            feed.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : '') + '</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>';
         } else {
             feed.innerHTML = items.map(a => {
                 const time = a.timestamp ? timeAgo(a.timestamp) : '';

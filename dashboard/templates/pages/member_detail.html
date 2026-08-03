@@ -43,7 +43,7 @@ async function loadMember() {
         if (typeof lucide !== 'undefined') lucide.createIcons();
         document.title = `Bark — ${data.name}`;
     } catch (e) {
-        root.innerHTML = '<div class="empty-state"><p>Failed to load member data.</p><button type="button" class="btn btn-sm" data-retry-member>Retry</button></div>';
+        root.innerHTML = '<div class="state-panel state-error" role="alert"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("alert-circle", 18)}</span><div><strong>Failed to load member data</strong><p>The member profile could not be loaded.</p></div><button type="button" class="btn btn-sm" data-retry-member>Retry</button></div>';
     }
 }
 
@@ -107,7 +107,7 @@ function renderMember(m) {
                 ? `<table class="data-table"><caption class="sr-only">Moderation cases for ${escHtml(m.name)}</caption><thead><tr><th scope="col">#</th><th scope="col">Type</th><th scope="col">Moderator</th><th scope="col">Reason</th><th scope="col">Date</th></tr></thead><tbody>
                     ${m.cases.map(c => `<tr><td>#${Number(c.case_number)}</td><td><span class="badge badge-${safeClassToken(c.action_type, 'unknown')}">${escHtml(c.action_type)}</span></td><td>${escHtml(c.moderator_tag)}</td><td class="cell-truncate">${escHtml(c.reason || '-')}</td><td class="timestamp">${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td></tr>`).join('')}
                 </tbody></table>`
-                : '<div class="empty-state small"><p>No cases.</p></div>'}
+                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("scroll-text", 18)}</span><div><strong>No cases</strong><p>No moderation cases recorded for this member.</p></div></div>'}
         </div>
 
         <!-- Active Warnings -->
@@ -117,7 +117,7 @@ function renderMember(m) {
                 ? `<table class="data-table"><caption class="sr-only">Active warnings for ${escHtml(m.name)}</caption><thead><tr><th scope="col">ID</th><th scope="col">Reason</th><th scope="col">Date</th></tr></thead><tbody>
                     ${m.warnings.map(w => `<tr><td>#${Number(w.id)}</td><td class="cell-truncate">${escHtml(w.reason)}</td><td class="timestamp">${w.created_at ? new Date(w.created_at).toLocaleDateString() : '-'}</td></tr>`).join('')}
                 </tbody></table>`
-                : '<div class="empty-state small"><p>No active warnings.</p></div>'}
+                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("alert-triangle", 18)}</span><div><strong>No active warnings</strong><p>This member has no active warnings.</p></div></div>'}
         </div>
 
         <!-- Voice Sessions -->
@@ -127,7 +127,7 @@ function renderMember(m) {
                 ? `<table class="data-table"><caption class="sr-only">Voice sessions for ${escHtml(m.name)}</caption><thead><tr><th scope="col">Channel</th><th scope="col">Joined</th><th scope="col">Left</th><th scope="col">Duration</th></tr></thead><tbody>
                     ${m.voice_sessions.map(v => `<tr><td>${escHtml(v.channel_name || '')}</td><td class="timestamp">${v.joined_at ? new Date(v.joined_at).toLocaleString() : '-'}</td><td class="timestamp">${v.left_at ? new Date(v.left_at).toLocaleString() : 'Now'}</td><td>${v.duration_seconds ? memberFormatDuration(v.duration_seconds) : '-'}</td></tr>`).join('')}
                 </tbody></table>`
-                : '<div class="empty-state small"><p>No voice sessions recorded.</p></div>'}
+                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("headphones", 18)}</span><div><strong>No voice sessions</strong><p>No voice sessions recorded for this member.</p></div></div>'}
         </div>
 
         <!-- Notes -->
@@ -141,7 +141,7 @@ function renderMember(m) {
                         </div>
                         <div class="note-content">${escHtml(n.content)}</div>
                     </div>`).join('')}</div>`
-                : '<div class="empty-state small"><p>No notes.</p></div>'}
+                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("file-text", 18)}</span><div><strong>No notes</strong><p>No private notes recorded for this member.</p></div></div>'}
         </div>
     `;
 }
@@ -174,7 +174,7 @@ function showActionForm(action, userId, userName) {
             <button type="button" class="btn btn-sm" data-dismiss-action>Cancel</button>
             <span id="result-warn"></span></div>`,
         timeout: `<div class="action-form"><h3>Timeout ${escHtml(userName)}</h3>
-            <div class="form-row"><div class="form-group"><label class="form-label" for="timeout-duration">Duration</label>
+            <div class="form-grid form-grid-2"><div class="form-group"><label class="form-label" for="timeout-duration">Duration</label>
                 <input type="number" class="form-input" id="timeout-duration" name="duration" value="10" min="1"></div>
             <div class="form-group"><label class="form-label" for="timeout-unit">Unit</label>
                 <select class="form-select" id="timeout-unit" name="unit">

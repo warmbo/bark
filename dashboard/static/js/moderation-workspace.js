@@ -25,15 +25,9 @@
       delete button.dataset.idleHtml;
     }
   };
-  const refreshIcons = () => { if (window.lucide?.createIcons) window.lucide.createIcons(); };
   const loading = (container, count = 2) => { if (container) showSkeleton(container, count, 'card'); };
-  const state = (kind, title, message, section) => `
-    <div class="state-panel state-${kind}" role="${kind === 'error' ? 'alert' : 'status'}">
-      <span class="state-panel-icon" aria-hidden="true">${icon(kind === 'error' ? 'alert-circle' : 'inbox', 18)}</span>
-      <div><strong>${escHtml(title)}</strong><p>${escHtml(message || '')}</p></div>
-      ${section ? `<button type="button" class="btn btn-sm" data-refresh-section="${section}">Retry</button>` : ''}
-    </div>`;
-  const table = (headers, rows) => `<div class="table-scroll"><table class="data-table"><thead><tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  const state = renderStatePanel;
+  const table = renderDataTable;
   const formatDate = (value, withTime = false) => value ? new Date(value)[withTime ? 'toLocaleString' : 'toLocaleDateString']() : '—';
 
   // Cases -----------------------------------------------------------------

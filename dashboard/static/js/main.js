@@ -198,6 +198,28 @@ function formatDuration(seconds) {
     return parts.join(' ');
 }
 
+// ── Shared Data-View Primitives ─────────────────────
+// Single source of truth for loading/empty/error states and data tables,
+// used by every module workspace and JS-rendered data surface.
+
+function renderStatePanel(kind, title, message, section) {
+    const iconName = kind === 'error' ? 'alert-circle' : 'inbox';
+    return `
+    <div class="state-panel state-${kind}" role="${kind === 'error' ? 'alert' : 'status'}">
+      <span class="state-panel-icon" aria-hidden="true">${getIconSvg(iconName, 18)}</span>
+      <div><strong>${escHtml(title)}</strong><p>${escHtml(message || '')}</p></div>
+      ${section ? `<button type="button" class="btn btn-sm" data-refresh-section="${section}">Retry</button>` : ''}
+    </div>`;
+}
+
+function renderDataTable(headers, rows) {
+    return `<div class="table-scroll"><table class="data-table"><thead><tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function refreshIcons() {
+    if (window.lucide?.createIcons) window.lucide.createIcons();
+}
+
 function currentGuildId() {
     return window.location.pathname.match(/\/guild\/(\d+)/)?.[1];
 }

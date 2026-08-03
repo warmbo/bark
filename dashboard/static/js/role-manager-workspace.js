@@ -10,14 +10,8 @@
   const byId = (id) => document.getElementById(id);
   const icon = (name, size = 13) => typeof getIconSvg === 'function' ? getIconSvg(name, size) : '';
   const loading = (container, count = 2) => { if (container) showSkeleton(container, count, 'card'); };
-  const refreshIcons = () => { if (window.lucide?.createIcons) window.lucide.createIcons(); };
   const formatDate = (value) => value ? new Date(value).toLocaleString() : '—';
-  const state = (kind, title, message, section) => `
-    <div class="state-panel state-${kind}" role="${kind === 'error' ? 'alert' : 'status'}">
-      <span class="state-panel-icon" aria-hidden="true">${icon(kind === 'error' ? 'alert-circle' : 'inbox', 18)}</span>
-      <div><strong>${escHtml(title)}</strong><p>${escHtml(message || '')}</p></div>
-      ${section ? `<button type="button" class="btn btn-sm" data-refresh-section="${section}">Retry</button>` : ''}
-    </div>`;
+  const state = renderStatePanel;
 
   const RULE_LABELS = {
     welcome: 'Welcome', tenure: 'Tenure', voice: 'Voice', stream: 'Stream', reaction: 'Reaction',

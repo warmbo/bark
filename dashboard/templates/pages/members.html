@@ -11,10 +11,10 @@
     </div>
 
     <div class="member-controls">
-        <div class="search-bar filter-search-bar">
+        <div class="search-bar">
             <span class="search-icon">{{ icon("search", 14) }}</span>
             <label class="sr-only" for="member-search">Search members</label>
-            <input type="search" class="form-input search-input" id="member-search" name="member_search" placeholder="Search by name or tag..." autocomplete="off">
+            <input type="search" class="form-input" id="member-search" name="member_search" placeholder="Search by name or tag..." autocomplete="off">
         </div>
         <span class="member-count" id="member-count" role="status" aria-live="polite">Loading...</span>
         <button type="button" class="btn btn-sm" id="filter-clear" title="Clear all filters" disabled>{{ icon("x", 14) }} Clear</button>
@@ -161,11 +161,11 @@ async function loadMembers(page = 0, append = false) {
         } else {
             tbody.innerHTML = '';
             if (data.members.length === 0 && !search && !roleId) {
-                tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state small"><p>No members in this server.</p></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${getIconSvg('users', 18)}</span><div><strong>No members in this server</strong><p>Invite members or check back later.</p></div></div></td></tr>';
                 if (pagination) pagination.hidden = true;
                 return;
             } else if (data.members.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state small"><p>No members match your filters. Try adjusting your search criteria.</p></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${getIconSvg('filter', 18)}</span><div><strong>No matching members</strong><p>Try adjusting your search or filters.</p></div></div></td></tr>';
                 if (pagination) pagination.hidden = true;
                 return;
             }

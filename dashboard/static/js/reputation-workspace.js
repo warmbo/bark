@@ -7,16 +7,9 @@
   const guildId = root.dataset.guildId;
   const api = (path) => `/api/v1/guilds/${guildId}/modules/reputation/${path}`;
   const byId = (id) => document.getElementById(id);
-  const icon = (name, size = 13) => typeof getIconSvg === 'function' ? getIconSvg(name, size) : '';
   const loading = (container, count = 2) => { if (container) showSkeleton(container, count, 'card'); };
-  const statePanel = (kind, title, message, section) => `
-    <div class="state-panel state-${kind}" role="${kind === 'error' ? 'alert' : 'status'}">
-      <span class="state-panel-icon" aria-hidden="true">${icon(kind === 'error' ? 'alert-circle' : 'inbox', 18)}</span>
-      <div><strong>${escHtml(title)}</strong><p>${escHtml(message || '')}</p></div>
-      ${section ? `<button type="button" class="btn btn-sm" data-refresh-section="${section}">Retry</button>` : ''}
-    </div>`;
+  const statePanel = renderStatePanel;
   const formatDate = (value) => value ? new Date(value).toLocaleString() : '—';
-  const refreshIcons = () => { if (window.lucide?.createIcons) window.lucide.createIcons(); };
 
   // ── Leaderboard ───────────────────────────────────────
 
