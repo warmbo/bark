@@ -47,7 +47,7 @@
     return template;
   }
 
-  function renderChannelName(template, fallback) {
+  function renderChannelName(template, fallback, caseFlags) {
     const game = (fallback && fallback.trim()) || 'General';
     const guildName = document.querySelector('.sidebar-guild-copy strong')?.textContent?.trim()
       || 'ZENHAWX';
@@ -65,6 +65,10 @@
     }
     rendered = applyAvcTransforms(rendered);
     rendered = rendered.replace(/\s+/g, ' ').trim().slice(0, 100);
+    if (caseFlags?.uppercase) rendered = rendered.toUpperCase();
+    else if (caseFlags?.lowercase) rendered = rendered.toLowerCase();
+    else if (caseFlags?.titlecase) rendered = rendered.replace(/\w\S*/g, (word) =>
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
     return rendered || 'Voice 02';
   }
 
@@ -102,15 +106,29 @@
   // ── Live preview update ────────────────────────────────────────
 
   const previewName = document.getElementById('auto-voice-preview-name');
+  const caseInputs = [
+    document.getElementById('config-name_uppercase'),
+    document.getElementById('config-name_lowercase'),
+    document.getElementById('config-name_titlecase'),
+  ].filter(Boolean);
+
+  const readCaseFlags = () => ({
+    uppercase: caseInputs[0]?.checked ?? false,
+    lowercase: caseInputs[1]?.checked ?? false,
+    titlecase: caseInputs[2]?.checked ?? false,
+  });
+
   const updatePreview = () => {
     if (!previewName) return;
     previewName.textContent = renderChannelName(
       templateInput.value,
-      fallbackInput ? fallbackInput.value : ''
+      fallbackInput ? fallbackInput.value : '',
+      readCaseFlags()
     );
   };
 
   templateInput.addEventListener('input', updatePreview);
   fallbackInput?.addEventListener('input', updatePreview);
+  caseInputs.forEach((input) => input.addEventListener('change', updatePreview));
   updatePreview();
 })();

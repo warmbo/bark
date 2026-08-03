@@ -127,6 +127,24 @@ class AutoVoiceModule(BarkModule):
                     "default": "## [@@game_name@@]",
                     "maxLength": 100,
                 },
+                "name_uppercase": {
+                    "type": "boolean",
+                    "title": "ALL UPPERCASE",
+                    "description": "Force the finished channel name to ALL UPPERCASE (overrides lowercase).",
+                    "default": False,
+                },
+                "name_lowercase": {
+                    "type": "boolean",
+                    "title": "all lowercase",
+                    "description": "Force the finished channel name to all lowercase.",
+                    "default": False,
+                },
+                "name_titlecase": {
+                    "type": "boolean",
+                    "title": "Title Case",
+                    "description": "Force the finished channel name to Title Case.",
+                    "default": False,
+                },
                 "fallback_name": {
                     "type": "string",
                     "title": "No-game Fallback",
@@ -580,7 +598,14 @@ class AutoVoiceModule(BarkModule):
         for token, value in replacements.items():
             template = template.replace(token, value)
         template = self._apply_avc_transforms(template)
-        return " ".join(template.split())[:100] or f"Voice {index:02d}"
+        name = " ".join(template.split())[:100]
+        if config.get("name_uppercase"):
+            name = name.upper()
+        elif config.get("name_lowercase"):
+            name = name.lower()
+        elif config.get("name_titlecase"):
+            name = name.title()
+        return name or f"Voice {index:02d}"
 
     async def _refresh_channel_name(self, channel, config: dict[str, Any]) -> None:
         channel_id = int(channel.id)

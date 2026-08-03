@@ -362,6 +362,40 @@ def test_channel_sequence_is_unique_before_discord_creation_finishes():
     assert module._render_name(other_member, {"channel_name_template": "## Room"}) == "#2 Room"
 
 
+def test_name_case_flags_transform_finished_name():
+    ctx, _guild, member, *_ = _voice_fixture({"channel_name_template": "## [@@game_name@@]"})
+    member.activities = [SimpleNamespace(name="Counter-Strike 2")]
+    module = AutoVoiceModule(ctx)
+    base = {"channel_name_template": "## [@@game_name@@]", "index_hint": None}
+
+    assert module._render_name(member, base, index=1) == "#1 [Counter-Strike 2]"
+    assert (
+        module._render_name(member, {**base, "name_uppercase": True}, index=1)
+        == "#1 [COUNTER-STRIKE 2]"
+    )
+    assert (
+        module._render_name(member, {**base, "name_lowercase": True}, index=1)
+        == "#1 [counter-strike 2]"
+    )
+    assert (
+        module._render_name(member, {**base, "name_titlecase": True}, index=1)
+        == "#1 [Counter-Strike 2]"
+    )
+
+
+def test_name_uppercase_wins_over_lowercase():
+    ctx, _guild, member, *_ = _voice_fixture({"channel_name_template": "## room"})
+    module = AutoVoiceModule(ctx)
+    assert (
+        module._render_name(
+            member,
+            {"channel_name_template": "## room", "name_uppercase": True, "name_lowercase": True},
+            index=1,
+        )
+        == "#1 ROOM"
+    )
+
+
 def test_game_detection_ignores_custom_status_before_playing_activity():
     ctx, _guild, member, *_ = _voice_fixture()
     member.activities = [

@@ -104,6 +104,13 @@ def test_auto_voice_workspace_registers_live_template_preview():
     assert "@@game_name@@" in av
     assert "applyAvcTransforms" in av
     assert "aria-live" in av
+    # Case-transform checkboxes wired into the live preview.
+    assert "config-name_uppercase" in av
+    assert "config-name_lowercase" in av
+    assert "config-name_titlecase" in av
+    assert "readCaseFlags" in av
+    assert "rendered.toUpperCase()" in av
+    assert "rendered.toLowerCase()" in av
 
 
 def test_inline_api_renderers_escape_dynamic_attributes_and_refresh_icons():
