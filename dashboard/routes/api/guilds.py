@@ -2,6 +2,8 @@
 Guilds API routes.
 """
 
+from datetime import datetime, timezone
+
 import discord
 from fastapi import APIRouter, Request
 
@@ -15,6 +17,22 @@ from services.response import (
 )
 
 router = APIRouter(tags=["api-guilds"])
+
+
+def _utc_iso(value: datetime | None) -> str | None:
+    """Serialize persisted UTC datetimes with an explicit timezone offset.
+
+    SQLite returns ``DateTime`` values without tzinfo even when callers stored
+    aware UTC values. Browsers interpret offset-free ISO strings as local time,
+    which can make old events look new (or even appear to be in the future).
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat()
 
 
 @router.get("/guilds")
@@ -299,7 +317,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "moderator": moderator,
                     "reason": c.reason or "",
                     "case_number": c.case_number,
-                    "timestamp": c.created_at.isoformat() if c.created_at else None,
+                    "timestamp": _utc_iso(c.created_at),
                     "icon": {"warn": "⚠️", "kick": "👢", "ban": "🔨", "timeout": "⏱"}.get(
                         c.action_type, "📝"
                     ),
@@ -370,7 +388,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "target_id": a.target_id,
                     "moderator": actor,
                     "reason": "",
-                    "timestamp": a.created_at.isoformat() if a.created_at else None,
+                    "timestamp": _utc_iso(a.created_at),
                     "icon": {
                         "kick": "👢",
                         "ban": "🔨",
@@ -404,7 +422,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "target_id": v.user_id,
                     "moderator": None,
                     "reason": "",
-                    "timestamp": v.joined_at.isoformat() if v.joined_at else None,
+                    "timestamp": _utc_iso(v.joined_at),
                     "icon": "🎧",
                     "duration": v.duration_seconds,
                 }
@@ -431,7 +449,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "target_id": w.user_id,
                     "moderator": moderator,
                     "reason": w.reason or "",
-                    "timestamp": w.created_at.isoformat() if w.created_at else None,
+                    "timestamp": _utc_iso(w.created_at),
                     "icon": "⚠️",
                 }
             )
@@ -476,7 +494,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "target_id": e.target_id,
                     "moderator": actor,
                     "reason": "",
-                    "timestamp": e.created_at.isoformat() if e.created_at else None,
+                    "timestamp": _utc_iso(e.created_at),
                     "icon": {
                         "thanks": "🙏",
                         "award": "🏆",
@@ -527,7 +545,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "target_id": ra.user_id,
                     "moderator": None,
                     "reason": "",
-                    "timestamp": ra.created_at.isoformat() if ra.created_at else None,
+                    "timestamp": _utc_iso(ra.created_at),
                     "icon": "🎭",
                 }
             )
@@ -553,7 +571,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "target_id": n.user_id,
                     "moderator": author,
                     "reason": n.content[:120],
-                    "timestamp": n.created_at.isoformat() if n.created_at else None,
+                    "timestamp": _utc_iso(n.created_at),
                     "icon": "📝",
                 }
             )
@@ -578,7 +596,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "target_id": avc.owner_id,
                     "moderator": None,
                     "reason": "",
-                    "timestamp": avc.created_at.isoformat() if avc.created_at else None,
+                    "timestamp": _utc_iso(avc.created_at),
                     "icon": "🎙️",
                 }
             )

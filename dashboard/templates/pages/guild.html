@@ -127,8 +127,47 @@
 {% block scripts %}
 <script>
 const GUILD_ID = '{{ guild.id }}';
+const GUILD_DATA_REFRESH_MS = 5 * 60 * 1000;
+const ACTIVITY_TIME_REFRESH_MS = 60 * 1000;
+let guildDataRefreshTimer = null;
+let activityTimeRefreshTimer = null;
+let guildOverviewRequestInFlight = false;
+let guildOverviewLoaded = false;
 
-(async () => {
+function refreshActivityTimes() {
+    document.querySelectorAll('#activity-feed [data-activity-timestamp]').forEach(element => {
+        element.textContent = timeAgo(element.dataset.activityTimestamp);
+    });
+}
+
+function renderActivity(activityData) {
+    const feed = document.getElementById('activity-feed');
+    const items = activityData?.data?.activity || activityData?.activity || [];
+    if (items.length === 0) {
+        feed.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : '') + '</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>';
+        return;
+    }
+    feed.innerHTML = items.map(a => {
+        const time = a.timestamp ? timeAgo(a.timestamp) : '';
+        const timestampAttr = a.timestamp
+            ? ` data-activity-timestamp="${escHtml(a.timestamp)}"`
+            : '';
+        let reasonHtml = '';
+        if (a.reason) reasonHtml = `<span class="activity-reason">${escHtml(a.reason)}</span>`;
+        let metaHtml = '';
+        if (a.moderator && a.moderator !== a.target && a.moderator !== 'Unknown') {
+            metaHtml = `<span class="activity-meta">by ${escHtml(a.moderator)}</span>`;
+        }
+        const badge = a.category
+            ? `<span class="activity-category cat-${safeClassToken(a.category, 'activity')}">${escHtml(a.category)}</span>`
+            : '';
+        return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}${metaHtml}</span>${reasonHtml}${badge}<span class="activity-time"${timestampAttr}>${escHtml(time)}</span></div>`;
+    }).join('');
+}
+
+async function loadGuildOverview() {
+    if (guildOverviewRequestInFlight || document.hidden) return;
+    guildOverviewRequestInFlight = true;
     try {
         const [activityData, statsRaw] = await Promise.all([
             safeFetch(`/api/v1/guilds/${GUILD_ID}/activity`, {cache: 'no-cache'}),
@@ -137,26 +176,7 @@ const GUILD_ID = '{{ guild.id }}';
 
         const stats = statsRaw || {};
 
-        // Activity feed
-        const feed = document.getElementById('activity-feed');
-        const items = activityData?.data?.activity || activityData?.activity || [];
-        if (items.length === 0) {
-            feed.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : '') + '</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>';
-        } else {
-            feed.innerHTML = items.map(a => {
-                const time = a.timestamp ? timeAgo(a.timestamp) : '';
-                let reasonHtml = '';
-                if (a.reason) reasonHtml = `<span class="activity-reason">${escHtml(a.reason)}</span>`;
-                let metaHtml = '';
-                if (a.moderator && a.moderator !== a.target && a.moderator !== 'Unknown') {
-                    metaHtml = `<span class="activity-meta">by ${escHtml(a.moderator)}</span>`;
-                }
-                const badge = a.category
-                    ? `<span class="activity-category cat-${safeClassToken(a.category, 'activity')}">${escHtml(a.category)}</span>`
-                    : '';
-                return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}${metaHtml}</span>${reasonHtml}${badge}<span class="activity-time">${escHtml(time)}</span></div>`;
-            }).join('');
-        }
+        renderActivity(activityData);
 
         // Case counts
         const cc = document.getElementById('case-count');
@@ -184,16 +204,43 @@ const GUILD_ID = '{{ guild.id }}';
         }
         setVal(voice, statsData.in_voice);
         setVal(growth, statsData.growth_30d);
-
+        guildOverviewLoaded = true;
     } catch (e) {
-        ['case-count', 'case-count-7d', 'online-count', 'online-percent', 'voice-count', 'growth-30d'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) element.textContent = 'Unavailable';
-        });
-        document.getElementById('activity-feed').innerHTML = `<div class="state-panel state-error" role="alert"><div><strong>Activity unavailable</strong><p>${escHtml(e.message || 'Dashboard statistics could not be loaded.')}</p></div><button type="button" class="btn btn-sm" id="guild-stats-retry">Retry</button></div>`;
-        document.getElementById('guild-stats-retry')?.addEventListener('click', () => location.reload());
-        showToast(e.message || 'Dashboard statistics could not be loaded', 'error');
+        if (!guildOverviewLoaded) {
+            ['case-count', 'case-count-7d', 'online-count', 'online-percent', 'voice-count', 'growth-30d'].forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = 'Unavailable';
+            });
+            document.getElementById('activity-feed').innerHTML = `<div class="state-panel state-error" role="alert"><div><strong>Activity unavailable</strong><p>${escHtml(e.message || 'Dashboard statistics could not be loaded.')}</p></div><button type="button" class="btn btn-sm" id="guild-stats-retry">Retry</button></div>`;
+            document.getElementById('guild-stats-retry')?.addEventListener('click', loadGuildOverview);
+            showToast(e.message || 'Dashboard statistics could not be loaded', 'error');
+        }
+    } finally {
+        guildOverviewRequestInFlight = false;
     }
-})();
+}
+
+function stopGuildOverviewRefresh() {
+    clearInterval(guildDataRefreshTimer);
+    clearInterval(activityTimeRefreshTimer);
+    guildDataRefreshTimer = null;
+    activityTimeRefreshTimer = null;
+}
+
+function startGuildOverviewRefresh() {
+    stopGuildOverviewRefresh();
+    loadGuildOverview();
+    guildDataRefreshTimer = setInterval(loadGuildOverview, GUILD_DATA_REFRESH_MS);
+    activityTimeRefreshTimer = setInterval(refreshActivityTimes, ACTIVITY_TIME_REFRESH_MS);
+}
+
+startGuildOverviewRefresh();
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadGuildOverview();
+});
+window.addEventListener('pagehide', stopGuildOverviewRefresh);
+window.addEventListener('pageshow', event => {
+    if (event.persisted) startGuildOverviewRefresh();
+});
 </script>
 {% endblock %}

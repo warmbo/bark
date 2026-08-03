@@ -175,6 +175,16 @@ def test_inline_api_renderers_escape_dynamic_attributes_and_refresh_icons():
     assert "function iconSvg(" not in detail
 
 
+def test_guild_activity_refreshes_from_server_and_ages_visible_timestamps():
+    guild = source(TEMPLATES / "pages" / "guild.html")
+
+    assert "const GUILD_DATA_REFRESH_MS = 5 * 60 * 1000" in guild
+    assert "setInterval(loadGuildOverview, GUILD_DATA_REFRESH_MS)" in guild
+    assert "data-activity-timestamp" in guild
+    assert "setInterval(refreshActivityTimes, ACTIVITY_TIME_REFRESH_MS)" in guild
+    assert "if (event.persisted) startGuildOverviewRefresh()" in guild
+
+
 def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listener():
     html = source(TEMPLATES / "pages" / "settings.html")
     assert "document.querySelector('label[for=\"avatar-upload\"]')" in html

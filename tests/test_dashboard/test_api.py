@@ -1057,7 +1057,7 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
                     user_id="905",
                     channel_id="600",
                     channel_name="General",
-                    joined_at=now - timedelta(hours=1),
+                    joined_at=now - timedelta(hours=3),
                     left_at=now - timedelta(minutes=6),
                     duration_seconds=3200,
                 ),
@@ -1092,6 +1092,9 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     # Voice sessions surface as joins.
     voice_items = [a for a in activity if a["type"] == "voice"]
     assert voice_items and all(a["action"] == "voice_join" for a in voice_items)
+    voice_timestamp = datetime.fromisoformat(voice_items[0]["timestamp"])
+    assert voice_timestamp.tzinfo is not None
+    assert now - voice_timestamp >= timedelta(hours=2, minutes=59)
 
     # Every item has a category, a human label, and a resolved display name.
     for a in activity:

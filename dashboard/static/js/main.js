@@ -177,7 +177,9 @@ function showSkeleton(container, count = 3, type = 'card') {
 
 function timeAgo(iso) {
     if (!iso) return '';
-    const sec = (Date.now() - new Date(iso).getTime()) / 1000;
+    const timestamp = new Date(iso).getTime();
+    if (!Number.isFinite(timestamp)) return '';
+    const sec = Math.max(0, (Date.now() - timestamp) / 1000);
     if (sec < 10) return 'just now';
     if (sec < 60) return `${Math.floor(sec)}s ago`;
     if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
