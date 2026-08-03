@@ -20,6 +20,14 @@ data/.secret_key
 .env
 .token
 
+# Hermes project-context (agent tooling, not bot code)
+.hermes/
+.hermes.md
+
+# Runtime state
+data/bot_presence.json
+bark.log
+
 # IDE
 .vscode/
 .idea/

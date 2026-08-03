@@ -8,26 +8,28 @@ Bark is a dashboard-first Discord management bot built for the ZENHAWX community
 - FastAPI dashboard with Discord OAuth2 sessions and role-based access
 - Per-server module enablement, configuration, and access overrides
 - Moderation cases, warnings, private notes, rulesets, word lists, and voice history
-- Styled confirmation dialogs for destructive actions, inline progress, and success/error feedback
+- Reputation/levels: message, emoji, reaction, voice, and thanks scoring with named tiers
+- Role manager: welcome, tenure, voice, Twitch-live, and reaction-claimed role rules
+- Auto voice: dynamic temporary voice channels with configurable naming
 - Server/member search, member actions, audit history, activity summaries, and SSE updates
 - SQLite by default, with asynchronous SQLAlchemy persistence
-- systemd user-service deployment
+- systemd user-service deployment (see `deploy/bark.service.example`)
 
 ## Requirements
 
 - Python 3.13+
 - A Discord application and bot token
-- Discord gateway intents required by the enabled modules (including member intent for member management)
+- Discord gateway intents required by the enabled modules (member + presence intents for member management, voice roles, and Twitch-live roles)
 - A reverse proxy and HTTPS for production OAuth2 deployments
 
 ## Setup
 
+Bark is developed with `uv`; a plain venv + pip also works.
+
 ```bash
 git clone <repository-url> bark
 cd bark
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install -e '.[dev]'
+uv sync --extra dev          # or: python3.13 -m venv .venv && pip install -e '.[dev]'
 cp .env.example .env
 ```
 
@@ -61,11 +63,11 @@ The dashboard listens on `BARK_DASHBOARD_HOST:BARK_DASHBOARD_PORT` (default `127
 
 ### systemd user service
 
-`bark.service` contains deployment-specific absolute paths. Update its `WorkingDirectory`, `EnvironmentFile`, `ExecStart`, `ReadWritePaths`, and log paths before installing on another host. Then:
+`deploy/bark.service.example` uses `%h` placeholders. Update its `WorkingDirectory`, `EnvironmentFile`, `ExecStart`, `ReadWritePaths`, and log paths for your host, then:
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp bark.service ~/.config/systemd/user/bark.service
+cp deploy/bark.service.example ~/.config/systemd/user/bark.service
 systemctl --user daemon-reload
 systemctl --user enable --now bark
 systemctl --user status bark
@@ -79,10 +81,15 @@ app.py
 ├── bot/client.py                 Discord connection and event dispatch
 ├── services/module_manager.py    Discovery, dependency order, lifecycle, reload
 ├── services/permission_service.py Dashboard role checks and module overrides
+├── services/reputation_service.py Pure level/decay/tier math (no DB or Discord deps)
 ├── modules/
 │   ├── base.py                   BarkModule contract and BarkContext
-│   ├── moderation/               Cases, warnings, rulesets, voice tracking
+│   ├── announcements/            Scheduled announcements
+│   ├── auto_voice/               Dynamic temporary voice channels
 │   ├── logging/                  Discord event logging
+│   ├── moderation/               Cases, warnings, rulesets, voice tracking
+│   ├── reputation/               Levels, thanks, reactions, voice, tiers
+│   ├── role_manager/             Welcome/tenure/voice/Twitch/reaction roles
 │   └── welcome/                  Member welcome automation
 ├── dashboard/
 │   ├── factory.py                FastAPI construction, middleware, routers
@@ -106,9 +113,9 @@ A typical module supplies:
 - metadata: `name`, `description`, `version`, `author`, `priority`
 - `get_commands()` and `get_events()`
 - `get_settings_schema()` for dashboard-generated fields
-- `get_dashboard_actions()` for runnable operation cards
-- `get_dashboard_tabs()` for module-specific data views
-- `on_load()` / `on_unload()` and optional health validation
+- `get_actions()` for runnable operation cards
+- `get_extra_tabs()` for module-specific data views
+- `enable()` / `disable()` and optional health validation
 
 Create a package under `modules/<name>/`, export the module class, and ensure the package follows the existing moderation, logging, or welcome examples. Module code should keep Discord behavior in the module and reusable persistence/business logic in `services/`.
 
@@ -130,8 +137,8 @@ The dashboard can:
 
 - **Operate** — schema-driven dashboard actions with confirmation for destructive operations
 - **Configure** — typed module settings with dirty-state, discard, save, and validation feedback
-- **About** — module metadata, behavior summaries, and commands
 - **Module tabs** — module-owned operational data loaded with explicit loading, empty, error, and populated states
+- **About** — module metadata, behavior summaries, and commands (always last)
 
 The moderation module adds Cases, Warnings, Notes, Rulesets, Word Lists, and Voice tabs. Destructive retention controls for voice history, audit records, and attachments are grouped in the Voice tab's Danger Zone. Shared UI behavior lives in `static/js/main.js`; generic workspace behavior lives in `module-workspace.js`; moderation data controls live in `moderation-workspace.js`.
 
@@ -173,7 +180,7 @@ Environment variables take precedence over defaults. Bark currently loads config
 | `BARK_SYNC_COMMANDS` | `true` | Sync Discord application commands at startup |
 | `BARK_DASHBOARD_HOST` | `127.0.0.1` | Dashboard bind address; set to `0.0.0.0` only behind a reverse proxy |
 | `BARK_DASHBOARD_PORT` | `8090` | Dashboard bind port |
-| `BARK_PUBLIC_URL` | `http://127.0.0.1:8090` | Browser-facing origin, without trailing slash; use `https://bark.warx.org` in production |
+| `BARK_PUBLIC_URL` | `http://127.0.0.1:8090` | Browser-facing origin, without trailing slash; use `https://your-host.example` in production |
 | `BARK_FORCE_HTTPS` | `false` | Secure cookies and HTTPS enforcement |
 | `BARK_SECRET_KEY` | generated in data dir | Session signing secret; set explicitly in clustered deployments |
 | `BARK_DATABASE_URL` | `sqlite+aiosqlite:///bark.db` | Async SQLAlchemy database URL |

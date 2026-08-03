@@ -1,0 +1,22 @@
+[Unit]
+Description=Bark Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/bark
+EnvironmentFile=%h/Projects/bark/.env
+ExecStart=%h/Projects/bark/.venv/bin/python %h/Projects/bark/app.py
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%h/Projects/bark/data %h/Projects/bark/bark.log
+StandardOutput=append:%h/Projects/bark/bark.log
+StandardError=append:%h/Projects/bark/bark.log
+
+[Install]
+WantedBy=default.target
