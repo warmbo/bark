@@ -1093,8 +1093,14 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     voice_items = [a for a in activity if a["type"] == "voice"]
     assert voice_items and all(a["action"] == "voice_join" for a in voice_items)
     voice_timestamp = datetime.fromisoformat(voice_items[0]["timestamp"])
-    assert voice_timestamp.tzinfo is not None
     assert now - voice_timestamp >= timedelta(hours=2, minutes=59)
+
+    # Every persisted timestamp is serialized as explicit UTC, never as a
+    # browser-local naive datetime.
+    for item in activity:
+        if item["timestamp"]:
+            timestamp = datetime.fromisoformat(item["timestamp"])
+            assert timestamp.utcoffset() == timedelta(0)
 
     # Every item has a category, a human label, and a resolved display name.
     for a in activity:

@@ -117,6 +117,10 @@ function escHtml(t) {
     return d.innerHTML;
 }
 
+function escAttr(value) {
+    return escHtml(value).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
 function safeClassToken(value, fallback = 'item') {
     const token = String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
     return token || fallback;

@@ -7,7 +7,9 @@ and frontend/backend endpoint agreement.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -183,6 +185,34 @@ def test_guild_activity_refreshes_from_server_and_ages_visible_timestamps():
     assert "data-activity-timestamp" in guild
     assert "setInterval(refreshActivityTimes, ACTIVITY_TIME_REFRESH_MS)" in guild
     assert "if (event.persisted) startGuildOverviewRefresh()" in guild
+    assert 'data-activity-timestamp="${escAttr(a.timestamp)}"' in guild
+
+
+def test_time_ago_uses_explicit_utc_and_handles_invalid_or_future_values():
+    main = source(JS / "main.js")
+    match = re.search(r"function timeAgo\(iso\) \{.*?^\}", main, re.MULTILINE | re.DOTALL)
+    assert match is not None
+
+    script = f"""
+{match.group(0)}
+Date.now = () => Date.parse('2026-08-03T23:00:00+00:00');
+const actual = [
+  timeAgo('2026-08-03T20:00:00+00:00'),
+  timeAgo('not-a-date'),
+  timeAgo('2026-08-04T00:00:00+00:00'),
+];
+const expected = ['3h ago', '', 'just now'];
+if (JSON.stringify(actual) !== JSON.stringify(expected)) {{
+  throw new Error(JSON.stringify({{actual, expected}}));
+}}
+"""
+    subprocess.run(
+        ["node", "-e", script],
+        check=True,
+        env={**os.environ, "TZ": "America/New_York"},
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listener():
