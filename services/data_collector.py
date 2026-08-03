@@ -397,6 +397,3 @@ class GuildDataCollector:
                 await asyncio.sleep(self.interval * 60)
         except asyncio.CancelledError:
             pass
-
-    def get_last_snapshot(self, guild_id: int) -> dict | None:
-        return self._last_snapshots.get(guild_id)

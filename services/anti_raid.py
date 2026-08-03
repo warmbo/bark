@@ -15,7 +15,6 @@ import logging
 import re
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
-from difflib import SequenceMatcher
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -93,12 +92,7 @@ class AntiRaidService:
         self._raid_mode[guild_id] = in_raid
         return in_raid
 
-    def is_raid_mode(self, guild_id: int) -> bool:
-        return self._raid_mode.get(guild_id, False)
 
-    def clear_raid_mode(self, guild_id: int) -> None:
-        self._raid_mode[guild_id] = False
-        self._join_track[guild_id].clear()
 
     # ══════════════════════════════════════════════════════
     # ACCOUNT AGE CHECK
@@ -120,18 +114,6 @@ class AntiRaidService:
     # CONTENT SIMILARITY SPAM
     # ══════════════════════════════════════════════════════
 
-    def check_content_spam(
-        self, guild_id: int, user_id: int, content: str, ratio: float = DEFAULT_SIMILARITY_RATIO
-    ) -> bool:
-        """Check if message content is too similar to recent messages."""
-        if not content:
-            return False
-        track = self._recent_content[guild_id][user_id]
-        for prev in track:
-            if SequenceMatcher(None, prev, content).ratio() >= ratio:
-                return True
-        track.append(content)
-        return False
 
     # ══════════════════════════════════════════════════════
     # WEBHOOK DETECTION
@@ -180,23 +162,6 @@ class AntiRaidService:
     # MASS MENTION TRACKING
     # ══════════════════════════════════════════════════════
 
-    def check_mass_mention(
-        self,
-        guild_id: int,
-        user_id: int,
-        mention_count: int,
-        max_mentions: int = DEFAULT_MENTION_LIMIT,
-    ) -> bool:
-        """Track total mentions by a user across messages within 60s window."""
-        now = datetime.now(timezone.utc)
-        track = self._mention_track[guild_id][user_id]
-        cutoff = now - timedelta(seconds=60)
-        while track and track[0][0] < cutoff:
-            track.popleft()
-        # Add current batch
-        total_in_window = sum(c for _, c in track) + mention_count
-        track.append((now, mention_count))
-        return total_in_window > max_mentions
 
     # ══════════════════════════════════════════════════════
     # ESCALATION ENGINE
@@ -222,8 +187,6 @@ class AntiRaidService:
             self._escalation_cooldown[guild_id][user_id] = now_ts
         return action, strikes
 
-    def get_violation_count(self, guild_id: int, user_id: int) -> int:
-        return self._violation_count[guild_id][user_id]
 
     def reset_violations(self, guild_id: int, user_id: int) -> None:
         self._violation_count[guild_id].pop(user_id, None)

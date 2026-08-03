@@ -35,7 +35,10 @@ def test_dynamic_form_and_module_names_do_not_build_raw_css_selectors():
     main = source(JS / "main.js")
     workspace = source(JS / "module-workspace.js")
     modules = source(TEMPLATES / "pages" / "modules.html")
-    assert "form.elements.namedItem(name)" in main
+    # No dynamic form/module name may be interpolated into a raw CSS selector;
+    # the one dynamic selector in main.js escapes via CSS.escape.
+    assert '`[name="${' not in main
+    assert "CSS.escape(panelId)" in main
     assert "el.name === group.dataset.depends" in workspace
     assert "item.dataset.module === moduleName" in modules
     assert '`[name="${group.dataset.depends}"]`' not in workspace

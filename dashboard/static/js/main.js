@@ -281,46 +281,6 @@ async function loadSection(url, container, renderFn, opts = {}) {
     }
 }
 
-// ── Form Draft Persistence (localStorage) ──
-
-function persistForm(formId, storageKey) {
-    const form = document.getElementById(formId);
-    if (!form) return;
-
-    // Restore saved draft
-    try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-            const data = JSON.parse(saved);
-            Object.entries(data).forEach(([name, value]) => {
-                const input = form.elements.namedItem(name);
-                if (input && 'type' in input) {
-                    if (input.type === 'checkbox') input.checked = value;
-                    else input.value = value;
-                }
-            });
-        }
-    } catch {}
-
-    // Auto-save on input
-    const saveDraft = () => {
-        try {
-            const data = {};
-            new FormData(form).forEach((value, key) => { data[key] = value; });
-            form.querySelectorAll('input[type="checkbox"]').forEach(cb => { data[cb.name] = cb.checked; });
-            localStorage.setItem(storageKey, JSON.stringify(data));
-        } catch {}
-    };
-
-    form.addEventListener('input', saveDraft);
-    form.addEventListener('change', saveDraft);
-
-    // Clear draft on successful submit
-    form.addEventListener('submit', () => {
-        setTimeout(() => localStorage.removeItem(storageKey), 100);
-    }, { once: true });
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     // ── Load Manifest & Build Sidebar ─────────────────
     const navItems = document.getElementById('sidebar-nav-items');

@@ -18,8 +18,8 @@ import json
 import logging
 import re
 import time
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any
+from datetime import datetime, timezone
+from typing import Any
 
 import discord
 
@@ -32,9 +32,6 @@ from modules.base import (
     PageRegistration,
     PermissionDefinition,
 )
-
-if TYPE_CHECKING:
-    from bot.client import BarkBot
 
 from fastapi import Request
 
@@ -578,7 +575,7 @@ class RoleManagerModule(BarkModule):
 
     def get_api_routes(self):
         """Dashboard API for managing role rules and viewing assignments."""
-        from fastapi import APIRouter, Request
+        from fastapi import APIRouter
         from services.response import api_error, api_not_found, api_success
 
         router = APIRouter(tags=["module-role_manager"])

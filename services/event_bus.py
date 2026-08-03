@@ -54,16 +54,6 @@ class EventBus:
             (p, h) for p, h in self._subscribers[event_type] if h != handler
         ]
         return len(self._subscribers[event_type]) < before
-
-    def unsubscribe_all(self, event_type: str | None = None) -> None:
-        """Remove all subscribers for a type, or all types."""
-        if event_type:
-            self._subscribers.pop(event_type, None)
-        else:
-            self._subscribers.clear()
-
-    # ── Dispatch ────────────────────────────────────────
-
     async def emit(self, event_type: str, **data: Any) -> None:
         """
         Emit an event to all subscribers.

@@ -259,12 +259,6 @@ class ModuleManager:
             return False
 
         return not was_enabled or await self.enable_module(name)
-
-    async def enable_all(self) -> None:
-        """Enable all discovered modules."""
-        for name in list(self._modules.keys()):
-            await self.enable_module(name)
-
     async def disable_all(self) -> None:
         """Disable all modules."""
         for name in list(self._modules.keys()):

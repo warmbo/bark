@@ -75,18 +75,6 @@ def get_session_factory():
             expire_on_commit=False,
         )
     return _session_factory
-
-
-async def get_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency: yields an async DB session."""
-    factory = get_session_factory()
-    async with factory() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
-
-
 @asynccontextmanager
 async def session_scope() -> AsyncIterator[AsyncSession]:
     """Context manager for manual DB sessions outside FastAPI."""

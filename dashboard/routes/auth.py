@@ -243,11 +243,3 @@ def _avatar_url(user: dict) -> str | None:
     if not avatar_hash:
         return None
     return f"https://cdn.discordapp.com/avatars/{user['id']}/{avatar_hash}.png"
-
-
-def _guild_icon_url(guild: dict) -> str | None:
-    """Build Discord CDN guild icon URL."""
-    icon_hash = guild.get("icon")
-    if not icon_hash:
-        return None
-    return f"https://cdn.discordapp.com/icons/{guild['id']}/{icon_hash}.png"

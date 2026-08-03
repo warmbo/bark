@@ -12,7 +12,6 @@ import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from difflib import SequenceMatcher
 from typing import Any
 
 import discord
@@ -281,23 +280,6 @@ async def _check_mention(message, cfg, rule_id, module):
     return False, ""
 
 
-async def _check_content_spam(message, cfg, rule_id, module):
-    """Repeated/similar message content from same user."""
-    content = message.content or ""
-    if not content or len(content) < 20:
-        return False, ""
-    threshold = cfg.get("threshold", 3)
-    track = module._anti_raid._recent_content[message.guild.id][message.author.id]
-    tally = 0
-    for prev in list(track):
-        if SequenceMatcher(None, prev, content).ratio() >= 0.85:
-            tally += 1
-            if tally + 1 >= threshold:
-                return True, f"Content spam ({tally} similar msgs)"
-    track.append(content)
-    return False, ""
-
-
 async def _check_all_caps(message, cfg, rule_id, module):
     """Message exceeds a threshold of uppercase characters."""
     content = message.content or ""
@@ -328,21 +310,6 @@ async def _check_word_denylist(message, cfg, rule_id, module):
     return False, ""
 
 
-async def _check_word_allowlist(message, cfg, rule_id, module):
-    """Message contains words NOT in the allowlist."""
-    list_id = cfg.get("word_list_id")
-    entries = await _get_list_entries(list_id, "word", module)
-    if not entries:
-        return True, "no allowlist defined"
-    content_lower = (message.content or "").lower()
-    words_in_msg = set(content_lower.split())
-    allowed_set = {w.lower() for w in entries}
-    for w in words_in_msg:
-        if w not in allowed_set and len(w) > 1:
-            return True, f"Word not in allowlist: {w}"
-    return False, ""
-
-
 async def _check_link_denylist(message, cfg, rule_id, module):
     """Message contains links to denied domains."""
     list_id = cfg.get("word_list_id")
@@ -358,20 +325,6 @@ async def _check_link_denylist(message, cfg, rule_id, module):
     return False, ""
 
 
-async def _check_link_allowlist(message, cfg, rule_id, module):
-    """Message contains links to domains NOT in the allowlist."""
-    list_id = cfg.get("word_list_id")
-    entries = await _get_list_entries(list_id, "domain", module)
-    if not entries:
-        return False, ""
-    domains = set(d.lower() for d in entries)
-    found = _extract_domains(message.content or "")
-    for f in found:
-        if f not in domains:
-            return True, f"Domain not in allowlist: {f}"
-    return False, ""
-
-
 async def _check_regex_match(message, cfg, rule_id, module):
     """Message matches a regex pattern."""
     pattern = cfg.get("pattern", "")
@@ -380,19 +333,6 @@ async def _check_regex_match(message, cfg, rule_id, module):
     try:
         if re.search(pattern, message.content or "", re.IGNORECASE):
             return True, f"Matched regex: {pattern}"
-    except re.error:
-        pass
-    return False, ""
-
-
-async def _check_regex_not_match(message, cfg, rule_id, module):
-    """Message does NOT match a regex pattern."""
-    pattern = cfg.get("pattern", "")
-    if not pattern:
-        return False, ""
-    try:
-        if not re.search(pattern, message.content or "", re.IGNORECASE):
-            return True, f"Did not match regex: {pattern}"
     except re.error:
         pass
     return False, ""
@@ -447,105 +387,6 @@ async def _check_attachment_rate(message, cfg, rule_id, module):
     return False, ""
 
 
-async def _check_link_rate(message, cfg, rule_id, module):
-    """X links by user in Y seconds."""
-    threshold = cfg.get("threshold", 5)
-    window = cfg.get("window_seconds", 60)
-    links = _extract_urls(message.content or "")
-    link_count = len(links)
-    if link_count == 0:
-        return False, ""
-    now = datetime.now(timezone.utc)
-    track = module._message_track[message.guild.id].setdefault(f"_link_{message.author.id}", [])
-    cutoff = now - timedelta(seconds=window)
-    while track and track[0][0] < cutoff:
-        track.pop(0)
-    total_in_window = sum(c for _, c in track) + link_count
-    track.append((now, link_count))
-    if total_in_window >= threshold:
-        return True, f"Link rate ({total_in_window} links/{window}s)"
-    return False, ""
-
-
-async def _check_user_message_rate(message, cfg, rule_id, module):
-    """X messages from same user in Y seconds (reuses spam check)."""
-    return await _check_spam(message, cfg, rule_id, module)
-
-
-async def _check_channel_message_rate(message, cfg, rule_id, module):
-    """X messages in channel in Y seconds."""
-    threshold = cfg.get("threshold", 20)
-    window = cfg.get("window_seconds", 5)
-    channel_id = message.channel.id
-    now = datetime.now(timezone.utc)
-    track = module._message_track[message.guild.id].setdefault(f"_ch_{channel_id}", [])
-    cutoff = now - timedelta(seconds=window)
-    while track and track[0] < cutoff:
-        track.pop(0)
-    track.append(now)
-    if len(track) >= threshold:
-        return True, f"Channel rate ({len(track)} msgs/{window}s)"
-    return False, ""
-
-
-async def _check_user_mention_rate(message, cfg, rule_id, module):
-    """X mentions by user across messages in Y seconds."""
-    threshold = cfg.get("threshold", 10)
-    window = cfg.get("window_seconds", 10)
-    mention_count = (
-        len(message.mentions) + len(message.role_mentions) + (1 if message.mention_everyone else 0)
-    )
-    if mention_count == 0:
-        return False, ""
-    now = datetime.now(timezone.utc)
-    track = module._mention_count[message.guild.id][message.author.id]
-    cutoff = now - timedelta(seconds=window)
-    while track and track[0][0] < cutoff:
-        track.popleft()
-    track.append((now, mention_count))
-    total = sum(c for _, c in track)
-    if total >= threshold:
-        return True, f"Mention rate ({total} @ in {window}s)"
-    return False, ""
-
-
-async def _check_channel_mention_rate(message, cfg, rule_id, module):
-    """X mentions in channel in Y seconds (across all users)."""
-    threshold = cfg.get("threshold", 20)
-    window = cfg.get("window_seconds", 10)
-    mention_count = (
-        len(message.mentions) + len(message.role_mentions) + (1 if message.mention_everyone else 0)
-    )
-    if mention_count == 0:
-        return False, ""
-    now = datetime.now(timezone.utc)
-    track = module._mention_count[message.guild.id].setdefault(f"_ch_{message.channel.id}", [])
-    cutoff = now - timedelta(seconds=window)
-    while track and track[0][0] < cutoff:
-        track.pop(0)
-    track.append((now, mention_count))
-    total = sum(c for _, c in track)
-    if total >= threshold:
-        return True, f"Channel mention rate ({total} @ in {window}s)"
-    return False, ""
-
-
-async def _check_character_limit_min(message, cfg, rule_id, module):
-    """Message has fewer than X characters."""
-    min_chars = cfg.get("char_limit", 0)
-    if min_chars > 0 and len(message.content or "") < min_chars:
-        return True, f"Message too short (< {min_chars} chars)"
-    return False, ""
-
-
-async def _check_character_limit_max(message, cfg, rule_id, module):
-    """Message has more than X characters."""
-    max_chars = cfg.get("char_limit", 2000)
-    if len(message.content or "") > max_chars:
-        return True, f"Message too long (> {max_chars} chars)"
-    return False, ""
-
-
 async def _check_scam_link(message, cfg, rule_id, module):
     """Message contains a known scam link.
     Checks per-guild configured scam domains/patterns, with built-in defaults as fallback."""
@@ -588,61 +429,6 @@ async def _check_any_link(message, cfg, rule_id, module):
     if urls:
         return True, f"Link detected: {urls[0]}"
     return False, ""
-
-
-async def _check_nickname_regex(message, cfg, rule_id, module):
-    """User's nickname matches a regex."""
-    pattern = cfg.get("pattern", "")
-    if not pattern:
-        return False, ""
-    nickname = getattr(message.author, "nick", None) or getattr(message.author, "name", "") or ""
-    try:
-        if re.search(pattern, nickname, re.IGNORECASE):
-            return True, f"Nickname matched regex: {pattern}"
-    except re.error:
-        pass
-    return False, ""
-
-
-async def _check_nickname_word_denylist(message, cfg, rule_id, module):
-    """Nickname contains words from a denylist."""
-    list_id = cfg.get("word_list_id")
-    entries = await _get_list_entries(list_id, "word", module)
-    if not entries:
-        return False, ""
-    nickname = (
-        getattr(message.author, "nick", None) or getattr(message.author, "name", "") or ""
-    ).lower()
-    for word in entries:
-        if word.lower() in nickname:
-            return True, f"Denied word in nickname: {word}"
-    return False, ""
-
-
-async def _check_nickname_word_allowlist(message, cfg, rule_id, module):
-    """Nickname contains words NOT in the allowlist."""
-    list_id = cfg.get("word_list_id")
-    entries = await _get_list_entries(list_id, "word", module)
-    if not entries:
-        return False, ""
-    nickname_words = set(
-        (getattr(message.author, "nick", None) or getattr(message.author, "name", "") or "")
-        .lower()
-        .split()
-    )
-    allowed_set = {w.lower() for w in entries}
-    for w in nickname_words:
-        if w not in allowed_set and len(w) > 1:
-            return True, f"Word not in allowlist in nickname: {w}"
-    return False, ""
-
-
-async def _check_new_member(message, cfg, rule_id, module):
-    """Always triggers — paired with account-age conditions."""
-    return True, "New member event"
-
-
-# ── Effect execution ───────────────────────────────────────────────
 
 
 async def execute_effect(
@@ -792,23 +578,6 @@ async def _effect_send_alert(message, cfg, reason, module):
         pass
 
 
-async def _effect_send_message(message, cfg, reason, module):
-    """Send a custom message to a channel (optionally ping user)."""
-    text = cfg.get("custom_message", f"⚠️ {reason}").format(
-        user=message.author.mention,
-        reason=reason,
-    )
-    target_ch_id = cfg.get("channel_id") or message.channel.id
-    target = message.guild.get_channel(int(target_ch_id)) if target_ch_id else message.channel
-    if not target:
-        return
-    delete_after = cfg.get("delete_after_seconds", 0) or None
-    try:
-        await target.send(text[:2000], delete_after=delete_after)
-    except Exception:
-        pass
-
-
 async def _effect_delete_multiple(message, cfg, reason, module):
     """Bulk-delete recent messages from the user in the same channel."""
     count = cfg.get("count", 5)
@@ -825,28 +594,6 @@ async def _effect_delete_multiple(message, cfg, reason, module):
         logger.info("Bulk-deleted %d messages for %s", len(deleted), message.author)
     except Exception:
         pass
-
-
-async def _effect_add_violation(message, cfg, reason, module):
-    """Add a named violation to the user's record (for escalation)."""
-    if hasattr(message.author, "id"):
-        action, strikes = await module._anti_raid.record_violation(
-            message.guild.id, message.author.id
-        )
-        if action:
-            logger.info(
-                "Escalating %s (strike %d) → %s",
-                message.author,
-                strikes,
-                action,
-            )
-            await _apply_escalation(message, action, strikes, reason, module)
-
-
-async def _effect_reset_violations(message, cfg, reason, module):
-    """Reset the user's violations."""
-    if hasattr(message.author, "id"):
-        module._anti_raid.reset_violations(message.guild.id, message.author.id)
 
 
 async def _apply_escalation(message, action, strikes, reason, module):

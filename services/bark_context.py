@@ -104,11 +104,6 @@ class BarkContext:
                 except json.JSONDecodeError:
                     return {}
             return {}
-
-    async def get_module_settings(self, module_name: str, guild_id: int) -> dict:
-        """Alias for get_module_config."""
-        return await self.get_module_config(module_name, guild_id)
-
     async def save_module_config(self, module_name: str, guild_id: int, config: dict) -> bool:
         from sqlalchemy import select
 

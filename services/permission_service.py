@@ -110,11 +110,6 @@ class PermissionService:
             return self._module_actions[action]
         # Fall back to core actions
         return self.CORE_ACTIONS.get(action, "admin")
-
-    def route_requires_auth(self, route_key: str) -> bool:
-        """Return True when a route is behind role-based access control."""
-        return route_key in self.CORE_ACTIONS or route_key in self._module_actions
-
     def capabilities_for_role(self, role: str) -> dict[str, bool]:
         """Return the complete, stable action manifest for a dashboard role."""
         return {
