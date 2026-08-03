@@ -66,7 +66,7 @@ bark/
 │   │       ├── moderation_wordlists.html
 │   │       └── moderation_voice.html
 │   └── static/
-│       ├── css/main.css        # All styles (2,395 lines)
+│       ├── css/main.css        # All dashboard styles and responsive rules
 │       └── js/
 │           ├── main.js         # Global UX: palette, dialog, navigation, tabs
 │           ├── module-workspace.js # Generic module workspace controller

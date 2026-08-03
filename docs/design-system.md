@@ -1,6 +1,6 @@
 # Design System
 
-All visual tokens and layout primitives are defined in `dashboard/static/css/main.css` (~2200 lines, single stylesheet).
+All visual tokens and layout primitives are defined in the single maintained stylesheet, `dashboard/static/css/main.css`.
 
 ## CSS Custom Properties (Root)
 

@@ -8,7 +8,7 @@ pytest           # All tests
 pytest -v        # Verbose output
 pytest -x        # Stop on first failure
 pytest -k "note" # Run tests matching "note"
-pytest --coverage  # With coverage report (if pytest-cov installed)
+coverage run -m pytest && coverage report -m  # Coverage report
 ```
 
 SQLite (aiosqlite) is used for tests — no external database needed. The test environment is isolated via `tests/conftest.py` which monkeypatches all config values to use a `tmp_path` database.

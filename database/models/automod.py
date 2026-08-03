@@ -14,8 +14,8 @@ class AutoModConfig(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("guilds.discord_id"), nullable=False
-    , index=True)
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     rule_type: Mapped[str] = mapped_column(String(32), nullable=False)  # spam/invite/mention
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=5)

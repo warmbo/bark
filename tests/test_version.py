@@ -24,7 +24,8 @@ def test_git_version_is_xxx_style():
 def test_git_version_fallback_when_git_unavailable(monkeypatch):
     """Without git, the derived version falls back to installed metadata."""
     monkeypatch.setattr(
-        bark_version.subprocess, "run",
+        bark_version.subprocess,
+        "run",
         lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("git")),
     )
     assert bark_version._git_commit_count() is None

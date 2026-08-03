@@ -139,6 +139,41 @@ async def test_public_health_does_not_expose_database_error_details(client, monk
     assert "private database" not in response.text
 
 
+@pytest.mark.asyncio
+async def test_moderation_actions_redact_unexpected_discord_errors(monkeypatch):
+    """Unexpected Discord exceptions are logged server-side and returned generically."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from dashboard.routes.api import actions
+
+    monkeypatch.setattr(actions, "get_module_min_role", AsyncMock(return_value="moderator"))
+
+    member = MagicMock(bot=False, id=42)
+    guild = MagicMock(id=1)
+    guild.me.guild_permissions.moderate_members = True
+    guild.get_member.return_value = member
+    bot = MagicMock()
+    bot.get_guild.return_value = guild
+    bot.fetch_user = AsyncMock(side_effect=RuntimeError("private upstream credential details"))
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot),
+        session={},
+        json=AsyncMock(return_value={"target_id": "42", "reason": "test"}),
+    )
+
+    async def fail_executor(*args):
+        raise RuntimeError("private moderation backend details")
+
+    action_response = await actions._mod_action(request, "1", "warn", fail_executor)
+    unban_response = await actions.action_unban(request, "1")
+
+    assert action_response.status_code == 502
+    assert unban_response.status_code == 502
+    assert b"private" not in action_response.body
+    assert b"private" not in unban_response.body
+
+
 def test_realtime_bridge_is_initialized(app):
     assert app.state.realtime_bridge is not None
 
@@ -605,6 +640,37 @@ async def test_list_notes(client):
 
 
 @pytest.mark.asyncio
+async def test_note_reads_require_moderation_permission(client, monkeypatch):
+    """Viewer-level sessions must not read private moderation notes."""
+    from unittest.mock import AsyncMock
+
+    from dashboard.routes.api import notes
+
+    monkeypatch.setattr(notes, "_can_view_notes", AsyncMock(return_value=False))
+
+    all_notes = await client.get("/api/v1/guilds/1/notes")
+    user_notes = await client.get("/api/v1/guilds/1/notes/user/123456")
+
+    assert all_notes.status_code == 403
+    assert user_notes.status_code == 403
+    assert all_notes.json()["error"] == "Insufficient permissions to view notes"
+
+
+@pytest.mark.asyncio
+async def test_discord_audit_log_requires_admin_permission(client, monkeypatch):
+    """Discord's native audit history is administrator-only data."""
+    from dashboard.routes.api import audit_log
+
+    monkeypatch.setattr(audit_log, "_can_view_audit_log", lambda request, guild_id: False)
+
+    entries = await client.get("/api/v1/guilds/1/audit-log")
+    summary = await client.get("/api/v1/guilds/1/audit-log/summary")
+
+    assert entries.status_code == 403
+    assert summary.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_note_edit_and_delete_persist(client):
     """Dashboard note CRUD persists and ignores client-supplied authors."""
     from sqlalchemy import select
@@ -736,58 +802,103 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
         session.add_all(
             [
                 ModerationCase(
-                    guild_id="1", case_number=1, action_type="warn", target_id="900",
-                    target_tag="WarnedUser", moderator_id="800", moderator_tag="Mod",
-                    reason="spam", created_at=now - timedelta(minutes=1),
+                    guild_id="1",
+                    case_number=1,
+                    action_type="warn",
+                    target_id="900",
+                    target_tag="WarnedUser",
+                    moderator_id="800",
+                    moderator_tag="Mod",
+                    reason="spam",
+                    created_at=now - timedelta(minutes=1),
                 ),
                 WarningModel(
-                    guild_id="1", user_id="901", moderator_id="800", reason="nope", active=True,
+                    guild_id="1",
+                    user_id="901",
+                    moderator_id="800",
+                    reason="nope",
+                    active=True,
                     created_at=now - timedelta(minutes=2),
                 ),
                 # Non-numeric actor ID (dashboard) must not crash name resolution.
                 WarningModel(
-                    guild_id="1", user_id="907", moderator_id="dashboard", reason="spam", active=True,
+                    guild_id="1",
+                    user_id="907",
+                    moderator_id="dashboard",
+                    reason="spam",
+                    active=True,
                     created_at=now - timedelta(seconds=15),
                 ),
                 # Noisy per-message scoring must be filtered out of the feed.
                 ReputationEvent(
-                    guild_id="1", actor_id="800", target_id="902", event_type="thanks",
-                    points=2.0, created_at=now - timedelta(minutes=3),
+                    guild_id="1",
+                    actor_id="800",
+                    target_id="902",
+                    event_type="thanks",
+                    points=2.0,
+                    created_at=now - timedelta(minutes=3),
                 ),
                 ReputationEvent(
-                    guild_id="1", actor_id="800", target_id="902", event_type="message",
-                    points=1.0, created_at=now - timedelta(seconds=30),
+                    guild_id="1",
+                    actor_id="800",
+                    target_id="902",
+                    event_type="message",
+                    points=1.0,
+                    created_at=now - timedelta(seconds=30),
                 ),
                 ReputationEvent(
-                    guild_id="1", actor_id="800", target_id="902", event_type="reaction",
-                    points=0.5, created_at=now - timedelta(seconds=20),
+                    guild_id="1",
+                    actor_id="800",
+                    target_id="902",
+                    event_type="reaction",
+                    points=0.5,
+                    created_at=now - timedelta(seconds=20),
                 ),
                 ReputationEvent(
-                    guild_id="1", actor_id="800", target_id="902", event_type="reaction_given",
-                    points=0.5, created_at=now - timedelta(seconds=18),
+                    guild_id="1",
+                    actor_id="800",
+                    target_id="902",
+                    event_type="reaction_given",
+                    points=0.5,
+                    created_at=now - timedelta(seconds=18),
                 ),
                 # Messaging audit event — target_id is a message id, not a user.
                 AuditLog(
-                    guild_id="1", action="link_posted", actor_id="800",
+                    guild_id="1",
+                    action="link_posted",
+                    actor_id="800",
                     target_id="1533906144068632777",
                     details='{"channel": "#general", "link": "https://example.com", "actor_tag": "Mod"}',
                     created_at=now - timedelta(seconds=10),
                 ),
                 RoleAssignment(
-                    guild_id="1", user_id="903", role_id="700", action="add",
+                    guild_id="1",
+                    user_id="903",
+                    role_id="700",
+                    action="add",
                     created_at=now - timedelta(minutes=4),
                 ),
                 UserNote(
-                    guild_id="1", user_id="904", author_id="800", content="watch this member",
+                    guild_id="1",
+                    user_id="904",
+                    author_id="800",
+                    content="watch this member",
                     created_at=now - timedelta(minutes=5),
                 ),
                 VoiceSession(
-                    guild_id="1", user_id="905", channel_id="600", channel_name="General",
-                    joined_at=now - timedelta(hours=1), left_at=now - timedelta(minutes=6),
+                    guild_id="1",
+                    user_id="905",
+                    channel_id="600",
+                    channel_name="General",
+                    joined_at=now - timedelta(hours=1),
+                    left_at=now - timedelta(minutes=6),
                     duration_seconds=3200,
                 ),
                 AutoVoiceChannel(
-                    channel_id="601", guild_id="1", owner_id="906", primary_channel_id="602",
+                    channel_id="601",
+                    guild_id="1",
+                    owner_id="906",
+                    primary_channel_id="602",
                     created_at=now - timedelta(minutes=7),
                 ),
             ]
@@ -818,7 +929,13 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     # Every item has a category, a human label, and a resolved display name.
     for a in activity:
         assert a.get("category") in {
-            "moderation", "messaging", "voice", "roles", "reputation", "notes", "system",
+            "moderation",
+            "messaging",
+            "voice",
+            "roles",
+            "reputation",
+            "notes",
+            "system",
         }
         assert a.get("label"), a
 

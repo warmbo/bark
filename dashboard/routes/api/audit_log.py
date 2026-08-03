@@ -1,12 +1,25 @@
 """Audit log dashboard API — direct Discord audit log access."""
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Query, Request
 
-from services.response import api_error, api_not_found, api_success
+from services.response import (
+    api_error,
+    api_forbidden,
+    api_not_found,
+    api_success,
+    check_api_permission,
+)
 
 router = APIRouter(tags=["api-auditlog"])
+logger = logging.getLogger("bark.dashboard.audit_log")
+
+
+def _can_view_audit_log(request: Request, guild_id: int) -> bool:
+    """Discord's native audit log contains administrator-only server history."""
+    return check_api_permission(request, "guild.manage", str(guild_id))
 
 
 @router.get("/guilds/{guild_id}/audit-log")
@@ -17,6 +30,8 @@ async def get_audit_log(
     category: str = Query("", max_length=64),
 ):
     """Return guild audit log entries, optionally filtered by category."""
+    if not _can_view_audit_log(request, guild_id):
+        return api_forbidden("Insufficient permissions to view the audit log")
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:
@@ -38,8 +53,9 @@ async def get_audit_log(
                         "created_at": entry.created_at.isoformat(),
                     }
                 )
-    except Exception as e:
-        return api_error(f"Audit log error: {e}")
+    except Exception:
+        logger.exception("Failed to read Discord audit log for guild %s", guild_id)
+        return api_error("Audit log unavailable", status_code=502)
 
     if category:
         entries = [e for e in entries if category in str(e.get("action", "")).lower()]
@@ -50,6 +66,8 @@ async def get_audit_log(
 @router.get("/guilds/{guild_id}/audit-log/summary")
 async def get_audit_log_summary(request: Request, guild_id: int):
     """Return audit log summary counts by timeframe."""
+    if not _can_view_audit_log(request, guild_id):
+        return api_forbidden("Insufficient permissions to view the audit log")
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:
@@ -65,8 +83,9 @@ async def get_audit_log_summary(request: Request, guild_id: int):
                         "created_at": entry.created_at.isoformat(),
                     }
                 )
-    except Exception as e:
-        return api_error(f"Audit log error: {e}")
+    except Exception:
+        logger.exception("Failed to summarize Discord audit log for guild %s", guild_id)
+        return api_error("Audit log unavailable", status_code=502)
 
     now = datetime.now(timezone.utc)
     hour_ago = now - timedelta(hours=1)

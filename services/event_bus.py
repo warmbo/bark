@@ -54,6 +54,7 @@ class EventBus:
             (p, h) for p, h in self._subscribers[event_type] if h != handler
         ]
         return len(self._subscribers[event_type]) < before
+
     async def emit(self, event_type: str, **data: Any) -> None:
         """
         Emit an event to all subscribers.

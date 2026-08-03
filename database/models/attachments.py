@@ -17,8 +17,8 @@ class FileAttachment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("guilds.discord_id"), nullable=False
-    , index=True)
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     channel_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     message_id: Mapped[str] = mapped_column(String(32), nullable=False)
     author_id: Mapped[str] = mapped_column(String(32), nullable=False)

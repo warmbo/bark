@@ -17,7 +17,7 @@
     <div class="page-actions">
       <span id="module-status-badge">{{ status_badge('Enabled' if module_data.enabled else 'Disabled', 'success' if module_data.enabled else 'neutral') }}</span>
       <label class="module-toggle-control" for="module-enabled">
-        <span class="sr-only">Enable {{ module_name }}</span>
+        <span class="sr-only">Enable {{ module_name | replace('_', ' ') | title }}</span>
         <span class="toggle-switch"><input id="module-enabled" name="module_enabled" type="checkbox" class="module-toggle" {{ 'checked' if module_data.enabled else '' }}><span class="toggle-slider"></span></span>
       </label>
       <button type="button" class="btn btn-sm module-reload" data-module="{{ module_name }}">{{ icon('refresh-cw', 14) }} Reload</button>

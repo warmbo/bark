@@ -110,6 +110,7 @@ class PermissionService:
             return self._module_actions[action]
         # Fall back to core actions
         return self.CORE_ACTIONS.get(action, "admin")
+
     def capabilities_for_role(self, role: str) -> dict[str, bool]:
         """Return the complete, stable action manifest for a dashboard role."""
         return {

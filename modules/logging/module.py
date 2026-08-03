@@ -14,7 +14,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import cast
+from typing import Any, cast
 
 import discord
 from fastapi import Query, Request
@@ -598,7 +598,7 @@ class LoggingModule(BarkModule):
 
             entries = []
             for row in rows:
-                details = {}
+                details: dict[str, Any] = {}
                 try:
                     details = json.loads(row.details) if row.details else {}
                 except (json.JSONDecodeError, TypeError):

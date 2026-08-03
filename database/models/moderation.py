@@ -24,8 +24,8 @@ class ModerationCase(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("guilds.discord_id"), nullable=False
-    , index=True)
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     case_number: Mapped[int] = mapped_column(Integer, nullable=False)
     action_type: Mapped[str] = mapped_column(
         String(32), nullable=False
@@ -53,8 +53,8 @@ class Warning(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("guilds.discord_id"), nullable=False
-    , index=True)
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     case_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("moderation_cases.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -77,8 +77,8 @@ class UserNote(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("guilds.discord_id"), nullable=False
-    , index=True)
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     user_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     author_id: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -97,8 +97,8 @@ class AuditLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("guilds.discord_id"), nullable=False
-    , index=True)
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     actor_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     target_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)

@@ -92,8 +92,6 @@ class AntiRaidService:
         self._raid_mode[guild_id] = in_raid
         return in_raid
 
-
-
     # ══════════════════════════════════════════════════════
     # ACCOUNT AGE CHECK
     # ══════════════════════════════════════════════════════
@@ -113,7 +111,6 @@ class AntiRaidService:
     # ══════════════════════════════════════════════════════
     # CONTENT SIMILARITY SPAM
     # ══════════════════════════════════════════════════════
-
 
     # ══════════════════════════════════════════════════════
     # WEBHOOK DETECTION
@@ -162,7 +159,6 @@ class AntiRaidService:
     # MASS MENTION TRACKING
     # ══════════════════════════════════════════════════════
 
-
     # ══════════════════════════════════════════════════════
     # ESCALATION ENGINE
     # ══════════════════════════════════════════════════════
@@ -186,7 +182,6 @@ class AntiRaidService:
         if action:
             self._escalation_cooldown[guild_id][user_id] = now_ts
         return action, strikes
-
 
     def reset_violations(self, guild_id: int, user_id: int) -> None:
         self._violation_count[guild_id].pop(user_id, None)

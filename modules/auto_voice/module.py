@@ -263,9 +263,12 @@ class AutoVoiceModule(BarkModule):
             )
 
     async def disable(self) -> None:
-        for task in self._delete_tasks.values():
-            task.cancel()
+        tasks = list(self._delete_tasks.values())
         self._delete_tasks.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         self._rename_locks.clear()
         self._joins_in_progress.clear()
         self._logger.info("Disabled auto voice module")

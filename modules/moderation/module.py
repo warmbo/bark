@@ -524,9 +524,11 @@ class ModerationModule(BarkModule):
         self._ruleset_cache_ttl.clear()
         self._dup_track.clear()
         self._wordlist_cache.clear()
-        if self._cleanup_task:
-            self._cleanup_task.cancel()
-            self._cleanup_task = None
+        task = self._cleanup_task
+        self._cleanup_task = None
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     # ── Command factories (called by ModuleManager) ────
 

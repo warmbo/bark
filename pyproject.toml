@@ -43,6 +43,9 @@ py-modules = ["app", "bark_version", "config"]
 [tool.setuptools.packages.find]
 include = ["bot", "bot.*", "dashboard", "dashboard.*", "database", "database.*", "services", "services.*", "modules", "modules.*"]
 
+[tool.setuptools.package-data]
+dashboard = ["templates/**/*.html", "static/**/*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

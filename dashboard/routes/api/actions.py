@@ -267,8 +267,11 @@ async def action_unban(request: Request, guild_id: str):
         return api_error("User not found or not banned")
     except discord.Forbidden:
         return api_forbidden("Cannot unban members")
-    except Exception as e:
-        return api_error(str(e))
+    except Exception:
+        logger.exception(
+            "Unexpected Discord error while unbanning user %s in guild %s", user_id, gid
+        )
+        return api_error("Unable to complete the unban action", status_code=502)
 
     case = await SERVICE.create_case(
         guild_id=gid,
@@ -368,8 +371,14 @@ async def _mod_action(request: Request, guild_id: str, action: str, executor):
         await executor(guild, member, reason, duration)
     except discord.Forbidden:
         return api_forbidden(f"Cannot {action} that member")
-    except Exception as e:
-        return api_error(str(e))
+    except Exception:
+        logger.exception(
+            "Unexpected Discord error while running %s for member %s in guild %s",
+            action,
+            member.id,
+            gid,
+        )
+        return api_error(f"Unable to complete the {action} action", status_code=502)
 
     case = await SERVICE.create_case(
         guild_id=gid,

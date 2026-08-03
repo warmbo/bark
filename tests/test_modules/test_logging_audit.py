@@ -34,11 +34,15 @@ async def test_message_edit_logs_audit_event():
     module = _module()
     author = _author()
     before = SimpleNamespace(
-        id=1, guild=SimpleNamespace(id=123), channel=SimpleNamespace(id=9, mention="#gen"),
-        author=author, content="old text",
+        id=1,
+        guild=SimpleNamespace(id=123),
+        channel=SimpleNamespace(id=9, mention="#gen"),
+        author=author,
+        content="old text",
     )
-    after = SimpleNamespace(id=1, guild=before.guild, channel=before.channel,
-                            author=author, content="new text")
+    after = SimpleNamespace(
+        id=1, guild=before.guild, channel=before.channel, author=author, content="new text"
+    )
 
     await module._on_message_edit("discord_message_edit", before=before, after=after)
     module.ctx.log_audit.assert_awaited_once()
@@ -53,8 +57,12 @@ async def test_message_edit_logs_audit_event():
 async def test_message_delete_logs_audit_event():
     module = _module()
     msg = SimpleNamespace(
-        id=2, guild=SimpleNamespace(id=123), channel=SimpleNamespace(id=9, mention="#gen"),
-        author=_author(), content="bye bye", attachments=[],
+        id=2,
+        guild=SimpleNamespace(id=123),
+        channel=SimpleNamespace(id=9, mention="#gen"),
+        author=_author(),
+        content="bye bye",
+        attachments=[],
     )
     await module._on_message_delete("discord_message_delete", message=msg)
     module.ctx.log_audit.assert_awaited_once()
@@ -67,8 +75,11 @@ async def test_message_delete_logs_audit_event():
 async def test_link_posted_logs_audit_event():
     module = _module()
     msg = SimpleNamespace(
-        id=3, guild=SimpleNamespace(id=123), channel=SimpleNamespace(id=9, mention="#gen"),
-        author=_author(), content="check https://example.com/page and https://second.dev/x",
+        id=3,
+        guild=SimpleNamespace(id=123),
+        channel=SimpleNamespace(id=9, mention="#gen"),
+        author=_author(),
+        content="check https://example.com/page and https://second.dev/x",
         attachments=[],
     )
     await module._on_message("discord_message", message=msg)
@@ -83,8 +94,12 @@ async def test_link_posted_logs_audit_event():
 async def test_plain_message_without_link_does_not_log():
     module = _module()
     msg = SimpleNamespace(
-        id=4, guild=SimpleNamespace(id=123), channel=SimpleNamespace(id=9, mention="#gen"),
-        author=_author(), content="just chatting, no links here", attachments=[],
+        id=4,
+        guild=SimpleNamespace(id=123),
+        channel=SimpleNamespace(id=9, mention="#gen"),
+        author=_author(),
+        content="just chatting, no links here",
+        attachments=[],
     )
     await module._on_message("discord_message", message=msg)
     module.ctx.log_audit.assert_not_awaited()

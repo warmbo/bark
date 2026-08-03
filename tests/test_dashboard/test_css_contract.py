@@ -65,3 +65,15 @@ def test_context_bar_has_no_unsafe_fixed_height():
 
 def test_css_avoids_unbounded_transition_all():
     assert not re.search(r"transition\s*:\s*all\b", css_source())
+
+
+def test_desktop_operation_grid_balances_incomplete_rows():
+    css = css_source()
+    assert ".operation-grid:has(> :only-child)" in css
+    assert ".operation-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }" in css
+
+
+def test_mobile_health_strip_stacks_labels_and_values():
+    css = css_source()
+    assert "@media (max-width: 480px)" in css
+    assert ".module-health-strip > div { grid-template-columns: 1fr; row-gap: 2px; }" in css

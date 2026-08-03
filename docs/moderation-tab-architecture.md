@@ -25,12 +25,13 @@ The data loading is handled by a SEPARATE JS file, NOT by inline scripts in the 
 ### JS Files (loaded order matters)
 
 1. **`base.html`** — always loads these:
-   - `main.js?v=17` — core utilities: `safeFetch`, `escHtml`, `showToast`, `showSkeleton`, `initTabs`
    - `forms.js` — `BarkForms` and `BarkDialog` namespaces
+   - `image-fallbacks.js` — same-origin fallback handling for remote avatars
+   - `main.js?v=N` — versioned core utilities: `safeFetch`, `escHtml`, `showToast`, `showSkeleton`, `initTabs`
 
 2. **`module_detail.html`** — appends these in `{% block scripts %}`:
-   - `module-workspace.js?v=4` — config form, in-place toggle, reload, role access, action forms
-   - **`moderation-workspace.js?v=3`** — data loading for all 6 extra tabs (cases, warnings, notes, rulesets, word lists, voice)
+   - `module-workspace.js?v=N` — versioned config form, in-place toggle, reload, role access, action forms
+   - **`moderation-workspace.js?v=N`** — versioned data loading for all 6 extra tabs (cases, warnings, notes, rulesets, word lists, voice)
 
 **Order is critical:** `main.js` defines `safeFetch`, `showSkeleton`, `escHtml`, `showToast`. `moderation-workspace.js` calls all of these. If `moderation-workspace.js` loads before `main.js`, every function reference throws `ReferenceError`.
 
@@ -91,7 +92,7 @@ This reloads data for that specific section. It does NOT affect other sections.
 3. Every subsequent edit touched the templates or the JS file but never fixed the missing include
 4. Each time someone rebuilt the page from scratch, they'd write shiny new templates with skeleton placeholders but forget the script include again
 
-**Fix:** Add `<script src="/static/js/moderation-workspace.js?v=1"></script>` to `module_detail.html`'s `{% block scripts %}`.
+**Fix:** Add a cache-versioned `<script src="/static/js/moderation-workspace.js?v=N"></script>` to `module_detail.html`'s `{% block scripts %}`.
 
 ### ROOT CAUSE 2: Script load order dependency
 If `moderation-workspace.js` loads before `main.js`, `safeFetch`, `showSkeleton`, `escHtml`, etc. are undefined → the IIFE throws `ReferenceError` on the first call → `loaders` is never built → no loaders fire → skeleton stays forever.

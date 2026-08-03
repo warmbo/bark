@@ -249,7 +249,7 @@
 <body>
     <div class="landing">
         {% if avatar_url %}
-        <img class="landing-avatar" src="{{ avatar_url }}" alt="Bark avatar" width="96" height="96">
+        <img class="landing-avatar" src="{{ avatar_url }}" data-fallback-src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
         {% else %}
         <img class="landing-avatar" src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
         {% endif %}
@@ -296,5 +296,6 @@
             <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener">GitHub</a>
         </div>
     </div>
+    <script src="/static/js/image-fallbacks.js?v=1"></script>
 </body>
 </html>

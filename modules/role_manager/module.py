@@ -217,9 +217,11 @@ class RoleManagerModule(BarkModule):
 
     async def disable(self) -> None:
         self._logger.info("Disabling role manager module")
-        if self._tenure_task is not None:
-            self._tenure_task.cancel()
-            self._tenure_task = None
+        task = self._tenure_task
+        self._tenure_task = None
+        if task is not None:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         self._rules_cache.clear()
         self._cache_ttl.clear()
         self._voice_members.clear()
@@ -234,6 +236,7 @@ class RoleManagerModule(BarkModule):
             return self._rules_cache[guild_id]
         async with session_scope() as session:
             from sqlalchemy import select
+
             result = await session.execute(
                 select(RoleRule).where(
                     RoleRule.guild_id == str(guild_id),
@@ -282,9 +285,7 @@ class RoleManagerModule(BarkModule):
             else:
                 await member.remove_roles(role, reason=reason or "Bark Role Manager")
         except (discord.Forbidden, discord.HTTPException):
-            self._logger.exception(
-                "Failed to %s role %s for user %s", action, role_id, member.id
-            )
+            self._logger.exception("Failed to %s role %s for user %s", action, role_id, member.id)
             return False
 
         async with session_scope() as session:
@@ -494,9 +495,7 @@ class RoleManagerModule(BarkModule):
                 rule.role_id,
                 action,
                 rule_id=rule.id,
-                reason=(
-                    "Claimed via reaction" if adding else "Released via reaction"
-                ),
+                reason=("Claimed via reaction" if adding else "Released via reaction"),
             )
 
     # ── State priming ────────────────────────────────────
@@ -549,9 +548,7 @@ class RoleManagerModule(BarkModule):
                     cfg = _json_loads(rule.trigger_config)
                     role = interaction.guild.get_role(int(rule.role_id))
                     role_name = role.name if role else f"<@&{rule.role_id}>"
-                    channel = interaction.guild.get_channel(
-                        int(cfg.get("channel_id", 0) or 0)
-                    )
+                    channel = interaction.guild.get_channel(int(cfg.get("channel_id", 0) or 0))
                     channel_label = channel.mention if channel else "configured channel"
                     lines.append(
                         f"{cfg.get('emoji', '⭐')} **{rule.name}** → {role_name} "
@@ -569,22 +566,40 @@ class RoleManagerModule(BarkModule):
     def get_extra_tabs(self) -> list[dict]:
         return [
             {"id": "rules", "label": "Rules", "template": "module_tabs/role_manager_rules.html"},
-            {"id": "assignments", "label": "Assignment Log", "template": "module_tabs/role_manager_assignments.html"},
+            {
+                "id": "assignments",
+                "label": "Assignment Log",
+                "template": "module_tabs/role_manager_assignments.html",
+            },
         ]
 
     def get_api_routes(self):
         """Dashboard API for managing role rules and viewing assignments."""
-        from fastapi import APIRouter
+        from fastapi import APIRouter, Query
 
-        from services.response import api_error, api_not_found, api_success
+        from services.response import (
+            api_error,
+            api_forbidden,
+            api_not_found,
+            api_success,
+            check_api_permission,
+            get_module_min_role,
+        )
 
         router = APIRouter(tags=["module-role_manager"])
 
+        async def can_view(request: Request, guild_id: str) -> bool:
+            await get_module_min_role("role_manager", guild_id)
+            return check_api_permission(request, "role_manager.view", guild_id)
+
         @router.get("/guilds/{guild_id}/modules/role_manager/rules")
-        async def list_rules(guild_id: str):
+        async def list_rules(request: Request, guild_id: str):
+            if not await can_view(request, guild_id):
+                return api_forbidden("Insufficient permissions to view role rules")
             gid = int(guild_id)
             async with session_scope() as session:
                 from sqlalchemy import select
+
                 result = await session.execute(
                     select(RoleRule)
                     .where(RoleRule.guild_id == str(gid))
@@ -647,6 +662,7 @@ class RoleManagerModule(BarkModule):
             gid = int(guild_id)
             async with session_scope() as session:
                 from sqlalchemy import select
+
                 rule = (
                     await session.execute(
                         select(RoleRule).where(
@@ -682,6 +698,7 @@ class RoleManagerModule(BarkModule):
             gid = int(guild_id)
             async with session_scope() as session:
                 from sqlalchemy import select
+
                 rule = (
                     await session.execute(
                         select(RoleRule).where(
@@ -697,15 +714,22 @@ class RoleManagerModule(BarkModule):
             return api_success({"message": "Rule deleted"})
 
         @router.get("/guilds/{guild_id}/modules/role_manager/assignments")
-        async def list_assignments(guild_id: str, limit: int = 100):
+        async def list_assignments(
+            request: Request,
+            guild_id: str,
+            limit: int = Query(100, ge=1, le=500),
+        ):
+            if not await can_view(request, guild_id):
+                return api_forbidden("Insufficient permissions to view role assignments")
             gid = int(guild_id)
             async with session_scope() as session:
                 from sqlalchemy import desc, select
+
                 result = await session.execute(
                     select(RoleAssignment)
                     .where(RoleAssignment.guild_id == str(gid))
                     .order_by(desc(RoleAssignment.created_at))
-                    .limit(min(limit, 500))
+                    .limit(limit)
                 )
                 rows = result.scalars().all()
             assignments = [

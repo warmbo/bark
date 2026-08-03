@@ -425,8 +425,12 @@ async def get_guild_activity(request: Request, guild_id: int):
         # (message, reaction, reaction_given/received, emoji, voice_minute) is
         # too noisy for the feed.
         noisy_rep_events = {
-            "message", "reaction", "reaction_given", "reaction_received",
-            "emoji", "voice_minute",
+            "message",
+            "reaction",
+            "reaction_given",
+            "reaction_received",
+            "emoji",
+            "voice_minute",
         }
         rep_result = await session.execute(
             select(ReputationEvent)
@@ -480,9 +484,7 @@ async def get_guild_activity(request: Request, guild_id: int):
         if rule_ids:
             from database.models.role_manager import RoleRule
 
-            rules_result = await session.execute(
-                select(RoleRule).where(RoleRule.id.in_(rule_ids))
-            )
+            rules_result = await session.execute(select(RoleRule).where(RoleRule.id.in_(rule_ids)))
             for rr in rules_result.scalars():
                 rule_names[rr.id] = rr.name
         # Re-execute so the scalar cursor is fresh for iteration.

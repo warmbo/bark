@@ -24,7 +24,9 @@ class RoleRule(Base):
     __table_args__ = (UniqueConstraint("guild_id", "rule_type", "role_id", "trigger_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     rule_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     role_id: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -41,7 +43,9 @@ class RoleRule(Base):
     guild = relationship("Guild", back_populates="role_rules")
 
     def __repr__(self) -> str:
-        return f"<RoleRule guild={self.guild_id} '{self.name}' [{self.rule_type}] role={self.role_id}>"
+        return (
+            f"<RoleRule guild={self.guild_id} '{self.name}' [{self.rule_type}] role={self.role_id}>"
+        )
 
 
 class RoleAssignment(Base):
@@ -50,10 +54,14 @@ class RoleAssignment(Base):
     __tablename__ = "role_assignments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
     user_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     role_id: Mapped[str] = mapped_column(String(32), nullable=False)
-    rule_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("role_rules.id"), nullable=True, index=True)
+    rule_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("role_rules.id"), nullable=True, index=True
+    )
     action: Mapped[str] = mapped_column(String(16), nullable=False)
     """add | remove"""
     reason: Mapped[str] = mapped_column(String(255), nullable=False, default="")

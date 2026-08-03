@@ -624,9 +624,11 @@ class ReputationModule(BarkModule):
 
     async def disable(self) -> None:
         self._logger.info("Disabling reputation module")
-        if self._voice_task is not None:
-            self._voice_task.cancel()
-            self._voice_task = None
+        task = self._voice_task
+        self._voice_task = None
+        if task is not None:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         self._voice_activity.clear()
         self._thanks_cooldowns.clear()
         self._thanks_self_cooldowns.clear()

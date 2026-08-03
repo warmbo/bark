@@ -75,6 +75,8 @@ def get_session_factory():
             expire_on_commit=False,
         )
     return _session_factory
+
+
 @asynccontextmanager
 async def session_scope() -> AsyncIterator[AsyncSession]:
     """Context manager for manual DB sessions outside FastAPI."""

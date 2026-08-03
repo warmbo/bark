@@ -55,9 +55,7 @@ def _make_guild(guild_id: int):
         me=bot_member,
         members=[],
         get_role=lambda rid: role if int(rid) == role.id else None,
-        get_member=lambda uid: next(
-            (m for m in guild.members if int(m.id) == int(uid)), None
-        ),
+        get_member=lambda uid: next((m for m in guild.members if int(m.id) == int(uid)), None),
     )
     return guild, role
 
@@ -266,12 +264,18 @@ async def test_reaction_rule_scoped_to_message_id(db):
     emoji.is_unicode_emoji = lambda: True
 
     wrong_message = SimpleNamespace(
-        guild_id=str(guild_id), channel_id=6001, message_id=9999,
-        user_id=user_id, emoji=emoji,
+        guild_id=str(guild_id),
+        channel_id=6001,
+        message_id=9999,
+        user_id=user_id,
+        emoji=emoji,
     )
     right_message = SimpleNamespace(
-        guild_id=str(guild_id), channel_id=6001, message_id=7001,
-        user_id=user_id, emoji=emoji,
+        guild_id=str(guild_id),
+        channel_id=6001,
+        message_id=7001,
+        user_id=user_id,
+        emoji=emoji,
     )
 
     await manager.event_bus.emit("raw_reaction_add", payload=wrong_message)
@@ -329,17 +333,27 @@ def test_is_twitch_live_only_matches_twitch():
     import discord
 
     from modules.role_manager.module import _is_twitch_live
+
     streaming = discord.ActivityType.streaming
     playing = discord.ActivityType.playing
 
     twitch = SimpleNamespace(type=streaming, platform="twitch", url="https://www.twitch.tv/foo")
-    youtube = SimpleNamespace(type=streaming, platform="youtube", url="https://www.youtube.com/watch?v=abc")
+    youtube = SimpleNamespace(
+        type=streaming, platform="youtube", url="https://www.youtube.com/watch?v=abc"
+    )
     custom = SimpleNamespace(type=streaming, platform=None, url="https://custom.stream/bar")
-    not_streaming = SimpleNamespace(type=playing, platform="twitch", url="https://www.twitch.tv/foo")
+    not_streaming = SimpleNamespace(
+        type=playing, platform="twitch", url="https://www.twitch.tv/foo"
+    )
 
     assert _is_twitch_live([twitch]) is True
     # URL pointing at twitch.tv still counts even if platform is missing.
-    assert _is_twitch_live([SimpleNamespace(type=streaming, platform=None, url="https://twitch.tv/foo")]) is True
+    assert (
+        _is_twitch_live(
+            [SimpleNamespace(type=streaming, platform=None, url="https://twitch.tv/foo")]
+        )
+        is True
+    )
     assert _is_twitch_live([youtube]) is False
     assert _is_twitch_live([custom]) is False
     # A Twitch platform is irrelevant unless the activity is actually streaming.
@@ -353,10 +367,12 @@ def test_parse_emoji_spec_handles_unicode_and_custom():
     assert _parse_emoji_spec("🎮") == {"unicode": "🎮"}
     assert _parse_emoji_spec("123456789012345678") == {"id": "123456789012345678"}
     assert _parse_emoji_spec("<:game:123456789012345678>") == {
-        "name": "game", "id": "123456789012345678",
+        "name": "game",
+        "id": "123456789012345678",
     }
     assert _parse_emoji_spec("<a:animated:987654321098765432>") == {
-        "name": "animated", "id": "987654321098765432",
+        "name": "animated",
+        "id": "987654321098765432",
     }
     assert _parse_emoji_spec("") is None
 

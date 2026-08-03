@@ -22,6 +22,12 @@ async def _can_manage_notes(request: Request, guild_id: str) -> bool:
     return check_api_permission(request, "moderation.notes.create", guild_id)
 
 
+async def _can_view_notes(request: Request, guild_id: str) -> bool:
+    """Private moderation notes are visible only to the configured moderation role."""
+    await get_module_min_role("moderation", guild_id)
+    return check_api_permission(request, "moderation.notes.view", guild_id)
+
+
 def _note_content(data: dict) -> str:
     content = str(data.get("content", "")).strip()
     if not content:
@@ -37,6 +43,8 @@ async def list_notes(request: Request, guild_id: str):
     from sqlalchemy import desc, select
 
     gid = str(guild_id)
+    if not await _can_view_notes(request, gid):
+        return api_forbidden("Insufficient permissions to view notes")
 
     async with session_scope() as session:
         result = await session.execute(
@@ -73,6 +81,8 @@ async def list_notes_for_user(request: Request, guild_id: str, user_id: str):
     from sqlalchemy import desc, select
 
     gid = str(guild_id)
+    if not await _can_view_notes(request, gid):
+        return api_forbidden("Insufficient permissions to view notes")
 
     async with session_scope() as session:
         result = await session.execute(

@@ -185,7 +185,7 @@ def test_controls_added_by_workspace_have_programmatic_names():
     assert 'for="{{ field_id }}"' in html
     assert 'id="{{ field_id }}"' in html
     assert 'for="module-enabled"' in html
-    assert 'aria-label="{{ module_name | replace(\'_\', \' \') | title }} workspace"' in html
+    assert "aria-label=\"{{ module_name | replace('_', ' ') | title }} workspace\"" in html
 
 
 def test_desktop_viewport_and_zoom_contract_is_present():
@@ -219,6 +219,22 @@ def test_changed_static_assets_have_cache_versions():
         assert re.search(rf"{re.escape(asset)}\?v=\d+", base)
     module = source(TEMPLATES / "pages" / "module_detail.html")
     assert re.search(r"module-workspace\.js\?v=\d+", module)
+
+
+def test_remote_bot_images_have_a_bundled_fallback():
+    base = source(TEMPLATES / "base.html")
+    landing = source(TEMPLATES / "pages" / "landing.html")
+    fallback_js = source(STATIC / "js" / "image-fallbacks.js")
+    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in base
+    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in landing
+    assert "function initImageFallbacks()" in fallback_js
+    assert "image-fallbacks.js?v=1" in base
+    assert "image-fallbacks.js?v=1" in landing
+
+
+def test_module_toggle_uses_the_human_readable_module_name():
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
+    assert "Enable {{ module_name | replace('_', ' ') | title }}" in detail
 
 
 # ═══════════════════════════════════════════════════════

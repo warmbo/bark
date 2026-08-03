@@ -104,6 +104,7 @@ class BarkContext:
                 except json.JSONDecodeError:
                     return {}
             return {}
+
     async def save_module_config(self, module_name: str, guild_id: int, config: dict) -> bool:
         from sqlalchemy import select
 

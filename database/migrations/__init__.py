@@ -405,7 +405,6 @@ async def _add_fk_indexes(connection: AsyncConnection) -> None:
         )
 
 
-
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
