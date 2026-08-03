@@ -1,9 +1,11 @@
 """Runtime access to Bark's version.
 
-The displayed version is derived from git (commit count + short SHA) so that
-every change to the repo produces a distinct version on the web UI. When git
-is unavailable (e.g. an sdist without VCS metadata), it falls back to the
-installed package version from importlib.metadata.
+The displayed version is X.X.X style, derived from the base version in
+pyproject.toml plus the git commit count as the patch component — so every
+change to the repo produces a distinct, monotonic version on the web UI
+(e.g. ``0.2.0`` -> ``0.2.1`` -> ``0.2.2`` ...). When git is unavailable
+(e.g. an sdist without VCS metadata), it falls back to the installed
+package version from importlib.metadata.
 """
 
 from __future__ import annotations
@@ -15,13 +17,8 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent
 
 
-def _git_version() -> str | None:
-    """Return a build-version string from the git repo, or None.
-
-    Format: ``<base>.<commit-count>-g<short-sha>`` where base is the
-    pyproject.toml version — e.g. ``0.2.0.412-g3f9a2c1``. Appends ``-dirty``
-    when the working tree has uncommitted changes.
-    """
+def _git_commit_count() -> int | None:
+    """Return the number of commits on the current branch, or None."""
     try:
         count = subprocess.run(
             ["git", "rev-list", "--count", "HEAD"],
@@ -30,29 +27,22 @@ def _git_version() -> str | None:
             text=True,
             timeout=2,
         )
-        sha = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=_REPO_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        dirty = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=_REPO_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        if count.returncode == 0 and sha.returncode == 0 and count.stdout.strip():
-            suffix = "-dirty" if dirty.returncode == 0 and dirty.stdout.strip() else ""
-            return (
-                f"{_installed_version('bark')}."
-                f"{count.stdout.strip()}-g{sha.stdout.strip()}{suffix}"
-            )
-    except (OSError, subprocess.SubprocessError):
+        if count.returncode == 0 and count.stdout.strip():
+            return int(count.stdout.strip())
+    except (OSError, subprocess.SubprocessError, ValueError):
         pass
     return None
 
 
-__version__ = _git_version() or _installed_version("bark")
+def _derive_version() -> str:
+    """X.X.X version: base from installed metadata, patch = commit count."""
+    base = _installed_version("bark")
+    commit_count = _git_commit_count()
+    if commit_count is None:
+        return base
+    parts = base.split(".")
+    major_minor = ".".join(parts[:2]) if len(parts) >= 2 else base
+    return f"{major_minor}.{commit_count}"
+
+
+__version__ = _derive_version()
