@@ -220,7 +220,12 @@ async def get_guild_channels(request: Request, guild_id: int):
 
 @router.get("/guilds/{guild_id}/activity")
 async def get_guild_activity(request: Request, guild_id: int):
-    """Aggregated recent activity feed — cases, audit logs, voice sessions, warnings."""
+    """Aggregated recent activity feed — cases, audit logs, voice sessions, warnings.
+
+    Each item carries ``type``, ``category`` (moderation / messaging / voice /
+    roles / reputation / notes / system), a human ``label``, and usernames
+    resolved from the guild member cache when possible.
+    """
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:
@@ -236,6 +241,14 @@ async def get_guild_activity(request: Request, guild_id: int):
     from database.models.role_manager import RoleAssignment
     from database.models.voice import VoiceSession
 
+    def member_name(user_id: str | None, fallback: str | None = None) -> str:
+        """Resolve a Discord user ID to a display name via the guild cache."""
+        if user_id:
+            member = guild.get_member(int(user_id))
+            if member is not None:
+                return str(getattr(member, "display_name", None) or member)
+        return fallback or user_id or "Unknown"
+
     items = []
 
     async with session_scope() as session:
@@ -247,13 +260,25 @@ async def get_guild_activity(request: Request, guild_id: int):
             .limit(10)
         )
         for c in cases_result.scalars():
+            target = member_name(c.target_id, c.target_tag)
+            moderator = member_name(c.moderator_id, c.moderator_tag)
+            label = {
+                "warn": "Warning issued",
+                "timeout": "Timeout applied",
+                "kick": "Member kicked",
+                "ban": "Member banned",
+                "unban": "Member unbanned",
+            }.get(c.action_type, c.action_type.replace("_", " ").title())
             items.append(
                 {
                     "type": "case",
+                    "category": "moderation",
                     "action": c.action_type,
-                    "description": f"{c.action_type} {c.target_tag or c.target_id or 'unknown'}",
-                    "target": c.target_tag or c.target_id,
-                    "moderator": c.moderator_tag or c.moderator_id,
+                    "label": label,
+                    "description": f"{label}: {target}",
+                    "target": target,
+                    "target_id": c.target_id,
+                    "moderator": moderator,
                     "reason": c.reason or "",
                     "case_number": c.case_number,
                     "timestamp": c.created_at.isoformat() if c.created_at else None,
@@ -278,15 +303,39 @@ async def get_guild_activity(request: Request, guild_id: int):
                 detail_dict = json.loads(detail) if isinstance(detail, str) else detail
             except (json.JSONDecodeError, TypeError):
                 detail_dict = {}
-            target_tag = detail_dict.get("target_tag", a.target_id or "unknown")
-            actor_tag = detail_dict.get("actor_tag", a.actor_id)
+            target = member_name(a.target_id, detail_dict.get("target_tag"))
+            actor = member_name(a.actor_id, detail_dict.get("actor_tag"))
+            audit_labels = {
+                "warn": "Warning issued",
+                "timeout": "Timeout applied",
+                "kick": "Member kicked",
+                "ban": "Member banned",
+                "unban": "Member unbanned",
+                "vc_kick": "Kicked from voice",
+                "member_update": "Member updated",
+                "member_role_update": "Role changed",
+                "message_edit": "Message edited",
+                "message_delete": "Message deleted",
+                "link_posted": "Link posted",
+            }
+            label = audit_labels.get(a.action, a.action.replace("_", " ").title())
+            category = (
+                "moderation"
+                if a.action in {"warn", "timeout", "kick", "ban", "unban", "vc_kick"}
+                else "messaging"
+                if a.action in {"message_edit", "message_delete", "link_posted"}
+                else "system"
+            )
             items.append(
                 {
                     "type": "audit",
+                    "category": category,
                     "action": a.action,
-                    "description": f"{a.action} {target_tag}",
-                    "target": target_tag,
-                    "moderator": actor_tag,
+                    "label": label,
+                    "description": f"{label}: {target}",
+                    "target": target,
+                    "target_id": a.target_id,
+                    "moderator": actor,
                     "reason": "",
                     "timestamp": a.created_at.isoformat() if a.created_at else None,
                     "icon": {
@@ -310,12 +359,16 @@ async def get_guild_activity(request: Request, guild_id: int):
             .limit(15)
         )
         for v in voice_result.scalars():
+            user = member_name(v.user_id, v.user_tag)
             items.append(
                 {
                     "type": "voice",
+                    "category": "voice",
                     "action": "voice_join",
-                    "description": f"{v.user_tag or v.user_id or 'Someone'} joined voice ({v.channel_name or 'unknown'})",
-                    "target": v.user_tag or v.user_id,
+                    "label": "Joined voice",
+                    "description": f"{user} joined voice ({v.channel_name or 'unknown'})",
+                    "target": user,
+                    "target_id": v.user_id,
                     "moderator": None,
                     "reason": "",
                     "timestamp": v.joined_at.isoformat() if v.joined_at else None,
@@ -332,13 +385,18 @@ async def get_guild_activity(request: Request, guild_id: int):
             .limit(10)
         )
         for w in warns_result.scalars():
+            user = member_name(w.user_id)
+            moderator = member_name(w.moderator_id)
             items.append(
                 {
                     "type": "warning",
+                    "category": "moderation",
                     "action": "warning",
-                    "description": f"Warning for {w.user_id}",
-                    "target": w.user_id,
-                    "moderator": w.moderator_id,
+                    "label": "Warning issued",
+                    "description": f"Warning issued: {user}",
+                    "target": user,
+                    "target_id": w.user_id,
+                    "moderator": moderator,
                     "reason": w.reason or "",
                     "timestamp": w.created_at.isoformat() if w.created_at else None,
                     "icon": "⚠️",
@@ -357,14 +415,25 @@ async def get_guild_activity(request: Request, guild_id: int):
         for e in rep_result.scalars():
             if e.event_type in noisy_rep_events:
                 continue
-            target = e.target_id or "someone"
+            target = member_name(e.target_id)
+            actor = member_name(e.actor_id)
+            rep_labels = {
+                "thanks": "Thanked",
+                "award": "Awarded",
+                "tier_up": "Tiered up",
+                "level_up": "Leveled up",
+            }
+            label = rep_labels.get(e.event_type, e.event_type.replace("_", " ").title())
             items.append(
                 {
                     "type": "reputation",
+                    "category": "reputation",
                     "action": e.event_type,
-                    "description": f"{e.event_type} +{e.points:g} → {target}",
+                    "label": label,
+                    "description": f"{actor} {label.lower()} {target} (+{e.points:g})",
                     "target": target,
-                    "moderator": e.actor_id,
+                    "target_id": e.target_id,
+                    "moderator": actor,
                     "reason": "",
                     "timestamp": e.created_at.isoformat() if e.created_at else None,
                     "icon": {
@@ -384,13 +453,17 @@ async def get_guild_activity(request: Request, guild_id: int):
             .limit(10)
         )
         for ra in role_result.scalars():
-            verb = "assigned" if ra.action == "add" else "removed"
+            user = member_name(ra.user_id)
+            label = f"Role {'assigned' if ra.action == 'add' else 'removed'}"
             items.append(
                 {
                     "type": "role",
+                    "category": "roles",
                     "action": f"role_{ra.action}",
-                    "description": f"Role {verb} for {ra.user_id}",
-                    "target": ra.user_id,
+                    "label": label,
+                    "description": f"{label}: {user}",
+                    "target": user,
+                    "target_id": ra.user_id,
                     "moderator": None,
                     "reason": "",
                     "timestamp": ra.created_at.isoformat() if ra.created_at else None,
@@ -406,13 +479,18 @@ async def get_guild_activity(request: Request, guild_id: int):
             .limit(10)
         )
         for n in notes_result.scalars():
+            user = member_name(n.user_id)
+            author = member_name(n.author_id)
             items.append(
                 {
                     "type": "note",
+                    "category": "notes",
                     "action": "note_added",
-                    "description": f"Note added for {n.user_id}",
-                    "target": n.user_id,
-                    "moderator": n.author_id,
+                    "label": "Note added",
+                    "description": f"Note added: {user}",
+                    "target": user,
+                    "target_id": n.user_id,
+                    "moderator": author,
                     "reason": n.content[:120],
                     "timestamp": n.created_at.isoformat() if n.created_at else None,
                     "icon": "📝",
@@ -427,12 +505,16 @@ async def get_guild_activity(request: Request, guild_id: int):
             .limit(10)
         )
         for avc in avc_result.scalars():
+            owner = member_name(avc.owner_id)
             items.append(
                 {
                     "type": "auto_voice",
+                    "category": "voice",
                     "action": "voice_channel_created",
-                    "description": f"Temp voice channel created for {avc.owner_id}",
-                    "target": avc.owner_id,
+                    "label": "Voice channel created",
+                    "description": f"Temp voice channel created: {owner}",
+                    "target": owner,
+                    "target_id": avc.owner_id,
                     "moderator": None,
                     "reason": "",
                     "timestamp": avc.created_at.isoformat() if avc.created_at else None,

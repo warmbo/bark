@@ -48,6 +48,7 @@ async def app(db):
     mock_guild.owner_id = "123"
     mock_guild.icon = None  # No icon — safely handled
     mock_guild.owner = None
+    mock_guild.get_member.return_value = None  # no cached members — fall back to stored tags
     mock_guild.channels = []
     mock_guild.roles = []
     mock_guild.text_channels = []
@@ -795,6 +796,18 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     # Voice sessions surface as joins.
     voice_items = [a for a in activity if a["type"] == "voice"]
     assert voice_items and all(a["action"] == "voice_join" for a in voice_items)
+
+    # Every item has a category, a human label, and a resolved display name.
+    for a in activity:
+        assert a.get("category") in {
+            "moderation", "messaging", "voice", "roles", "reputation", "notes", "system",
+        }
+        assert a.get("label"), a
+
+    # Case items resolve the stored target tag into the description.
+    case_items = [a for a in activity if a["type"] == "case"]
+    assert case_items and "WarnedUser" in case_items[0]["description"]
+    assert case_items[0]["label"] == "Warning issued"
 
     # Chronological ordering — newest first
     stamps = [a.get("timestamp") or "" for a in activity]

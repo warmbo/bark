@@ -141,7 +141,14 @@ const GUILD_ID = '{{ guild.id }}';
                 const time = a.timestamp ? timeAgo(a.timestamp) : '';
                 let reasonHtml = '';
                 if (a.reason) reasonHtml = `<span class="activity-reason">${escHtml(a.reason)}</span>`;
-                return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}</span>${reasonHtml}<span class="activity-time">${escHtml(time)}</span></div>`;
+                let metaHtml = '';
+                if (a.moderator && a.moderator !== a.target && a.moderator !== 'Unknown') {
+                    metaHtml = `<span class="activity-meta">by ${escHtml(a.moderator)}</span>`;
+                }
+                const badge = a.category
+                    ? `<span class="activity-category cat-${safeClassToken(a.category, 'activity')}">${escHtml(a.category)}</span>`
+                    : '';
+                return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}${metaHtml}</span>${reasonHtml}${badge}<span class="activity-time">${escHtml(time)}</span></div>`;
             }).join('');
         }
 
