@@ -6,9 +6,11 @@ from httpx import ASGITransport, AsyncClient
 
 from services.security import (
     AuthMiddleware,
+    RateLimiter,
     SecurityMiddleware,
     _module_action_from_path,
     mutation_capability,
+    rate_limit_identity,
 )
 
 
@@ -93,6 +95,43 @@ def test_mutation_capabilities_cover_every_route_family_and_gets_remain_readable
     assert mutation_capability("PATCH", "/api/v1/guilds/1/notes/42") == "moderation.notes.create"
     assert mutation_capability("DELETE", "/api/v1/guilds/1/notes/42") == "moderation.notes.create"
     assert mutation_capability("DELETE", "/api/v1/guilds/1/unknown/new-route") == "guild.manage"
+
+
+def test_rate_limiter_bounds_and_prunes_inactive_buckets(monkeypatch):
+    import services.security as security
+
+    limiter = RateLimiter(capacity=10, max_keys=3)
+    monkeypatch.setattr(security.time, "monotonic", lambda: 0.0)
+    for key in ("one", "two", "three", "four"):
+        assert limiter.check(key)
+    assert len(limiter.tokens) == 3
+    assert "one" not in limiter.tokens
+
+    monkeypatch.setattr(security.time, "monotonic", lambda: 61.0)
+    assert limiter.check("five")
+    assert set(limiter.tokens) == {"five"}
+
+
+def test_rate_limit_identity_prefers_authenticated_user_over_proxy_ip():
+    request = MagicMock()
+    request.scope = {"session": {"user": {"id": "42"}}}
+    request.client.host = "10.0.0.1"
+
+    assert rate_limit_identity(request) == "user:42"
+
+
+def test_dashboard_middleware_exposes_session_to_security_layer():
+    from starlette.middleware.sessions import SessionMiddleware
+
+    from dashboard import create_app
+
+    dashboard = create_app(MagicMock())
+    middleware = [entry.cls.__name__ for entry in dashboard.app.user_middleware]
+
+    assert middleware.index(SessionMiddleware.__name__) < middleware.index(
+        SecurityMiddleware.__name__
+    )
+    assert middleware.index(SecurityMiddleware.__name__) < middleware.index(AuthMiddleware.__name__)
 
 
 @pytest.mark.asyncio

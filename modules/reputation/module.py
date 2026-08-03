@@ -1156,34 +1156,51 @@ class ReputationModule(BarkModule):
         try:
             while True:
                 await asyncio.sleep(VOICE_TICK_SECONDS)
-                now = time.time()
-                for guild_id, activity in list(self._voice_activity.items()):
-                    guild = self.ctx.get_guild(guild_id)
-                    if guild is None:
-                        self._voice_activity.pop(guild_id, None)
-                        continue
-                    config = await self.load_dashboard_config(guild_id)
-                    if not config.get("enabled_sources", {}).get("voice", True):
-                        continue
-                    for user_id, join_ts in list(activity.items()):
-                        elapsed = now - join_ts
-                        if elapsed >= VOICE_TICK_SECONDS:
-                            minutes = elapsed / 60.0
-                            points = compute_voice_points(minutes, config)
-                            if points > 0:
-                                await self._add_points(
-                                    guild_id,
-                                    user_id,
-                                    points,
-                                    "voice_minute",
-                                    actor_id=user_id,
-                                    metadata={"minutes": minutes},
-                                    config=config,
-                                )
-                            # Reset timer so we don't double-count
-                            activity[user_id] = now
+                await self._credit_voice_tick(time.time())
         except asyncio.CancelledError:
             pass
+
+    async def _credit_voice_tick(self, now: float) -> None:
+        """Credit one voice interval without restoring members who left mid-award."""
+        for guild_id, activity in list(self._voice_activity.items()):
+            guild = self.ctx.get_guild(guild_id)
+            if guild is None:
+                self._voice_activity.pop(guild_id, None)
+                continue
+            config = await self.load_dashboard_config(guild_id)
+            if not config.get("enabled_sources", {}).get("voice", True):
+                continue
+            for user_id, join_ts in list(activity.items()):
+                elapsed = now - join_ts
+                if elapsed < VOICE_TICK_SECONDS:
+                    continue
+                minutes = elapsed / 60.0
+                points = compute_voice_points(minutes, config)
+                # Claim this sampled interval before awaiting the DB write. A
+                # concurrent leave then sees only post-tick time and cannot
+                # award the same interval a second time.
+                if activity.get(user_id) != join_ts:
+                    continue
+                activity[user_id] = now
+                try:
+                    if points > 0:
+                        await self._add_points(
+                            guild_id,
+                            user_id,
+                            points,
+                            "voice_minute",
+                            actor_id=user_id,
+                            metadata={"minutes": minutes},
+                            config=config,
+                        )
+                except Exception:
+                    if activity.get(user_id) == now:
+                        activity[user_id] = join_ts
+                    self._logger.exception(
+                        "Failed to credit voice reputation for guild %s user %s",
+                        guild_id,
+                        user_id,
+                    )
 
     # ── Slash commands ───────────────────────────────────
 

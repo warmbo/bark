@@ -41,7 +41,11 @@ async def member_detail(request: Request, guild_id: int, user_id: str):
     if guild is None:
         return HTMLResponse("Guild not found", status_code=404)
 
-    member = guild.get_member(int(user_id))
+    try:
+        member_id = int(user_id)
+    except (TypeError, ValueError):
+        return HTMLResponse("Member not found", status_code=404)
+    member = guild.get_member(member_id)
     if member is None:
         return HTMLResponse("Member not found", status_code=404)
 

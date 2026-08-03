@@ -175,8 +175,8 @@ async def test_moderation_actions_redact_unexpected_discord_errors(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_member_detail_does_not_disclose_notes_without_permission(monkeypatch):
-    """Member profiles must not bypass the private-note read permission."""
+async def test_member_detail_does_not_disclose_moderation_data_without_permission(monkeypatch):
+    """Member profiles must not bypass private moderation read permissions."""
     import json
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, MagicMock
@@ -204,17 +204,61 @@ async def test_member_detail_does_not_disclose_notes_without_permission(monkeypa
     monkeypatch.setattr(actions, "get_module_min_role", AsyncMock(return_value=None))
     monkeypatch.setattr(actions, "check_api_permission", lambda *_args, **_kwargs: False)
     private_notes = AsyncMock(return_value=[{"content": "private note"}])
+    private_cases = AsyncMock(return_value=[{"target_id": "42", "reason": "private"}])
+    private_warnings = AsyncMock(return_value=[{"reason": "private"}])
+    private_voice = AsyncMock(return_value=[{"channel_name": "private"}])
     monkeypatch.setattr(actions, "_get_user_notes", private_notes)
-    monkeypatch.setattr(actions.SERVICE, "get_cases", AsyncMock(return_value=[]))
-    monkeypatch.setattr(actions.SERVICE, "get_warnings", AsyncMock(return_value=[]))
-    monkeypatch.setattr(actions.SERVICE, "get_voice_sessions", AsyncMock(return_value=[]))
+    monkeypatch.setattr(actions.SERVICE, "get_cases", private_cases)
+    monkeypatch.setattr(actions.SERVICE, "get_warnings", private_warnings)
+    monkeypatch.setattr(actions.SERVICE, "get_voice_sessions", private_voice)
 
     response = await actions.get_member_detail(request, "1", "42")
     data = json.loads(response.body)["data"]
 
     assert data["can_view_notes"] is False
+    assert data["can_view_moderation"] is False
+    assert data["cases"] == []
+    assert data["warnings"] == []
+    assert data["voice_sessions"] == []
     assert data["notes"] == []
+    private_cases.assert_not_awaited()
+    private_warnings.assert_not_awaited()
+    private_voice.assert_not_awaited()
     private_notes.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_member_routes_reject_non_numeric_member_ids(client):
+    api_response = await client.get("/api/v1/guilds/1/members/not-a-number")
+    web_response = await client.get("/guild/1/members/not-a-number")
+
+    assert api_response.status_code == 404
+    assert web_response.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target_id", ["not-a-number", None])
+async def test_unban_rejects_invalid_target_as_client_error(monkeypatch, target_id):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from dashboard.routes.api import actions
+
+    bot = MagicMock()
+    bot.fetch_user = AsyncMock()
+    bot.get_guild.return_value = MagicMock()
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot),
+        session={"role": "admin"},
+        json=AsyncMock(return_value={"target_id": target_id, "reason": "test"}),
+    )
+    monkeypatch.setattr(actions, "get_module_min_role", AsyncMock(return_value="admin"))
+    monkeypatch.setattr(actions, "check_api_permission", lambda *_args, **_kwargs: True)
+
+    response = await actions.action_unban(request, "1")
+
+    assert response.status_code == 400
+    bot.fetch_user.assert_not_awaited()
 
 
 def test_realtime_bridge_is_initialized(app):
@@ -394,6 +438,86 @@ async def test_module_role_access_override_enforces_and_resets_default(client, a
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
     assert await get_module_min_role("moderation", 1) is None
     assert not check_api_permission(request, "moderation.warn", guild_id=1)
+
+
+@pytest.mark.asyncio
+async def test_guild_capabilities_match_module_role_enforcement(client, app, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    import config
+    from modules.base import PermissionDefinition
+    from services.response import get_guild_capabilities
+
+    module = MagicMock()
+    module.get_permissions.return_value = [
+        PermissionDefinition(name="moderation.warn", label="Warn Members"),
+        PermissionDefinition(name="automod.configure", label="Configure AutoMod"),
+    ]
+    app.state.bot.modules.get_module.return_value = module
+    app.state.bot.modules.get_all_modules.return_value = {"moderation": module}
+
+    request = SimpleNamespace(
+        session={"role": "moderator"},
+        state=SimpleNamespace(bot=app.state.bot),
+        url=SimpleNamespace(path="/api/v1/guilds/1/manifest"),
+    )
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    default_capabilities = await get_guild_capabilities(request, 1)
+    assert default_capabilities["moderation.warn"] is False
+    assert default_capabilities["automod.configure"] is False
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "")
+    response = await client.patch(
+        "/api/v1/guilds/1/modules/moderation/role-access",
+        json={"min_role": "moderator"},
+    )
+    assert response.status_code == 200
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+
+    overridden_capabilities = await get_guild_capabilities(request, 1)
+    assert overridden_capabilities["moderation.warn"] is True
+    assert overridden_capabilities["automod.configure"] is True
+
+
+@pytest.mark.asyncio
+async def test_private_moderation_reads_require_module_access(app, monkeypatch):
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds, moderation
+    from modules.moderation.module import ModerationModule
+    from services.bark_context import BarkContext
+    from services.response import set_cached_module_min_role
+
+    module = ModerationModule(BarkContext(app.state.bot, app.state.bot.modules.event_bus))
+    app.state.bot.modules.get_all_modules.return_value = {"moderation": module}
+    set_cached_module_min_role("moderation", 1, None)
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    request = SimpleNamespace(
+        session={"role": "viewer"},
+        state=SimpleNamespace(bot=app.state.bot),
+        url=SimpleNamespace(path="/api/v1/guilds/1/moderation/cases"),
+    )
+
+    cases_response = await moderation.list_cases(request, "1", page=0, limit=50)
+    stats_response = await guilds.get_guild_stats(request, 1)
+    activity_response = await guilds.get_guild_activity(request, 1)
+    ruleset_route = next(
+        route for route in module.get_api_routes().routes if route.path.endswith("/rulesets")
+    )
+    request.url.path = "/api/v1/guilds/1/rulesets"
+    rulesets_response = await ruleset_route.endpoint(request, "1")
+
+    assert cases_response.status_code == 403
+    assert stats_response.status_code == 403
+    assert activity_response.status_code == 403
+    assert rulesets_response.status_code == 403
 
 
 def test_module_config_validation_rejects_array_and_enum_type_drift():

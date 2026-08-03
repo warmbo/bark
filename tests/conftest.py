@@ -33,6 +33,12 @@ def setup_test_env(monkeypatch, tmp_path):
     database.engine._engine = None
     database.engine._session_factory = None
 
+    from services.response import reset_permission_state
+
+    reset_permission_state()
+    yield
+    reset_permission_state()
+
 
 @pytest.fixture(scope="function")
 async def db():

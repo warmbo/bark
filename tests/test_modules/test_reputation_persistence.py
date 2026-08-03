@@ -1,6 +1,7 @@
 """Reputation persistence and cap regression tests."""
 
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import select
@@ -79,3 +80,76 @@ async def test_voice_awards_update_profile_voice_minutes(db):
             )
         ).scalar_one()
     assert profile.voice_minutes == 5
+
+
+@pytest.mark.asyncio
+async def test_voice_tick_does_not_restore_member_who_left_during_award():
+    ctx = MagicMock()
+    ctx.get_guild.return_value = MagicMock()
+    module = ReputationModule(ctx)
+    module._voice_activity[1][42] = 100.0
+    module.load_dashboard_config = AsyncMock(
+        return_value={
+            "enabled_sources": {"voice": True},
+            "weights": {"voice_minute": 1},
+        }
+    )
+
+    async def leave_during_award(*_args, **_kwargs):
+        module._voice_activity[1].pop(42)
+
+    module._add_points = AsyncMock(side_effect=leave_during_award)
+
+    await module._credit_voice_tick(now=1000.0)
+
+    assert 42 not in module._voice_activity[1]
+
+
+@pytest.mark.asyncio
+async def test_voice_leave_during_tick_does_not_double_credit(monkeypatch):
+    import modules.reputation.module as reputation_module
+
+    ctx = MagicMock()
+    ctx.get_guild.return_value = MagicMock()
+    module = ReputationModule(ctx)
+    module._voice_activity[1][42] = 100.0
+    module.load_dashboard_config = AsyncMock(
+        return_value={
+            "enabled_sources": {"voice": True},
+            "weights": {"voice_minute": 1},
+        }
+    )
+    monkeypatch.setattr(reputation_module.time, "time", lambda: 1000.0)
+    leave_award = AsyncMock()
+
+    async def leave_during_award(*_args, **_kwargs):
+        module._add_points = leave_award
+        member = SimpleNamespace(id=42, bot=False, guild=SimpleNamespace(id=1))
+        await module._on_voice_state("voice_state", member=member, after_channel=None)
+
+    module._add_points = AsyncMock(side_effect=leave_during_award)
+
+    await module._credit_voice_tick(now=1000.0)
+
+    leave_award.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_voice_tick_award_error_restores_timer_and_continues():
+    """A transient award failure must not terminate the periodic voice worker."""
+    module = ReputationModule(MagicMock())
+    module._voice_activity[1][42] = 100.0
+    module._voice_activity[1][43] = 100.0
+    module.load_dashboard_config = AsyncMock(
+        return_value={
+            "enabled_sources": {"voice": True},
+            "weights": {"voice_minute": 1},
+        }
+    )
+    module._add_points = AsyncMock(side_effect=[RuntimeError("database unavailable"), None])
+
+    await module._credit_voice_tick(now=1000.0)
+
+    assert module._voice_activity[1][42] == 100.0
+    assert module._voice_activity[1][43] == 1000.0
+    assert module._add_points.await_count == 2

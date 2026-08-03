@@ -8,7 +8,7 @@ quick actions, and cross-module links in a single endpoint.
 from fastapi import APIRouter, Request
 
 from database.engine import session_scope
-from services.response import api_not_found, api_success, get_capabilities
+from services.response import api_not_found, api_success, get_guild_capabilities
 
 router = APIRouter(tags=["api-manifest"])
 
@@ -214,6 +214,6 @@ async def get_guild_manifest(request: Request, guild_id: int):
                 "modules_enabled": sum(1 for m in modules_list if m["enabled"]),
                 "modules_total": len(modules_list),
             },
-            "capabilities": get_capabilities(request),
+            "capabilities": await get_guild_capabilities(request, guild_id),
         }
     )

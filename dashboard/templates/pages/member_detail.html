@@ -49,7 +49,7 @@ async function loadMember() {
 }
 
 function renderMember(m) {
-    const warnCount = m.warnings ? (m.warnings.length || m.warnings_count || 0) : 0;
+    const warnCount = m.can_view_moderation && m.warnings ? (m.warnings.length || m.warnings_count || 0) : '—';
     const memberName = String(m.name || 'Unknown member');
     const memberIdAttr = escHtml(String(m.id ?? ''));
     const avatarUrl = safeResourceUrl(m.avatar_url, '');
@@ -95,40 +95,46 @@ function renderMember(m) {
 
         <!-- Stats -->
         <div class="stats-grid">
-            <div class="stat-card compact"><span class="stat-label">Total Cases</span><span class="stat-value stat-value-sm">${(m.cases || []).length}</span></div>
+            <div class="stat-card compact"><span class="stat-label">Total Cases</span><span class="stat-value stat-value-sm">${m.can_view_moderation ? (m.cases || []).length : '—'}</span></div>
             <div class="stat-card compact"><span class="stat-label">Active Warnings</span><span class="stat-value stat-value-sm">${warnCount}</span></div>
             <div class="stat-card compact"><span class="stat-label">Notes</span><span class="stat-value stat-value-sm">${m.can_view_notes ? (m.notes || []).length : '—'}</span></div>
-            <div class="stat-card compact"><span class="stat-label">Voice Sessions</span><span class="stat-value stat-value-sm">${(m.voice_sessions || []).length}</span></div>
+            <div class="stat-card compact"><span class="stat-label">Voice Sessions</span><span class="stat-value stat-value-sm">${m.can_view_moderation ? (m.voice_sessions || []).length : '—'}</span></div>
         </div>
 
         <!-- Moderation Cases -->
         <div class="content-card">
             <div class="card-header"><h2 class="card-title">${memberIconSvg('scroll-text', 16)} Moderation Cases</h2></div>
-            ${(m.cases || []).length
+            ${!m.can_view_moderation
+                ? '<div class="state-panel state-empty" role="status"><div><strong>Cases restricted</strong><p>Your dashboard role cannot view moderation history.</p></div></div>'
+                : (m.cases || []).length
                 ? `<table class="data-table"><caption class="sr-only">Moderation cases for ${escHtml(m.name)}</caption><thead><tr><th scope="col">#</th><th scope="col">Type</th><th scope="col">Moderator</th><th scope="col">Reason</th><th scope="col">Date</th></tr></thead><tbody>
                     ${m.cases.map(c => `<tr><td>#${Number(c.case_number)}</td><td><span class="badge badge-${safeClassToken(c.action_type, 'unknown')}">${escHtml(c.action_type)}</span></td><td>${escHtml(c.moderator_tag)}</td><td class="cell-truncate">${escHtml(c.reason || '-')}</td><td class="timestamp">${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td></tr>`).join('')}
                 </tbody></table>`
-                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("scroll-text", 18)}</span><div><strong>No cases</strong><p>No moderation cases recorded for this member.</p></div></div>'}
+                : `<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("scroll-text", 18)}</span><div><strong>No cases</strong><p>No moderation cases recorded for this member.</p></div></div>`}
         </div>
 
         <!-- Active Warnings -->
         <div class="content-card">
             <div class="card-header"><h2 class="card-title">${memberIconSvg('alert-triangle', 16)} Active Warnings</h2></div>
-            ${(m.warnings || []).length
+            ${!m.can_view_moderation
+                ? '<div class="state-panel state-empty" role="status"><div><strong>Warnings restricted</strong><p>Your dashboard role cannot view moderation history.</p></div></div>'
+                : (m.warnings || []).length
                 ? `<table class="data-table"><caption class="sr-only">Active warnings for ${escHtml(m.name)}</caption><thead><tr><th scope="col">ID</th><th scope="col">Reason</th><th scope="col">Date</th></tr></thead><tbody>
                     ${m.warnings.map(w => `<tr><td>#${Number(w.id)}</td><td class="cell-truncate">${escHtml(w.reason)}</td><td class="timestamp">${w.created_at ? new Date(w.created_at).toLocaleDateString() : '-'}</td></tr>`).join('')}
                 </tbody></table>`
-                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("alert-triangle", 18)}</span><div><strong>No active warnings</strong><p>This member has no active warnings.</p></div></div>'}
+                : `<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("alert-triangle", 18)}</span><div><strong>No active warnings</strong><p>This member has no active warnings.</p></div></div>`}
         </div>
 
         <!-- Voice Sessions -->
         <div class="content-card">
             <div class="card-header"><h2 class="card-title">${memberIconSvg('headphones', 16)} Voice Sessions</h2></div>
-            ${(m.voice_sessions || []).length
+            ${!m.can_view_moderation
+                ? '<div class="state-panel state-empty" role="status"><div><strong>Voice history restricted</strong><p>Your dashboard role cannot view voice history.</p></div></div>'
+                : (m.voice_sessions || []).length
                 ? `<table class="data-table"><caption class="sr-only">Voice sessions for ${escHtml(m.name)}</caption><thead><tr><th scope="col">Channel</th><th scope="col">Joined</th><th scope="col">Left</th><th scope="col">Duration</th></tr></thead><tbody>
                     ${m.voice_sessions.map(v => `<tr><td>${escHtml(v.channel_name || '')}</td><td class="timestamp">${v.joined_at ? new Date(v.joined_at).toLocaleString() : '-'}</td><td class="timestamp">${v.left_at ? new Date(v.left_at).toLocaleString() : 'Now'}</td><td>${v.duration_seconds ? memberFormatDuration(v.duration_seconds) : '-'}</td></tr>`).join('')}
                 </tbody></table>`
-                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("headphones", 18)}</span><div><strong>No voice sessions</strong><p>No voice sessions recorded for this member.</p></div></div>'}
+                : `<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("headphones", 18)}</span><div><strong>No voice sessions</strong><p>No voice sessions recorded for this member.</p></div></div>`}
         </div>
 
         <!-- Notes -->
@@ -144,7 +150,7 @@ function renderMember(m) {
                         </div>
                         <div class="note-content">${escHtml(n.content)}</div>
                     </div>`).join('')}</div>`
-                : '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("file-text", 18)}</span><div><strong>No notes</strong><p>No private notes recorded for this member.</p></div></div>'}
+                : `<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${memberIconSvg("file-text", 18)}</span><div><strong>No notes</strong><p>No private notes recorded for this member.</p></div></div>`}
         </div>
     `;
 }

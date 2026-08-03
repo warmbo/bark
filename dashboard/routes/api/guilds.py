@@ -5,7 +5,14 @@ Guilds API routes.
 import discord
 from fastapi import APIRouter, Request
 
-from services.response import api_error, api_not_found, api_success
+from services.response import (
+    api_error,
+    api_forbidden,
+    api_not_found,
+    api_success,
+    check_api_permission,
+    get_module_min_role,
+)
 
 router = APIRouter(tags=["api-guilds"])
 
@@ -100,6 +107,10 @@ async def get_guild(request: Request, guild_id: int):
 @router.get("/guilds/{guild_id}/stats")
 async def get_guild_stats(request: Request, guild_id: int):
     """Get live guild and recent moderation statistics."""
+    await get_module_min_role("moderation", guild_id)
+    if not check_api_permission(request, "moderation.view", guild_id):
+        return api_forbidden("Insufficient permissions")
+
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:
@@ -226,6 +237,10 @@ async def get_guild_activity(request: Request, guild_id: int):
     roles / reputation / notes / system), a human ``label``, and usernames
     resolved from the guild member cache when possible.
     """
+    await get_module_min_role("moderation", guild_id)
+    if not check_api_permission(request, "moderation.view", guild_id):
+        return api_forbidden("Insufficient permissions")
+
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:

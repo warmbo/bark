@@ -39,6 +39,9 @@ DEFAULT_MENTION_LIMIT = 10  # mentions per 60s
 class AntiRaidService:
     """Combined anti-raid, spam, and escalation detection."""
 
+    MAX_TRACKED_USERS_PER_GUILD = 10_000
+    VIOLATION_STATE_TTL_SECONDS = 86_400
+
     def __init__(self) -> None:
         # ── Raid detection ──
         self._join_track: dict[int, deque] = defaultdict(lambda: deque(maxlen=200))
@@ -59,6 +62,7 @@ class AntiRaidService:
         self._escalation_cooldown: dict[int, dict[int, float]] = defaultdict(
             lambda: defaultdict(float)
         )
+        self._violation_seen: dict[int, dict[int, float]] = defaultdict(dict)
 
     # ══════════════════════════════════════════════════════
     # RAID DETECTION
@@ -165,9 +169,11 @@ class AntiRaidService:
 
     async def record_violation(self, guild_id: int, user_id: int) -> tuple[str | None, int]:
         """Record an AutoMod violation. Returns (action_to_take, strike_count) or (None, count)."""
+        now_ts = datetime.now(timezone.utc).timestamp()
+        self._violation_seen[guild_id][user_id] = now_ts
+        self._prune_violation_state(guild_id, now_ts)
         self._violation_count[guild_id][user_id] += 1
         strikes = self._violation_count[guild_id][user_id]
-        now_ts = datetime.now(timezone.utc).timestamp()
         last_esc = self._escalation_cooldown[guild_id][user_id]
 
         # Only escalate once per 5 minutes to prevent spam
@@ -183,6 +189,19 @@ class AntiRaidService:
             self._escalation_cooldown[guild_id][user_id] = now_ts
         return action, strikes
 
+    def _prune_violation_state(self, guild_id: int, now_ts: float) -> None:
+        """Expire inactive users and cap per-guild in-memory escalation state."""
+        seen = self._violation_seen[guild_id]
+        cutoff = now_ts - self.VIOLATION_STATE_TTL_SECONDS
+        stale_users = [user_id for user_id, timestamp in seen.items() if timestamp < cutoff]
+        for user_id in stale_users:
+            self.reset_violations(guild_id, user_id)
+
+        while len(seen) > self.MAX_TRACKED_USERS_PER_GUILD:
+            oldest_user = min(seen, key=seen.__getitem__)
+            self.reset_violations(guild_id, oldest_user)
+
     def reset_violations(self, guild_id: int, user_id: int) -> None:
         self._violation_count[guild_id].pop(user_id, None)
         self._escalation_cooldown[guild_id].pop(user_id, None)
+        self._violation_seen[guild_id].pop(user_id, None)

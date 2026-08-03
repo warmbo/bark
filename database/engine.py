@@ -113,9 +113,10 @@ async def init_db() -> None:
 
 
 async def close_db() -> None:
-    """Dispose of the engine."""
-    global _engine
+    """Dispose of the engine and close all connections."""
+    global _engine, _session_factory
     if _engine is not None:
         await _engine.dispose()
         _engine = None
-        logger.info("Database engine disposed")
+    _session_factory = None
+    logger.info("Database connections closed")

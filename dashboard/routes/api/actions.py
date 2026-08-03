@@ -156,18 +156,27 @@ async def get_member_detail(request: Request, guild_id: str, user_id: str):
     guild = bot.get_guild(gid)
     if guild is None:
         return api_not_found("Guild")
-    member = guild.get_member(int(user_id))
+    try:
+        member_id = int(user_id)
+    except (TypeError, ValueError):
+        return api_not_found("Member")
+    member = guild.get_member(member_id)
     if member is None:
         return api_not_found("Member")
 
-    cases = await SERVICE.get_cases(gid, limit=50)
-    member_cases = [c for c in cases if c["target_id"] == user_id]
-
-    warnings = await SERVICE.get_warnings(gid, user_id=str(member.id))
     await get_module_min_role("moderation", gid)
+    can_view_moderation = check_api_permission(request, "moderation.view", gid)
+    if can_view_moderation:
+        cases = await SERVICE.get_cases(gid, limit=50)
+        member_cases = [c for c in cases if c["target_id"] == user_id]
+        warnings = await SERVICE.get_warnings(gid, user_id=str(member.id))
+        voice_sessions = await SERVICE.get_voice_sessions(gid, str(member.id))
+    else:
+        member_cases = []
+        warnings = []
+        voice_sessions = []
     can_view_notes = check_api_permission(request, "moderation.notes.view", gid)
     notes = await _get_user_notes(gid, str(member.id)) if can_view_notes else []
-    voice_sessions = await SERVICE.get_voice_sessions(gid, str(member.id))
 
     return api_success(
         {
@@ -187,6 +196,7 @@ async def get_member_detail(request: Request, guild_id: str, user_id: str):
             "cases": member_cases,
             "warnings": warnings,
             "notes": notes,
+            "can_view_moderation": can_view_moderation,
             "can_view_notes": can_view_notes,
             "voice_sessions": voice_sessions,
         }
@@ -257,11 +267,15 @@ async def action_unban(request: Request, guild_id: str):
         return api_not_found("Guild")
 
     data = await request.json()
-    user_id = data.get("target_id", "").strip()
-    reason = data.get("reason", "Unbanned via dashboard").strip()
+    raw_user_id = data.get("target_id")
+    user_id = str(raw_user_id).strip() if raw_user_id is not None else ""
+    raw_reason = data.get("reason")
+    reason = str(raw_reason).strip() if raw_reason is not None else "Unbanned via dashboard"
 
     if not user_id:
         return api_error("target_id is required")
+    if not user_id.isdigit():
+        return api_error("target_id must be a valid user ID")
 
     try:
         user = await bot.fetch_user(int(user_id))

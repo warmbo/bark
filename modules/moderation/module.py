@@ -444,6 +444,7 @@ class ModerationModule(BarkModule):
 
     def get_permissions(self) -> list[PermissionDefinition]:
         return [
+            PermissionDefinition(name="moderation.view", label="View Moderation Records"),
             PermissionDefinition(name="moderation.warn", label="Warn Members"),
             PermissionDefinition(name="moderation.timeout", label="Timeout Members"),
             PermissionDefinition(name="moderation.kick", label="Kick Members"),
@@ -1949,6 +1950,10 @@ class ModerationModule(BarkModule):
         svc = ModerationService()
         router = APIRouter(tags=["module-moderation"])
 
+        async def can_view(request: Request, guild_id: str) -> bool:
+            await get_module_min_role("moderation", guild_id)
+            return check_api_permission(request, "moderation.view", guild_id)
+
         @router.post("/guilds/{guild_id}/modules/moderation/quick-warn")
         async def quick_warn(request: Request, guild_id: str):
             """Quick-warn a member from the dashboard."""
@@ -2167,6 +2172,8 @@ class ModerationModule(BarkModule):
         @router.get("/guilds/{guild_id}/rulesets")
         async def list_rulesets(request: Request, guild_id: str):
             """List all rulesets for a guild with their rules."""
+            if not await can_view(request, guild_id):
+                return api_forbidden("Insufficient permissions")
             from sqlalchemy import select
 
             from database.models.ruleset import Rule, RuleSet
@@ -2409,6 +2416,8 @@ class ModerationModule(BarkModule):
         @router.get("/guilds/{guild_id}/wordlists")
         async def list_wordlists(request: Request, guild_id: str):
             """List word/domain lists for a guild."""
+            if not await can_view(request, guild_id):
+                return api_forbidden("Insufficient permissions")
             from sqlalchemy import select
 
             from database.models.ruleset import WordList

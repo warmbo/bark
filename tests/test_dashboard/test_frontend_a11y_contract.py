@@ -245,6 +245,16 @@ def test_all_remote_dashboard_avatars_use_the_shared_fallback():
     assert "initImageFallbacks();" in detail
 
 
+def test_member_detail_empty_state_icons_are_interpolated():
+    """Empty-state icon helpers must not render as literal template source."""
+    detail = source(TEMPLATES / "pages" / "member_detail.html")
+
+    assert not re.search(r":\s*'[^'\n]*\$\{memberIconSvg", detail)
+    for icon in ("scroll-text", "alert-triangle", "headphones", "file-text"):
+        literal = '${memberIconSvg("' + icon + '", 18)}'
+        assert re.search(r":\s*`[^`\n]*" + re.escape(literal), detail)
+
+
 def test_module_toggle_uses_the_human_readable_module_name():
     detail = source(TEMPLATES / "pages" / "module_detail.html")
     assert "Enable {{ module_name | replace('_', ' ') | title }}" in detail

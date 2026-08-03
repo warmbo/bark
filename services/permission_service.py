@@ -69,6 +69,7 @@ class PermissionService:
     def __init__(self, session=None):
         self.session = session
         self._module_actions: dict[str, str] = {}
+        self._module_owners: dict[str, str] = {}
 
     def register_module_permissions(self, module_name: str, permission_defs: list) -> None:
         """Register permissions from a module. Called during module discovery."""
@@ -77,9 +78,12 @@ class PermissionService:
             # Preserve centrally defined role levels; unknown module mutations
             # remain administrator-only unless a future definition says otherwise.
             self._module_actions[action_name] = self.CORE_ACTIONS.get(action_name, "admin")
+            self._module_owners[action_name] = module_name
 
     def discover_module_permissions(self, modules: dict) -> None:
-        """Scan all modules and register their permissions."""
+        """Discover and register permissions from all modules."""
+        self._module_actions.clear()
+        self._module_owners.clear()
         for name, module in modules.items():
             try:
                 perms = module.get_permissions()
@@ -110,6 +114,15 @@ class PermissionService:
             return self._module_actions[action]
         # Fall back to core actions
         return self.CORE_ACTIONS.get(action, "admin")
+
+    def get_module_for_action(self, action: str) -> str | None:
+        """Return the module that declared an action, when known."""
+        return self._module_owners.get(action)
+
+    def clear_module_permissions(self) -> None:
+        """Clear discovered module actions and ownership metadata."""
+        self._module_actions.clear()
+        self._module_owners.clear()
 
     def capabilities_for_role(self, role: str) -> dict[str, bool]:
         """Return the complete, stable action manifest for a dashboard role."""

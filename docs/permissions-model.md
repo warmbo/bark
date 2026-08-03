@@ -45,6 +45,7 @@ Higher numeric level = more access. A user's role must be **≥** the required r
 ### Moderation Actions
 | Action | Required Role |
 |---|---|
+| `moderation.view` | module minimum role (admin when unset) |
 | `moderation.warn` | moderator |
 | `moderation.timeout` | moderator |
 | `moderation.kick` | moderator |
@@ -99,7 +100,8 @@ check_api_permission(request, action, guild_id)
     │
     ├─ user_role = request.session["role"]  (default: "viewer")
     │
-    ├─ action has "." prefix? 
+    ├─ action was declared by a module (or has a module prefix)?
+    │     → resolve the declaring module from PermissionService
     │     → lookup _module_role_cache[(guild_id, module_name)]
     │     → required = cached min_role or "admin"
     │
@@ -120,6 +122,10 @@ Directly sets the cache — used after API writes to keep permissions consistent
 ### 4. `load_module_role_access_cache()` (`services/response.py`)
 
 Called at startup (`dashboard/__init__.py`). Loads all `ModuleRoleAccess` rows into the sync cache so `AuthMiddleware` can check permissions synchronously on every request.
+
+### 5. Guild capability manifests
+
+`get_guild_capabilities()` discovers each action's declaring module, primes every module's guild-specific role cache, and evaluates capabilities through the same `check_api_permission()` path used by route enforcement. The guild manifest therefore cannot advertise a moderator action that the configured module role would reject.
 
 ## AuthMiddleware Permission Enforcement
 
@@ -206,4 +212,4 @@ Session stores `{"user": {...}, "role": "viewer|moderator|admin|owner"}`. The `r
 - `Referrer-Policy: same-origin`
 - `Strict-Transport-Security` (when `secure_cookies` enabled)
 - Cross-origin write rejection (non-GET with mismatched Origin header)
-- Per-IP token-bucket rate limiting (3× config cap for reads, ½ cap for writes, 429 on overflow)
+- Bounded per-identity request-window limiting (authenticated user ID, otherwise client IP; 3× config cap for reads, ½ cap for writes, 429 on overflow)

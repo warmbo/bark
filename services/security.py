@@ -2,7 +2,7 @@
 
 import re
 import time
-from collections import defaultdict
+from collections import OrderedDict
 from typing import Callable
 
 from fastapi import Request, Response
@@ -173,21 +173,47 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimiter:
-    """Simple in-memory token bucket rate limiter per IP."""
+    """Bounded in-memory request-window limiter per identity."""
 
-    def __init__(self, capacity: int = 60):
+    def __init__(self, capacity: int = 60, max_keys: int = 10_000):
         self.capacity = capacity
-        self.tokens: dict[str, list[float]] = defaultdict(list)
+        self.max_keys = max_keys
+        self.tokens: OrderedDict[str, list[float]] = OrderedDict()
+        self._last_sweep = 0.0
 
-    def check(self, ip: str) -> bool:
+    def check(self, identity: str) -> bool:
         now = time.monotonic()
         window = now - 60.0
-        # Prune old entries
-        self.tokens[ip] = [t for t in self.tokens[ip] if t > window]
-        if len(self.tokens[ip]) >= self.capacity:
+        if now - self._last_sweep >= 60.0:
+            for key in list(self.tokens):
+                recent = [timestamp for timestamp in self.tokens[key] if timestamp > window]
+                if recent:
+                    self.tokens[key] = recent
+                else:
+                    del self.tokens[key]
+            self._last_sweep = now
+
+        bucket = [timestamp for timestamp in self.tokens.get(identity, []) if timestamp > window]
+        if len(bucket) >= self.capacity:
+            self.tokens[identity] = bucket
+            self.tokens.move_to_end(identity)
             return False
-        self.tokens[ip].append(now)
+        bucket.append(now)
+        self.tokens[identity] = bucket
+        self.tokens.move_to_end(identity)
+        while len(self.tokens) > self.max_keys:
+            self.tokens.popitem(last=False)
         return True
+
+
+def rate_limit_identity(request: Request) -> str:
+    """Use a signed-in user ID before the shared reverse-proxy address."""
+    session = request.scope.get("session") or {}
+    user = session.get("user") or {}
+    if user.get("id"):
+        return f"user:{user['id']}"
+    host = request.client.host if request.client else "unknown"
+    return f"ip:{host}"
 
 
 # Separate limiters: GET requests are read-only and much more frequent
@@ -260,11 +286,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Rate limiting on API routes — separate GET (read) and POST/PUT/DELETE (write)
         path = request.url.path
         if path.startswith("/api/"):
-            ip = request.client.host if request.client else "unknown"
+            identity = rate_limit_identity(request)
             read_lim, write_lim = _get_limiters()
             method = request.method.upper()
             limiter = read_lim if method == "GET" else write_lim
-            if not limiter.check(ip):
+            if not limiter.check(identity):
                 from fastapi.responses import JSONResponse
 
                 return JSONResponse(

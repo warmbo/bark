@@ -187,4 +187,4 @@ Categories: `_core` (priority -1), `community` (priority 2), `_modules` (priorit
 | **Permission cache** | `ModuleRoleAccess` overrides are loaded into a sync dict at startup so auth middleware can check permissions without awaiting DB. |
 | **SQLite by default** | Single-file deployment. SQLAlchemy async engine makes swapping to Postgres straightforward. |
 | **SessionMiddleware + OAuth2** | Discord OAuth2 flow authenticates dashboard users; `SessionMiddleware` persists the user. Role-based access control (`viewer`/`moderator`/`admin`/`owner`) gates every mutation. |
-| **CSP + rate limiting** | Strict Content-Security-Policy headers, per-IP token-bucket rate limiting (3× cap for GET, ½ cap for writes), and CORS origin enforcement all live in `SecurityMiddleware`. |
+| **CSP + rate limiting** | Strict Content-Security-Policy headers, bounded per-identity request-window limiting (authenticated user ID, otherwise client IP; 3× cap for GET, ½ cap for writes), and CORS origin enforcement all live in `SecurityMiddleware`. |

@@ -10,7 +10,14 @@ from database.engine import session_scope
 from database.models.moderation import ModerationCase, Warning
 from services.bark_context import emit_moderation_case_created
 from services.moderation_service import ModerationService
-from services.response import api_error, api_paginated, api_success
+from services.response import (
+    api_error,
+    api_forbidden,
+    api_paginated,
+    api_success,
+    check_api_permission,
+    get_module_min_role,
+)
 
 router = APIRouter(tags=["api-moderation"])
 
@@ -18,6 +25,11 @@ router = APIRouter(tags=["api-moderation"])
 def _deleted_count(result) -> int:
     """Return affected-row count from a DML execution result."""
     return result.rowcount or 0
+
+
+async def _can_view_moderation(request: Request, guild_id: str) -> bool:
+    await get_module_min_role("moderation", guild_id)
+    return check_api_permission(request, "moderation.view", guild_id)
 
 
 # ── Cases ────────────────────────────────────────────
@@ -31,6 +43,8 @@ async def list_cases(
     limit: int = Query(50, ge=1, le=100),
 ):
     """List moderation cases for a guild with pagination."""
+    if not await _can_view_moderation(request, guild_id):
+        return api_forbidden("Insufficient permissions")
     gid = int(guild_id)
     from sqlalchemy import desc, func, select
 
@@ -83,6 +97,8 @@ async def list_cases(
 @router.get("/guilds/{guild_id}/moderation/cases/{case_number}")
 async def get_case(request: Request, guild_id: str, case_number: int):
     """Get a specific case."""
+    if not await _can_view_moderation(request, guild_id):
+        return api_forbidden("Insufficient permissions")
     from sqlalchemy import select
 
     gid = str(guild_id)
@@ -163,6 +179,8 @@ async def create_case(request: Request, guild_id: str):
 @router.get("/guilds/{guild_id}/moderation/warnings")
 async def list_warnings(request: Request, guild_id: str):
     """List all active warnings for a guild."""
+    if not await _can_view_moderation(request, guild_id):
+        return api_forbidden("Insufficient permissions")
     from sqlalchemy import desc, select
 
     gid = str(guild_id)
@@ -196,6 +214,8 @@ async def list_warnings(request: Request, guild_id: str):
 @router.get("/guilds/{guild_id}/moderation/warnings/{user_id}")
 async def get_user_warnings(request: Request, guild_id: str, user_id: str):
     """List warnings for a specific user."""
+    if not await _can_view_moderation(request, guild_id):
+        return api_forbidden("Insufficient permissions")
     from sqlalchemy import desc, select
 
     gid = str(guild_id)
@@ -298,6 +318,8 @@ async def guild_voice_history(
     limit: int = Query(50, ge=1, le=100),
 ):
     """Get recent voice session history across all users in a guild."""
+    if not await _can_view_moderation(request, guild_id):
+        return api_forbidden("Insufficient permissions")
     from sqlalchemy import desc, select
 
     from database.models.voice import VoiceSession

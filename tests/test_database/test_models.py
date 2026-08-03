@@ -5,7 +5,7 @@ Tests for database models and engine.
 import pytest
 from sqlalchemy import func, select
 
-from database.engine import close_db, init_db, session_scope
+from database.engine import close_db, get_engine, get_session_factory, init_db, session_scope
 from database.models.automod import AutoModConfig
 from database.models.guild import Guild, GuildSetting
 from database.models.logging import LogConfig
@@ -41,6 +41,17 @@ async def test_create_guild(db):
         assert saved.name == "Test Guild"
         assert saved.owner_id == "987654321"
         assert saved.prefix == "!"
+
+
+@pytest.mark.asyncio
+async def test_close_db_clears_engine_and_session_factory(db):
+    engine_before = get_engine()
+    factory_before = get_session_factory()
+
+    await close_db()
+
+    assert get_engine() is not engine_before
+    assert get_session_factory() is not factory_before
 
 
 @pytest.mark.asyncio

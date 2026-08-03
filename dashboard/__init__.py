@@ -41,9 +41,11 @@ def create_app(bot: BarkBot) -> DashboardApp:
         redoc_url=None,
     )
 
-    # Starlette executes class middleware in reverse registration order. Auth
-    # must run inside SessionMiddleware so request.session is available.
+    # Starlette executes class middleware in reverse registration order.
+    # Session must wrap Security (rate-limit user identity) and Auth; Security
+    # must wrap Auth so rejected responses still receive security headers.
     app.add_middleware(AuthMiddleware)
+    app.add_middleware(SecurityMiddleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=config.dashboard.secret_key,
@@ -51,7 +53,6 @@ def create_app(bot: BarkBot) -> DashboardApp:
         same_site="lax",
         https_only=config.dashboard.secure_cookies,
     )
-    app.add_middleware(SecurityMiddleware)
     public_host = urlparse(config.dashboard.public_url).hostname
     app.add_middleware(
         TrustedHostMiddleware,

@@ -26,11 +26,11 @@ Response shape:
 |---|---|---|---|---|
 | GET | `/api/v1/guilds` | Session | List accessible guilds (with OAuth filters when enabled) | `dashboard/routes/api/guilds.py` |
 | GET | `/api/v1/guilds/{guild_id}` | Session | Detailed guild info — name, members, channels, roles, boosts, premium | `dashboard/routes/api/guilds.py` |
-| GET | `/api/v1/guilds/{guild_id}/stats` | Session | Live guild stats — online members, voice count, cases 7d, growth 30d, cases by type | `dashboard/routes/api/guilds.py` |
+| GET | `/api/v1/guilds/{guild_id}/stats` | moderation.view | Live guild stats — online members, voice count, cases 7d, growth 30d, cases by type | `dashboard/routes/api/guilds.py` |
 | GET | `/api/v1/guilds/{guild_id}/roles` | Session | All roles (id, name, color) for filtering | `dashboard/routes/api/guilds.py` |
 | GET | `/api/v1/guilds/{guild_id}/channels` | Session | Sorted text channels (id, name, parent_name, type) | `dashboard/routes/api/guilds.py` |
-| GET | `/api/v1/guilds/{guild_id}/activity` | Session | Aggregated feed — last 10 cases, audits, voice sessions, warnings (merged, sorted, max 25) | `dashboard/routes/api/guilds.py` |
-| GET | `/api/v1/guilds/{guild_id}/manifest` | Session | Full navigation + capabilities manifest for dashboard rendering | `dashboard/routes/api/manifest.py` |
+| GET | `/api/v1/guilds/{guild_id}/activity` | moderation.view | Aggregated feed — last 10 cases, audits, voice sessions, warnings (merged, sorted, max 25) | `dashboard/routes/api/guilds.py` |
+| GET | `/api/v1/guilds/{guild_id}/manifest` | Session | Full navigation + guild-specific capabilities manifest, including module role overrides | `dashboard/routes/api/manifest.py` |
 
 `GET /api/v1/guilds/{guild_id}/stats` response:
 ```json
@@ -43,7 +43,7 @@ Response shape:
 | Method | Path | Auth | Description | Source file |
 |---|---|---|---|---|
 | GET | `/api/v1/guilds/{guild_id}/members` | Session | List/search members with filters (search, role_id, min_age_days, max_age_days), sorting (name/joined_at/account_age/role), pagination (page, limit up to 100) | `dashboard/routes/api/actions.py` |
-| GET | `/api/v1/guilds/{guild_id}/members/{user_id}` | Session | Full member detail — profile, cases, warnings, notes, voice sessions | `dashboard/routes/api/actions.py` |
+| GET | `/api/v1/guilds/{guild_id}/members/{user_id}` | Session | Member profile; cases, warnings, and voice sessions require `moderation.view`, while notes require `moderation.notes.view` | `dashboard/routes/api/actions.py` |
 
 ## Moderation Actions
 
@@ -70,14 +70,14 @@ Each action also checks:
 
 | Method | Path | Auth | Description | Source file |
 |---|---|---|---|---|
-| GET | `/api/v1/guilds/{guild_id}/moderation/cases` | Session | Paginated unresolved cases (page, limit) | `dashboard/routes/api/moderation.py` |
-| GET | `/api/v1/guilds/{guild_id}/moderation/cases/{case_number}` | Session | Single case detail | `dashboard/routes/api/moderation.py` |
+| GET | `/api/v1/guilds/{guild_id}/moderation/cases` | moderation.view | Paginated unresolved cases (page, limit) | `dashboard/routes/api/moderation.py` |
+| GET | `/api/v1/guilds/{guild_id}/moderation/cases/{case_number}` | moderation.view | Single case detail | `dashboard/routes/api/moderation.py` |
 | POST | `/api/v1/guilds/{guild_id}/moderation/cases` | moderation.cases.create | Create case directly | `dashboard/routes/api/moderation.py` |
 | DELETE | `/api/v1/guilds/{guild_id}/moderation/cases/{case_number}` | moderation.cases.delete | Soft-delete (marks resolved) | `dashboard/routes/api/moderation.py` |
-| GET | `/api/v1/guilds/{guild_id}/moderation/warnings` | Session | List all active warnings | `dashboard/routes/api/moderation.py` |
-| GET | `/api/v1/guilds/{guild_id}/moderation/warnings/{user_id}` | Session | List warnings for a user | `dashboard/routes/api/moderation.py` |
+| GET | `/api/v1/guilds/{guild_id}/moderation/warnings` | moderation.view | List all active warnings | `dashboard/routes/api/moderation.py` |
+| GET | `/api/v1/guilds/{guild_id}/moderation/warnings/{user_id}` | moderation.view | List warnings for a user | `dashboard/routes/api/moderation.py` |
 | DELETE | `/api/v1/guilds/{guild_id}/moderation/warnings/{warning_id}` | moderation.warnings.delete | Deactivate a warning | `dashboard/routes/api/moderation.py` |
-| GET | `/api/v1/guilds/{guild_id}/moderation/voice-history` | Session | Recent voice sessions (limit, enriched with resolved names) | `dashboard/routes/api/moderation.py` |
+| GET | `/api/v1/guilds/{guild_id}/moderation/voice-history` | moderation.view | Recent voice sessions (limit, enriched with resolved names) | `dashboard/routes/api/moderation.py` |
 | DELETE | `/api/v1/guilds/{guild_id}/moderation/voice-history` | guild.manage | Purge all voice session records | `dashboard/routes/api/moderation.py` |
 | DELETE | `/api/v1/guilds/{guild_id}/moderation/audit-logs` | guild.manage | Purge all audit logs | `dashboard/routes/api/moderation.py` |
 | DELETE | `/api/v1/guilds/{guild_id}/moderation/attachments` | guild.manage | Purge all file attachment records | `dashboard/routes/api/moderation.py` |

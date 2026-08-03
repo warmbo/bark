@@ -35,7 +35,8 @@ def _module_name_for_action(request, action: str, guild_id=None) -> str | None:
         guild_id = _guild_id_from_path(path)
     if guild_id is None or "." not in action:
         return None
-    prefix = action.split(".", 1)[0]
+    owner = _permission_service.get_module_for_action(action)
+    prefix = owner or action.split(".", 1)[0]
     key = (str(guild_id), prefix)
     if key in _module_role_cache:
         return prefix
@@ -57,6 +58,10 @@ async def get_module_min_role(module_name: str, guild_id: int | str) -> str | No
     Looking up an unset module is cached as well so the synchronous permission
     check can apply the documented default of administrator access.
     """
+    key = (str(guild_id), module_name)
+    if key in _module_role_cache:
+        return _module_role_cache[key]
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -72,13 +77,19 @@ async def get_module_min_role(module_name: str, guild_id: int | str) -> str | No
             )
         ).scalar_one_or_none()
     min_role = row.min_role if row is not None else None
-    _module_role_cache[(str(guild_id), module_name)] = min_role
+    _module_role_cache[key] = min_role
     return min_role
 
 
 def set_cached_module_min_role(module_name: str, guild_id: int | str, min_role: str | None) -> None:
     """Keep permission enforcement coherent immediately after API writes."""
     _module_role_cache[(str(guild_id), module_name)] = min_role
+
+
+def reset_permission_state() -> None:
+    """Clear in-memory permission state for reloads and isolated test runs."""
+    _module_role_cache.clear()
+    _permission_service.clear_module_permissions()
 
 
 async def load_module_role_access_cache() -> None:
@@ -140,6 +151,30 @@ def get_capabilities(request) -> dict[str, bool]:
     if not config.oauth2.enabled:
         return {action: True for action in _permission_service.get_all_actions()}
     return _permission_service.capabilities_for_role(request.session.get("role", "viewer"))
+
+
+async def get_guild_capabilities(request, guild_id: int | str) -> dict[str, bool]:
+    """Return capabilities using the same per-guild module roles as enforcement."""
+    bot = getattr(getattr(request, "state", None), "bot", None)
+    manager = getattr(bot, "modules", None)
+    modules: dict = {}
+    if manager is not None:
+        try:
+            modules = manager.get_all_modules()
+            _permission_service.discover_module_permissions(modules)
+        except (AttributeError, TypeError):
+            logger.debug("Module capabilities unavailable for this request")
+            modules = {}
+
+    for module_name in modules:
+        await get_module_min_role(module_name, guild_id)
+
+    from config import config
+
+    actions = _permission_service.get_all_actions()
+    if not config.oauth2.enabled:
+        return {action: True for action in actions}
+    return {action: check_api_permission(request, action, guild_id) for action in sorted(actions)}
 
 
 def api_success(data: Any = None, status_code: int = 200) -> JSONResponse:
