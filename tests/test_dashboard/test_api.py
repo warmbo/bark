@@ -716,6 +716,74 @@ async def test_guild_stats(client):
         assert "members" in data["data"]
 
 
+@pytest.mark.asyncio
+async def test_guild_activity_aggregates_all_logged_sources(client, db):
+    """Activity feed surfaces cases, warnings, reputation, roles, notes, voice, and auto-voice."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.auto_voice import AutoVoiceChannel
+    from database.models.moderation import ModerationCase, UserNote
+    from database.models.moderation import Warning as WarningModel
+    from database.models.reputation import ReputationEvent
+    from database.models.role_manager import RoleAssignment
+    from database.models.voice import VoiceSession
+
+    async with session_scope() as session:
+        now = datetime.now(timezone.utc)
+        session.add_all(
+            [
+                ModerationCase(
+                    guild_id="1", case_number=1, action_type="warn", target_id="900",
+                    target_tag="WarnedUser", moderator_id="800", moderator_tag="Mod",
+                    reason="spam", created_at=now - timedelta(minutes=1),
+                ),
+                WarningModel(
+                    guild_id="1", user_id="901", moderator_id="800", reason="nope", active=True,
+                    created_at=now - timedelta(minutes=2),
+                ),
+                ReputationEvent(
+                    guild_id="1", actor_id="800", target_id="902", event_type="thanks",
+                    points=2.0, created_at=now - timedelta(minutes=3),
+                ),
+                RoleAssignment(
+                    guild_id="1", user_id="903", role_id="700", action="add",
+                    created_at=now - timedelta(minutes=4),
+                ),
+                UserNote(
+                    guild_id="1", user_id="904", author_id="800", content="watch this member",
+                    created_at=now - timedelta(minutes=5),
+                ),
+                VoiceSession(
+                    guild_id="1", user_id="905", channel_id="600", channel_name="General",
+                    joined_at=now - timedelta(hours=1), left_at=now - timedelta(minutes=6),
+                    duration_seconds=3200,
+                ),
+                AutoVoiceChannel(
+                    channel_id="601", guild_id="1", owner_id="906", primary_channel_id="602",
+                    created_at=now - timedelta(minutes=7),
+                ),
+            ]
+        )
+        await session.commit()
+
+    resp = await client.get("/api/v1/guilds/1/activity")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    activity = data["data"]["activity"]
+    assert len(activity) >= 7
+
+    types = {a["type"] for a in activity}
+    assert {"case", "warning", "reputation", "role", "note", "voice", "auto_voice"} <= types
+
+    # Chronological ordering — newest first
+    stamps = [a.get("timestamp") or "" for a in activity]
+    assert stamps == sorted(stamps, reverse=True)
+
+
 # ═══════════════════════════════════════════════════════
 # ── Phase 16 Regression: Persistence Tests ────────────
 # ═══════════════════════════════════════════════════════

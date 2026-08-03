@@ -229,8 +229,11 @@ async def get_guild_activity(request: Request, guild_id: int):
     from sqlalchemy import desc, select
 
     from database.engine import session_scope
-    from database.models.moderation import AuditLog, ModerationCase
+    from database.models.auto_voice import AutoVoiceChannel
+    from database.models.moderation import AuditLog, ModerationCase, UserNote
     from database.models.moderation import Warning as WarningModel
+    from database.models.reputation import ReputationEvent
+    from database.models.role_manager import RoleAssignment
     from database.models.voice import VoiceSession
 
     items = []
@@ -341,6 +344,98 @@ async def get_guild_activity(request: Request, guild_id: int):
                 }
             )
 
-    # Sort all by timestamp descending, take top 25
+        # Reputation events (recently scored activity)
+        rep_result = await session.execute(
+            select(ReputationEvent)
+            .where(ReputationEvent.guild_id == str(guild_id))
+            .order_by(desc(ReputationEvent.created_at))
+            .limit(10)
+        )
+        for e in rep_result.scalars():
+            target = e.target_id or "someone"
+            items.append(
+                {
+                    "type": "reputation",
+                    "action": e.event_type,
+                    "description": f"{e.event_type} +{e.points:g} → {target}",
+                    "target": target,
+                    "moderator": e.actor_id,
+                    "reason": "",
+                    "timestamp": e.created_at.isoformat() if e.created_at else None,
+                    "icon": {
+                        "thanks": "🙏",
+                        "message": "💬",
+                        "reaction": "⭐",
+                        "emoji": "😀",
+                        "voice_minute": "🎧",
+                    }.get(e.event_type, "🏆"),
+                }
+            )
+
+        # Role assignments (roles granted/removed by role_manager)
+        role_result = await session.execute(
+            select(RoleAssignment)
+            .where(RoleAssignment.guild_id == str(guild_id))
+            .order_by(desc(RoleAssignment.created_at))
+            .limit(10)
+        )
+        for ra in role_result.scalars():
+            verb = "assigned" if ra.action == "add" else "removed"
+            items.append(
+                {
+                    "type": "role",
+                    "action": f"role_{ra.action}",
+                    "description": f"Role {verb} for {ra.user_id}",
+                    "target": ra.user_id,
+                    "moderator": None,
+                    "reason": "",
+                    "timestamp": ra.created_at.isoformat() if ra.created_at else None,
+                    "icon": "🎭",
+                }
+            )
+
+        # User notes (added by moderators)
+        notes_result = await session.execute(
+            select(UserNote)
+            .where(UserNote.guild_id == str(guild_id))
+            .order_by(desc(UserNote.created_at))
+            .limit(10)
+        )
+        for n in notes_result.scalars():
+            items.append(
+                {
+                    "type": "note",
+                    "action": "note_added",
+                    "description": f"Note added for {n.user_id}",
+                    "target": n.user_id,
+                    "moderator": n.author_id,
+                    "reason": n.content[:120],
+                    "timestamp": n.created_at.isoformat() if n.created_at else None,
+                    "icon": "📝",
+                }
+            )
+
+        # Temporary voice channels created by auto_voice
+        avc_result = await session.execute(
+            select(AutoVoiceChannel)
+            .where(AutoVoiceChannel.guild_id == str(guild_id))
+            .order_by(desc(AutoVoiceChannel.created_at))
+            .limit(10)
+        )
+        for avc in avc_result.scalars():
+            items.append(
+                {
+                    "type": "auto_voice",
+                    "action": "voice_channel_created",
+                    "description": f"Temp voice channel created for {avc.owner_id}",
+                    "target": avc.owner_id,
+                    "moderator": None,
+                    "reason": "",
+                    "timestamp": avc.created_at.isoformat() if avc.created_at else None,
+                    "icon": "🎙️",
+                }
+            )
+
+    # Sort all by timestamp descending, take top 40
     items.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
-    return api_success({"activity": items[:25]})
+    return api_success({"activity": items[:40]})
