@@ -746,6 +746,15 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
                     guild_id="1", actor_id="800", target_id="902", event_type="thanks",
                     points=2.0, created_at=now - timedelta(minutes=3),
                 ),
+                # Noisy per-message scoring must be filtered out of the feed.
+                ReputationEvent(
+                    guild_id="1", actor_id="800", target_id="902", event_type="message",
+                    points=1.0, created_at=now - timedelta(seconds=30),
+                ),
+                ReputationEvent(
+                    guild_id="1", actor_id="800", target_id="902", event_type="reaction",
+                    points=0.5, created_at=now - timedelta(seconds=20),
+                ),
                 RoleAssignment(
                     guild_id="1", user_id="903", role_id="700", action="add",
                     created_at=now - timedelta(minutes=4),
@@ -776,6 +785,16 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
 
     types = {a["type"] for a in activity}
     assert {"case", "warning", "reputation", "role", "note", "voice", "auto_voice"} <= types
+
+    # Per-message scoring noise is excluded from the feed.
+    rep_items = [a for a in activity if a["type"] == "reputation"]
+    assert all(a["action"] != "message" for a in rep_items)
+    assert all(a["action"] != "reaction" for a in rep_items)
+    assert any(a["action"] == "thanks" for a in rep_items)
+
+    # Voice sessions surface as joins.
+    voice_items = [a for a in activity if a["type"] == "voice"]
+    assert voice_items and all(a["action"] == "voice_join" for a in voice_items)
 
     # Chronological ordering — newest first
     stamps = [a.get("timestamp") or "" for a in activity]

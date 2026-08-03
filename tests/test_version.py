@@ -1,7 +1,6 @@
 """Application version contract tests."""
 
 import re
-
 from importlib.metadata import version as installed_version
 
 import bark_version

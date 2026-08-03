@@ -295,29 +295,30 @@ async def get_guild_activity(request: Request, guild_id: int):
                         "unban": "🔓",
                         "member_update": "✏️",
                         "member_role_update": "🎭",
+                        "message_edit": "✏️",
+                        "message_delete": "🗑️",
+                        "link_posted": "🔗",
                     }.get(a.action, "📋"),
                 }
             )
 
-        # Voice sessions
+        # Voice sessions — members joining voice channels
         voice_result = await session.execute(
             select(VoiceSession)
-            .where(VoiceSession.guild_id == str(guild_id), VoiceSession.left_at.isnot(None))
+            .where(VoiceSession.guild_id == str(guild_id))
             .order_by(desc(VoiceSession.joined_at))
-            .limit(10)
+            .limit(15)
         )
         for v in voice_result.scalars():
             items.append(
                 {
                     "type": "voice",
-                    "action": "voice_leave",
-                    "description": f"{v.user_tag or v.user_id or 'Someone'} left voice ({v.channel_name or 'unknown'})",
+                    "action": "voice_join",
+                    "description": f"{v.user_tag or v.user_id or 'Someone'} joined voice ({v.channel_name or 'unknown'})",
                     "target": v.user_tag or v.user_id,
                     "moderator": None,
                     "reason": "",
-                    "timestamp": v.left_at.isoformat()
-                    if v.left_at
-                    else (v.joined_at.isoformat() if v.joined_at else None),
+                    "timestamp": v.joined_at.isoformat() if v.joined_at else None,
                     "icon": "🎧",
                     "duration": v.duration_seconds,
                 }
@@ -344,14 +345,18 @@ async def get_guild_activity(request: Request, guild_id: int):
                 }
             )
 
-        # Reputation events (recently scored activity)
+        # Reputation events — only notable/abnormal ones. Per-message scoring
+        # (message, reaction, emoji, voice_minute) is too noisy for the feed.
+        noisy_rep_events = {"message", "reaction", "emoji", "voice_minute"}
         rep_result = await session.execute(
             select(ReputationEvent)
             .where(ReputationEvent.guild_id == str(guild_id))
             .order_by(desc(ReputationEvent.created_at))
-            .limit(10)
+            .limit(50)
         )
         for e in rep_result.scalars():
+            if e.event_type in noisy_rep_events:
+                continue
             target = e.target_id or "someone"
             items.append(
                 {
@@ -364,10 +369,9 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "timestamp": e.created_at.isoformat() if e.created_at else None,
                     "icon": {
                         "thanks": "🙏",
-                        "message": "💬",
-                        "reaction": "⭐",
-                        "emoji": "😀",
-                        "voice_minute": "🎧",
+                        "award": "🏆",
+                        "tier_up": "⬆️",
+                        "level_up": "⭐",
                     }.get(e.event_type, "🏆"),
                 }
             )

@@ -11,6 +11,7 @@ See docs/api-contracts.md#logging for API endpoint contracts.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import cast
 
@@ -301,7 +302,28 @@ class LoggingModule(BarkModule):
 
     async def _on_message(self, event_type: str, **data):
         msg = data.get("message")
-        if not msg or msg.author.bot or not msg.guild or not msg.attachments:
+        if not msg or msg.author.bot or not msg.guild:
+            return
+
+        # Record posted links as notable activity (abnormal-feed signal).
+        if msg.content:
+            links = re.findall(r"https?://[^\s<>]+", msg.content)
+            if links:
+                await self.ctx.log_audit(
+                    msg.guild.id,
+                    "link_posted",
+                    str(msg.author.id),
+                    actor_tag=str(msg.author),
+                    target_id=str(msg.id),
+                    details={
+                        "channel_id": str(msg.channel.id),
+                        "channel": str(msg.channel),
+                        "link": links[0][:300],
+                        "links": links[:5],
+                    },
+                )
+
+        if not msg.attachments:
             return
         ch = await self._get_channel(msg.guild.id, "file_upload")
         for att in msg.attachments:
@@ -358,6 +380,19 @@ class LoggingModule(BarkModule):
         await self._send(
             ch, "✏️ Edited", f"in {before.channel.mention}", discord.Color.blue(), fields
         )
+        await self.ctx.log_audit(
+            before.guild.id,
+            "message_edit",
+            str(before.author.id),
+            actor_tag=str(before.author),
+            target_id=str(before.id),
+            details={
+                "channel_id": str(before.channel.id),
+                "channel": str(before.channel),
+                "before": (before.content or "")[:400],
+                "after": (after.content or "")[:400],
+            },
+        )
 
     async def _on_message_delete(self, event_type: str, **data):
         msg = data.get("message")
@@ -373,6 +408,19 @@ class LoggingModule(BarkModule):
             files = "\n".join(f"[{a.filename}]({a.url})" for a in msg.attachments)
             fields.append(("Attachments", files, False))
         await self._send(ch, "🗑️ Deleted", f"in {msg.channel.mention}", discord.Color.red(), fields)
+        await self.ctx.log_audit(
+            msg.guild.id,
+            "message_delete",
+            str(msg.author.id),
+            actor_tag=str(msg.author),
+            target_id=str(msg.id),
+            details={
+                "channel_id": str(msg.channel.id),
+                "channel": str(msg.channel),
+                "content": (msg.content or "")[:400],
+                "attachments": [a.filename for a in msg.attachments][:5],
+            },
+        )
 
     async def _on_member_join(self, event_type: str, **data):
         member = data.get("member")
