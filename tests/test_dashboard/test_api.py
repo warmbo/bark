@@ -721,8 +721,6 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     """Activity feed surfaces cases, warnings, reputation, roles, notes, voice, and auto-voice."""
     from datetime import datetime, timedelta, timezone
 
-    from sqlalchemy import select
-
     from database.engine import session_scope
     from database.models.auto_voice import AutoVoiceChannel
     from database.models.moderation import ModerationCase, UserNote

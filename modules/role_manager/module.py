@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import discord
+from fastapi import Request
 
 from database.engine import session_scope
 from database.models.role_manager import RoleAssignment, RoleRule
@@ -32,8 +33,6 @@ from modules.base import (
     PageRegistration,
     PermissionDefinition,
 )
-
-from fastapi import Request
 
 logger = logging.getLogger("bark.modules.role_manager")
 
@@ -576,6 +575,7 @@ class RoleManagerModule(BarkModule):
     def get_api_routes(self):
         """Dashboard API for managing role rules and viewing assignments."""
         from fastapi import APIRouter
+
         from services.response import api_error, api_not_found, api_success
 
         router = APIRouter(tags=["module-role_manager"])
@@ -700,7 +700,7 @@ class RoleManagerModule(BarkModule):
         async def list_assignments(guild_id: str, limit: int = 100):
             gid = int(guild_id)
             async with session_scope() as session:
-                from sqlalchemy import select, desc
+                from sqlalchemy import desc, select
                 result = await session.execute(
                     select(RoleAssignment)
                     .where(RoleAssignment.guild_id == str(gid))

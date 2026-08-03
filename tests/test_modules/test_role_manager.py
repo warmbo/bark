@@ -326,9 +326,9 @@ async def test_reaction_rule_matches_custom_emoji_by_id(db):
 
 
 def test_is_twitch_live_only_matches_twitch():
-    from modules.role_manager.module import _is_twitch_live
-
     import discord
+
+    from modules.role_manager.module import _is_twitch_live
     streaming = discord.ActivityType.streaming
     playing = discord.ActivityType.playing
 
