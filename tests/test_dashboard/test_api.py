@@ -49,6 +49,7 @@ async def app(db):
     mock_guild.icon = None  # No icon — safely handled
     mock_guild.owner = None
     mock_guild.get_member.return_value = None  # no cached members — fall back to stored tags
+    mock_guild.get_role.return_value = None  # no cached roles — fall back to stored IDs
     mock_guild.channels = []
     mock_guild.roles = []
     mock_guild.text_channels = []
@@ -724,7 +725,7 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
 
     from database.engine import session_scope
     from database.models.auto_voice import AutoVoiceChannel
-    from database.models.moderation import ModerationCase, UserNote
+    from database.models.moderation import AuditLog, ModerationCase, UserNote
     from database.models.moderation import Warning as WarningModel
     from database.models.reputation import ReputationEvent
     from database.models.role_manager import RoleAssignment
@@ -748,11 +749,11 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
                     guild_id="1", user_id="907", moderator_id="dashboard", reason="spam", active=True,
                     created_at=now - timedelta(seconds=15),
                 ),
+                # Noisy per-message scoring must be filtered out of the feed.
                 ReputationEvent(
                     guild_id="1", actor_id="800", target_id="902", event_type="thanks",
                     points=2.0, created_at=now - timedelta(minutes=3),
                 ),
-                # Noisy per-message scoring must be filtered out of the feed.
                 ReputationEvent(
                     guild_id="1", actor_id="800", target_id="902", event_type="message",
                     points=1.0, created_at=now - timedelta(seconds=30),
@@ -760,6 +761,17 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
                 ReputationEvent(
                     guild_id="1", actor_id="800", target_id="902", event_type="reaction",
                     points=0.5, created_at=now - timedelta(seconds=20),
+                ),
+                ReputationEvent(
+                    guild_id="1", actor_id="800", target_id="902", event_type="reaction_given",
+                    points=0.5, created_at=now - timedelta(seconds=18),
+                ),
+                # Messaging audit event — target_id is a message id, not a user.
+                AuditLog(
+                    guild_id="1", action="link_posted", actor_id="800",
+                    target_id="1533906144068632777",
+                    details='{"channel": "#general", "link": "https://example.com", "actor_tag": "Mod"}',
+                    created_at=now - timedelta(seconds=10),
                 ),
                 RoleAssignment(
                     guild_id="1", user_id="903", role_id="700", action="add",
@@ -796,6 +808,7 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     rep_items = [a for a in activity if a["type"] == "reputation"]
     assert all(a["action"] != "message" for a in rep_items)
     assert all(a["action"] != "reaction" for a in rep_items)
+    assert all(a["action"] != "reaction_given" for a in rep_items)
     assert any(a["action"] == "thanks" for a in rep_items)
 
     # Voice sessions surface as joins.
@@ -813,6 +826,17 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     case_items = [a for a in activity if a["type"] == "case"]
     assert case_items and "WarnedUser" in case_items[0]["description"]
     assert case_items[0]["label"] == "Warning issued"
+
+    # Messaging audit events describe the actor + channel, never the message id.
+    audit_items = [a for a in activity if a["type"] == "audit"]
+    link_items = [a for a in audit_items if a["action"] == "link_posted"]
+    assert link_items
+    assert "1533906144068632777" not in link_items[0]["description"]
+    assert "Link posted by" in link_items[0]["description"]
+
+    # Role assignments include the role name in the description.
+    role_items = [a for a in activity if a["type"] == "role"]
+    assert role_items and "Role assigned" in role_items[0]["description"]
 
     # Chronological ordering — newest first
     stamps = [a.get("timestamp") or "" for a in activity]

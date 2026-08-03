@@ -306,8 +306,9 @@ async def get_guild_activity(request: Request, guild_id: int):
                 detail_dict = json.loads(detail) if isinstance(detail, str) else detail
             except (json.JSONDecodeError, TypeError):
                 detail_dict = {}
-            target = member_name(a.target_id, detail_dict.get("target_tag"))
             actor = member_name(a.actor_id, detail_dict.get("actor_tag"))
+            messaging = a.action in {"message_edit", "message_delete", "link_posted"}
+            channel = detail_dict.get("channel") or ""
             audit_labels = {
                 "warn": "Warning issued",
                 "timeout": "Timeout applied",
@@ -322,11 +323,25 @@ async def get_guild_activity(request: Request, guild_id: int):
                 "link_posted": "Link posted",
             }
             label = audit_labels.get(a.action, a.action.replace("_", " ").title())
+            if messaging:
+                # For messaging events target_id is the *message* id, not a user —
+                # describe the actor and channel instead.
+                location = f" in {channel}" if channel else ""
+                if a.action == "message_edit":
+                    description = f"Message edited by {actor}{location}"
+                elif a.action == "message_delete":
+                    description = f"Message deleted by {actor}{location}"
+                else:
+                    description = f"Link posted by {actor}{location}"
+                target = actor
+            else:
+                target = member_name(a.target_id, detail_dict.get("target_tag"))
+                description = f"{label}: {target}"
             category = (
                 "moderation"
                 if a.action in {"warn", "timeout", "kick", "ban", "unban", "vc_kick"}
                 else "messaging"
-                if a.action in {"message_edit", "message_delete", "link_posted"}
+                if messaging
                 else "system"
             )
             items.append(
@@ -335,7 +350,7 @@ async def get_guild_activity(request: Request, guild_id: int):
                     "category": category,
                     "action": a.action,
                     "label": label,
-                    "description": f"{label}: {target}",
+                    "description": description,
                     "target": target,
                     "target_id": a.target_id,
                     "moderator": actor,
@@ -407,8 +422,12 @@ async def get_guild_activity(request: Request, guild_id: int):
             )
 
         # Reputation events — only notable/abnormal ones. Per-message scoring
-        # (message, reaction, emoji, voice_minute) is too noisy for the feed.
-        noisy_rep_events = {"message", "reaction", "emoji", "voice_minute"}
+        # (message, reaction, reaction_given/received, emoji, voice_minute) is
+        # too noisy for the feed.
+        noisy_rep_events = {
+            "message", "reaction", "reaction_given", "reaction_received",
+            "emoji", "voice_minute",
+        }
         rep_result = await session.execute(
             select(ReputationEvent)
             .where(ReputationEvent.guild_id == str(guild_id))
@@ -455,16 +474,38 @@ async def get_guild_activity(request: Request, guild_id: int):
             .order_by(desc(RoleAssignment.created_at))
             .limit(10)
         )
+        # Resolve rule names for the trigger info in one batched query.
+        rule_ids = {ra.rule_id for ra in role_result.scalars().all() if ra.rule_id}
+        rule_names: dict[int, str] = {}
+        if rule_ids:
+            from database.models.role_manager import RoleRule
+
+            rules_result = await session.execute(
+                select(RoleRule).where(RoleRule.id.in_(rule_ids))
+            )
+            for rr in rules_result.scalars():
+                rule_names[rr.id] = rr.name
+        # Re-execute so the scalar cursor is fresh for iteration.
+        role_result = await session.execute(
+            select(RoleAssignment)
+            .where(RoleAssignment.guild_id == str(guild_id))
+            .order_by(desc(RoleAssignment.created_at))
+            .limit(10)
+        )
         for ra in role_result.scalars():
             user = member_name(ra.user_id)
-            label = f"Role {'assigned' if ra.action == 'add' else 'removed'}"
+            role = guild.get_role(int(ra.role_id)) if ra.role_id else None
+            role_name = str(getattr(role, "name", None) or ra.role_id or "role")
+            action = "assigned" if ra.action == "add" else "removed"
+            trigger = f" ({rule_names.get(ra.rule_id, 'manual')})" if ra.rule_id else ""
+            label = f"Role {action}"
             items.append(
                 {
                     "type": "role",
                     "category": "roles",
                     "action": f"role_{ra.action}",
                     "label": label,
-                    "description": f"{label}: {user}",
+                    "description": f"{label} '{role_name}' for {user}{trigger}",
                     "target": user,
                     "target_id": ra.user_id,
                     "moderator": None,
