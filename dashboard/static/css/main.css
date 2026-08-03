@@ -2753,3 +2753,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 @media (max-width: 640px) {
   .behavior-guide-grid { grid-template-columns: 1fr; }
 }
+
+/* Reputation thanks search input width */
+.rep-search-input { width: 200px; }

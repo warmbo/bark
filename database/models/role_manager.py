@@ -53,7 +53,7 @@ class RoleAssignment(Base):
     guild_id: Mapped[str] = mapped_column(String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     role_id: Mapped[str] = mapped_column(String(32), nullable=False)
-    rule_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("role_rules.id"), nullable=True)
+    rule_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("role_rules.id"), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(16), nullable=False)
     """add | remove"""
     reason: Mapped[str] = mapped_column(String(255), nullable=False, default="")

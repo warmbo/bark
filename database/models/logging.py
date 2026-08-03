@@ -15,9 +15,9 @@ class LogConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(
         String(32), ForeignKey("guilds.discord_id"), nullable=False
-    )
+    , index=True)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    channel_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    channel_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     guild = relationship("Guild", back_populates="log_configs")

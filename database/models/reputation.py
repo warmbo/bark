@@ -76,7 +76,7 @@ class ReputationEvent(Base):
     """message|reaction|emoji|thanks|voice_minute"""
     points: Mapped[float] = mapped_column(Float, nullable=False)
     message_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    channel_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), index=True

@@ -368,6 +368,44 @@ async def _migrate_logging_config(connection: AsyncConnection) -> None:
             )
 
 
+async def _add_fk_indexes(connection: AsyncConnection) -> None:
+    """Add indexes on hot foreign-key columns, tolerating legacy schemas.
+
+    CREATE INDEX IF NOT EXISTS still raises when the target table or column is
+    absent, so probe sqlite_master first and skip missing ones.
+    """
+    wanted = [
+        ("moderation_cases", "guild_id"),
+        ("moderation_cases", "target_id"),
+        ("warnings", "guild_id"),
+        ("user_notes", "guild_id"),
+        ("audit_logs", "guild_id"),
+        ("audit_logs", "actor_id"),
+        ("audit_logs", "target_id"),
+        ("file_attachments", "guild_id"),
+        ("file_attachments", "channel_id"),
+        ("automod_configs", "guild_id"),
+        ("log_configs", "guild_id"),
+        ("log_configs", "channel_id"),
+        ("voice_sessions", "guild_id"),
+        ("voice_sessions", "channel_id"),
+        ("reputation_events", "channel_id"),
+        ("role_assignments", "rule_id"),
+    ]
+    for table, column in wanted:
+        probe = await connection.exec_driver_sql(
+            "SELECT 1 FROM pragma_table_info(?) WHERE name = ?",
+            (table, column),
+        )
+        if probe.first() is None:
+            continue
+        index_name = f"ix_{table}_{column}"
+        await connection.exec_driver_sql(
+            f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({column})"
+        )
+
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -409,6 +447,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     ("0004_canonical_discord_guild_ids", _canonicalize_feature_guild_ids),
     ("0005_post_delivery_state", _add_post_delivery_state),
     ("0006_canonical_logging_config", _migrate_logging_config),
+    (
+        "0007_fk_indexes",
+        _add_fk_indexes,
+    ),
 )
 
 
