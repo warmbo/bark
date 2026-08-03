@@ -232,6 +232,19 @@ def test_remote_bot_images_have_a_bundled_fallback():
     assert "image-fallbacks.js?v=1" in landing
 
 
+def test_all_remote_dashboard_avatars_use_the_shared_fallback():
+    base = source(TEMPLATES / "base.html")
+    members = source(TEMPLATES / "pages" / "members.html")
+    detail = source(TEMPLATES / "pages" / "member_detail.html")
+
+    assert 'class="sidebar-user-avatar"' in base
+    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in base
+    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in members
+    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in detail
+    assert "initImageFallbacks();" in members
+    assert "initImageFallbacks();" in detail
+
+
 def test_module_toggle_uses_the_human_readable_module_name():
     detail = source(TEMPLATES / "pages" / "module_detail.html")
     assert "Enable {{ module_name | replace('_', ' ') | title }}" in detail

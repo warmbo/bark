@@ -40,6 +40,7 @@ async function loadMember() {
         const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/members/${USER_ID}`, {cache: 'no-cache'});
         const data = raw.data || raw;
         root.innerHTML = renderMember(data);
+        if (typeof initImageFallbacks === 'function') initImageFallbacks();
         if (typeof lucide !== 'undefined') lucide.createIcons();
         document.title = `Bark — ${data.name}`;
     } catch (e) {
@@ -56,7 +57,7 @@ function renderMember(m) {
         <div class="member-detail-header">
             <div class="member-detail-avatar">
                 ${avatarUrl
-                    ? `<img src="${escHtml(avatarUrl)}" alt="${escHtml(memberName)}'s avatar">`
+                    ? `<img src="${escHtml(avatarUrl)}" data-fallback-src="/static/img/bark-avatar.svg" alt="${escHtml(memberName)}'s avatar">`
                     : `<div class="avatar-placeholder large">${escHtml(memberName.charAt(0))}</div>`}
             </div>
             <div class="member-detail-info">
@@ -86,7 +87,7 @@ function renderMember(m) {
                 <button type="button" class="btn btn-sm" data-member-action="kick" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Kick</button>
                 <button type="button" class="btn btn-sm" data-member-action="ban" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Ban</button>
                 ${m.voice_channel ? `<button type="button" class="btn btn-sm" data-member-action="vc_kick" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>VC Kick</button>` : ''}
-                <button type="button" class="btn btn-sm" data-member-action="note" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}">Add Note</button>
+                ${m.can_view_notes ? `<button type="button" class="btn btn-sm" data-member-action="note" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}">Add Note</button>` : ''}
             </div>
         </div>
 
@@ -96,7 +97,7 @@ function renderMember(m) {
         <div class="stats-grid">
             <div class="stat-card compact"><span class="stat-label">Total Cases</span><span class="stat-value stat-value-sm">${(m.cases || []).length}</span></div>
             <div class="stat-card compact"><span class="stat-label">Active Warnings</span><span class="stat-value stat-value-sm">${warnCount}</span></div>
-            <div class="stat-card compact"><span class="stat-label">Notes</span><span class="stat-value stat-value-sm">${(m.notes || []).length}</span></div>
+            <div class="stat-card compact"><span class="stat-label">Notes</span><span class="stat-value stat-value-sm">${m.can_view_notes ? (m.notes || []).length : '—'}</span></div>
             <div class="stat-card compact"><span class="stat-label">Voice Sessions</span><span class="stat-value stat-value-sm">${(m.voice_sessions || []).length}</span></div>
         </div>
 
@@ -133,7 +134,9 @@ function renderMember(m) {
         <!-- Notes -->
         <div class="content-card">
             <div class="card-header"><h2 class="card-title">${memberIconSvg('file-text', 16)} Notes</h2></div>
-            ${(m.notes || []).length
+            ${!m.can_view_notes
+                ? '<div class="state-panel state-empty" role="status"><div><strong>Notes restricted</strong><p>Your dashboard role cannot view private moderation notes.</p></div></div>'
+                : (m.notes || []).length
                 ? `<div class="notes-list">${m.notes.map(n => `
                     <div class="note-item">
                         <div class="note-meta">By <code>${escHtml(n.author_id)}</code> · ${n.created_at ? new Date(n.created_at).toLocaleDateString() : ''}

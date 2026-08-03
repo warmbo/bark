@@ -174,6 +174,49 @@ async def test_moderation_actions_redact_unexpected_discord_errors(monkeypatch):
     assert b"private" not in unban_response.body
 
 
+@pytest.mark.asyncio
+async def test_member_detail_does_not_disclose_notes_without_permission(monkeypatch):
+    """Member profiles must not bypass the private-note read permission."""
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from dashboard.routes.api import actions
+
+    member = MagicMock()
+    member.id = 42
+    member.display_name = "Member"
+    member.display_avatar = None
+    member.joined_at = None
+    member.created_at = None
+    member.roles = []
+    member.top_role = None
+    member.bot = False
+    member.is_timed_out.return_value = False
+    member.voice = None
+    guild = MagicMock()
+    guild.get_member.return_value = member
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=SimpleNamespace(get_guild=lambda _gid: guild)),
+        session={"role": "viewer"},
+    )
+
+    monkeypatch.setattr(actions, "get_module_min_role", AsyncMock(return_value=None))
+    monkeypatch.setattr(actions, "check_api_permission", lambda *_args, **_kwargs: False)
+    private_notes = AsyncMock(return_value=[{"content": "private note"}])
+    monkeypatch.setattr(actions, "_get_user_notes", private_notes)
+    monkeypatch.setattr(actions.SERVICE, "get_cases", AsyncMock(return_value=[]))
+    monkeypatch.setattr(actions.SERVICE, "get_warnings", AsyncMock(return_value=[]))
+    monkeypatch.setattr(actions.SERVICE, "get_voice_sessions", AsyncMock(return_value=[]))
+
+    response = await actions.get_member_detail(request, "1", "42")
+    data = json.loads(response.body)["data"]
+
+    assert data["can_view_notes"] is False
+    assert data["notes"] == []
+    private_notes.assert_not_awaited()
+
+
 def test_realtime_bridge_is_initialized(app):
     assert app.state.realtime_bridge is not None
 

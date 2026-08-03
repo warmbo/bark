@@ -164,7 +164,9 @@ async def get_member_detail(request: Request, guild_id: str, user_id: str):
     member_cases = [c for c in cases if c["target_id"] == user_id]
 
     warnings = await SERVICE.get_warnings(gid, user_id=str(member.id))
-    notes = await _get_user_notes(gid, str(member.id))
+    await get_module_min_role("moderation", gid)
+    can_view_notes = check_api_permission(request, "moderation.notes.view", gid)
+    notes = await _get_user_notes(gid, str(member.id)) if can_view_notes else []
     voice_sessions = await SERVICE.get_voice_sessions(gid, str(member.id))
 
     return api_success(
@@ -185,6 +187,7 @@ async def get_member_detail(request: Request, guild_id: str, user_id: str):
             "cases": member_cases,
             "warnings": warnings,
             "notes": notes,
+            "can_view_notes": can_view_notes,
             "voice_sessions": voice_sessions,
         }
     )

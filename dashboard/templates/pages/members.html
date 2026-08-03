@@ -137,7 +137,7 @@ async function loadMembers(page = 0, append = false) {
             tr.innerHTML = `
                 <td class="member-cell-name">
                     <a href="/guild/${GUILD_ID}/members/${memberPathId}" class="member-name-link">
-                        <span class="member-avatar-sm">${avatarUrl ? `<img src="${escHtml(avatarUrl)}" alt="">` : `<span class="avatar-placeholder-sm">${escHtml(String(m.name || '?').charAt(0))}</span>`}</span>
+                        <span class="member-avatar-sm">${avatarUrl ? `<img src="${escHtml(avatarUrl)}" data-fallback-src="/static/img/bark-avatar.svg" alt="">` : `<span class="avatar-placeholder-sm">${escHtml(String(m.name || '?').charAt(0))}</span>`}</span>
                         <span class="member-name">${escHtml(m.name)}</span>
                         <span class="member-tag">${escHtml(m.tag)}</span>
                         ${m.is_bot?'<span class="badge-sm bot">BOT</span>':''}${m.is_timed_out?'<span class="badge-sm timeout">TIMEOUT</span>':''}
@@ -172,6 +172,7 @@ async function loadMembers(page = 0, append = false) {
             tbody.appendChild(fragment);
         }
 
+        if (typeof initImageFallbacks === 'function') initImageFallbacks();
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
         const loaded = grid.querySelectorAll('.member-table-row').length;

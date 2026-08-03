@@ -89,7 +89,7 @@
                 {% if request.session.get('user') %}
                 <div class="sidebar-user">
                     {% if request.session.user.avatar %}
-                    <img src="{{ request.session.user.avatar }}" alt="" class="sidebar-user-avatar">
+                    <img src="{{ request.session.user.avatar }}" data-fallback-src="/static/img/bark-avatar.svg" alt="" class="sidebar-user-avatar">
                     {% else %}
                     <span class="sidebar-user-avatar sidebar-user-placeholder">{{ request.session.user.username[:1] }}</span>
                     {% endif %}
