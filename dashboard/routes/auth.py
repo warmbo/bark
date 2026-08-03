@@ -105,7 +105,9 @@ async def callback(
         )
 
         if token_resp.status_code != 200:
-            logger.error("Token exchange failed: %s %s", token_resp.status_code, token_resp.text)
+            # Log status only — the body can contain provider error details but
+            # never the exchange secret; keep it out of logs to avoid leakage.
+            logger.error("Token exchange failed with status %s", token_resp.status_code)
             return RedirectResponse(url="/dashboard?auth_error=token_failed")
 
         token_json = token_resp.json()
