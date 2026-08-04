@@ -8,29 +8,29 @@
     /* ── Base Colors ── */
     --bg-base: #0a0a0d;
     --bg-elevated: #111114;
-    --bg-card: rgba(22, 22, 28, 0.75);
-    --bg-card-hover: rgba(30, 30, 38, 0.85);
-    --bg-card-solid: #16161c;
-    --bg-input: rgba(22, 22, 28, 0.85);
-    --bg-sidebar: rgba(12, 12, 16, 0.88);
-    --bg-surface: rgba(18, 18, 22, 0.85);
+    --bg-card: rgba(28, 28, 36, 0.85);
+    --bg-card-hover: rgba(36, 36, 46, 0.9);
+    --bg-card-solid: #1c1c24;
+    --bg-input: rgba(32, 32, 40, 0.92);
+    --bg-sidebar: rgba(14, 14, 18, 0.92);
+    --bg-surface: rgba(22, 22, 28, 0.9);
     --bg-overlay: rgba(0, 0, 0, 0.7);
 
     /* ── Frosted Glass ── */
-    --glass-tint: rgba(255, 255, 255, 0.02);
-    --glass-tint-strong: rgba(255, 255, 255, 0.04);
-    --glass-border: rgba(255, 255, 255, 0.042);
-    --glass-border-hover: rgba(255, 255, 255, 0.07);
-    --glass-accent-border: rgba(59, 130, 246, 0.14);
+    --glass-tint: rgba(255, 255, 255, 0.04);
+    --glass-tint-strong: rgba(255, 255, 255, 0.07);
+    --glass-border: rgba(255, 255, 255, 0.09);
+    --glass-border-hover: rgba(255, 255, 255, 0.14);
+    --glass-accent-border: rgba(59, 130, 246, 0.24);
     --glass-blur: blur(16px);
     --glass-blur-light: blur(8px);
     --glass-blur-heavy: blur(24px);
 
-    /* ── Borders (30% softer) ── */
-    --border-subtle: rgba(255, 255, 255, 0.028);
-    --border-card: rgba(255, 255, 255, 0.035);
-    --border-input: rgba(255, 255, 255, 0.049);
-    --border-hover: rgba(255, 255, 255, 0.07);
+    /* ── Borders ── */
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-card: rgba(255, 255, 255, 0.09);
+    --border-input: rgba(255, 255, 255, 0.14);
+    --border-hover: rgba(255, 255, 255, 0.2);
 
     /* ── Accent (single blue) ── */
     --accent: #3b82f6;
@@ -39,9 +39,9 @@
     --accent-border: rgba(59, 130, 246, 0.21);
 
     /* ── Text ── */
-    --text-primary: #ededef;
-    --text-secondary: #a1a1aa;
-    --text-tertiary: #71717a;
+    --text-primary: #f4f4f5;
+    --text-secondary: #c9c9d2;
+    --text-tertiary: #9d9da8;
     --text-inverse: #0f0f11;
 
     /* ── Semantic ── */
@@ -1501,13 +1501,13 @@ textarea:focus-visible,
     flex-shrink: 0;
 }
 
-.cat-moderation { color: #f87171; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); }
-.cat-messaging  { color: #60a5fa; border-color: rgba(96, 165, 250, 0.35); background: rgba(96, 165, 250, 0.08); }
-.cat-voice      { color: #34d399; border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.08); }
-.cat-roles      { color: #c084fc; border-color: rgba(192, 132, 252, 0.35); background: rgba(192, 132, 252, 0.08); }
-.cat-reputation { color: #fbbf24; border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.08); }
-.cat-notes      { color: #fb923c; border-color: rgba(251, 146, 60, 0.35); background: rgba(251, 146, 60, 0.08); }
-.cat-system     { color: #94a3b8; border-color: rgba(148, 163, 184, 0.35); background: rgba(148, 163, 184, 0.08); }
+.cat-moderation { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); background: rgba(248, 113, 113, 0.14); }
+.cat-messaging  { color: #93c5fd; border-color: rgba(96, 165, 250, 0.45); background: rgba(96, 165, 250, 0.14); }
+.cat-voice      { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.14); }
+.cat-roles      { color: #d8b4fe; border-color: rgba(192, 132, 252, 0.45); background: rgba(192, 132, 252, 0.14); }
+.cat-reputation { color: #fcd34d; border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.14); }
+.cat-notes      { color: #fdba74; border-color: rgba(251, 146, 60, 0.45); background: rgba(251, 146, 60, 0.14); }
+.cat-system     { color: #cbd5e1; border-color: rgba(148, 163, 184, 0.45); background: rgba(148, 163, 184, 0.14); }
 
 .activity-meta {
     display: block;
