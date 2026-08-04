@@ -77,6 +77,9 @@
                 <div class="skeleton skeleton-text"></div>
                 <div class="skeleton skeleton-text"></div>
             </div>
+            <div class="activity-more-wrap" id="activity-more-wrap" hidden>
+                <button type="button" class="btn btn-sm" id="activity-load-more">Show more</button>
+            </div>
         </div>
 
         <!-- Right Column -->
@@ -129,10 +132,20 @@
 const GUILD_ID = '{{ guild.id }}';
 const GUILD_DATA_REFRESH_MS = 5 * 60 * 1000;
 const ACTIVITY_TIME_REFRESH_MS = 60 * 1000;
+const ACTIVITY_PAGE_SIZE = 10;
 let guildDataRefreshTimer = null;
 let activityTimeRefreshTimer = null;
 let guildOverviewRequestInFlight = false;
 let guildOverviewLoaded = false;
+let activityItems = [];
+let activityPage = 0;
+
+const activityFeedEl = document.getElementById('activity-feed');
+const activityMoreWrap = document.getElementById('activity-more-wrap');
+document.getElementById('activity-load-more')?.addEventListener('click', () => {
+    activityPage += 1;
+    renderActivityPage();
+});
 
 function refreshActivityTimes() {
     document.querySelectorAll('#activity-feed [data-activity-timestamp]').forEach(element => {
@@ -141,13 +154,19 @@ function refreshActivityTimes() {
 }
 
 function renderActivity(activityData) {
-    const feed = document.getElementById('activity-feed');
     const items = activityData?.data?.activity || activityData?.activity || [];
+    activityItems = items;
+    activityPage = 0;
     if (items.length === 0) {
-        feed.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : '') + '</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>';
+        activityFeedEl.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : '') + '</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>';
+        activityFeedEl.classList.remove('is-masked');
+        if (activityMoreWrap) activityMoreWrap.hidden = true;
         return;
     }
-    feed.innerHTML = items.map(a => {
+    renderActivityPage();
+}
+
+function renderActivityItem(a) {
         const time = a.timestamp ? timeAgo(a.timestamp) : '';
         const timestampAttr = a.timestamp
             ? ` data-activity-timestamp="${escHtml(a.timestamp).replaceAll('"', '&quot;').replaceAll("'", '&#39;')}"`
@@ -161,8 +180,15 @@ function renderActivity(activityData) {
         const badge = a.category
             ? `<span class="activity-category cat-${safeClassToken(a.category, 'activity')}">${escHtml(a.category)}</span>`
             : '';
-        return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}${metaHtml}</span>${reasonHtml}${badge}<span class="activity-time"${timestampAttr}>${escHtml(time)}</span></div>`;
-    }).join('');
+    return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}${metaHtml}</span>${reasonHtml}${badge}<span class="activity-time"${timestampAttr}>${escHtml(time)}</span></div>`;
+}
+
+function renderActivityPage() {
+    const visible = activityItems.slice(0, (activityPage + 1) * ACTIVITY_PAGE_SIZE);
+    activityFeedEl.innerHTML = visible.map(renderActivityItem).join('');
+    const hasMore = visible.length !== activityItems.length;
+    activityFeedEl.classList.toggle('is-masked', hasMore);
+    if (activityMoreWrap) activityMoreWrap.hidden = !hasMore;
 }
 
 async function loadGuildOverview() {
@@ -212,6 +238,8 @@ async function loadGuildOverview() {
                 if (element) element.textContent = 'Unavailable';
             });
             document.getElementById('activity-feed').innerHTML = `<div class="state-panel state-error" role="alert"><div><strong>Activity unavailable</strong><p>${escHtml(e.message || 'Dashboard statistics could not be loaded.')}</p></div><button type="button" class="btn btn-sm" id="guild-stats-retry">Retry</button></div>`;
+            activityFeedEl.classList.remove('is-masked');
+            if (activityMoreWrap) activityMoreWrap.hidden = true;
             document.getElementById('guild-stats-retry')?.addEventListener('click', loadGuildOverview);
             showToast(e.message || 'Dashboard statistics could not be loaded', 'error');
         }

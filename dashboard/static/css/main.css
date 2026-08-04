@@ -933,6 +933,17 @@ textarea:focus-visible,
     flex-shrink: 0;
 }
 
+.activity-feed.is-masked {
+    -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 56px), transparent 100%);
+    mask-image: linear-gradient(to bottom, black calc(100% - 56px), transparent 100%);
+}
+
+.activity-more-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 12px;
+}
+
 /* ── Quick Action Cards ─────────────────────────────── */
 
 .quick-action-grid {

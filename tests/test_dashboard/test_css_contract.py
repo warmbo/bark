@@ -77,3 +77,10 @@ def test_mobile_health_strip_stacks_labels_and_values():
     css = css_source()
     assert "@media (max-width: 480px)" in css
     assert ".module-health-strip > div { grid-template-columns: 1fr; row-gap: 2px; }" in css
+
+
+def test_activity_feed_fade_mask_contract():
+    css = css_source()
+    assert ".activity-feed.is-masked" in css
+    assert "mask-image: linear-gradient(to bottom" in css
+    assert ".activity-more-wrap" in css

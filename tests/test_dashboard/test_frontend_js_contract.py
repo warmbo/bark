@@ -219,6 +219,22 @@ if (JSON.stringify(actual) !== JSON.stringify(expected)) {{
     )
 
 
+def test_activity_feed_paginates_with_fade_and_load_more():
+    guild = source(TEMPLATES / "pages" / "guild.html")
+
+    assert "const ACTIVITY_PAGE_SIZE = 10" in guild
+    assert "activityItems.slice(0, (activityPage + 1) * ACTIVITY_PAGE_SIZE)" in guild
+    assert "activityPage += 1" in guild
+    assert "renderActivityPage" in guild
+    assert 'id="activity-load-more"' in guild
+    assert 'id="activity-more-wrap"' in guild
+    # The bottom fade is a CSS mask toggled only while more pages exist.
+    assert "classList.toggle('is-masked', hasMore)" in guild
+    # Pagination must stay self-contained: no helpers from main.js that a stale
+    # cached copy could lack.
+    assert "escAttr(" not in guild
+
+
 def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listener():
     html = source(TEMPLATES / "pages" / "settings.html")
     assert "document.querySelector('label[for=\"avatar-upload\"]')" in html
