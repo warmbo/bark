@@ -126,31 +126,31 @@ body {
     position: relative;
 }
 
-/* Faded Bark avatar backdrop — blown up to cover the page, very low opacity */
+/* Subtle shark wallpaper backdrop — very low opacity, blurred */
 body::before {
     content: '';
     position: fixed;
     inset: -10%;
-    background-image: var(--bg-avatar, url('/static/img/bark-avatar.svg'));
+    background-image: url('/static/img/bark-wallpaper.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    opacity: 0.05;
-    filter: blur(2px);
+    opacity: 0.08;
+    filter: blur(1px);
     pointer-events: none;
     z-index: -1;
     will-change: transform;
     transform: translateZ(0);
 }
 
-/* Soft readability vignette over the avatar backdrop */
+/* Soft readability vignette over the wallpaper */
 body::after {
     content: '';
     position: fixed;
     inset: 0;
     background:
-        radial-gradient(circle at 50% 40%, transparent 0%, rgba(10, 10, 14, 0.55) 100%),
-        linear-gradient(180deg, rgba(10, 10, 14, 0.35) 0%, rgba(10, 10, 14, 0.1) 30%, rgba(10, 10, 14, 0.1) 70%, rgba(10, 10, 14, 0.5) 100%);
+        radial-gradient(circle at 50% 40%, transparent 0%, rgba(10, 10, 14, 0.6) 100%),
+        linear-gradient(180deg, rgba(10, 10, 14, 0.4) 0%, rgba(10, 10, 14, 0.1) 30%, rgba(10, 10, 14, 0.1) 70%, rgba(10, 10, 14, 0.55) 100%);
     pointer-events: none;
     z-index: -1;
 }
