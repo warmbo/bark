@@ -95,76 +95,78 @@ def mutation_capability(method: str, path: str) -> str | None:
 # ── Auth Required Middleware ─────────────────────────
 
 
+def _json_error(
+    status_code: int,
+    message: str,
+    *,
+    headers: dict[str, str] | None = None,
+    **extra,
+) -> Response:
+    """Build a JSON error response with the API's standard envelope."""
+    from fastapi.responses import JSONResponse
+
+    content = {"success": False, "error": message}
+    content.update(extra)
+    return JSONResponse(status_code=status_code, content=content, headers=headers)
+
+
+def _auth_required_response(path: str) -> Response:
+    """Return the 401/302 response for a missing session on the given path."""
+    if path.startswith("/api/"):
+        return _json_error(401, "Authentication required")
+    return RedirectResponse(url="/auth/login", status_code=302)
+
+
+async def _user_can_manage_guild(user_id: str, guild_id: str) -> bool:
+    """Check persisted dashboard access for the user on the guild."""
+    from database.engine import session_scope
+    from services.dashboard_access import user_can_manage_guild
+
+    async with session_scope() as session:
+        return await user_can_manage_guild(session, user_id, guild_id)
+
+
+def _access_denied_response(path: str, api_message: str, html_message: str) -> Response:
+    """Return the 403 response (JSON envelope for API paths, HTML otherwise)."""
+    if path.startswith("/api/"):
+        return _json_error(403, api_message)
+    from fastapi.responses import HTMLResponse
+
+    return HTMLResponse(html_message, status_code=403)
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """Redirects unauthenticated users to /auth/login when OAuth2 is configured."""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         from config import config
 
-        # Only enforce when OAuth2 is configured
         if not config.oauth2.enabled:
             return await call_next(request)
 
         path = request.url.path
 
-        # Skip public paths
         if _is_public(path):
             return await call_next(request)
 
-        # Check session
         user = request.session.get("user")
         if user is None:
-            # API requests get JSON 401
-            if path.startswith("/api/"):
-                from fastapi.responses import JSONResponse
-
-                return JSONResponse(
-                    status_code=401,
-                    content={"success": False, "error": "Authentication required"},
-                )
-            # HTML page requests get redirected
-            return RedirectResponse(url="/auth/login", status_code=302)
+            return _auth_required_response(path)
 
         guild_id = _guild_id_from_path(path)
-        if guild_id:
-            from database.engine import session_scope
-            from services.dashboard_access import user_can_manage_guild
-
-            async with session_scope() as session:
-                allowed = await user_can_manage_guild(session, user["id"], guild_id)
-            if not allowed:
-                if path.startswith("/api/"):
-                    from fastapi.responses import JSONResponse
-
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "success": False,
-                            "error": "You cannot manage this Discord server",
-                        },
-                    )
-                from fastapi.responses import HTMLResponse
-
-                return HTMLResponse(
-                    "You do not have permission to manage this Discord server.",
-                    status_code=403,
-                )
+        if guild_id and not await _user_can_manage_guild(user["id"], guild_id):
+            return _access_denied_response(
+                path,
+                "You cannot manage this Discord server",
+                "You do not have permission to manage this Discord server.",
+            )
 
         action = mutation_capability(request.method, path)
         if action is not None:
             from services.response import check_api_permission
 
             if not check_api_permission(request, action):
-                from fastapi.responses import JSONResponse
-
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "success": False,
-                        "error": "Insufficient permissions",
-                        "required_capability": action,
-                    },
-                )
+                return _json_error(403, "Insufficient permissions", required_capability=action)
 
         return await call_next(request)
 
@@ -245,7 +247,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         from config import config
 
-        # HTTPS redirect
         if config.dashboard.force_https and request.url.scheme == "http":
             url = str(request.url).replace("http://", "https://", 1)
             return RedirectResponse(url=url, status_code=301)
@@ -257,15 +258,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             and origin
             and origin.rstrip("/") != config.dashboard.public_url
         ):
-            from fastapi.responses import JSONResponse
-
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "success": False,
-                    "error": "Cross-origin write rejected",
-                },
-            )
+            return _json_error(403, "Cross-origin write rejected")
 
         module_action = _module_action_from_path(request.url.path)
         if module_action is not None:
@@ -273,17 +266,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             bot = getattr(request.app.state, "bot", None)
             manager = getattr(bot, "modules", None)
             if manager is not None and not manager.is_enabled_for_guild(guild_id, module_name):
-                from fastapi.responses import JSONResponse
+                return _json_error(409, f"Module '{module_name}' is disabled for this server")
 
-                return JSONResponse(
-                    status_code=409,
-                    content={
-                        "success": False,
-                        "error": f"Module '{module_name}' is disabled for this server",
-                    },
-                )
-
-        # Rate limiting on API routes — separate GET (read) and POST/PUT/DELETE (write)
         path = request.url.path
         if path.startswith("/api/"):
             identity = rate_limit_identity(request)
@@ -291,35 +275,32 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             method = request.method.upper()
             limiter = read_lim if method == "GET" else write_lim
             if not limiter.check(identity):
-                from fastapi.responses import JSONResponse
-
-                return JSONResponse(
-                    status_code=429,
-                    content={
-                        "success": False,
-                        "error": "Too many requests. Try again in 60 seconds.",
-                    },
+                return _json_error(
+                    429,
+                    "Too many requests. Try again in 60 seconds.",
                     headers={"Retry-After": "60"},
                 )
 
         response = await call_next(request)
-
-        # CSP headers on all responses
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://unpkg.com https://*.googleapis.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' https://cdn.discordapp.com data:; "
-            "connect-src 'self' ws: wss: https://unpkg.com; "
-            "frame-ancestors 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self'"
-        )
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "same-origin"
-        if config.dashboard.secure_cookies:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-
+        _apply_security_headers(response, config)
         return response
+
+
+def _apply_security_headers(response: Response, config) -> None:
+    """Harden every response with CSP and related security headers."""
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://unpkg.com https://*.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' https://cdn.discordapp.com data:; "
+        "connect-src 'self' ws: wss: https://unpkg.com; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "same-origin"
+    if config.dashboard.secure_cookies:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"

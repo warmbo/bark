@@ -65,111 +65,119 @@ def check_ruleset_conditions(
 
     channel = getattr(message, "channel", None) if message else None
     guild = getattr(message, "guild", None) if message else None
+    target = member or (message.author if message else None)
 
-    # ── Bot/user scoping ──
+    for ok, reason in (
+        _check_bot_scoping(member, message, ruleset),
+        _check_role_scoping(target, ruleset),
+        _check_channel_scoping(channel, ruleset),
+        _check_account_age(target, ruleset),
+        _check_member_duration(target, guild, ruleset),
+    ):
+        if not ok:
+            return False, reason
+    return True, ""
+
+
+def _check_bot_scoping(member: Any | None, message: Any | None, ruleset: Any) -> tuple[bool, str]:
+    """Apply only-bots / ignore-bots scoping to the message author or member."""
     if message:
         is_bot = getattr(message.author, "bot", False) if message.author else False
-        if ruleset.only_bots and not is_bot:
-            return False, "rule only applies to bots"
-        if ruleset.ignore_bots and is_bot:
-            return False, "bot ignored"
     elif member:
-        if ruleset.only_bots and not getattr(member, "bot", False):
-            return False, "rule only applies to bots"
-        if ruleset.ignore_bots and getattr(member, "bot", False):
-            return False, "bot ignored"
+        is_bot = getattr(member, "bot", False)
+    else:
+        return True, ""
+    if ruleset.only_bots and not is_bot:
+        return False, "rule only applies to bots"
+    if ruleset.ignore_bots and is_bot:
+        return False, "bot ignored"
+    return True, ""
 
-    # ── Ignored roles ──
-    target = member or (message.author if message else None)
-    if target and hasattr(target, "roles"):
-        ignored = _json_list(ruleset.ignored_roles)
-        if ignored:
-            for role in target.roles:
-                if str(role.id) in ignored:
-                    return False, f"ignored role {role.name}"
 
-    # ── Required roles ──
-    if target and hasattr(target, "roles"):
-        required = _json_list(ruleset.require_roles)
-        if required:
-            user_role_ids = {str(r.id) for r in target.roles}
-            if ruleset.require_all_roles:
-                if not all(r in user_role_ids for r in required):
-                    return False, "missing required role"
-            else:
-                if not any(r in user_role_ids for r in required):
-                    return False, "missing any required role"
+def _check_role_scoping(target: Any | None, ruleset: Any) -> tuple[bool, str]:
+    """Enforce ignored-role and required-role scoping on the target member."""
+    if not target or not hasattr(target, "roles"):
+        return True, ""
 
-    # ── Channel conditions ──
-    if channel:
-        channel_id = str(channel.id)
-        # Ignored channels
-        ignored_chs = _json_list(ruleset.ignored_channels)
-        if ignored_chs and channel_id in ignored_chs:
-            return False, "channel is ignored"
+    ignored = _json_list(ruleset.ignored_roles)
+    if ignored:
+        for role in target.roles:
+            if str(role.id) in ignored:
+                return False, f"ignored role {role.name}"
 
-        # Active channels (if set, only match these)
-        active_chs = _json_list(ruleset.active_channels)
-        if active_chs and channel_id not in active_chs:
-            return False, "channel not in active list"
+    required = _json_list(ruleset.require_roles)
+    if required:
+        user_role_ids = {str(role.id) for role in target.roles}
+        if ruleset.require_all_roles:
+            if not all(role_id in user_role_ids for role_id in required):
+                return False, "missing required role"
+        elif not any(role_id in user_role_ids for role_id in required):
+            return False, "missing any required role"
+    return True, ""
 
-        # Ignored categories
-        category_id = str(channel.category_id) if channel.category_id else ""
-        ignored_cats = _json_list(ruleset.ignored_categories)
-        if ignored_cats and category_id in ignored_cats:
-            return False, "category is ignored"
 
-        # Active categories
-        active_cats = _json_list(ruleset.active_categories)
-        if active_cats and category_id not in active_cats:
-            return False, "category not in active list"
+def _check_channel_scoping(channel: Any | None, ruleset: Any) -> tuple[bool, str]:
+    """Enforce ignored/active channel and category scoping."""
+    if not channel:
+        return True, ""
 
-    # ── Message scope (new vs edited) ──
-    if message and hasattr(message, "_edited"):
-        # discord.py doesn't expose "is this an edit" directly in on_message
-        # but we can check if the message has been edited via raw data
-        pass  # handled by event subscription in the module
+    channel_id = str(channel.id)
+    ignored_channels = _json_list(ruleset.ignored_channels)
+    if ignored_channels and channel_id in ignored_channels:
+        return False, "channel is ignored"
+    active_channels = _json_list(ruleset.active_channels)
+    if active_channels and channel_id not in active_channels:
+        return False, "channel not in active list"
 
-    # ── Account age ──
-    if target:
-        created_at = getattr(target, "created_at", None)
-        if created_at and ruleset.account_age_minutes_min > 0:
-            age_minutes = (datetime.now(timezone.utc) - created_at).total_seconds() / 60
-            if age_minutes < ruleset.account_age_minutes_min:
-                return (
-                    False,
-                    f"account too young ({age_minutes:.0f}m < {ruleset.account_age_minutes_min}m)",
-                )
-        if created_at and ruleset.account_age_minutes_max > 0:
-            age_minutes = (datetime.now(timezone.utc) - created_at).total_seconds() / 60
-            if age_minutes > ruleset.account_age_minutes_max:
-                return (
-                    False,
-                    f"account too old ({age_minutes:.0f}m > {ruleset.account_age_minutes_max}m)",
-                )
+    category_id = str(channel.category_id) if channel.category_id else ""
+    ignored_categories = _json_list(ruleset.ignored_categories)
+    if ignored_categories and category_id in ignored_categories:
+        return False, "category is ignored"
+    active_categories = _json_list(ruleset.active_categories)
+    if active_categories and category_id not in active_categories:
+        return False, "category not in active list"
+    return True, ""
 
-    # ── Member duration ──
-    if target and guild:
-        joined_at = getattr(target, "joined_at", None)
-        if joined_at:
-            member_minutes = (datetime.now(timezone.utc) - joined_at).total_seconds() / 60
-            if (
-                ruleset.member_duration_minutes_min > 0
-                and member_minutes < ruleset.member_duration_minutes_min
-            ):
-                return (
-                    False,
-                    f"member too new ({member_minutes:.0f}m < {ruleset.member_duration_minutes_min}m)",
-                )
-            if (
-                ruleset.member_duration_minutes_max > 0
-                and member_minutes > ruleset.member_duration_minutes_max
-            ):
-                return (
-                    False,
-                    f"member been here too long ({member_minutes:.0f}m > {ruleset.member_duration_minutes_max}m)",
-                )
 
+def _check_account_age(target: Any | None, ruleset: Any) -> tuple[bool, str]:
+    """Enforce account-age bounds on the target member."""
+    if not target:
+        return True, ""
+    created_at = getattr(target, "created_at", None)
+    if not created_at:
+        return True, ""
+    age_minutes = (datetime.now(timezone.utc) - created_at).total_seconds() / 60
+    if ruleset.account_age_minutes_min > 0 and age_minutes < ruleset.account_age_minutes_min:
+        return False, f"account too young ({age_minutes:.0f}m < {ruleset.account_age_minutes_min}m)"
+    if ruleset.account_age_minutes_max > 0 and age_minutes > ruleset.account_age_minutes_max:
+        return False, f"account too old ({age_minutes:.0f}m > {ruleset.account_age_minutes_max}m)"
+    return True, ""
+
+
+def _check_member_duration(target: Any | None, guild: Any | None, ruleset: Any) -> tuple[bool, str]:
+    """Enforce member-duration bounds using the target's guild join time."""
+    if not target or not guild:
+        return True, ""
+    joined_at = getattr(target, "joined_at", None)
+    if not joined_at:
+        return True, ""
+    member_minutes = (datetime.now(timezone.utc) - joined_at).total_seconds() / 60
+    if (
+        ruleset.member_duration_minutes_min > 0
+        and member_minutes < ruleset.member_duration_minutes_min
+    ):
+        return (
+            False,
+            f"member too new ({member_minutes:.0f}m < {ruleset.member_duration_minutes_min}m)",
+        )
+    if (
+        ruleset.member_duration_minutes_max > 0
+        and member_minutes > ruleset.member_duration_minutes_max
+    ):
+        return (
+            False,
+            f"member been here too long ({member_minutes:.0f}m > {ruleset.member_duration_minutes_max}m)",
+        )
     return True, ""
 
 

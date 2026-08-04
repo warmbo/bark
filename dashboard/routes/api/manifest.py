@@ -64,12 +64,54 @@ async def get_guild_manifest(request: Request, guild_id: int):
     if guild is None:
         return api_not_found("Guild")
 
-    modules_list = []
     pages_list: list[dict[str, object]] = [
-        {**p, "route": p["route"].replace("{guild_id}", str(guild_id))} for p in CORE_PAGES
+        {**page, "route": page["route"].replace("{guild_id}", str(guild_id))} for page in CORE_PAGES
     ]
-    actions_list = []
+    modules_list: list[dict[str, object]] = []
+    actions_list: list[dict[str, object]] = []
 
+    enabled_by_module = await _load_enabled_modules(guild_id)
+    for name, module in bot.modules.get_all_modules().items():
+        pages = module.get_dashboard_pages()
+        actions = module.get_actions()
+        modules_list.append(_module_entry(name, module, guild_id, enabled_by_module, actions))
+        pages_list.extend(_module_pages(name, module, guild_id, enabled_by_module, pages))
+        actions_list.extend(_module_actions(name, module, guild_id, actions))
+
+    categories = _build_navigation(pages_list)
+    case_count = await _count_cases(guild_id)
+
+    return api_success(
+        {
+            "guild": {
+                "id": str(guild.id),
+                "name": guild.name,
+                "member_count": guild.member_count,
+                "icon_url": guild.icon.url if guild.icon else None,
+            },
+            "modules": modules_list,
+            "pages": pages_list,
+            "actions": actions_list,
+            "categories": {
+                key: value
+                for key, value in sorted(
+                    categories.items(),
+                    key=lambda item: int(str(item[1].get("priority", 99)) or 99),
+                )
+            },
+            "stats": {
+                "members": guild.member_count,
+                "total_cases": case_count,
+                "modules_enabled": sum(1 for entry in modules_list if entry["enabled"]),
+                "modules_total": len(modules_list),
+            },
+            "capabilities": await get_guild_capabilities(request, guild_id),
+        }
+    )
+
+
+async def _load_enabled_modules(guild_id: int) -> dict[str, bool]:
+    """Return module name -> enabled flag from persisted module configs."""
     from sqlalchemy import select
 
     from database.models.module import ModuleConfig
@@ -84,56 +126,82 @@ async def get_guild_manifest(request: Request, guild_id: int):
             .scalars()
             .all()
         )
-    enabled_by_module = {config.module_name: config.enabled for config in configs}
+    return {config.module_name: config.enabled for config in configs}
 
-    for name, module in bot.modules.get_all_modules().items():
-        mod_pages = module.get_dashboard_pages()
-        mod_actions = module.get_actions()
 
-        module_entry = {
-            "name": name,
-            "label": name.replace("_", " ").title(),
-            "version": module.version,
-            "description": module.description,
-            "enabled": enabled_by_module.get(name, True),
-            "commands": [c.name for c in module.get_commands()],
-            "settings_schema": bool(module.get_settings_schema()),
-            "actions_count": len(mod_actions),
+def _module_entry(
+    name: str,
+    module,
+    guild_id: int,
+    enabled_by_module: dict[str, bool],
+    actions: list[dict],
+) -> dict[str, object]:
+    """Describe a module for the manifest, including its command surface."""
+    return {
+        "name": name,
+        "label": name.replace("_", " ").title(),
+        "version": module.version,
+        "description": module.description,
+        "enabled": enabled_by_module.get(name, True),
+        "commands": [command.name for command in module.get_commands()],
+        "settings_schema": bool(module.get_settings_schema()),
+        "actions_count": len(actions),
+        "url": f"/guild/{guild_id}/modules/{name}",
+    }
+
+
+def _module_pages(
+    name: str,
+    module,
+    guild_id: int,
+    enabled_by_module: dict[str, bool],
+    pages,
+) -> list[dict[str, object]]:
+    """Render a module's dashboard pages into manifest entries."""
+    rendered = []
+    for page in pages:
+        rendered.append(
+            {
+                "route": page.route.replace("{guild_id}", str(guild_id)),
+                "label": page.label,
+                "icon": page.icon or "puzzle",
+                "category": page.category or "",
+                "module": name,
+                "enabled": enabled_by_module.get(name, True),
+            }
+        )
+    return rendered
+
+
+def _module_actions(
+    name: str,
+    module,
+    guild_id: int,
+    actions: list[dict],
+) -> list[dict[str, object]]:
+    """Render a module's quick actions into manifest entries."""
+    return [
+        {
+            "label": action.get("label", name),
             "url": f"/guild/{guild_id}/modules/{name}",
+            "icon": "zap",
+            "module": name,
         }
+        for action in actions
+    ]
 
-        # Gather module pages
-        for pg in mod_pages:
-            route = pg.route.replace("{guild_id}", str(guild_id))
-            cat = pg.category or ""
-            pages_list.append(
-                {
-                    "route": route,
-                    "label": pg.label,
-                    "icon": pg.icon or "puzzle",
-                    "category": cat,
-                    "module": name,
-                    "enabled": enabled_by_module.get(name, True),
-                }
-            )
 
-        # Add quick actions to manifest
-        for act in mod_actions:
-            actions_list.append(
-                {
-                    "label": act.get("label", name),
-                    "url": f"/guild/{guild_id}/modules/{name}",
-                    "icon": "zap",
-                    "module": name,
-                }
-            )
+def _build_navigation(pages_list: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+    """Group manifest pages into navigation categories by page metadata."""
+    core_pages = [page for page in pages_list if not page.get("category")]
+    community_pages = [
+        page
+        for page in pages_list
+        if page.get("category") == "community" and not page.get("module")
+    ]
+    module_pages = [page for page in pages_list if page.get("module")]
+    settings_pages = [page for page in pages_list if page.get("category") == "settings"]
 
-        modules_list.append(module_entry)
-
-    # Compute category-groups for navigation
-
-    # Core pages (no label in sidebar)
-    core_pages = [p for p in pages_list if not p.get("category")]
     categories: dict[str, dict[str, object]] = {}
     if core_pages:
         categories["_core"] = {
@@ -142,11 +210,6 @@ async def get_guild_manifest(request: Request, guild_id: int):
             "priority": -1,
             "pages": core_pages,
         }
-
-    # Community pages (members, etc.)
-    community_pages = [
-        p for p in pages_list if p.get("category") == "community" and not p.get("module")
-    ]
     if community_pages:
         categories["community"] = {
             "label": "Community",
@@ -154,9 +217,6 @@ async def get_guild_manifest(request: Request, guild_id: int):
             "priority": 2,
             "pages": community_pages,
         }
-
-    # All module pages under a single "Modules" section
-    module_pages = [p for p in pages_list if p.get("module")]
     if module_pages:
         categories["_modules"] = {
             "label": "Modules",
@@ -164,9 +224,6 @@ async def get_guild_manifest(request: Request, guild_id: int):
             "priority": 3,
             "pages": module_pages,
         }
-
-    # Settings pages
-    settings_pages = [p for p in pages_list if p.get("category") == "settings"]
     if settings_pages:
         categories["settings"] = {
             "label": "Settings",
@@ -174,46 +231,21 @@ async def get_guild_manifest(request: Request, guild_id: int):
             "priority": 4,
             "pages": settings_pages,
         }
+    return categories
 
-    # Stats snapshot
-    from sqlalchemy import func
+
+async def _count_cases(guild_id: int) -> int:
+    """Count moderation cases for the guild, cached briefly."""
+    from sqlalchemy import func, select
 
     from database.models.moderation import ModerationCase
 
     async with session_scope() as session:
-        case_count = (
+        count = (
             await session.execute(
                 select(func.count(ModerationCase.id)).where(
                     ModerationCase.guild_id == str(guild_id)
                 )
             )
         ).scalar() or 0
-    case_count = _get_cached_case_count(guild_id, case_count)
-
-    return api_success(
-        {
-            "guild": {
-                "id": str(guild.id),
-                "name": guild.name,
-                "member_count": guild.member_count,
-                "icon_url": guild.icon.url if guild.icon else None,
-            },
-            "modules": modules_list,
-            "pages": pages_list,
-            "actions": actions_list,
-            "categories": {
-                k: v
-                for k, v in sorted(
-                    categories.items(),
-                    key=lambda x: int(str(x[1].get("priority", 99)) or 99),
-                )
-            },
-            "stats": {
-                "members": guild.member_count,
-                "total_cases": case_count,
-                "modules_enabled": sum(1 for m in modules_list if m["enabled"]),
-                "modules_total": len(modules_list),
-            },
-            "capabilities": await get_guild_capabilities(request, guild_id),
-        }
-    )
+    return _get_cached_case_count(guild_id, count)
