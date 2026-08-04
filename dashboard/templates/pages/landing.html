@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bark — Discord Server Management</title>
-    <meta name="description" content="Bark is a dashboard-first, self-hosted Discord management platform — moderation, reputation, roles, voice insights, and automation, all from a clean web UI.">
+    <meta name="description" content="Bark is a dashboard-first Discord management bot — moderation, voice insights, member management, and more, all from a clean web UI.">
 
     <!-- Open Graph -->
     <meta property="og:site_name" content="Bark">
     <meta property="og:title" content="Bark — Discord Server Management">
-    <meta property="og:description" content="Moderation, reputation, roles, and automation — self-hosted in a single process.">
+    <meta property="og:description" content="Bark is a dashboard-first Discord management bot — moderation, voice insights, member management, and more, all from a clean web UI.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ config.dashboard.public_url }}/">
     {% if avatar_url %}
@@ -23,38 +23,40 @@
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Bark — Discord Server Management">
-    <meta name="twitter:description" content="Moderation, reputation, roles, and automation — self-hosted in a single process.">
+    <meta name="twitter:description" content="Bark is a dashboard-first Discord management bot — moderation, voice insights, member management, and more, all from a clean web UI.">
     {% if avatar_url %}
     <meta name="twitter:image" content="{{ avatar_url }}">
     {% endif %}
 
+    <!-- Theme -->
     <meta name="theme-color" content="#2563eb">
+
+    <!-- Favicon: live bot avatar (falls back to bundled SVG) -->
     <link rel="icon" type="image/png" href="{{ avatar_url or '/static/img/bark-avatar.svg' }}">
 
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
         /* ── Reset ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg: #07070a;
+            --bg: #0a0a0d;
+            --bg-card: rgba(18, 18, 24, 0.92);
+            --bg-card-hover: rgba(24, 24, 32, 0.95);
             --accent: #2563eb;
             --accent-hover: #3b82f6;
-            --accent-subtle: rgba(37, 99, 235, 0.15);
             --accent-glow: rgba(37, 99, 235, 0.25);
             --text-primary: #ededef;
             --text-secondary: #a1a1aa;
             --text-tertiary: #71717a;
-            --glass-bg: rgba(10, 10, 15, 0.75);
-            --glass-border: rgba(255, 255, 255, 0.06);
-            --glass-hover: rgba(255, 255, 255, 0.04);
-            --card-bg: rgba(12, 12, 18, 0.85);
+            --border-subtle: rgba(255, 255, 255, 0.05);
+            --border-card: rgba(255, 255, 255, 0.06);
             --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             --radius: 12px;
-            --radius-lg: 16px;
             --ease-out: cubic-bezier(.16, 1, .3, 1);
         }
 
@@ -64,954 +66,236 @@
             font-family: var(--font-sans);
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
-            scroll-behavior: smooth;
         }
 
         body {
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        /* ── WebGL Canvas Background ── */
-        #shader-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        /* ── Dim overlay ── */
-        #shader-overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            z-index: 1;
-            pointer-events: none;
-            background:
-                radial-gradient(ellipse at 50% 0%, rgba(7, 7, 10, 0.4) 0%, transparent 70%),
-                radial-gradient(ellipse at 50% 100%, rgba(7, 7, 10, 0.6) 0%, transparent 60%),
-                linear-gradient(180deg, rgba(7, 7, 10, 0.2) 0%, rgba(7, 7, 10, 0.8) 100%);
-        }
-
-        /* ── Content overlay ── */
-        .content {
-            position: relative;
-            z-index: 2;
-        }
-
-        /* ── Navigation ── */
-        nav {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 32px;
-            background: linear-gradient(180deg, rgba(7, 7, 10, 0.85) 0%, transparent 100%);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-
-        .nav-logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
-            color: var(--text-primary);
-        }
-
-        .nav-logo img {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-        }
-
-        .nav-logo span {
-            font-size: 20px;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-            list-style: none;
-        }
-
-        .nav-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: color 200ms var(--ease-out);
-        }
-
-        .nav-links a:hover {
-            color: var(--text-primary);
-        }
-
-        .btn-login {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: var(--font-sans);
-            color: #fff;
-            background: var(--accent);
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 200ms var(--ease-out);
-        }
-
-        .btn-login:hover {
-            background: var(--accent-hover);
-            transform: translateY(-1px);
-            box-shadow: 0 8px 24px var(--accent-glow);
-        }
-
-        .btn-login:active {
-            transform: translateY(0);
-        }
-
-        .btn-login.ghost {
-            background: transparent;
-            border: 1px solid var(--glass-border);
-        }
-
-        .btn-login.ghost:hover {
-            background: var(--glass-hover);
-            border-color: rgba(255, 255, 255, 0.1);
-            box-shadow: none;
-        }
-
-        /* ── Hero ── */
-        .hero {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            padding: 24px;
+            background: radial-gradient(ellipse at 50% 0%, rgba(37, 99, 235, 0.06) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 100%, rgba(37, 99, 235, 0.03) 0%, transparent 50%),
+                        radial-gradient(ellipse at 20% 100%, rgba(37, 99, 235, 0.02) 0%, transparent 40%);
+        }
+
+        /* ── Landing Card ── */
+        .landing {
+            max-width: 520px;
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius);
+            padding: 56px 40px 48px;
             text-align: center;
-            padding: 120px 24px 80px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: border-color 300ms var(--ease-out);
         }
 
-        .hero-avatar {
-            width: 120px;
-            height: 120px;
+        .landing:hover {
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        /* ── Avatar ── */
+        .landing-avatar {
+            width: 96px;
+            height: 96px;
             border-radius: 50%;
-            margin-bottom: 28px;
-            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 64px var(--accent-glow);
-            animation: float 6s var(--ease-out) infinite;
+            margin: 0 auto 24px;
+            display: block;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 48px var(--accent-glow);
         }
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
-        }
-
-        .hero h1 {
-            font-size: clamp(40px, 7vw, 72px);
-            font-weight: 900;
-            letter-spacing: -0.03em;
-            line-height: 1.05;
-            margin-bottom: 16px;
-            background: linear-gradient(135deg, #f0f0f2 0%, #a1a1aa 50%, #f0f0f2 100%);
+        /* ── Typography ── */
+        .landing h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #f0f0f2 0%, #a1a1aa 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        .hero .tagline {
-            font-size: clamp(16px, 2vw, 20px);
+        .landing .subtitle {
+            font-size: 16px;
             color: var(--text-secondary);
-            line-height: 1.7;
-            max-width: 600px;
-            margin-bottom: 40px;
+            line-height: 1.6;
+            margin-bottom: 36px;
         }
 
-        .hero .tagline strong {
+        .landing .subtitle strong {
             color: var(--accent);
-            -webkit-text-fill-color: var(--accent);
             font-weight: 600;
         }
 
-        .hero-actions {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-            justify-content: center;
+        /* ── Feature Grid ── */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 36px;
+            text-align: left;
         }
 
-        .btn-primary {
+        .feature-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 14px 16px;
+            transition: background 200ms var(--ease-out), border-color 200ms var(--ease-out);
+        }
+
+        .feature-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.07);
+        }
+
+        .feature-item .feature-icon {
+            display: inline-block;
+            font-size: 18px;
+            margin-bottom: 6px;
+            line-height: 1;
+        }
+
+        .feature-item .feature-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .feature-item .feature-desc {
+            display: block;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            line-height: 1.4;
+        }
+
+        /* ── Button ── */
+        .btn-discord {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 10px;
-            padding: 16px 32px;
+            width: 100%;
+            padding: 14px 32px;
             font-size: 16px;
             font-weight: 600;
             font-family: var(--font-sans);
-            color: #fff;
-            background: var(--accent);
+            color: #ffffff;
+            background: #5865F2;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             cursor: pointer;
-            text-decoration: none;
             transition: all 200ms var(--ease-out);
+            text-decoration: none;
         }
 
-        .btn-primary:hover {
-            background: var(--accent-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px var(--accent-glow);
+        .btn-discord:hover {
+            background: #4752C4;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(88, 101, 242, 0.3);
         }
 
-        .btn-primary:active {
+        .btn-discord:active {
             transform: translateY(0);
+            box-shadow: none;
         }
 
-        .btn-primary svg {
+        .btn-discord svg {
             flex-shrink: 0;
         }
 
-        .btn-secondary {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 16px 32px;
-            font-size: 16px;
-            font-weight: 600;
-            font-family: var(--font-sans);
-            color: var(--text-primary);
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 200ms var(--ease-out);
-        }
-
-        .btn-secondary:hover {
-            background: var(--card-bg);
-            border-color: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
-        }
-
-        .hero-scroll {
-            margin-top: 60px;
-            color: var(--text-tertiary);
-            font-size: 13px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            animation: bounce 2s var(--ease-out) infinite;
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(4px); }
-        }
-
-        .hero-scroll svg {
-            opacity: 0.5;
-        }
-
-        /* ── Sections ── */
-        section {
-            padding: 80px 24px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        section h2 {
-            font-size: clamp(28px, 4vw, 40px);
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            text-align: center;
-            margin-bottom: 12px;
-        }
-
-        section .section-subtitle {
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 16px;
-            max-width: 560px;
-            margin: 0 auto 48px;
-            line-height: 1.6;
-        }
-
-        .section-divider {
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--glass-border), transparent);
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        /* ── Glass Card ── */
-        .glass-card {
-            background: var(--card-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            padding: 32px;
-            transition: all 300ms var(--ease-out);
-        }
-
-        .glass-card:hover {
-            border-color: rgba(255, 255, 255, 0.08);
-            transform: translateY(-2px);
-        }
-
-        /* ── Features Grid ── */
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 16px;
-        }
-
-        .feature-card {
-            background: var(--card-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius);
-            padding: 28px;
-            transition: all 300ms var(--ease-out);
-        }
-
-        .feature-card:hover {
-            border-color: rgba(255, 255, 255, 0.08);
-            transform: translateY(-2px);
-            background: rgba(14, 14, 22, 0.9);
-        }
-
-        .feature-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            background: var(--accent-subtle);
-            margin-bottom: 16px;
-            font-size: 20px;
-        }
-
-        .feature-card h3 {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .feature-card p {
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-        }
-
-        /* ── Modules Table ── */
-        .modules-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: var(--card-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-        }
-
-        .modules-table th {
-            text-align: left;
-            padding: 16px 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-tertiary);
-            background: rgba(255, 255, 255, 0.02);
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        .modules-table td {
-            padding: 14px 20px;
-            font-size: 14px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            color: var(--text-secondary);
-        }
-
-        .modules-table tr:last-child td {
-            border-bottom: none;
-        }
-
-        .modules-table td:first-child {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .modules-table tr:hover td {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        /* ── Dashboard Preview ── */
-        .preview-container {
-            position: relative;
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            border: 1px solid var(--glass-border);
-            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-        }
-
-        .preview-container img {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-
-        .preview-overlay {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            padding: 48px 32px 32px;
-            background: linear-gradient(0deg, rgba(7, 7, 10, 0.9) 0%, transparent 100%);
-        }
-
-        .preview-overlay h3 {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .preview-overlay p {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        /* ── Stats Bar ── */
-        .stats-bar {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 24px;
-            padding: 48px 0;
-            text-align: center;
-        }
-
-        .stat-item .stat-number {
-            font-size: 36px;
-            font-weight: 800;
-            color: var(--accent);
-            letter-spacing: -0.02em;
-        }
-
-        .stat-item .stat-label {
-            font-size: 14px;
-            color: var(--text-tertiary);
-            margin-top: 4px;
-        }
-
-        /* ── Quote / CTA ── */
-        .cta-section {
-            text-align: center;
-            padding: 100px 24px;
-        }
-
-        .cta-section h2 {
-            font-size: clamp(32px, 5vw, 48px);
-            margin-bottom: 16px;
-        }
-
-        .cta-section p {
-            color: var(--text-secondary);
-            font-size: 18px;
-            max-width: 480px;
-            margin: 0 auto 32px;
-            line-height: 1.6;
-        }
-
         /* ── Footer ── */
-        footer {
-            border-top: 1px solid var(--glass-border);
-            padding: 32px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        footer .footer-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        footer .footer-left img {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            opacity: 0.6;
-        }
-
-        footer .footer-left span {
+        .landing-footer {
+            margin-top: 24px;
             font-size: 13px;
             color: var(--text-tertiary);
         }
 
-        footer .footer-links {
-            display: flex;
-            gap: 20px;
-        }
-
-        footer .footer-links a {
-            font-size: 13px;
-            color: var(--text-tertiary);
+        .landing-footer a {
+            color: var(--accent);
             text-decoration: none;
-            transition: color 200ms var(--ease-out);
         }
 
-        footer .footer-links a:hover {
-            color: var(--text-primary);
+        .landing-footer a:hover {
+            color: var(--accent-hover);
+            text-decoration: underline;
         }
 
-        /* ── Responsive ── */
-        @media (max-width: 768px) {
-            nav {
-                padding: 12px 16px;
+        .landing-footer .dot {
+            margin: 0 8px;
+        }
+
+        /* ── Mobile ── */
+        @media (max-width: 480px) {
+            .landing {
+                padding: 40px 24px 36px;
             }
-            .nav-links {
-                gap: 12px;
-            }
-            .nav-links a {
-                font-size: 13px;
-            }
-            .nav-links a:not(.btn-login) {
-                display: none;
-            }
-            .hero {
-                padding: 100px 16px 60px;
-            }
-            section {
-                padding: 48px 16px;
-            }
-            .features-grid {
+            .features {
                 grid-template-columns: 1fr;
             }
-            .stats-bar {
-                grid-template-columns: 1fr 1fr;
-                gap: 16px;
-            }
-            footer {
-                flex-direction: column;
-                text-align: center;
+            .landing h1 {
+                font-size: 28px;
             }
         }
     </style>
 </head>
 <body>
-
-    <!-- ── WebGL Canvas Background ── -->
-    <canvas id="shader-canvas"></canvas>
-    <div id="shader-overlay"></div>
-
-    <!-- ── Navigation ── -->
-    <nav>
-        <a href="/" class="nav-logo">
-            <img src="{{ avatar_url or '/static/img/bark-avatar.svg' }}" alt="Bark logo" width="36" height="36">
-            <span>Bark</span>
-        </a>
-        <ul class="nav-links">
-            <li><a href="#features">Features</a></li>
-            <li><a href="#modules">Modules</a></li>
-            <li><a href="#preview">Dashboard</a></li>
-            <li><a href="https://github.com/warmbo/bark" target="_blank" rel="noopener">GitHub</a></li>
-            <li><a id="auth-btn" href="/auth/login" class="btn-login">
-                <svg width="18" height="18" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M18.942 5.152a16.728 16.728 0 0 0-4.126-1.28c-.177.322-.383.75-.524 1.095a15.572 15.572 0 0 0-4.584 0 11.894 11.894 0 0 0-.533-1.095A16.673 16.673 0 0 0 5.04 5.152c-2.608 3.894-3.32 7.692-2.965 11.434A16.748 16.748 0 0 0 8.85 19.96c.399-.545.754-1.122 1.058-1.73a10.998 10.998 0 0 1-1.668-.802l.42-.328a11.843 11.843 0 0 0 10.184 0l.42.328c-.53.321-1.09.594-1.677.806.305.608.66 1.183 1.058 1.726a16.722 16.722 0 0 0 4.775-3.374c.413-4.244-.695-7.998-2.963-11.438ZM8.678 14.274c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Zm6.126 0c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Z" fill="currentColor"/>
-                </svg>
-                <span id="auth-label">Sign in</span>
-            </a></li>
-        </ul>
-    </nav>
-
-    <!-- ── Hero ── -->
-    <section class="hero">
+    <div class="landing">
         {% if avatar_url %}
-        <img class="hero-avatar" src="{{ avatar_url }}" data-fallback-src="/static/img/bark-avatar.svg" alt="Bark avatar" width="120" height="120">
+        <img class="landing-avatar" src="{{ avatar_url }}" data-fallback-src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
         {% else %}
-        <img class="hero-avatar" src="/static/img/bark-avatar.svg" alt="Bark avatar" width="120" height="120">
+        <img class="landing-avatar" src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
         {% endif %}
-        <h1>Your server,<br>under control.</h1>
-        <p class="tagline">
-            <strong>Bark</strong> is a self-hosted Discord management platform that brings moderation, reputation, roles, and automation together in a single, dashboard-first process.
+
+        <h1>Bark</h1>
+        <p class="subtitle">
+            A <strong>dashboard-first</strong> Discord management bot.<br>
+            Moderation, voice insights, member management &mdash; all from a clean web UI.
         </p>
-        <div class="hero-actions">
-            <a id="hero-login-btn" href="/auth/login" class="btn-primary">
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M18.942 5.152a16.728 16.728 0 0 0-4.126-1.28c-.177.322-.383.75-.524 1.095a15.572 15.572 0 0 0-4.584 0 11.894 11.894 0 0 0-.533-1.095A16.673 16.673 0 0 0 5.04 5.152c-2.608 3.894-3.32 7.692-2.965 11.434A16.748 16.748 0 0 0 8.85 19.96c.399-.545.754-1.122 1.058-1.73a10.998 10.998 0 0 1-1.668-.802l.42-.328a11.843 11.843 0 0 0 10.184 0l.42.328c-.53.321-1.09.594-1.677.806.305.608.66 1.183 1.058 1.726a16.722 16.722 0 0 0 4.775-3.374c.413-4.244-.695-7.998-2.963-11.438ZM8.678 14.274c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Zm6.126 0c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Z" fill="currentColor"/>
-                </svg>
-                <span id="hero-login-label">Sign in with Discord</span>
-            </a>
-            {% if config.dashboard.invite_url %}
-            <a href="{{ config.dashboard.invite_url }}" target="_blank" rel="noopener" class="btn-secondary">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-                Add to Server
-            </a>
-            {% endif %}
-            <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener" class="btn-secondary">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-                Source
-            </a>
-        </div>
-        <div class="hero-scroll">
-            <span>Scroll to explore</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-    </section>
 
-    <!-- ── What is Bark ── -->
-    <section id="about">
-        <h2>What is Bark?</h2>
-        <p class="section-subtitle">A single process that runs both the Discord bot and the management dashboard — no microservices, no complex infrastructure.</p>
-        <div class="glass-card">
-            <p style="color:var(--text-secondary);line-height:1.8;font-size:15px;max-width:820px;margin:0 auto;">
-                Bark pairs a <strong>discord.py</strong> bot with a <strong>FastAPI</strong> web dashboard in one async Python process, so server operators can moderate, configure, and monitor their communities from the browser. The dashboard uses <strong>Discord OAuth2</strong> for authentication, <strong>server-sent events</strong> for live updates, and a <strong>glassmorphism</strong> design system with role-gated pages. Every feature — moderation, reputation, roles, auto voice, logging, welcome — is a pluggable module that can be enabled, configured, and reloaded per server without restarting the bot.
-            </p>
+        <div class="features">
+            <div class="feature-item">
+                <span class="feature-icon">🛡️</span>
+                <span class="feature-label">Moderation</span>
+                <span class="feature-desc">Cases, warnings, notes &amp; rulesets</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🔊</span>
+                <span class="feature-label">Voice Insights</span>
+                <span class="feature-desc">Activity logs &amp; analytics</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">👥</span>
+                <span class="feature-label">Members</span>
+                <span class="feature-desc">Search, inspect &amp; manage</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">⚙️</span>
+                <span class="feature-label">Modules</span>
+                <span class="feature-desc">Per-server toggle &amp; configure</span>
+            </div>
         </div>
-    </section>
 
-    <!-- ── Stats ── -->
-    <div class="stats-bar" style="max-width:1200px;margin:0 auto;">
-        <div class="stat-item">
-            <div class="stat-number">7</div>
-            <div class="stat-label">Pluggable Modules</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">278+</div>
-            <div class="stat-label">Passing Tests</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">4</div>
-            <div class="stat-label">Access Roles</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">2</div>
-            <div class="stat-label">Deployment Targets</div>
+        <a href="/auth/login" class="btn-discord">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18.942 5.152a16.728 16.728 0 0 0-4.126-1.28c-.177.322-.383.75-.524 1.095a15.572 15.572 0 0 0-4.584 0 11.894 11.894 0 0 0-.533-1.095A16.673 16.673 0 0 0 5.04 5.152c-2.608 3.894-3.32 7.692-2.965 11.434A16.748 16.748 0 0 0 8.85 19.96c.399-.545.754-1.122 1.058-1.73a10.998 10.998 0 0 1-1.668-.802l.42-.328a11.843 11.843 0 0 0 10.184 0l.42.328c-.53.321-1.09.594-1.677.806.305.608.66 1.183 1.058 1.726a16.722 16.722 0 0 0 4.775-3.374c.413-4.244-.695-7.998-2.963-11.438ZM8.678 14.274c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Zm6.126 0c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Z" fill="currentColor"/>
+            </svg>
+            Sign in with Discord
+        </a>
+
+        <div class="landing-footer">
+            <a href="{{ config.dashboard.invite_url or '#' }}" {% if config.dashboard.invite_url %}target="_blank" rel="noopener"{% else %}onclick="return false" style="pointer-events:none;opacity:0.5"{% endif %}>Add to Server</a>
+            {% if config.dashboard.invite_url %}<span class="dot">&middot;</span>{% endif %}
+            <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener">GitHub</a>
         </div>
     </div>
-
-    <div class="section-divider"></div>
-
-    <!-- ── Features ── -->
-    <section id="features">
-        <h2>Everything you need</h2>
-        <p class="section-subtitle">Seven modules, one dashboard. Every feature is toggleable, configurable, and permission-gated per server.</p>
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">🛡️</div>
-                <h3>Moderation</h3>
-                <p>Cases, warnings, private notes, timeouts, kicks, bans, voice actions, rulesets, and word lists — with a full audit trail.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🏆</div>
-                <h3>Reputation &amp; Levels</h3>
-                <p>Message, emoji, reaction, voice, and thanks scoring with automatic leveling, named tiers, and leaderboards.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🎭</div>
-                <h3>Role Manager</h3>
-                <p>Welcome, tenure, voice, Twitch-live, and reaction-claimed role rules — fully automated role assignment.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🔊</div>
-                <h3>Auto Voice</h3>
-                <p>Dynamic temporary voice channels with configurable naming, limits, and permissions — created on demand.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">📋</div>
-                <h3>Logging</h3>
-                <p>Comprehensive Discord event logging to configurable channels — message edits, joins, leaves, and more.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">👋</div>
-                <h3>Welcome</h3>
-                <p>Automated member welcome messages with customizable messages and embedded content.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">📢</div>
-                <h3>Announcements</h3>
-                <p>Schedule and publish announcements across channels with Jinja templates and configurable recurrence.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">⚡</div>
-                <h3>Live Updates</h3>
-                <p>Server-sent events push moderation actions, activity changes, and reputation updates to the dashboard in real time.</p>
-            </div>
-        </div>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- ── Modules ── -->
-    <section id="modules">
-        <h2>Module system</h2>
-        <p class="section-subtitle">Every module is a self-contained Python package that declares its own commands, events, configuration schema, dashboard actions, and workspace tabs.</p>
-        <div style="overflow-x:auto;">
-            <table class="modules-table">
-                <thead>
-                    <tr>
-                        <th>Module</th>
-                        <th>What it does</th>
-                        <th>Dashboard tabs</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td><code>announcements</code></td><td>Scheduled announcements with Jinja templates</td><td>Operate, Configure, About</td></tr>
-                    <tr><td><code>auto_voice</code></td><td>Dynamic temporary voice channels</td><td>Operate, Configure, About</td></tr>
-                    <tr><td><code>logging</code></td><td>Discord event logging to configurable channels</td><td>Operate, Configure, About</td></tr>
-                    <tr><td><code>moderation</code></td><td>Cases, warnings, rulesets, voice tracking, audit</td><td>Cases, Warnings, Notes, Rulesets, Word Lists, Voice, Operate, Configure, About</td></tr>
-                    <tr><td><code>reputation</code></td><td>Levels, thanks, reactions, voice, tiers, leaderboards</td><td>Leaderboard, Thanks Log, Operate, Configure, About</td></tr>
-                    <tr><td><code>role_manager</code></td><td>Welcome, tenure, voice, Twitch, reaction roles</td><td>Rules, Operate, Configure, About</td></tr>
-                    <tr><td><code>welcome</code></td><td>Member welcome message automation</td><td>Operate, Configure, About</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- ── Dashboard Preview ── -->
-    <section id="preview">
-        <h2>The dashboard</h2>
-        <p class="section-subtitle">Every server has its own workspace — overview, member management, per-module configuration, and a full moderation desk.</p>
-        <div class="preview-container">
-            <img src="/static/img/dashboard-preview.png" alt="Bark dashboard workspace" id="dashboard-preview" loading="lazy">
-            <div class="preview-overlay">
-                <h3>Server workspace</h3>
-                <p>Overview stats, recent activity, quick actions, and a sidebar linking every module's interface.</p>
-            </div>
-        </div>
-        <div style="text-align:center;margin-top:24px;">
-            <a href="/dashboard" class="btn-secondary" style="display:inline-flex;">Open Dashboard &rarr;</a>
-        </div>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- ── Self-hosted ── -->
-    <section id="self-hosted" style="padding-top:48px;padding-bottom:48px;">
-        <h2>Self-hosted, your data</h2>
-        <p class="section-subtitle">Bark runs on your own infrastructure — no third-party cloud, no data leaving your servers.</p>
-        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
-            <div class="feature-card">
-                <div class="feature-icon">🐍</div>
-                <h3>Python 3.13+</h3>
-                <p>Single process. SQLite by default with async SQLAlchemy. Deploy behind any reverse proxy.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">📦</div>
-                <h3>One command</h3>
-                <p><code>uv sync &amp;&amp; cp .env.example .env</code> — then edit your token and run.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🔧</div>
-                <h3>systemd ready</h3>
-                <p>Drop-in user service unit included. Health endpoint, graceful shutdown, log rotation.</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- ── CTA ── -->
-    <div class="section-divider"></div>
-    <section class="cta-section">
-        <h2>Ready to take control?</h2>
-        <p>Self-hosted Discord management — one process, one command, one dashboard.</p>
-        <div class="hero-actions">
-            <a id="cta-login-btn" href="/auth/login" class="btn-primary">
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M18.942 5.152a16.728 16.728 0 0 0-4.126-1.28c-.177.322-.383.75-.524 1.095a15.572 15.572 0 0 0-4.584 0 11.894 11.894 0 0 0-.533-1.095A16.673 16.673 0 0 0 5.04 5.152c-2.608 3.894-3.32 7.692-2.965 11.434A16.748 16.748 0 0 0 8.85 19.96c.399-.545.754-1.122 1.058-1.73a10.998 10.998 0 0 1-1.668-.802l.42-.328a11.843 11.843 0 0 0 10.184 0l.42.328c-.53.321-1.09.594-1.677.806.305.608.66 1.183 1.058 1.726a16.722 16.722 0 0 0 4.775-3.374c.413-4.244-.695-7.998-2.963-11.438ZM8.678 14.274c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Zm6.126 0c-.931 0-1.693-.86-1.693-1.908 0-1.049.744-1.909 1.693-1.909.949 0 1.711.86 1.693 1.909 0 1.048-.744 1.908-1.693 1.908Z" fill="currentColor"/>
-                </svg>
-                <span id="cta-login-label">Sign in with Discord</span>
-            </a>
-            <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener" class="btn-secondary">View on GitHub</a>
-        </div>
-    </section>
-
-    <!-- ── Footer ── -->
-    <footer>
-        <div class="footer-left">
-            <img src="{{ avatar_url or '/static/img/bark-avatar.svg' }}" alt="Bark">
-            <span>Bark &mdash; MIT License</span>
-        </div>
-        <div class="footer-links">
-            <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener">GitHub</a>
-            <a href="/dashboard">Dashboard</a>
-            <a href="/auth/login">Sign in</a>
-        </div>
-    </footer>
-
-    <!-- ── Image fallbacks ── -->
     <script src="/static/js/image-fallbacks.js?v=1"></script>
-
-    <!-- ── WebGL Shader ── -->
-    <script>
-    // Adapted from Danilo Guanabara's "Creation" (1k intro)
-    // http://www.pouet.net/prod.php?which=57245
-    (function() {
-        var canvas = document.getElementById('shader-canvas');
-        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl) { canvas.style.display = 'none'; return; }
-
-        // ── Vertex shader ──
-        var vsSource = [
-            'attribute vec2 a_position;',
-            'void main() {',
-            '  gl_Position = vec4(a_position, 0.0, 1.0);',
-            '}'
-        ].join('\n');
-
-        // ── Fragment shader (adapted) ──
-        var fsSource = [
-            'precision highp float;',
-            'uniform vec2 u_resolution;',
-            'uniform float u_time;',
-            '',
-            'void main() {',
-            '  vec3 c;',
-            '  float l, z = u_time * 0.3;',
-            '  vec2 fragCoord = gl_FragCoord.xy;',
-            '  vec2 r = u_resolution;',
-            '  for (int i = 0; i < 3; i++) {',
-            '    vec2 uv, p = fragCoord.xy / r;',
-            '    uv = p;',
-            '    p -= 0.5;',
-            '    p.x *= r.x / r.y;',
-            '    z += 0.07;',
-            '    l = length(p);',
-            '    uv += p / l * (sin(z) + 1.0) * abs(sin(l * 9.0 - z * 2.0));',
-            '    c[i] = 0.01 / length(abs(mod(uv, 1.0) - 0.5));',
-            '  }',
-            '  c /= l;',
-            '  float intensity = max(c.r, max(c.g, c.b));',
-            '  vec3 barkBlue = vec3(0.145, 0.388, 0.922);',
-            '  vec3 darkBlue = vec3(0.02, 0.04, 0.10);',
-            '  vec3 color = mix(darkBlue, barkBlue, intensity * 0.18);',
-            '  vec2 center = (fragCoord - 0.5 * r) / min(r.x, r.y);',
-            '  float vignette = 1.0 - dot(center, center) * 0.4;',
-            '  color *= max(vignette, 0.0);',
-            '  gl_FragColor = vec4(color, 1.0);',
-            '}'
-        ].join('\n');
-
-        // ── Compile shaders ──
-        function compileShader(src, type) {
-            var s = gl.createShader(type);
-            gl.shaderSource(s, src);
-            gl.compileShader(s);
-            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-                console.error('Shader error:', gl.getShaderInfoLog(s));
-                gl.deleteShader(s);
-                return null;
-            }
-            return s;
-        }
-
-        var vs = compileShader(vsSource, gl.VERTEX_SHADER);
-        var fs = compileShader(fsSource, gl.FRAGMENT_SHADER);
-        if (!vs || !fs) { canvas.style.display = 'none'; return; }
-
-        var program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error('Program link error:', gl.getProgramInfoLog(program));
-            canvas.style.display = 'none';
-            return;
-        }
-        gl.useProgram(program);
-
-        // ── Geometry: full-screen quad ──
-        var positions = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
-        var buf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-        var aPos = gl.getAttribLocation(program, 'a_position');
-        gl.enableVertexAttribArray(aPos);
-        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-        var uRes = gl.getUniformLocation(program, 'u_resolution');
-        var uTime = gl.getUniformLocation(program, 'u_time');
-
-        // ── Resize ──
-        function resize() {
-            var w = window.innerWidth;
-            var h = window.innerHeight;
-            canvas.width = w;
-            canvas.height = h;
-            gl.viewport(0, 0, w, h);
-            gl.uniform2f(uRes, w, h);
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        // ── Render loop ──
-        var start = performance.now();
-        function render() {
-            var t = (performance.now() - start) / 1000;
-            gl.uniform1f(uTime, t);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            requestAnimationFrame(render);
-        }
-        render();
-    })();
-    </script>
-
-    <!-- ── Auth state + login persistence ── -->
-    <script>
-    (function() {
-        var LOGIN_KEY = 'bark_auth';
-
-        function updateAuthUI(authenticated, username) {
-            var labels = document.querySelectorAll('#auth-label, #hero-login-label, #cta-login-label');
-            var btns = document.querySelectorAll('#auth-btn, #hero-login-btn, #cta-login-btn');
-            var label = authenticated ? ('Dashboard' + (username ? ' (' + username + ')' : '')) : 'Sign in with Discord';
-            var href = authenticated ? '/dashboard' : '/auth/login';
-            labels.forEach(function(el) { el.textContent = label; });
-            btns.forEach(function(el) { el.href = href; if (!authenticated) el.classList.remove('ghost'); });
-            if (authenticated) {
-                localStorage.setItem(LOGIN_KEY, '1');
-            } else {
-                localStorage.removeItem(LOGIN_KEY);
-            }
-        }
-
-        // Check cache first, then API
-        if (localStorage.getItem(LOGIN_KEY) === '1') {
-            updateAuthUI(true, null);
-            // Verify with server (async, won't block)
-        }
-
-        fetch('/auth/me', { credentials: 'same-origin' })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data && data.success && data.data && data.data.authenticated) {
-                    updateAuthUI(true, data.data.user ? (data.data.user.username || data.data.user.display_name) : null);
-                } else {
-                    updateAuthUI(false, null);
-                }
-            })
-            .catch(function() {
-                updateAuthUI(false, null);
-            });
-    })();
-    </script>
-
 </body>
 </html>
