@@ -159,3 +159,28 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
     except Exception as exc:
         logger.exception("Failed to update banner")
         return api_error(f"Failed to update banner: {exc}")
+
+
+@router.put("/guilds/{guild_id}/bot/appearance/name")
+async def update_bot_name(request: Request, guild_id: str):
+    """Change the bot's display name (username)."""
+    if not check_api_permission(request, "guild.manage", guild_id):
+        return api_forbidden("Insufficient permissions")
+
+    body = await request.json()
+    new_name = str(body.get("name", "")).strip()
+    if not new_name or len(new_name) < 2 or len(new_name) > 32:
+        return api_error("Name must be between 2 and 32 characters")
+
+    import discord
+
+    bot = request.state.bot
+    try:
+        await bot.user.edit(username=new_name)
+        logger.info("Bot name updated to %s", new_name)
+        return api_success({"message": f"Bot name changed to {new_name}"})
+    except discord.Forbidden:
+        return api_error("Cannot change name: insufficient permissions. Rate-limited by Discord (max 2 changes per hour).")
+    except Exception as exc:
+        logger.exception("Failed to update name")
+        return api_error(f"Failed to update name: {exc}")
