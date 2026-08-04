@@ -111,12 +111,16 @@ async def update_avatar(request: Request, guild_id: str, file: UploadFile = File
         return api_error("File must be an image (JPEG, PNG, or GIF)")
 
     bot = request.state.bot
+    import asyncio
+
     try:
         image_data = await file.read()
-        if len(image_data) > 10 * 1024 * 1024:  # 10MB Discord limit
+        if len(image_data) > 10 * 1024 * 1024:
             return api_error("Image must be under 10MB")
 
-        await bot.user.edit(avatar=image_data)
+        # Discord's REST call can hang (large uploads, API latency); cap it so
+        # the reverse proxy never sees a silent upstream and returns 502.
+        await asyncio.wait_for(bot.user.edit(avatar=image_data), timeout=30)
         logger.info("Bot avatar updated")
         return api_success(
             {
@@ -124,6 +128,9 @@ async def update_avatar(request: Request, guild_id: str, file: UploadFile = File
                 "avatar_url": bot.user.display_avatar.url,
             }
         )
+    except asyncio.TimeoutError:
+        logger.error("Avatar update timed out")
+        return api_error("Avatar update timed out — Discord API did not respond in time")
     except Exception as exc:
         logger.exception("Failed to update avatar")
         return api_error(f"Failed to update avatar: {exc}")
@@ -138,6 +145,8 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
     if not file.content_type or not file.content_type.startswith("image/"):
         return api_error("File must be an image (JPEG, PNG, or GIF)")
 
+    import asyncio
+
     import discord
 
     bot = request.state.bot
@@ -146,7 +155,9 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
         if len(image_data) > 10 * 1024 * 1024:
             return api_error("Image must be under 10MB")
 
-        await bot.user.edit(banner=image_data)
+        # Cap the Discord REST call so a slow API never turns into a 502
+        # from the reverse proxy.
+        await asyncio.wait_for(bot.user.edit(banner=image_data), timeout=30)
         logger.info("Bot banner updated")
         return api_success(
             {
@@ -154,6 +165,9 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
                 "banner_url": bot.user.banner.url if bot.user.banner else None,
             }
         )
+    except asyncio.TimeoutError:
+        logger.error("Banner update timed out")
+        return api_error("Banner update timed out — Discord API did not respond in time")
     except discord.Forbidden:
         return api_error("Banner requires a Discord Nitro subscription on the bot owner's account")
     except Exception as exc:
@@ -172,13 +186,18 @@ async def update_bot_name(request: Request, guild_id: str):
     if not new_name or len(new_name) < 2 or len(new_name) > 32:
         return api_error("Name must be between 2 and 32 characters")
 
+    import asyncio
+
     import discord
 
     bot = request.state.bot
     try:
-        await bot.user.edit(username=new_name)
+        await asyncio.wait_for(bot.user.edit(username=new_name), timeout=30)
         logger.info("Bot name updated to %s", new_name)
         return api_success({"message": f"Bot name changed to {new_name}"})
+    except asyncio.TimeoutError:
+        logger.error("Name update timed out")
+        return api_error("Name update timed out — Discord API did not respond in time")
     except discord.Forbidden:
         return api_error("Cannot change name: insufficient permissions. Rate-limited by Discord (max 2 changes per hour).")
     except Exception as exc:
