@@ -658,6 +658,64 @@ async def test_role_manager_create_rule_accepts_json_body(app, client):
 
 
 @pytest.mark.asyncio
+async def test_role_manager_assignments_resolve_names(app, client, db):
+    """Assignments endpoint returns resolved user/role names when the guild
+    cache knows them, with the triggering rule name."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from modules.role_manager.module import RoleManagerModule
+    from services.bark_context import BarkContext
+
+    # Register the role_manager router for this test.
+    bot = app.state.bot
+    ctx = BarkContext(bot, bot.modules.event_bus)
+    router = RoleManagerModule(ctx).get_api_routes()
+    assert router is not None
+    app.include_router(router, prefix="/api/v1")
+
+    # Seed a rule + assignment.
+
+    from database.engine import session_scope
+    from database.models.role_manager import RoleAssignment, RoleRule
+
+    async with session_scope() as session:
+        rule = RoleRule(
+            guild_id="1", name="Counter-Strike role", rule_type="reaction",
+            role_id="555", trigger_key="reaction:123:🎮",
+            trigger_config='{"channel_id": "123", "emoji": "🎮"}',
+        )
+        session.add(rule)
+        await session.flush()
+        session.add(
+            RoleAssignment(
+                guild_id="1", user_id="903", role_id="555", rule_id=rule.id,
+                action="add", reason="", created_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
+    # Give the mock guild a member and a role with real names.
+    guild = bot.get_guild(1)
+    guild.get_member.return_value = SimpleNamespace(display_name="Jenny Ruiz")
+    guild.get_role.return_value = SimpleNamespace(name="Member")
+
+    resp = await client.get("/api/v1/guilds/1/modules/role_manager/assignments")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assignments = data["data"]["assignments"]
+    assert assignments
+    a = assignments[0]
+    assert a["user_name"] == "Jenny Ruiz"
+    assert a["role_name"] == "Member"
+    assert a["rule_name"] == "Counter-Strike role"
+    # Raw ids still present for reference.
+    assert a["user_id"] == "903"
+    assert a["role_id"] == "555"
+
+
+@pytest.mark.asyncio
 async def test_module_action_fields_render_with_browser_valid_types(client, app):
     from unittest.mock import AsyncMock, MagicMock
 

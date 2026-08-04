@@ -1516,6 +1516,12 @@ textarea:focus-visible,
     margin-top: 2px;
 }
 
+.cell-muted {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin-left: 6px;
+}
+
 .template-help {
     margin-top: 8px;
     border: 1px solid var(--border-input);

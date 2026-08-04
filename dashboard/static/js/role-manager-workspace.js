@@ -178,10 +178,10 @@
         refreshIcons(); return;
       }
       const rows = items.map(a => `<tr>
-        <td><code>${escHtml(a.user_id)}</code></td>
-        <td><code>${escHtml(a.role_id)}</code></td>
+        <td>${escHtml(a.user_name || a.user_id)}${a.user_name && a.user_name !== a.user_id ? `<code class="cell-muted">${escHtml(a.user_id)}</code>` : ''}</td>
+        <td>${escHtml(a.role_name || a.role_id)}${a.role_name && a.role_name !== a.role_id ? `<code class="cell-muted">${escHtml(a.role_id)}</code>` : ''}</td>
         <td><span class="badge ${a.action === 'add' ? 'badge-ok' : 'badge-warn'}">${a.action === 'add' ? 'Added' : 'Removed'}</span></td>
-        <td class="cell-truncate" title="${escHtml(a.reason || '')}">${escHtml(a.reason || '—')}</td>
+        <td class="cell-truncate" title="${escHtml(a.reason || '')}">${escHtml(a.reason || (a.rule_name ? a.rule_name : '—'))}</td>
         <td class="timestamp">${formatDate(a.created_at)}</td>
       </tr>`).join('');
       container.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>User</th><th>Role</th><th>Action</th><th>Reason</th><th>When</th></tr></thead><tbody>${rows}</tbody></table></div>`;

@@ -722,11 +722,36 @@ class RoleManagerModule(BarkModule):
             if not await can_view(request, guild_id):
                 return api_forbidden("Insufficient permissions to view role assignments")
             gid = int(guild_id)
+            bot = getattr(request.state, "bot", None)
+            guild = bot.get_guild(gid) if bot is not None else None
+
+            def resolve_user(user_id: str) -> str:
+                if guild is not None and user_id:
+                    try:
+                        member = guild.get_member(int(user_id))
+                    except (TypeError, ValueError):
+                        member = None
+                    if member is not None:
+                        return str(getattr(member, "display_name", None) or member)
+                return user_id
+
+            def resolve_role(role_id: str) -> str:
+                if guild is not None and role_id:
+                    try:
+                        role = guild.get_role(int(role_id))
+                    except (TypeError, ValueError):
+                        role = None
+                    if role is not None:
+                        return str(getattr(role, "name", None) or role_id)
+                return role_id
+
             async with session_scope() as session:
                 from sqlalchemy import desc, select
+                from sqlalchemy.orm import selectinload
 
                 result = await session.execute(
                     select(RoleAssignment)
+                    .options(selectinload(RoleAssignment.rule))
                     .where(RoleAssignment.guild_id == str(gid))
                     .order_by(desc(RoleAssignment.created_at))
                     .limit(limit)
@@ -736,7 +761,11 @@ class RoleManagerModule(BarkModule):
                 {
                     "id": a.id,
                     "user_id": a.user_id,
+                    "user_name": resolve_user(a.user_id),
                     "role_id": a.role_id,
+                    "role_name": resolve_role(a.role_id),
+                    "rule_id": a.rule_id,
+                    "rule_name": a.rule.name if a.rule else None,
                     "action": a.action,
                     "reason": a.reason,
                     "created_at": a.created_at.isoformat() if a.created_at else None,
