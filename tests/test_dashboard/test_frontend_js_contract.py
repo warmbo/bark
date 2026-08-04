@@ -235,6 +235,50 @@ def test_activity_feed_paginates_with_fade_and_load_more():
     assert "escAttr(" not in guild
 
 
+def test_discord_toolbar_covers_discord_markdown_and_images():
+    include = source(TEMPLATES / "components" / "discord_toolbar.html")
+    primitives = source(TEMPLATES / "components" / "primitives.html")
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
+
+    for token in (
+        'data-insert="**"',
+        'data-insert="*"',
+        'data-insert="__"',
+        'data-insert="~~"',
+        'data-insert="||"',
+        'data-insert="`"',
+        'data-insert="```"',
+        'data-insert="> "',
+        'data-insert="# "',
+        'data-insert="- "',
+        'data-insert="1. "',
+        'data-action="link"',
+        'data-action="image-url"',
+        'data-action="image-upload"',
+    ):
+        assert token in include
+
+    # Both renderers reuse the shared include instead of duplicating the toolbar.
+    assert '{% include "components/discord_toolbar.html" %}' in primitives
+    assert '{% include "components/discord_toolbar.html" %}' in detail
+    assert 'data-action="image-upload"' not in primitives
+    assert 'data-action="image-upload"' not in detail
+
+
+def test_module_workspace_toolbar_handles_discord_markdown_and_uploads():
+    workspace = source(JS / "module-workspace.js")
+
+    assert "WRAP_TOKENS" in workspace
+    assert "LINE_PREFIX_TOKENS" in workspace
+    assert "prefixLines" in workspace
+    assert "replaceSelection" in workspace
+    assert 'button[data-action="link"]' in workspace
+    assert 'button[data-action="image-url"]' in workspace
+    assert 'button[data-action="image-upload"]' in workspace
+    assert "FormData" in workspace
+    assert "guildId}/uploads" in workspace
+
+
 def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listener():
     html = source(TEMPLATES / "pages" / "settings.html")
     assert "document.querySelector('label[for=\"avatar-upload\"]')" in html

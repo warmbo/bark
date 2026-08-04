@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Bark — {% block title %}Dashboard{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/main.css?v=50">
+    <link rel="stylesheet" href="/static/css/main.css?v=51">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
@@ -156,13 +156,14 @@
         <section class="app-dialog" role="alertdialog" aria-modal="true" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message">
             <div class="dialog-icon" aria-hidden="true">{{ icon('alert-triangle', 20) }}</div>
             <div><h2 id="app-dialog-title" data-dialog-title>Confirm action</h2><p id="app-dialog-message" data-dialog-message></p></div>
+            <div class="dialog-input-wrap" data-dialog-input-wrap hidden><input type="text" class="form-input" name="dialog-input" data-dialog-input autocomplete="off"></div>
             <div class="dialog-actions"><button type="button" class="btn" data-dialog-cancel>Cancel</button><button type="button" class="btn btn-primary" data-dialog-confirm>Continue</button></div>
         </section>
     </div>
 
     <script src="/static/js/forms.js?v=1"></script>
     <script src="/static/js/image-fallbacks.js?v=1"></script>
-    <script src="/static/js/main.js?v=23"></script>
+    <script src="/static/js/main.js?v=24"></script>
     <script src="/static/js/realtime.js?v=3"></script>
     <script src="/static/js/palette.js?v=5"></script>
     <script src="/static/js/shortcuts.js?v=3"></script>

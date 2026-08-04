@@ -200,37 +200,106 @@
     const target = document.getElementById(targetId);
     if (!target) return;
 
-    const insert = (raw) => {
+    const WRAP_TOKENS = new Set(['**', '*', '__', '~~', '||', '`']);
+    const LINE_PREFIX_TOKENS = new Set(['> ', '# ', '- ', '1. ']);
+
+    const replaceSelection = (insertion, caretOffset = 0) => {
       const start = target.selectionStart ?? target.value.length;
       const end = target.selectionEnd ?? target.value.length;
-      const selected = target.value.slice(start, end);
-      let insertion = raw;
-      let caretOffset = 0;
-
-      if (['**', '*', '__', '~~'].includes(raw) && selected.length) {
-        insertion = raw + selected + raw;
-        caretOffset = insertion.length;
-      } else if (raw === '```') {
-        insertion = raw + '\n' + (selected || 'code') + '\n' + raw;
-        caretOffset = insertion.length;
-      } else if (raw.startsWith('>')) {
-        insertion = raw + (selected || 'quoted text');
-        caretOffset = insertion.length;
-      }
-
-      const value = target.value;
-      target.value = value.slice(0, start) + insertion + value.slice(end);
+      target.value = target.value.slice(0, start) + insertion + target.value.slice(end);
       const newPos = Math.min(start + caretOffset, target.value.length);
       target.setSelectionRange(newPos, newPos);
       target.focus();
       target.dispatchEvent(new Event('input', {bubbles: true}));
     };
 
+    const prefixLines = (text, prefix) =>
+      text.split('\n').map((line) => prefix + line).join('\n');
+
+    const insertToken = (raw) => {
+      const start = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? target.value.length;
+      const selected = target.value.slice(start, end);
+
+      if (WRAP_TOKENS.has(raw) && selected.length) {
+        const wrapped = raw + selected + raw;
+        replaceSelection(wrapped, wrapped.length);
+      } else if (raw === '```') {
+        const block = '```\n' + (selected || 'code') + '\n```';
+        replaceSelection(block, block.length);
+      } else if (LINE_PREFIX_TOKENS.has(raw)) {
+        const prefixed = selected.length ? prefixLines(selected, raw) : raw;
+        replaceSelection(prefixed, prefixed.length);
+      } else {
+        replaceSelection(raw, raw.length);
+      }
+    };
+
+    const askText = async (title, defaultValue = '') => {
+      if (typeof BarkDialog?.prompt !== 'function') return null;
+      return BarkDialog.prompt({title, defaultValue, confirmLabel: 'OK'});
+    };
+
+    const insertLink = async () => {
+      const start = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? target.value.length;
+      const label = target.value.slice(start, end) || 'link text';
+      const url = await askText('Link URL', 'https://');
+      if (!url) return;
+      const markdown = `[${label}](${url})`;
+      replaceSelection(markdown, markdown.length);
+    };
+
+    const insertImageUrl = async () => {
+      const url = await askText('Image URL', 'https://');
+      if (!url) return;
+      const alt = (await askText('Alt text (optional)')) || '';
+      const markdown = `![${alt}](${url})`;
+      replaceSelection(markdown, markdown.length);
+    };
+
+    const insertUploadedImage = () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const response = await safeFetch(`/api/v1/guilds/${guildId}/uploads`, {
+            method: 'POST',
+            body: formData,
+          });
+          if (!response?.data?.url) throw new Error(response?.error || 'Upload failed');
+          const alt = (await askText('Alt text (optional)', file.name)) || file.name;
+          const markdown = `![${alt}](${response.data.url})`;
+          replaceSelection(markdown, markdown.length);
+        } catch (error) {
+          showToast(error.message || 'Image upload failed', 'error');
+        }
+      });
+      input.click();
+    };
+
     Array.from(toolbar.querySelectorAll('button[data-insert]')).forEach((btn) => {
       btn.addEventListener('mousedown', (event) => {
         event.preventDefault();
-        insert(btn.dataset.insert);
+        insertToken(btn.dataset.insert);
       });
+    });
+    toolbar.querySelector('button[data-action="link"]')?.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      insertLink();
+    });
+    toolbar.querySelector('button[data-action="image-url"]')?.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      insertImageUrl();
+    });
+    toolbar.querySelector('button[data-action="image-upload"]')?.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      insertUploadedImage();
     });
   });
 })();

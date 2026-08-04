@@ -1,0 +1,21 @@
+{# Shared Discord-markdown formatting toolbar for text fields.
+   Requires the wiring in module-workspace.js (data-insert / data-action buttons). #}
+<div class="discord-toolbar" data-for="{{ field_id }}" role="group" aria-label="Discord markdown formatting">
+  <button type="button" class="btn btn-xs" data-insert="**" title="Bold" aria-label="Bold"><strong>B</strong></button>
+  <button type="button" class="btn btn-xs" data-insert="*" title="Italic" aria-label="Italic"><em>I</em></button>
+  <button type="button" class="btn btn-xs" data-insert="__" title="Underline" aria-label="Underline"><u>U</u></button>
+  <button type="button" class="btn btn-xs" data-insert="~~" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button>
+  <button type="button" class="btn btn-xs" data-insert="||" title="Spoiler" aria-label="Spoiler">Spoiler</button>
+  <span class="sep" aria-hidden="true"></span>
+  <button type="button" class="btn btn-xs" data-insert="`" title="Inline code" aria-label="Inline code">Code</button>
+  <button type="button" class="btn btn-xs" data-insert="```" title="Code block" aria-label="Code block">Code block</button>
+  <button type="button" class="btn btn-xs" data-insert="> " title="Blockquote" aria-label="Blockquote">Quote</button>
+  <span class="sep" aria-hidden="true"></span>
+  <button type="button" class="btn btn-xs" data-insert="# " title="Header" aria-label="Header">H</button>
+  <button type="button" class="btn btn-xs" data-insert="- " title="Bulleted list" aria-label="Bulleted list">&#8226; List</button>
+  <button type="button" class="btn btn-xs" data-insert="1. " title="Numbered list" aria-label="Numbered list">1. List</button>
+  <span class="sep" aria-hidden="true"></span>
+  <button type="button" class="btn btn-xs" data-action="link" title="Insert link" aria-label="Insert link">Link</button>
+  <button type="button" class="btn btn-xs" data-action="image-url" title="Insert image by URL" aria-label="Insert image by URL">Image</button>
+  <button type="button" class="btn btn-xs" data-action="image-upload" title="Upload and insert image" aria-label="Upload and insert image">Upload</button>
+</div>

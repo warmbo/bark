@@ -62,6 +62,16 @@ def create_app(bot: BarkBot) -> DashboardApp:
     # Static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    # Uploaded images for Discord markdown fields (public so Discord can fetch them)
+    from dashboard.routes.api.uploads import uploads_directory
+
+    uploads_directory().mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/media/uploads",
+        StaticFiles(directory=str(uploads_directory())),
+        name="media-uploads",
+    )
+
     # Templates
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -93,7 +103,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
         response = await call_next(request)
         # Versioned static assets can be cached aggressively — ?v=N handles invalidation
         content_type = response.headers.get("content-type", "")
-        if request.url.path.startswith("/static/"):
+        if request.url.path.startswith(("/static/", "/media/")):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         # Prevent browser caching on HTML pages
         elif "text/html" in content_type:
@@ -129,6 +139,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     from dashboard.routes.api.notes import router as notes_api
     from dashboard.routes.api.realtime import router as realtime_api
     from dashboard.routes.api.settings import router as settings_api
+    from dashboard.routes.api.uploads import router as uploads_api
     from dashboard.routes.auth import router as auth_router
 
     app.include_router(guilds_api, prefix="/api/v1")
@@ -142,6 +153,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     app.include_router(realtime_api, prefix="/api/v1")
     app.include_router(notes_api, prefix="/api/v1")
     app.include_router(bot_appearance_api, prefix="/api/v1")
+    app.include_router(uploads_api, prefix="/api/v1")
     app.include_router(auth_router)
 
     # ── Root Route ────────────────────────────────────

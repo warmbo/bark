@@ -68,6 +68,8 @@ const BarkDialog = (() => {
         if (!node || node.hidden) return;
         node.hidden = true;
         node.setAttribute('aria-hidden', 'true');
+        const inputWrap = node.querySelector('[data-dialog-input-wrap]');
+        if (inputWrap) inputWrap.hidden = true;
         const resolver = node._resolver;
         node._resolver = null;
         if (previousFocus?.isConnected) previousFocus.focus();
@@ -89,6 +91,30 @@ const BarkDialog = (() => {
         node.hidden = false; node.setAttribute('aria-hidden', 'false'); node._resolver = resolve;
         confirmButton.focus();
     });
+    const prompt = ({title, message = '', defaultValue = '', confirmLabel = 'OK', placeholder = ''}) => new Promise((resolve) => {
+        const node = overlay();
+        if (!node) { resolve(null); return; }
+        if (!node.hidden) close(false);
+        previousFocus = document.activeElement;
+        node.querySelector('[data-dialog-title]').textContent = title;
+        node.querySelector('[data-dialog-message]').textContent = message;
+        const inputWrap = node.querySelector('[data-dialog-input-wrap]');
+        const input = node.querySelector('[data-dialog-input]');
+        input.value = defaultValue;
+        input.placeholder = placeholder;
+        inputWrap.hidden = false;
+        const confirmButton = node.querySelector('[data-dialog-confirm]');
+        confirmButton.textContent = confirmLabel;
+        confirmButton.classList.remove('btn-danger');
+        confirmButton.classList.add('btn-primary');
+        node._resolver = (confirmed) => {
+            inputWrap.hidden = true;
+            resolve(confirmed === true ? input.value.trim() : null);
+        };
+        node.hidden = false; node.setAttribute('aria-hidden', 'false');
+        input.focus();
+        input.select();
+    });
     document.addEventListener('click', (event) => {
         if (event.target.matches('[data-dialog-cancel], #app-dialog-overlay')) close(false);
         if (event.target.matches('[data-dialog-confirm]')) close(true);
@@ -97,6 +123,11 @@ const BarkDialog = (() => {
         const node = overlay();
         if (!node || node.hidden) return;
         if (event.key === 'Escape') { event.preventDefault(); close(false); return; }
+        if (event.key === 'Enter' && event.target.matches('[data-dialog-input]')) {
+            event.preventDefault();
+            close(true);
+            return;
+        }
         if (event.key === 'Tab') {
             const controls = [...node.querySelectorAll('button:not([disabled]), [href], input:not([disabled])')];
             if (!controls.length) return;
@@ -105,7 +136,7 @@ const BarkDialog = (() => {
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }
     });
-    return {confirm, close};
+    return {confirm, prompt, close};
 })();
 
 // ── Shared Utility Functions ──────────────────────────

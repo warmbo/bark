@@ -1136,6 +1136,59 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     assert stamps == sorted(stamps, reverse=True)
 
 
+@pytest.mark.asyncio
+async def test_upload_image_requires_permission_and_returns_public_url(client, app, monkeypatch):
+    """Image uploads gate on content permissions, validate input, and serve back."""
+    import dashboard.routes.api.uploads as uploads_route
+
+    # Denied without a content-editing permission.
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: False)
+    denied = await client.post(
+        "/api/v1/guilds/1/uploads",
+        files={"file": ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+    )
+    assert denied.status_code == 403
+
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: True)
+
+    # Reject disallowed content type.
+    bad_type = await client.post(
+        "/api/v1/guilds/1/uploads",
+        files={"file": ("a.txt", b"hello", "text/plain")},
+    )
+    assert bad_type.status_code == 400
+
+    # Reject empty uploads.
+    empty = await client.post(
+        "/api/v1/guilds/1/uploads",
+        files={"file": ("a.png", b"", "image/png")},
+    )
+    assert empty.status_code == 400
+
+    # Reject oversized uploads.
+    oversized = await client.post(
+        "/api/v1/guilds/1/uploads",
+        files={"file": ("a.png", b"x" * (8 * 1024 * 1024 + 1), "image/png")},
+    )
+    assert oversized.status_code == 413
+
+    # Valid PNG upload returns a public URL, persists the file, and serves it.
+    valid = await client.post(
+        "/api/v1/guilds/1/uploads",
+        files={"file": ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+    )
+    assert valid.status_code == 200
+    url = valid.json()["data"]["url"]
+    assert url.startswith("http://127.0.0.1:8090/media/uploads/")
+    name = url.rsplit("/", 1)[1]
+    saved = uploads_route.uploads_directory() / name
+    assert saved.read_bytes() == b"\x89PNG\r\n\x1a\n"
+
+    served = await client.get(f"/media/uploads/{name}")
+    assert served.status_code == 200
+    assert served.headers["content-type"].startswith("image/png")
+
+
 # ═══════════════════════════════════════════════════════
 # ── Phase 16 Regression: Persistence Tests ────────────
 # ═══════════════════════════════════════════════════════

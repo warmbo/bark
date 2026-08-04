@@ -46,14 +46,7 @@
     <textarea id="{{ field_id }}" class="form-input" name="{{ name }}" rows="3" data-schema-type="array"{% if prop.description %} aria-describedby="{{ field_id }}-hint"{% endif %}>{{ value | default([]) | tojson }}</textarea>
     {% elif prop.format == 'textarea' %}
     {% if prop.format_toolbar %}
-    <div class="discord-toolbar" data-for="{{ field_id }}">
-      <button type="button" class="btn btn-xs" data-insert="**">B</button>
-      <button type="button" class="btn btn-xs" data-insert="*">I</button>
-      <button type="button" class="btn btn-xs" data-insert="__">U</button>
-      <button type="button" class="btn btn-xs" data-insert="~~">S</button>
-      <button type="button" class="btn btn-xs" data-insert="```">Code</button>
-      <button type="button" class="btn btn-xs" data-insert="> ">Quote</button>
-    </div>
+    {% include "components/discord_toolbar.html" %}
     {% endif %}
     <textarea id="{{ field_id }}" class="form-input" name="{{ name }}" rows="{{ prop.rows | default(4) }}" {% if prop.maxLength is defined %}maxlength="{{ prop.maxLength }}"{% endif %} placeholder="{{ prop.placeholder | default('') }}">{{ value | default(prop.default, true) | default('', true) }}</textarea>
     {% elif prop.type in ['integer', 'number'] %}

@@ -12,6 +12,7 @@ os.environ.setdefault("BARK_BOT_TOKEN", "test_token_12345")
 os.environ.setdefault("BARK_SECRET_KEY", "test_secret_key_abc_xyz_789")
 os.environ.setdefault("BARK_DATABASE_URL", "sqlite+aiosqlite:////tmp/bark_test.db")
 os.environ.setdefault("BARK_DATA_DIR", "/tmp/bark_test_data")
+os.environ.setdefault("BARK_PUBLIC_URL", "http://127.0.0.1:8091")
 
 sys.path.insert(0, str(Path(__file__).parent))
 logging.basicConfig(level=logging.WARNING)

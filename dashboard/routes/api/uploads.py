@@ -1,0 +1,76 @@
+"""
+Image upload API for Discord markdown content fields.
+
+Uploaded images are stored under ``<data_dir>/uploads`` and served back at a
+public URL (``<public_url>/media/uploads/<name>``) so Discord can fetch them
+when the markdown is posted to a channel.
+"""
+
+from __future__ import annotations
+
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, File, Request, UploadFile
+
+from config import config
+from services.response import (
+    api_error,
+    api_forbidden,
+    api_success,
+    check_api_permission,
+)
+
+router = APIRouter(tags=["api-uploads"])
+
+ALLOWED_IMAGE_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
+# Actions whose holders are allowed to attach images to Discord-facing content.
+_CONTENT_EDIT_PERMISSIONS = (
+    "announcements.post",
+    "welcome.configure",
+    "moderation.view",
+)
+
+
+def uploads_directory() -> Path:
+    """Return the directory where uploaded images are stored."""
+    return Path(config.data_dir) / "uploads"
+
+
+def _can_upload(request: Request, guild_id: str) -> bool:
+    """Return whether the caller may attach images to Discord content."""
+    return any(
+        check_api_permission(request, action, guild_id) for action in _CONTENT_EDIT_PERMISSIONS
+    )
+
+
+@router.post("/guilds/{guild_id}/uploads")
+async def upload_image(request: Request, guild_id: str, file: UploadFile = File(...)):
+    """Upload an image and return a public URL for use in Discord markdown."""
+    if not _can_upload(request, guild_id):
+        return api_forbidden()
+
+    extension = ALLOWED_IMAGE_TYPES.get(file.content_type or "")
+    if extension is None:
+        return api_error("Only PNG, JPEG, GIF, and WebP images are supported", status_code=400)
+
+    payload = await file.read()
+    if len(payload) == 0:
+        return api_error("Uploaded file is empty", status_code=400)
+    if len(payload) > MAX_UPLOAD_BYTES:
+        return api_error("Image exceeds the 8 MB limit", status_code=413)
+
+    directory = uploads_directory()
+    directory.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4().hex}{extension}"
+    (directory / name).write_bytes(payload)
+
+    public_base = config.dashboard.public_url.rstrip("/")
+    return api_success({"url": f"{public_base}/media/uploads/{name}"})
