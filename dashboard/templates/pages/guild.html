@@ -150,7 +150,7 @@ function renderActivity(activityData) {
     feed.innerHTML = items.map(a => {
         const time = a.timestamp ? timeAgo(a.timestamp) : '';
         const timestampAttr = a.timestamp
-            ? ` data-activity-timestamp="${escAttr(a.timestamp)}"`
+            ? ` data-activity-timestamp="${escHtml(a.timestamp).replaceAll('"', '&quot;').replaceAll("'", '&#39;')}"`
             : '';
         let reasonHtml = '';
         if (a.reason) reasonHtml = `<span class="activity-reason">${escHtml(a.reason)}</span>`;

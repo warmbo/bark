@@ -185,7 +185,11 @@ def test_guild_activity_refreshes_from_server_and_ages_visible_timestamps():
     assert "data-activity-timestamp" in guild
     assert "setInterval(refreshActivityTimes, ACTIVITY_TIME_REFRESH_MS)" in guild
     assert "if (event.persisted) startGuildOverviewRefresh()" in guild
-    assert 'data-activity-timestamp="${escAttr(a.timestamp)}"' in guild
+    assert 'data-activity-timestamp="${escHtml(a.timestamp).replaceAll(' in guild
+    # The inline script must not depend on functions added to main.js recently:
+    # browsers cache main.js by version query, so a stale cached copy would
+    # throw ReferenceError and render "Activity unavailable".
+    assert "escAttr(" not in guild
 
 
 def test_time_ago_uses_explicit_utc_and_handles_invalid_or_future_values():
