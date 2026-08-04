@@ -126,7 +126,7 @@ body {
     position: relative;
 }
 
-/* Subtle shark wallpaper backdrop — very low opacity, blurred */
+/* Subtle shark wallpaper backdrop — the paper is near-black, so show it at high opacity */
 body::before {
     content: '';
     position: fixed;
@@ -135,8 +135,8 @@ body::before {
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    opacity: 0.08;
-    filter: blur(1px);
+    opacity: 0.55;
+    filter: blur(0.5px);
     pointer-events: none;
     z-index: -1;
     will-change: transform;
@@ -149,8 +149,8 @@ body::after {
     position: fixed;
     inset: 0;
     background:
-        radial-gradient(circle at 50% 40%, transparent 0%, rgba(10, 10, 14, 0.6) 100%),
-        linear-gradient(180deg, rgba(10, 10, 14, 0.4) 0%, rgba(10, 10, 14, 0.1) 30%, rgba(10, 10, 14, 0.1) 70%, rgba(10, 10, 14, 0.55) 100%);
+        radial-gradient(circle at 50% 40%, transparent 0%, rgba(10, 10, 14, 0.45) 100%),
+        linear-gradient(180deg, rgba(10, 10, 14, 0.25) 0%, rgba(10, 10, 14, 0.08) 30%, rgba(10, 10, 14, 0.08) 70%, rgba(10, 10, 14, 0.4) 100%);
     pointer-events: none;
     z-index: -1;
 }

@@ -681,16 +681,24 @@ async def test_role_manager_assignments_resolve_names(app, client, db):
 
     async with session_scope() as session:
         rule = RoleRule(
-            guild_id="1", name="Counter-Strike role", rule_type="reaction",
-            role_id="555", trigger_key="reaction:123:🎮",
+            guild_id="1",
+            name="Counter-Strike role",
+            rule_type="reaction",
+            role_id="555",
+            trigger_key="reaction:123:🎮",
             trigger_config='{"channel_id": "123", "emoji": "🎮"}',
         )
         session.add(rule)
         await session.flush()
         session.add(
             RoleAssignment(
-                guild_id="1", user_id="903", role_id="555", rule_id=rule.id,
-                action="add", reason="", created_at=datetime.now(timezone.utc),
+                guild_id="1",
+                user_id="903",
+                role_id="555",
+                rule_id=rule.id,
+                action="add",
+                reason="",
+                created_at=datetime.now(timezone.utc),
             )
         )
         await session.commit()

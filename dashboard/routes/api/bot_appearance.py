@@ -199,7 +199,9 @@ async def update_bot_name(request: Request, guild_id: str):
         logger.error("Name update timed out")
         return api_error("Name update timed out — Discord API did not respond in time")
     except discord.Forbidden:
-        return api_error("Cannot change name: insufficient permissions. Rate-limited by Discord (max 2 changes per hour).")
+        return api_error(
+            "Cannot change name: insufficient permissions. Rate-limited by Discord (max 2 changes per hour)."
+        )
     except Exception as exc:
         logger.exception("Failed to update name")
         return api_error(f"Failed to update name: {exc}")
