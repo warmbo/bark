@@ -6,31 +6,31 @@
 
 :root {
     /* ── Base Colors ── */
-    --bg-base: #0a0a0d;
-    --bg-elevated: #111114;
-    --bg-card: rgba(28, 28, 36, 0.85);
-    --bg-card-hover: rgba(36, 36, 46, 0.9);
-    --bg-card-solid: #1c1c24;
-    --bg-input: rgba(32, 32, 40, 0.92);
-    --bg-sidebar: rgba(14, 14, 18, 0.92);
-    --bg-surface: rgba(22, 22, 28, 0.9);
+    --bg-base: #14141a;
+    --bg-elevated: #1b1b23;
+    --bg-card: rgba(35, 35, 45, 0.88);
+    --bg-card-hover: rgba(44, 44, 56, 0.92);
+    --bg-card-solid: #23232d;
+    --bg-input: rgba(40, 40, 52, 0.95);
+    --bg-sidebar: rgba(18, 18, 24, 0.94);
+    --bg-surface: rgba(28, 28, 36, 0.92);
     --bg-overlay: rgba(0, 0, 0, 0.7);
 
     /* ── Frosted Glass ── */
-    --glass-tint: rgba(255, 255, 255, 0.04);
-    --glass-tint-strong: rgba(255, 255, 255, 0.07);
-    --glass-border: rgba(255, 255, 255, 0.09);
-    --glass-border-hover: rgba(255, 255, 255, 0.14);
-    --glass-accent-border: rgba(59, 130, 246, 0.24);
+    --glass-tint: rgba(255, 255, 255, 0.05);
+    --glass-tint-strong: rgba(255, 255, 255, 0.09);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border-hover: rgba(255, 255, 255, 0.18);
+    --glass-accent-border: rgba(59, 130, 246, 0.3);
     --glass-blur: blur(16px);
     --glass-blur-light: blur(8px);
     --glass-blur-heavy: blur(24px);
 
     /* ── Borders ── */
-    --border-subtle: rgba(255, 255, 255, 0.07);
-    --border-card: rgba(255, 255, 255, 0.09);
-    --border-input: rgba(255, 255, 255, 0.14);
-    --border-hover: rgba(255, 255, 255, 0.2);
+    --border-subtle: rgba(255, 255, 255, 0.1);
+    --border-card: rgba(255, 255, 255, 0.13);
+    --border-input: rgba(255, 255, 255, 0.19);
+    --border-hover: rgba(255, 255, 255, 0.26);
 
     /* ── Accent (single blue) ── */
     --accent: #3b82f6;
@@ -39,9 +39,9 @@
     --accent-border: rgba(59, 130, 246, 0.21);
 
     /* ── Text ── */
-    --text-primary: #f4f4f5;
-    --text-secondary: #c9c9d2;
-    --text-tertiary: #9d9da8;
+    --text-primary: #ffffff;
+    --text-secondary: #d6d6dd;
+    --text-tertiary: #a8a8b3;
     --text-inverse: #0f0f11;
 
     /* ── Semantic ── */
@@ -76,6 +76,7 @@
     /* ── Typography ── */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --bg-avatar: none;
 
     /* ── Layout ── */
     --sidebar-width: 256px;
@@ -125,46 +126,33 @@ body {
     position: relative;
 }
 
-/* Animated ambient backdrop — drifting accent orbs across the whole page */
-body::before,
+/* Faded Bark avatar backdrop — blown up to cover the page, very low opacity */
+body::before {
+    content: '';
+    position: fixed;
+    inset: -10%;
+    background-image: var(--bg-avatar, url('/static/img/bark-avatar.svg'));
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.05;
+    filter: blur(2px);
+    pointer-events: none;
+    z-index: -1;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Soft readability vignette over the avatar backdrop */
 body::after {
     content: '';
     position: fixed;
-    border-radius: 50%;
-    filter: blur(120px);
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 40%, transparent 0%, rgba(10, 10, 14, 0.55) 100%),
+        linear-gradient(180deg, rgba(10, 10, 14, 0.35) 0%, rgba(10, 10, 14, 0.1) 30%, rgba(10, 10, 14, 0.1) 70%, rgba(10, 10, 14, 0.5) 100%);
     pointer-events: none;
     z-index: -1;
-    will-change: opacity, transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-}
-
-body::before {
-    width: 600px;
-    height: 600px;
-    top: -200px;
-    right: -150px;
-    background: radial-gradient(circle, rgba(59, 130, 246, 0.08), transparent 70%);
-    animation: orb-drift-1 20s ease-in-out infinite alternate;
-}
-
-body::after {
-    width: 500px;
-    height: 500px;
-    bottom: -150px;
-    left: -150px;
-    background: radial-gradient(circle, rgba(59, 130, 246, 0.05), transparent 70%);
-    animation: orb-drift-2 25s ease-in-out infinite alternate;
-}
-
-@keyframes orb-drift-1 {
-    0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.6; }
-    100% { transform: translate3d(80px, 60px, 0) scale(1.2); opacity: 1; }
-}
-
-@keyframes orb-drift-2 {
-    0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.4; }
-    100% { transform: translate3d(-60px, -40px, 0) scale(1.15); opacity: 0.8; }
 }
 
 a { color: inherit; text-decoration: none; }
@@ -1625,8 +1613,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     gap: 6px;
     padding: 8px 20px;
     border: 1px solid var(--glass-border);
-    background: var(--bg-card);
-    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
     font-family: var(--font-sans);
     font-size: 14px;
     font-weight: 500;

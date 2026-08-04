@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Bark — {% block title %}Dashboard{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/main.css?v=52">
+    <link rel="stylesheet" href="/static/css/main.css?v=53">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
@@ -40,7 +40,7 @@
     <!-- Theme -->
     <meta name="theme-color" content="#1e1e2e">
 </head>
-<body>
+<body style="--bg-avatar: url('{{ _avatar or '/static/img/bark-avatar.svg' }}')">
     <!-- Skip to content link for keyboard users -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
 

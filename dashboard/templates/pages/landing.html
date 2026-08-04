@@ -44,9 +44,9 @@
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg: #0a0a0d;
-            --bg-card: rgba(24, 24, 32, 0.94);
-            --bg-card-hover: rgba(30, 30, 40, 0.96);
+            --bg: #14141a;
+            --bg-card: rgba(32, 32, 42, 0.94);
+            --bg-card-hover: rgba(38, 38, 50, 0.96);
             --accent: #2563eb;
             --accent-hover: #3b82f6;
             --accent-glow: rgba(37, 99, 235, 0.25);
@@ -246,7 +246,7 @@
         }
     </style>
 </head>
-<body>
+<body style="--bg-avatar: url('{{ avatar_url or '/static/img/bark-avatar.svg' }}')">
     <div class="landing">
         {% if avatar_url %}
         <img class="landing-avatar" src="{{ avatar_url }}" data-fallback-src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
