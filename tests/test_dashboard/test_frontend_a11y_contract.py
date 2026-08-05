@@ -225,8 +225,8 @@ def test_remote_bot_images_have_a_bundled_fallback():
     base = source(TEMPLATES / "base.html")
     landing = source(TEMPLATES / "pages" / "landing.html")
     fallback_js = source(STATIC / "js" / "image-fallbacks.js")
-    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in base
-    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in landing
+    assert 'data-fallback-src="/static/img/bark-avatar.png"' in base
+    assert 'data-fallback-src="/static/img/bark-avatar.png"' in landing
     assert "function initImageFallbacks()" in fallback_js
     assert "image-fallbacks.js?v=1" in base
     assert "image-fallbacks.js?v=1" in landing
@@ -238,9 +238,9 @@ def test_all_remote_dashboard_avatars_use_the_shared_fallback():
     detail = source(TEMPLATES / "pages" / "member_detail.html")
 
     assert 'class="sidebar-user-avatar"' in base
-    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in base
-    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in members
-    assert 'data-fallback-src="/static/img/bark-avatar.svg"' in detail
+    assert 'data-fallback-src="/static/img/bark-avatar.png"' in base
+    assert 'data-fallback-src="/static/img/bark-avatar.png"' in members
+    assert 'data-fallback-src="/static/img/bark-avatar.png"' in detail
     assert "initImageFallbacks();" in members
     assert "initImageFallbacks();" in detail
 

@@ -57,7 +57,7 @@ function renderMember(m) {
         <div class="member-detail-header">
             <div class="member-detail-avatar">
                 ${avatarUrl
-                    ? `<img src="${escHtml(avatarUrl)}" data-fallback-src="/static/img/bark-avatar.svg" alt="${escHtml(memberName)}'s avatar">`
+                    ? `<img src="${escHtml(avatarUrl)}" data-fallback-src="/static/img/bark-avatar.png" alt="${escHtml(memberName)}'s avatar">`
                     : `<div class="avatar-placeholder large">${escHtml(memberName.charAt(0))}</div>`}
             </div>
             <div class="member-detail-info">

@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Bark — {% block title %}Dashboard{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/main.css?v=57">
+    <link rel="stylesheet" href="/static/css/main.css?v=58">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
     {% set _avatar = '' %}
     {% endif %}
     <!-- Favicon: live bot avatar (falls back to bundled SVG) -->
-    <link rel="icon" type="image/png" href="{{ _avatar or '/static/img/bark-avatar.svg' }}">
+    <link rel="icon" type="image/png" href="{{ _avatar or '/static/img/bark-avatar.png' }}">
     <!-- OpenGraph -->
     <meta property="og:site_name" content="Bark">
     <meta property="og:title" content="{% block og_title %}Bark — {{ self.title() }}{% endblock %}">
@@ -49,7 +49,7 @@
         <aside class="sidebar" id="sidebar" aria-label="Main navigation">
             <div class="sidebar-header">
                 <a href="/dashboard" class="sidebar-logo">
-                    {% if _avatar %}<img class="logo-icon" src="{{ _avatar }}" data-fallback-src="/static/img/bark-avatar.svg" alt="Bark logo">{% else %}<span class="logo-icon">{{ icon("radio", 20) }}</span>{% endif %}
+                    {% if _avatar %}<img class="logo-icon" src="{{ _avatar }}" data-fallback-src="/static/img/bark-avatar.png" alt="Bark logo">{% else %}<img class="logo-icon" src="/static/img/bark-avatar.png" data-fallback-src="/static/img/bark-avatar.png" alt="Bark logo">{% endif %}
                     <span class="logo-text">Bark</span>
                 </a>
                 <span class="sidebar-version">v{{ request.app.state.version }}</span>
@@ -89,7 +89,7 @@
                 {% if request.session.get('user') %}
                 <div class="sidebar-user">
                     {% if request.session.user.avatar %}
-                    <img src="{{ request.session.user.avatar }}" data-fallback-src="/static/img/bark-avatar.svg" alt="" class="sidebar-user-avatar">
+                    <img src="{{ request.session.user.avatar }}" data-fallback-src="/static/img/bark-avatar.png" alt="" class="sidebar-user-avatar">
                     {% else %}
                     <span class="sidebar-user-avatar sidebar-user-placeholder">{{ request.session.user.username[:1] }}</span>
                     {% endif %}

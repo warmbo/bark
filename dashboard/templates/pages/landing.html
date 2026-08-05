@@ -17,7 +17,7 @@
     <meta property="og:image:width" content="512">
     <meta property="og:image:height" content="512">
     {% else %}
-    <meta property="og:image" content="{{ config.dashboard.public_url }}/static/img/bark-avatar.svg">
+    <meta property="og:image" content="{{ config.dashboard.public_url }}/static/img/bark-avatar.png">
     {% endif %}
 
     <!-- Twitter Card -->
@@ -32,7 +32,7 @@
     <meta name="theme-color" content="#2563eb">
 
     <!-- Favicon: live bot avatar (falls back to bundled SVG) -->
-    <link rel="icon" type="image/png" href="{{ avatar_url or '/static/img/bark-avatar.svg' }}">
+    <link rel="icon" type="image/png" href="{{ avatar_url or '/static/img/bark-avatar.png' }}">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -293,9 +293,9 @@
     <canvas id="shader-canvas"></canvas>
     <div class="landing">
         {% if avatar_url %}
-        <img class="landing-avatar" src="{{ avatar_url }}" data-fallback-src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
+        <img class="landing-avatar" src="{{ avatar_url }}" data-fallback-src="/static/img/bark-avatar.png" alt="Bark avatar" width="96" height="96">
         {% else %}
-        <img class="landing-avatar" src="/static/img/bark-avatar.svg" alt="Bark avatar" width="96" height="96">
+        <img class="landing-avatar" src="/static/img/bark-avatar.png" alt="Bark avatar" width="96" height="96">
         {% endif %}
 
         <h1>Bark</h1>
