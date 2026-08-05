@@ -126,9 +126,15 @@ async def upload_image(request: Request, guild_id: str, file: UploadFile = File(
         return api_error("Image exceeds the 8 MB limit", status_code=413)
 
     directory = _guild_uploads_dir(guild_id)
-    directory.mkdir(parents=True, exist_ok=True)
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return api_error("Could not create upload directory", status_code=500)
     name = f"{uuid.uuid4().hex}{extension}"
-    (directory / name).write_bytes(payload)
+    try:
+        (directory / name).write_bytes(payload)
+    except OSError:
+        return api_error("Could not save upload (check directory permissions)", status_code=500)
 
     public_base = config.dashboard.public_url.rstrip("/")
     return api_success({"url": f"{public_base}/media/uploads/{guild_id}/{name}"})

@@ -1255,6 +1255,38 @@ async def test_upload_image_requires_permission_and_returns_public_url(client, a
     assert served.headers["content-type"].startswith("image/png")
 
 
+@pytest.mark.asyncio
+async def test_upload_image_write_failure_returns_clean_500(client, app, monkeypatch):
+    """A disk write failure must return a JSON error, not an unhandled traceback."""
+    import dashboard.routes.api.uploads as uploads_route
+
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: True)
+
+    def boom_directory(guild_id: str):
+        class Unwritable:
+            def mkdir(self, *a, **k):
+                raise OSError("permission denied")
+
+            def iterdir(self):
+                raise OSError("permission denied")
+
+            def exists(self):
+                return False
+
+        return Unwritable()
+
+    monkeypatch.setattr(uploads_route, "_guild_uploads_dir", boom_directory)
+
+    resp = await client.post(
+        "/api/v1/guilds/1/uploads",
+        files={"file": ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+    )
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body.get("success") is False
+    assert "error" in body
+
+
 # ═══════════════════════════════════════════════════════
 # ── Phase 16 Regression: Persistence Tests ────────────
 # ═══════════════════════════════════════════════════════
