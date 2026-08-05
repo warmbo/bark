@@ -138,6 +138,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     from dashboard.routes.api.moderation import router as moderation_api
     from dashboard.routes.api.modules import router as modules_api
     from dashboard.routes.api.notes import router as notes_api
+    from dashboard.routes.api.plugins import router as plugins_api
     from dashboard.routes.api.realtime import router as realtime_api
     from dashboard.routes.api.settings import router as settings_api
     from dashboard.routes.api.uploads import router as uploads_api
@@ -154,6 +155,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     app.include_router(audit_log_api, prefix="/api/v1")
     app.include_router(realtime_api, prefix="/api/v1")
     app.include_router(notes_api, prefix="/api/v1")
+    app.include_router(plugins_api, prefix="/api/v1")
     app.include_router(bot_appearance_api, prefix="/api/v1")
     app.include_router(uploads_api, prefix="/api/v1")
     app.include_router(auth_router)

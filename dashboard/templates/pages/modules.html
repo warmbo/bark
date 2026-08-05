@@ -16,7 +16,7 @@
         <article class="module-card {{ 'is-enabled' if is_enabled else 'is-disabled' }}" data-module="{{ name }}">
             <div class="module-card-header">
                 <div class="module-card-title">
-                    <h3><a href="/guild/{{ guild.id }}/modules/{{ name }}">{{ icon("puzzle", 16) }} {{ name | replace('_', ' ') | title }}</a></h3>
+                    <h3><a href="/guild/{{ guild.id }}/modules/{{ name }}">{{ icon("puzzle", 16) }} {{ name | replace('_', ' ') | title }}</a>{% if name in plugin_names %} <span class="badge badge-muted">plugin</span>{% endif %}</h3>
                     <span class="module-version">v{{ module.version }}</span>
                 </div>
                 <label class="module-toggle-control" for="module-toggle-{{ name }}">

@@ -1,0 +1,293 @@
+"""Unit tests for the single-file plugin system (services/plugin_manager.py
+and the ModuleManager plugin lifecycle)."""
+
+from __future__ import annotations
+
+import pytest
+
+from services.plugin_manager import (
+    MAX_PLUGIN_BYTES,
+    PluginValidationError,
+    is_core_module,
+    load_plugin_class,
+    plugins_directory,
+    validate_plugin_name,
+)
+
+VALID_PLUGIN = '''
+from modules.base import BarkModule, CommandRegistration, EventRegistration
+
+class PingPlugin(BarkModule):
+    name = "ping_plugin"
+    version = "1.0.0"
+    description = "A tiny test plugin"
+
+    def get_commands(self):
+        return [CommandRegistration(name="ping", description="Ping!")]
+
+    def get_events(self):
+        return [EventRegistration("discord_message", handler="_on_message")]
+
+    async def _on_message(self, event_type: str, **data):
+        return None
+
+    async def enable(self):
+        pass
+
+    async def disable(self):
+        pass
+'''
+
+NO_SUBCLASS_PLUGIN = """
+# This file has no BarkModule subclass.
+ANSWER = 42
+"""
+
+TWO_CLASSES_PLUGIN = '''
+from modules.base import BarkModule
+
+class FirstPlugin(BarkModule):
+    name = "first_plugin"
+    async def enable(self): pass
+    async def disable(self): pass
+
+class SecondPlugin(BarkModule):
+    name = "second_plugin"
+    async def enable(self): pass
+    async def disable(self): pass
+'''
+
+BROKEN_PLUGIN = """
+this is not valid python !!!
+"""
+
+
+class FakeBot:
+    """Minimal bot stand-in with a real ModuleManager and no FastAPI app."""
+
+    def __init__(self):
+        from services.event_bus import EventBus
+        from services.module_manager import ModuleManager
+
+        self._event_bus = EventBus()
+        self._module_manager = ModuleManager(self)
+        self.app = None
+        self.guilds = []
+        self.tree = None
+        self.user = None
+
+    @property
+    def modules(self):
+        return self._module_manager
+
+    def is_ready(self):
+        return False
+
+
+@pytest.fixture
+def manager():
+    bot = FakeBot()
+    return bot.modules
+
+
+# ── Validation helpers ───────────────────────────────
+
+
+def test_validate_plugin_name_accepts_snake_case():
+    assert validate_plugin_name("my_plugin") == "my_plugin"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["MyPlugin", "my-plugin", "1plugin", "my plugin", "", "a", "toolong_" + "x" * 40],
+)
+def test_validate_plugin_name_rejects_invalid(bad):
+    with pytest.raises(PluginValidationError):
+        validate_plugin_name(bad)
+
+
+def test_validate_plugin_name_rejects_core_and_reserved():
+    assert is_core_module("reputation")
+    for name in ("reputation", "base", "__init__", "plugins", "modules"):
+        with pytest.raises(PluginValidationError):
+            validate_plugin_name(name)
+
+
+def test_load_plugin_class_returns_single_class(tmp_path):
+    path = tmp_path / "ping_plugin.py"
+    path.write_text(VALID_PLUGIN)
+    cls = load_plugin_class(path)
+    assert cls.name == "ping_plugin"
+
+
+def test_load_plugin_class_rejects_files_without_subclass(tmp_path):
+    path = tmp_path / "noop.py"
+    path.write_text(NO_SUBCLASS_PLUGIN)
+    with pytest.raises(PluginValidationError, match="No BarkModule subclass"):
+        load_plugin_class(path)
+
+
+def test_load_plugin_class_rejects_multiple_subclasses(tmp_path):
+    path = tmp_path / "double.py"
+    path.write_text(TWO_CLASSES_PLUGIN)
+    with pytest.raises(PluginValidationError, match="exactly one"):
+        load_plugin_class(path)
+
+
+def test_load_plugin_class_rejects_broken_syntax(tmp_path):
+    path = tmp_path / "broken.py"
+    path.write_text(BROKEN_PLUGIN)
+    with pytest.raises(PluginValidationError, match="failed to import"):
+        load_plugin_class(path)
+
+
+# ── Install ──────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_install_plugin_registers_and_enables(manager):
+    metadata = await manager.install_plugin(VALID_PLUGIN.encode(), "whatever.py")
+    assert metadata["name"] == "ping_plugin"
+    assert metadata["enabled"] is True
+    assert metadata["file"] == "ping_plugin.py"
+
+    assert manager.is_plugin("ping_plugin")
+    assert "ping_plugin" in manager.get_all_modules()
+    module = manager.get_module("ping_plugin")
+    assert module.enabled is True
+    assert [c.name for c in module.get_commands()] == ["ping"]
+
+    # The file is written under the module name, not the upload filename.
+    assert (plugins_directory() / "ping_plugin.py").is_file()
+    assert not (plugins_directory() / "whatever.py").exists()
+
+
+@pytest.mark.asyncio
+async def test_install_rejects_non_py(manager):
+    with pytest.raises(PluginValidationError, match=r"\.py file"):
+        await manager.install_plugin(b"x", "plugin.txt")
+
+
+@pytest.mark.asyncio
+async def test_install_rejects_empty_and_oversized(manager):
+    with pytest.raises(PluginValidationError, match="empty"):
+        await manager.install_plugin(b"", "p.py")
+    with pytest.raises(PluginValidationError, match="size limit"):
+        await manager.install_plugin(b"x" * (MAX_PLUGIN_BYTES + 1), "p.py")
+
+
+@pytest.mark.asyncio
+async def test_install_rejects_bad_module_name(manager):
+    bad = VALID_PLUGIN.replace('name = "ping_plugin"', 'name = "My-Plugin!"')
+    with pytest.raises(PluginValidationError, match="Module name"):
+        await manager.install_plugin(bad.encode(), "p.py")
+    # Nothing left behind.
+    assert list(plugins_directory().glob("*.py")) == []
+
+
+@pytest.mark.asyncio
+async def test_install_rejects_core_module_collision(manager):
+    bad = VALID_PLUGIN.replace('name = "ping_plugin"', 'name = "reputation"')
+    with pytest.raises(PluginValidationError, match="built-in"):
+        await manager.install_plugin(bad.encode(), "p.py")
+
+
+@pytest.mark.asyncio
+async def test_reinstall_replaces_existing_plugin(db, manager):
+    v1 = VALID_PLUGIN.replace('version = "1.0.0"', 'version = "2.0.0"')
+    first = await manager.install_plugin(VALID_PLUGIN.encode(), "a.py")
+    assert first["version"] == "1.0.0"
+    second = await manager.install_plugin(v1.encode(), "b.py")
+    assert second["version"] == "2.0.0"
+    assert manager.get_module("ping_plugin").version == "2.0.0"
+    assert len(list(plugins_directory().glob("*.py"))) == 1
+
+
+# ── Uninstall ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_uninstall_plugin_cleans_everything(db, manager):
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from database.models.module import ModuleConfig
+    from database.models.permissions import ModuleRoleAccess
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        session.add(ModuleConfig(guild_id="1", module_name="ping_plugin", enabled=True))
+        session.add(
+            ModuleRoleAccess(guild_id="1", module_name="ping_plugin", min_role="viewer")
+        )
+        await session.commit()
+
+    await manager.install_plugin(VALID_PLUGIN.encode(), "p.py")
+    assert manager.is_plugin("ping_plugin")
+
+    assert await manager.uninstall_plugin("ping_plugin") is True
+    assert not manager.is_plugin("ping_plugin")
+    assert "ping_plugin" not in manager.get_all_modules()
+    assert not (plugins_directory() / "ping_plugin.py").exists()
+
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        configs = (
+            (
+                await session.execute(
+                    select(ModuleConfig).where(ModuleConfig.module_name == "ping_plugin")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        roles = (
+            (
+                await session.execute(
+                    select(ModuleRoleAccess).where(
+                        ModuleRoleAccess.module_name == "ping_plugin"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert configs == []
+    assert roles == []
+
+
+@pytest.mark.asyncio
+async def test_uninstall_refuses_unknown_and_core(manager):
+    assert await manager.uninstall_plugin("reputation") is False
+    assert await manager.uninstall_plugin("nope") is False
+
+
+# ── Discovery ────────────────────────────────────────
+
+
+def test_discover_plugins_loads_files_on_disk(manager, tmp_path):
+    (plugins_directory() / "ping_plugin.py").write_text(VALID_PLUGIN)
+    manager.discover_plugins()
+    assert manager.is_plugin("ping_plugin")
+    assert manager.get_module("ping_plugin") is not None
+
+
+def test_discover_plugins_skips_invalid_files(manager, tmp_path):
+    (plugins_directory() / "broken.py").write_text(BROKEN_PLUGIN)
+    (plugins_directory() / "ping_plugin.py").write_text(VALID_PLUGIN)
+    manager.discover_plugins()
+    assert manager.is_plugin("ping_plugin")
+    assert not manager.is_plugin("broken")
+
+
+# ── Reload ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_reload_plugin_reloads_code(manager):
+    await manager.install_plugin(VALID_PLUGIN.encode(), "p.py")
+    new_version = VALID_PLUGIN.replace('version = "1.0.0"', 'version = "3.1.4"')
+    (plugins_directory() / "ping_plugin.py").write_text(new_version)
+    assert await manager.reload_module("ping_plugin") is True
+    assert manager.get_module("ping_plugin").version == "3.1.4"
+    assert manager.get_module("ping_plugin").enabled is True

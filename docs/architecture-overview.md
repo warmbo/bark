@@ -158,7 +158,7 @@ The manifest API (`dashboard/routes/api/manifest.py`) returns a structured navig
 Core Pages (no category)
 ├── /guild/{id}              # Dashboard — overview, stats, activity feed
 ├── /guild/{id}/members      # Members — directory, search, filters
-├── /guild/{id}/modules      # All Modules — grid of every installed module
+├── /guild/{id}/modules      # Modules — grid of every installed module
 └── /guild/{id}/settings     # General Settings
 
 Module Pages (per-module from PageRegistration)

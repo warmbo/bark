@@ -27,7 +27,7 @@ CORE_PAGES = [
     },
     {
         "route": "/guild/{guild_id}/modules",
-        "label": "All Modules",
+        "label": "Modules",
         "icon": "puzzle",
         "category": "settings",
     },
@@ -74,10 +74,18 @@ async def get_guild_manifest(request: Request, guild_id: int):
     for name, module in bot.modules.get_all_modules().items():
         pages = module.get_dashboard_pages()
         actions = module.get_actions()
-        modules_list.append(_module_entry(name, module, guild_id, enabled_by_module, actions))
+        modules_list.append(
+            _module_entry(
+                name,
+                module,
+                guild_id,
+                enabled_by_module,
+                actions,
+                is_plugin=bot.modules.is_plugin(name),
+            )
+        )
         pages_list.extend(_module_pages(name, module, guild_id, enabled_by_module, pages))
         actions_list.extend(_module_actions(name, module, guild_id, actions))
-
     categories = _build_navigation(pages_list)
     case_count = await _count_cases(guild_id)
 
@@ -135,6 +143,7 @@ def _module_entry(
     guild_id: int,
     enabled_by_module: dict[str, bool],
     actions: list[dict],
+    is_plugin: bool = False,
 ) -> dict[str, object]:
     """Describe a module for the manifest, including its command surface."""
     return {
@@ -143,6 +152,7 @@ def _module_entry(
         "version": module.version,
         "description": module.description,
         "enabled": enabled_by_module.get(name, True),
+        "is_plugin": is_plugin,
         "commands": [command.name for command in module.get_commands()],
         "settings_schema": bool(module.get_settings_schema()),
         "actions_count": len(actions),

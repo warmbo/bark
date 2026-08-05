@@ -86,6 +86,12 @@ def set_cached_module_min_role(module_name: str, guild_id: int | str, min_role: 
     _module_role_cache[(str(guild_id), module_name)] = min_role
 
 
+def clear_module_role_cache(module_name: str) -> None:
+    """Drop cached per-guild min roles for a module (used on plugin removal)."""
+    for key in [key for key in _module_role_cache if key[1] == module_name]:
+        _module_role_cache.pop(key, None)
+
+
 def reset_permission_state() -> None:
     """Clear in-memory permission state for reloads and isolated test runs."""
     _module_role_cache.clear()

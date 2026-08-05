@@ -584,7 +584,7 @@ function renderNavItem(page, activePage) {
     const activeParts = activePage.split('/');
     const activeBase = activeParts[0];
 
-    // List pages like "All Modules" should only highlight on exact match,
+    // List pages like "Modules" should only highlight on exact match,
     // never when viewing a sub-page like /guild/{id}/modules/moderation
     const isListPage = pageRoute.match(/\/modules$/) && !page.module;
 

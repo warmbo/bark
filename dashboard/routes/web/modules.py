@@ -28,6 +28,7 @@ async def modules_page(request: Request, guild_id: int):
         return HTMLResponse("Guild not found", status_code=404)
 
     all_modules = bot.modules.get_all_modules()
+    plugin_names = bot.modules.plugin_names()
     from sqlalchemy import select
 
     async with session_scope() as session:
@@ -45,7 +46,12 @@ async def modules_page(request: Request, guild_id: int):
     return templates.TemplateResponse(
         request,
         "pages/modules.html",
-        {"guild": guild, "modules": all_modules, "module_states": module_states},
+        {
+            "guild": guild,
+            "modules": all_modules,
+            "module_states": module_states,
+            "plugin_names": plugin_names,
+        },
     )
 
 
@@ -112,6 +118,17 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
     current_role = request.session.get("role", "admin")
     can_manage_module = role_rank.get(current_role, -1) >= role_rank[minimum_role]
 
+    # Extra tabs render via ``{% include tab.template %}`` — a plugin may
+    # declare a tab whose template file is missing, which would 500 the page.
+    # Only keep tabs whose template exists on disk.
+    extra_tabs = []
+    for tab in module.get_extra_tabs():
+        template = (tab or {}).get("template")
+        if not template:
+            continue
+        if (TEMPLATES_DIR / template).is_file():
+            extra_tabs.append(tab)
+
     module_data = {
         "version": module.version,
         "description": module.description,
@@ -130,7 +147,7 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
         ],
         "actions": module.get_actions(),
         "about": module.get_about(),
-        "extra_tabs": module.get_extra_tabs(),
+        "extra_tabs": extra_tabs,
         "role_access_override": role_access.min_role if role_access else None,
         "minimum_role": minimum_role,
         "can_manage_module": can_manage_module,

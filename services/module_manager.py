@@ -14,6 +14,7 @@ import inspect
 import logging
 import pkgutil
 from functools import wraps
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from modules.base import BarkModule, PageRegistration
@@ -47,6 +48,8 @@ class ModuleManager:
         ] = {}  # module -> [(event_type, handler)]
         self._registered_api_modules: set[str] = set()
         self._guild_states: dict[tuple[int, str], bool] = {}
+        # Runtime-installed single-file plugins: module name -> file path.
+        self._plugin_files: dict[str, Path] = {}
 
     # ── Discovery ─────────────────────────────────────
 
@@ -61,6 +64,8 @@ class ModuleManager:
         for _, module_name, is_pkg in pkgutil.iter_modules(modules.__path__):
             if is_pkg and module_name != "base":
                 self._load_module_package(module_name)
+
+        self.discover_plugins()
 
         from services.response import get_permission_service
 
@@ -127,6 +132,221 @@ class ModuleManager:
         self._modules[module.name] = module
         self._page_registry[module.name] = module.get_dashboard_pages()
         logger.debug("Loaded module: %s v%s", module.name, module.version)
+
+    # ── Plugins (single-file modules) ─────────────────
+
+    def discover_plugins(self) -> None:
+        """Load single-file plugins from the plugins directory at startup."""
+        from services.plugin_manager import (
+            discover_plugin_files,
+            load_plugin_class,
+            validate_plugin_name,
+        )
+
+        for path in discover_plugin_files():
+            try:
+                module_class = load_plugin_class(path)
+                name = validate_plugin_name(module_class.name)
+            except Exception as exc:
+                logger.warning("Skipping plugin file '%s': %s", path.name, exc)
+                continue
+            if name in self._modules or name in self._plugin_files:
+                logger.warning("Skipping plugin '%s': module name already taken", name)
+                continue
+            try:
+                instance = module_class(self._context)
+                self._register_module(instance)
+                self._plugin_files[name] = path
+                logger.info("Loaded plugin: %s v%s", name, instance.version)
+            except Exception:
+                logger.exception("Failed to instantiate plugin '%s'", name)
+
+    def is_plugin(self, name: str) -> bool:
+        """Return True when ``name`` is a runtime-installed single-file plugin."""
+        return name in self._plugin_files
+
+    def plugin_names(self) -> set[str]:
+        """Return the names of all installed plugins."""
+        return set(self._plugin_files)
+
+    def list_plugins(self) -> list[dict]:
+        """Return metadata for every installed plugin, sorted by name."""
+        return [self._plugin_metadata(name) for name in sorted(self._plugin_files)]
+
+    def _plugin_metadata(self, name: str) -> dict:
+        module = self._modules.get(name)
+        return {
+            "name": name,
+            "version": module.version if module else "",
+            "description": module.description if module else "",
+            "author": module.author if module else "",
+            "enabled": bool(module and module.enabled),
+            "file": self._plugin_files[name].name if name in self._plugin_files else None,
+        }
+
+    async def install_plugin(self, source: bytes, filename: str) -> dict:
+        """Install a single-file plugin from uploaded bytes.
+
+        Validates the upload against a staging file, then atomically moves it
+        into the plugins directory, registers the module, and enables it.
+        Raises PluginValidationError on any validation failure.
+        """
+        import uuid
+
+        from services.plugin_manager import (
+            MAX_PLUGIN_BYTES,
+            PluginValidationError,
+            load_plugin_class,
+            plugins_directory,
+            validate_plugin_name,
+        )
+
+        if not filename.endswith(".py"):
+            raise PluginValidationError("Plugin must be a single .py file.")
+        if not source:
+            raise PluginValidationError("Uploaded file is empty.")
+        if len(source) > MAX_PLUGIN_BYTES:
+            raise PluginValidationError("Plugin exceeds the 512 KB size limit.")
+
+        directory = plugins_directory()
+        staging = directory / f".staging-{uuid.uuid4().hex}.py"
+        try:
+            staging.write_bytes(source)
+            module_class = load_plugin_class(staging)
+            name = validate_plugin_name(module_class.name)
+        except Exception:
+            staging.unlink(missing_ok=True)
+            raise
+
+        if name in self._modules and name not in self._plugin_files:
+            staging.unlink(missing_ok=True)
+            raise PluginValidationError(
+                f"'{name}' is a built-in module and cannot be replaced by a plugin."
+            )
+
+        # Replacing an existing plugin: unload the old instance first.
+        if name in self._plugin_files:
+            await self.uninstall_plugin(name)
+
+        destination = directory / f"{name}.py"
+        staging.replace(destination)
+
+        try:
+            instance = module_class(self._context)
+            self._register_module(instance)
+            self._plugin_files[name] = destination
+            self._register_module_api_routes(name)
+            if not await self.enable_module(name):
+                raise PluginValidationError(
+                    "Plugin failed to enable; check its enable() method."
+                )
+        except Exception:
+            # Roll back the registries so the failed plugin is fully inert.
+            self._modules.pop(name, None)
+            self._page_registry.pop(name, None)
+            self._plugin_files.pop(name, None)
+            self._registered_api_modules.discard(name)
+            destination.unlink(missing_ok=True)
+            raise
+
+        # Refresh discovered permissions so plugin actions are enforced now.
+        from services.response import get_permission_service
+
+        get_permission_service().discover_module_permissions(self._modules)
+
+        # Surface slash commands in Discord immediately; failure is non-fatal
+        # (they reappear on the next startup sync).
+        if (
+            getattr(self.bot, "tree", None) is not None
+            and getattr(self.bot, "is_ready", lambda: False)()
+        ):
+            try:
+                await self.bot.tree.sync()
+            except Exception:
+                logger.exception(
+                    "Plugin '%s' installed but slash command sync failed", name
+                )
+
+        logger.info("Plugin '%s' installed (v%s)", name, instance.version)
+        return self._plugin_metadata(name)
+
+    async def uninstall_plugin(self, name: str) -> bool:
+        """Disable, deregister, clean up, and delete a plugin. Safe to call on
+        any registered plugin; returns False when ``name`` is not a plugin."""
+        if name not in self._plugin_files:
+            return False
+        path = self._plugin_files[name]
+
+        # 1. Disable: unsubscribes events and removes commands from the tree.
+        try:
+            await self.disable_module(name)
+        except Exception:
+            logger.exception("Plugin '%s' disable() raised during uninstall", name)
+
+        # 2. Deregister from every in-memory registry.
+        self._modules.pop(name, None)
+        self._page_registry.pop(name, None)
+        self._registered_commands.pop(name, None)
+        self._registered_events.pop(name, None)
+        self._registered_api_modules.discard(name)
+        self._plugin_files.pop(name, None)
+        self._guild_states = {
+            key: value for key, value in self._guild_states.items() if key[1] != name
+        }
+
+        # 3. Drop permission + role caches so no stale checks reference it.
+        from services.response import clear_module_role_cache, get_permission_service
+
+        clear_module_role_cache(name)
+        get_permission_service().discover_module_permissions(self._modules)
+
+        # 4. Remove per-guild rows so the module cannot resurface after restart.
+        from sqlalchemy import delete
+
+        from database.engine import session_scope
+        from database.models.module import ModuleConfig
+        from database.models.permissions import ModuleRoleAccess
+
+        async with session_scope() as session:
+            await session.execute(
+                delete(ModuleConfig).where(ModuleConfig.module_name == name)
+            )
+            await session.execute(
+                delete(ModuleRoleAccess).where(ModuleRoleAccess.module_name == name)
+            )
+            await session.commit()
+
+        # 5. Delete the file last so a crash leaves a recoverable state.
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Plugin '%s' file could not be deleted", name)
+
+        logger.info("Plugin '%s' uninstalled", name)
+        return True
+
+    async def _reload_plugin(self, name: str) -> bool:
+        """Reload one plugin's code from its file without touching other state."""
+        path = self._plugin_files.get(name)
+        if path is None:
+            return False
+        module = self._modules.get(name)
+        was_enabled = bool(module and module.enabled)
+        if was_enabled and not await self.disable_module(name):
+            return False
+        try:
+            from services.plugin_manager import load_plugin_class
+
+            module_class = load_plugin_class(path)
+            instance = module_class(self._context)
+            self._register_module(instance)
+            from services.response import get_permission_service
+
+            get_permission_service().discover_module_permissions(self._modules)
+        except Exception:
+            logger.exception("Failed to reload plugin code for '%s'", name)
+            return False
+        return not was_enabled or await self.enable_module(name)
 
     # ── Lifecycle ─────────────────────────────────────
 
@@ -233,6 +453,8 @@ class ModuleManager:
 
     async def reload_module(self, name: str) -> bool:
         """Reload one module without disturbing any other live plugin."""
+        if name in self._plugin_files:
+            return await self._reload_plugin(name)
         original = self._modules.get(name)
         if original is None:
             return False
@@ -347,11 +569,44 @@ class ModuleManager:
 
     def register_api_routes(self, app) -> None:
         """Register each module's API routes with the FastAPI app."""
-        for name, module in self._modules.items():
-            if name in self._registered_api_modules:
-                continue
-            router = module.get_api_routes()
-            if router is not None:
-                app.include_router(router, prefix="/api/v1")
-                self._registered_api_modules.add(name)
-                logger.debug("Registered API routes for module '%s'", name)
+        for name in list(self._modules.keys()):
+            self._register_module_api_routes(name)
+
+    def _register_module_api_routes(self, name: str) -> None:
+        """Register one module's API routes with the dashboard app.
+
+        Plugin routers are wrapped with an availability guard so their routes
+        answer 404 once the plugin is removed — FastAPI cannot un-register
+        routes after startup.
+        """
+        app = getattr(self.bot, "app", None)
+        if app is None or name in self._registered_api_modules:
+            return
+        module = self._modules.get(name)
+        if module is None:
+            return
+        router = module.get_api_routes()
+        if router is None:
+            return
+        if name in self._plugin_files:
+            router = self._guard_plugin_router(name, router)
+        app.include_router(router, prefix="/api/v1")
+        self._registered_api_modules.add(name)
+        logger.debug("Registered API routes for module '%s'", name)
+
+    def _guard_plugin_router(self, plugin_name: str, router):
+        """Wrap a plugin router so every route 404s once the plugin is removed.
+
+        Removing a plugin leaves its route objects mounted (FastAPI cannot
+        un-register them), but the guard makes them inert: they check the live
+        registry on every request and answer 404 when the module is gone.
+        """
+        from fastapi import APIRouter, Depends, HTTPException
+
+        async def _plugin_present() -> None:
+            if self.get_module(plugin_name) is None:
+                raise HTTPException(status_code=404, detail="Plugin not installed")
+
+        wrapper = APIRouter(dependencies=[Depends(_plugin_present)])
+        wrapper.include_router(router)
+        return wrapper
