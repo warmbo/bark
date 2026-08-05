@@ -233,13 +233,17 @@ async def test_announce_embed_without_image_gets_full_width_spacer():
     channel.send.assert_awaited_once()
     sent_embed = channel.send.await_args.kwargs["embed"]
     assert isinstance(sent_embed, discord.Embed)
-    assert sent_embed.image.url is None
-    assert sent_embed.thumbnail.url.endswith("/static/img/spacer.png")
+    assert sent_embed.image.url is not None
+    assert sent_embed.image.url.endswith("/static/img/spacer.png")
+    # Three invisible zero-width inline fields force the full-width row layout.
+    assert len(sent_embed.fields) == 3
+    assert all(f.inline for f in sent_embed.fields)
+    assert all(f.name == "\u200b" and f.value == "\u200b" for f in sent_embed.fields)
 
 
 @pytest.mark.asyncio
 async def test_announce_embed_with_image_does_not_use_spacer():
-    """Real images keep the embed image and no spacer thumbnail is added."""
+    """Real images keep the embed image; the row-of-fields full-width trigger remains."""
     module = AnnouncementsModule(MagicMock())
     command = module._make_announce_command()
     interaction = SimpleNamespace(
@@ -262,4 +266,5 @@ async def test_announce_embed_with_image_does_not_use_spacer():
     channel.send.assert_awaited_once()
     sent_embed = channel.send.await_args.kwargs["embed"]
     assert sent_embed.image.url == "https://example.com/real.png"
-    assert sent_embed.thumbnail.url is None
+    # Full-width trigger still present even with a real image.
+    assert len(sent_embed.fields) == 3

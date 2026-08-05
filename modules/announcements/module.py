@@ -43,6 +43,19 @@ def _full_width_spacer_url() -> str:
     return f"{base}/static/img/spacer.png"
 
 
+def _force_full_width(embed: discord.Embed) -> None:
+    """Force Discord to lay the embed out at full width.
+
+    Discord renders text-only embeds in a narrow column. It only expands an embed
+    to the full available width when the embed carries media (an image) or when it
+    has fields laid out in a row. The most reliable, network-independent trigger is
+    three invisible inline fields (zero-width spaces): Discord places up to three
+    inline fields per row, and a row of fields stretches across the full width.
+    """
+    for _ in range(3):
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+
 class AnnouncementsModule(BarkModule):
     """Post announcements to a selected channel as text or embeds."""
 
@@ -247,13 +260,14 @@ class AnnouncementsModule(BarkModule):
                         timestamp=datetime.now(timezone.utc),
                     )
                     # Discord only expands an embed to full width when it carries an
-                    # image; a text-only embed renders narrow. Always attach an image
-                    # (real one if provided, else an invisible spacer) so every embed
-                    # announcement posts at the full available width.
+                    # image or a row of fields; a text-only embed renders narrow.
+                    # Stack both triggers: an invisible 1×1 image plus three
+                    # zero-width inline fields, so every embed is full width.
+                    _force_full_width(emb)
                     if image_url:
                         emb.set_image(url=image_url)
                     else:
-                        emb.set_thumbnail(url=_full_width_spacer_url())
+                        emb.set_image(url=_full_width_spacer_url())
                     await channel.send(embed=emb)
                 else:
                     if image_url:
@@ -320,11 +334,12 @@ class AnnouncementsModule(BarkModule):
                         color=discord.Color.blurple(),
                         timestamp=datetime.now(timezone.utc),
                     )
-                    # Full-width embeds: Discord expands only embeds that carry an image.
+                    # Full-width embeds: stack the row-of-fields trigger plus an image.
+                    _force_full_width(announcement_embed)
                     if image_url:
                         announcement_embed.set_image(url=image_url)
                     else:
-                        announcement_embed.set_thumbnail(url=_full_width_spacer_url())
+                        announcement_embed.set_image(url=_full_width_spacer_url())
                     if video_url:
                         vid = video_url.strip().rstrip("/")
                         link = f"[Watch Video]({vid})"
