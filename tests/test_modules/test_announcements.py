@@ -206,3 +206,60 @@ async def test_post_announcement_maps_media_picker_payload(db, monkeypatch):
     assert sent_embed.image.url == "https://example.com/a.png"
     assert "Watch Video" in (sent_embed.description or "")
     assert "https://youtube.com/watch?v=abc" in (sent_embed.description or "")
+
+
+@pytest.mark.asyncio
+async def test_announce_embed_without_image_gets_full_width_spacer():
+    """Text-only embeds attach an invisible spacer thumbnail so Discord renders them full width."""
+
+    module = AnnouncementsModule(MagicMock())
+    command = module._make_announce_command()
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(me=MagicMock()),
+        response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+    channel = MagicMock()
+    channel.permissions_for.return_value.send_messages = True
+    channel.send = AsyncMock()
+
+    await command.callback(
+        interaction,
+        channel,
+        message="Plain text announcement.",
+        embed=True,
+    )
+
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert isinstance(sent_embed, discord.Embed)
+    assert sent_embed.image.url is None
+    assert sent_embed.thumbnail.url.endswith("/static/img/spacer.png")
+
+
+@pytest.mark.asyncio
+async def test_announce_embed_with_image_does_not_use_spacer():
+    """Real images keep the embed image and no spacer thumbnail is added."""
+    module = AnnouncementsModule(MagicMock())
+    command = module._make_announce_command()
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(me=MagicMock()),
+        response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+    channel = MagicMock()
+    channel.permissions_for.return_value.send_messages = True
+    channel.send = AsyncMock()
+
+    await command.callback(
+        interaction,
+        channel,
+        message="With an image.",
+        embed=True,
+        image_url="https://example.com/real.png",
+    )
+
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert sent_embed.image.url == "https://example.com/real.png"
+    assert sent_embed.thumbnail.url is None

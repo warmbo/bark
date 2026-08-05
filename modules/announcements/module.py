@@ -30,6 +30,19 @@ from modules.base import (
 logger = logging.getLogger("bark.modules.announcements")
 
 
+def _full_width_spacer_url() -> str:
+    """Public URL of an invisible 1×1 spacer that forces Discord to render embeds full width.
+
+    Discord renders text-only embeds at a narrow width; any embed with an image or
+    thumbnail is expanded to the full available width. The spacer is a transparent
+    1×1 PNG served from our own static directory so it is always fetchable by Discord.
+    """
+    from config import config
+
+    base = config.dashboard.public_url.rstrip("/")
+    return f"{base}/static/img/spacer.png"
+
+
 class AnnouncementsModule(BarkModule):
     """Post announcements to a selected channel as text or embeds."""
 
@@ -233,8 +246,14 @@ class AnnouncementsModule(BarkModule):
                         color=discord.Color.blurple(),
                         timestamp=datetime.now(timezone.utc),
                     )
+                    # Discord only expands an embed to full width when it carries an
+                    # image; a text-only embed renders narrow. Always attach an image
+                    # (real one if provided, else an invisible spacer) so every embed
+                    # announcement posts at the full available width.
                     if image_url:
                         emb.set_image(url=image_url)
+                    else:
+                        emb.set_thumbnail(url=_full_width_spacer_url())
                     await channel.send(embed=emb)
                 else:
                     if image_url:
@@ -301,8 +320,11 @@ class AnnouncementsModule(BarkModule):
                         color=discord.Color.blurple(),
                         timestamp=datetime.now(timezone.utc),
                     )
+                    # Full-width embeds: Discord expands only embeds that carry an image.
                     if image_url:
                         announcement_embed.set_image(url=image_url)
+                    else:
+                        announcement_embed.set_thumbnail(url=_full_width_spacer_url())
                     if video_url:
                         vid = video_url.strip().rstrip("/")
                         link = f"[Watch Video]({vid})"
