@@ -1245,12 +1245,12 @@ async def test_upload_image_requires_permission_and_returns_public_url(client, a
     )
     assert valid.status_code == 200
     url = valid.json()["data"]["url"]
-    assert url.startswith("http://127.0.0.1:8090/media/uploads/")
+    assert url.startswith("http://127.0.0.1:8090/media/uploads/1/")
     name = url.rsplit("/", 1)[1]
-    saved = uploads_route.uploads_directory() / name
+    saved = uploads_route._guild_uploads_dir("1") / name
     assert saved.read_bytes() == b"\x89PNG\r\n\x1a\n"
 
-    served = await client.get(f"/media/uploads/{name}")
+    served = await client.get(f"/media/uploads/1/{name}")
     assert served.status_code == 200
     assert served.headers["content-type"].startswith("image/png")
 
@@ -1880,9 +1880,15 @@ async def test_upload_library_lists_previous_uploads(client, app, monkeypatch, t
     import dashboard.routes.api.uploads as uploads_route
 
     directory = tmp_path / "uploads"
-    (directory / "alpha.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-    (directory / "beta.jpg").write_bytes(b"\xff\xd8\xff\xe0")
-    (directory / "note.txt").write_bytes(b"skip me")
+    guild_dir = directory / "1"
+    guild_dir.mkdir(parents=True, exist_ok=True)
+    (guild_dir / "alpha.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (guild_dir / "beta.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    (guild_dir / "note.txt").write_bytes(b"skip me")
+    # Another guild's uploads must never appear in this guild's library.
+    other_dir = directory / "2"
+    other_dir.mkdir(parents=True, exist_ok=True)
+    (other_dir / "other.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     monkeypatch.setattr(uploads_route, "uploads_directory", lambda: directory)
 
     # Denied without a content-editing permission.
@@ -1895,9 +1901,9 @@ async def test_upload_library_lists_previous_uploads(client, app, monkeypatch, t
     assert ok.status_code == 200
     items = ok.json()["data"]["items"]
     names = [i["name"] for i in items]
-    # Only image files, no .txt; images included.
+    # Only this guild's image files, no .txt, and never another guild's files.
     assert set(names) == {"alpha.png", "beta.jpg"}
-    assert all(i["url"].startswith("http://127.0.0.1:8090/media/uploads/") for i in items)
+    assert all(i["url"].startswith("http://127.0.0.1:8090/media/uploads/1/") for i in items)
 
 
 @pytest.mark.asyncio
@@ -1906,8 +1912,9 @@ async def test_upload_delete_removes_file_and_guards_paths(client, app, monkeypa
     import dashboard.routes.api.uploads as uploads_route
 
     directory = tmp_path / "uploads"
-    directory.mkdir(parents=True, exist_ok=True)
-    victim = directory / "victim.png"
+    guild_dir = directory / "1"
+    guild_dir.mkdir(parents=True, exist_ok=True)
+    victim = guild_dir / "victim.png"
     victim.write_bytes(b"\x89PNG\r\n\x1a\n")
     monkeypatch.setattr(uploads_route, "uploads_directory", lambda: directory)
     monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: True)
@@ -1932,10 +1939,28 @@ async def test_upload_delete_removes_file_and_guards_paths(client, app, monkeypa
 
     # Deletion gated on permission.
     monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: False)
-    (directory / "locked.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (guild_dir / "locked.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     denied = await client.delete("/api/v1/guilds/1/uploads/locked.png")
     assert denied.status_code == 403
-    assert (directory / "locked.png").exists()
+    assert (guild_dir / "locked.png").exists()
+
+
+@pytest.mark.asyncio
+async def test_upload_delete_cannot_touch_another_guilds_file(client, app, monkeypatch, tmp_path):
+    """A guild can only delete files from its own uploads directory."""
+    import dashboard.routes.api.uploads as uploads_route
+
+    directory = tmp_path / "uploads"
+    other_dir = directory / "2"
+    other_dir.mkdir(parents=True, exist_ok=True)
+    (other_dir / "sneaky.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(uploads_route, "uploads_directory", lambda: directory)
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: True)
+
+    # Guild 1 cannot delete guild 2's file (resolves to a missing path -> 404).
+    denied = await client.delete("/api/v1/guilds/1/uploads/sneaky.png")
+    assert denied.status_code == 404
+    assert (other_dir / "sneaky.png").exists()
 
 
 @pytest.mark.asyncio
@@ -1944,10 +1969,11 @@ async def test_media_uploads_are_public_without_session(client, app, monkeypatch
     import dashboard.routes.api.uploads as uploads_route
 
     directory = tmp_path / "uploads"
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "public.gif").write_bytes(b"GIF89a")
+    guild_dir = directory / "1"
+    guild_dir.mkdir(parents=True, exist_ok=True)
+    (guild_dir / "public.gif").write_bytes(b"GIF89a")
     monkeypatch.setattr(uploads_route, "uploads_directory", lambda: directory)
 
-    response = await client.get("/media/uploads/public.gif")
+    response = await client.get("/media/uploads/1/public.gif")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/gif")

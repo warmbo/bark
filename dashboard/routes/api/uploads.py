@@ -40,8 +40,18 @@ _CONTENT_EDIT_PERMISSIONS = (
 
 
 def uploads_directory() -> Path:
-    """Return the directory where uploaded images are stored."""
+    """Return the root directory where uploaded images are stored."""
     return Path(config.data_dir) / "uploads"
+
+
+def _guild_uploads_dir(guild_id: str) -> Path:
+    """Return the per-guild subdirectory for uploaded images.
+
+    Uploads are namespaced by guild so media never leaks between servers:
+    files live under ``uploads/<guild_id>/`` and are only listed/uploaded/
+    deleted through that guild's endpoints.
+    """
+    return uploads_directory() / str(guild_id)
 
 
 def _can_upload(request: Request, guild_id: str) -> bool:
@@ -53,11 +63,11 @@ def _can_upload(request: Request, guild_id: str) -> bool:
 
 @router.get("/guilds/{guild_id}/uploads")
 async def list_uploads(request: Request, guild_id: str):
-    """Return previously uploaded images for reuse in Discord markdown."""
+    """Return previously uploaded images for this guild only."""
     if not _can_upload(request, guild_id):
         return api_forbidden()
 
-    directory = uploads_directory()
+    directory = _guild_uploads_dir(guild_id)
     if not directory.exists():
         return api_success({"items": []})
 
@@ -67,7 +77,7 @@ async def list_uploads(request: Request, guild_id: str):
         if path.is_file() and path.suffix.lower() in ALLOWED_IMAGE_TYPES.values():
             items.append(
                 {
-                    "url": f"{public_base}/media/uploads/{path.name}",
+                    "url": f"{public_base}/media/uploads/{guild_id}/{path.name}",
                     "name": path.name,
                 }
             )
@@ -76,7 +86,7 @@ async def list_uploads(request: Request, guild_id: str):
 
 @router.delete("/guilds/{guild_id}/uploads/{name}")
 async def delete_upload(request: Request, guild_id: str, name: str):
-    """Delete a previously uploaded image so it stops appearing in the library."""
+    """Delete an uploaded image from this guild's media library."""
     if not _can_upload(request, guild_id):
         return api_forbidden()
 
@@ -87,7 +97,7 @@ async def delete_upload(request: Request, guild_id: str, name: str):
     if suffix not in ALLOWED_IMAGE_TYPES.values():
         return api_error("Only PNG, JPEG, GIF, and WebP images can be deleted", status_code=400)
 
-    directory = uploads_directory()
+    directory = _guild_uploads_dir(guild_id)
     target = directory / name
     if not target.is_file():
         return api_error("Upload not found", status_code=404)
@@ -101,7 +111,7 @@ async def delete_upload(request: Request, guild_id: str, name: str):
 
 @router.post("/guilds/{guild_id}/uploads")
 async def upload_image(request: Request, guild_id: str, file: UploadFile = File(...)):
-    """Upload an image and return a public URL for use in Discord markdown."""
+    """Upload an image into this guild's media library."""
     if not _can_upload(request, guild_id):
         return api_forbidden()
 
@@ -115,10 +125,10 @@ async def upload_image(request: Request, guild_id: str, file: UploadFile = File(
     if len(payload) > MAX_UPLOAD_BYTES:
         return api_error("Image exceeds the 8 MB limit", status_code=413)
 
-    directory = uploads_directory()
+    directory = _guild_uploads_dir(guild_id)
     directory.mkdir(parents=True, exist_ok=True)
     name = f"{uuid.uuid4().hex}{extension}"
     (directory / name).write_bytes(payload)
 
     public_base = config.dashboard.public_url.rstrip("/")
-    return api_success({"url": f"{public_base}/media/uploads/{name}"})
+    return api_success({"url": f"{public_base}/media/uploads/{guild_id}/{name}"})
