@@ -13,6 +13,7 @@ Placeholders are not required here; announcement text is freeform.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
 import discord
@@ -145,7 +146,14 @@ class AnnouncementsModule(BarkModule):
                         "label": "Image URL",
                         "type": "text",
                         "required": False,
-                        "placeholder": "https://example.com/image.png — image is embedded, not linked",
+                        "placeholder": "Optional — also auto-detected from Image/Upload toolbar markdown",
+                    },
+                    {
+                        "key": "video_url",
+                        "label": "Video URL",
+                        "type": "text",
+                        "required": False,
+                        "placeholder": "YouTube / Vimeo / TikTok / direct MP4 — shows Watch Video button in embed",
                     },
                 ],
             }
@@ -180,6 +188,7 @@ class AnnouncementsModule(BarkModule):
             message = str(data.get("message", "") or "")
             as_embed = bool(data.get("as_embed", False))
             image_url = str(data.get("image_url", "") or "").strip()
+            video_url = str(data.get("video_url", "") or "").strip()
 
             if not channel_id or not message.strip():
                 return api_error("channel_id and message are required")
@@ -197,11 +206,22 @@ class AnnouncementsModule(BarkModule):
                 return api_error("Channel not found in this guild")
 
             image_url = image_url or None
+            if not image_url and as_embed and message:
+                m = re.search(r"!\[.*?\]\((https?://\S+)\)", message)
+                if m:
+                    image_url = m.group(1)
+
+            description = message[:4096]
+            if video_url and as_embed:
+                vid = video_url.strip().rstrip("/")
+                link = f"[Watch Video]({vid})"
+                description = f"{description}\n\n{link}" if description else link
+
             try:
                 if as_embed:
                     emb = discord.Embed(
                         title=title or None,
-                        description=message[:4096],
+                        description=description or None,
                         color=discord.Color.blurple(),
                         timestamp=datetime.now(timezone.utc),
                     )
@@ -239,6 +259,7 @@ class AnnouncementsModule(BarkModule):
             message="Announcement content",
             embed="Send as embed instead of plain text",
             image_url="Optional image URL to embed inline",
+            video_url="Optional video URL — appended as Watch Video link in embeds",
         )
         async def announce_cmd(
             interaction: discord.Interaction,
@@ -247,6 +268,7 @@ class AnnouncementsModule(BarkModule):
             message: str = "",
             embed: bool = False,
             image_url: str | None = None,
+            video_url: str | None = None,
         ):
             if interaction.guild is None:
                 await interaction.response.send_message("Guild-only command.", ephemeral=True)
@@ -273,6 +295,11 @@ class AnnouncementsModule(BarkModule):
                     )
                     if image_url:
                         announcement_embed.set_image(url=image_url)
+                    if video_url:
+                        vid = video_url.strip().rstrip("/")
+                        link = f"[Watch Video]({vid})"
+                        desc = announcement_embed.description or ""
+                        announcement_embed.description = f"{desc}\n\n{link}" if desc else link
                     await channel.send(embed=announcement_embed)
                 else:
                     if image_url:

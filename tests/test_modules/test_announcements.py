@@ -94,3 +94,30 @@ async def test_announce_slash_command_sends_text_with_image_embed_when_not_embed
     img_embed = channel.send.await_args.kwargs["embed"]
     assert isinstance(img_embed, discord.Embed)
     assert img_embed.image.url == "https://example.com/patch.png"
+
+
+@pytest.mark.asyncio
+async def test_announce_slash_command_appends_watch_video_link_in_embed():
+    module = AnnouncementsModule(MagicMock())
+    command = module._make_announce_command()
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(me=MagicMock()),
+        response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+    channel = MagicMock()
+    channel.permissions_for.return_value.send_messages = True
+    channel.send = AsyncMock()
+
+    await command.callback(
+        interaction,
+        channel,
+        message="New trailer.",
+        embed=True,
+        video_url="https://www.youtube.com/watch?v=demo",
+    )
+
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert isinstance(sent_embed, discord.Embed)
+    assert sent_embed.description == "New trailer.\n\n[Watch Video](https://www.youtube.com/watch?v=demo)"
