@@ -140,6 +140,13 @@ class AnnouncementsModule(BarkModule):
                         "required": False,
                         "placeholder": "Use embed formatting",
                     },
+                    {
+                        "key": "image_url",
+                        "label": "Image URL",
+                        "type": "text",
+                        "required": False,
+                        "placeholder": "https://example.com/image.png — image is embedded, not linked",
+                    },
                 ],
             }
         ]
@@ -172,6 +179,7 @@ class AnnouncementsModule(BarkModule):
             title = str(data.get("title", "") or "")
             message = str(data.get("message", "") or "")
             as_embed = bool(data.get("as_embed", False))
+            image_url = str(data.get("image_url", "") or "").strip()
 
             if not channel_id or not message.strip():
                 return api_error("channel_id and message are required")
@@ -188,6 +196,7 @@ class AnnouncementsModule(BarkModule):
             if channel is None:
                 return api_error("Channel not found in this guild")
 
+            image_url = image_url or None
             try:
                 if as_embed:
                     emb = discord.Embed(
@@ -196,9 +205,16 @@ class AnnouncementsModule(BarkModule):
                         color=discord.Color.blurple(),
                         timestamp=datetime.now(timezone.utc),
                     )
+                    if image_url:
+                        emb.set_image(url=image_url)
                     await channel.send(embed=emb)
                 else:
-                    await channel.send(content=message[:2000])
+                    if image_url:
+                        emb = discord.Embed(color=discord.Color.blurple())
+                        emb.set_image(url=image_url)
+                        await channel.send(content=message[:2000], embed=emb)
+                    else:
+                        await channel.send(content=message[:2000])
             except discord.Forbidden:
                 return api_error("Missing permission to send to that channel")
             except discord.HTTPException as exc:
@@ -222,6 +238,7 @@ class AnnouncementsModule(BarkModule):
             title="Optional embed title",
             message="Announcement content",
             embed="Send as embed instead of plain text",
+            image_url="Optional image URL to embed inline",
         )
         async def announce_cmd(
             interaction: discord.Interaction,
@@ -229,6 +246,7 @@ class AnnouncementsModule(BarkModule):
             title: str | None = None,
             message: str = "",
             embed: bool = False,
+            image_url: str | None = None,
         ):
             if interaction.guild is None:
                 await interaction.response.send_message("Guild-only command.", ephemeral=True)
@@ -253,9 +271,16 @@ class AnnouncementsModule(BarkModule):
                         color=discord.Color.blurple(),
                         timestamp=datetime.now(timezone.utc),
                     )
+                    if image_url:
+                        announcement_embed.set_image(url=image_url)
                     await channel.send(embed=announcement_embed)
                 else:
-                    await channel.send(content=message[:2000])
+                    if image_url:
+                        img_emb = discord.Embed(color=discord.Color.blurple())
+                        img_emb.set_image(url=image_url)
+                        await channel.send(content=message[:2000], embed=img_emb)
+                    else:
+                        await channel.send(content=message[:2000])
                 await interaction.followup.send(
                     f"Announcement sent to {channel.mention}.", ephemeral=True
                 )
