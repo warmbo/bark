@@ -236,6 +236,9 @@ const cases = [
   ['`code`', '<code class="discord-code">code</code>'],
   ['```js\\nconst x = 1;\\n```', '<pre class="discord-codeblock">js\\nconst x = 1;\\n</pre>'],
   ['# Head', '<h2 class="discord-h2">Head</h2>'],
+  ['## Sub', '<h3 class="discord-h3">Sub</h3>'],
+  ['### Mini', '<h4 class="discord-h4">Mini</h4>'],
+  ['-# muted', '<span class="discord-subtext">muted</span>'],
   ['- item', '<span class="discord-li">• item</span>'],
   ['> quote', '<blockquote class="discord-quote">quote</blockquote>'],
   ['[link](https://x.dev)', '<a class="discord-link" href="https://x.dev" target="_blank" rel="noopener noreferrer">link</a>'],
@@ -245,9 +248,12 @@ for (const [input, expected] of cases) {{
   const out = renderMarkdown(input, false);
   if (!out.includes(expected)) throw new Error(`missing ${{expected}} in ${{out}}`);
 }}
-const embedOut = renderMarkdown('# Head\\n- item', true);
-if (embedOut.includes('discord-h2') || embedOut.includes('discord-li')) {{
-  throw new Error('embeds must not render block-level tokens');
+// Discord parses embed descriptions with the same markdown engine as message
+// content, so block-level tokens (headings, subtext, lists, quotes) render
+// inside embeds too — the preview must mirror that.
+const embedOut = renderMarkdown('# Head\\n## Sub\\n-# muted\\n- item\\n> quote', true);
+for (const cls of ['discord-h2', 'discord-h3', 'discord-subtext', 'discord-li', 'discord-quote']) {{
+  if (!embedOut.includes(cls)) throw new Error(`embed mode must render ${{cls}}`);
 }}
 console.log('OK');
 """

@@ -1712,13 +1712,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .discord-message-content a.discord-link:hover, .discord-embed a.discord-link:hover { text-decoration: underline; }
 .discord-message-content code.discord-code, .discord-embed code.discord-code { background: #1e1f22; padding: 1px 4px; border-radius: 4px; font-family: var(--font-mono); font-size: 13px; }
 .discord-message-content pre.discord-codeblock { background: #1e1f22; border: 1px solid #26272b; border-radius: 6px; padding: 8px 10px; margin: 4px 0; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; color: #dbdee1; white-space: pre; }
-.discord-message-content blockquote.discord-quote { border-left: 4px solid #4e5058; margin: 4px 0; padding: 2px 10px; color: #dbdee1; }
-.discord-message-content .discord-h2 { color: #f2f3f5; font-size: 18px; font-weight: 700; margin: 6px 0 2px; }
-.discord-message-content .discord-h3 { color: #f2f3f5; font-size: 16px; font-weight: 700; margin: 6px 0 2px; }
-.discord-message-content .discord-h4 { color: #f2f3f5; font-size: 14px; font-weight: 700; margin: 6px 0 2px; }
-.discord-message-content .discord-li { display: block; color: #dbdee1; }
-.discord-message-content .discord-spoiler { background: #1e1f22; color: #1e1f22; border-radius: 3px; padding: 0 3px; cursor: pointer; }
-.discord-message-content .discord-spoiler:hover { color: #dbdee1; }
+.discord-message-content blockquote.discord-quote, .discord-embed-desc blockquote.discord-quote { border-left: 4px solid #4e5058; margin: 4px 0; padding: 2px 10px; color: #dbdee1; }
+.discord-message-content .discord-h2, .discord-embed-desc .discord-h2 { color: #f2f3f5; font-size: 18px; font-weight: 700; margin: 6px 0 2px; }
+.discord-message-content .discord-h3, .discord-embed-desc .discord-h3 { color: #f2f3f5; font-size: 16px; font-weight: 700; margin: 6px 0 2px; }
+.discord-message-content .discord-h4, .discord-embed-desc .discord-h4 { color: #f2f3f5; font-size: 14px; font-weight: 700; margin: 6px 0 2px; }
+.discord-message-content .discord-li, .discord-embed-desc .discord-li { display: block; color: #dbdee1; }
+.discord-message-content .discord-subtext, .discord-embed-desc .discord-subtext { color: #949ba4; font-size: 12px; }
+.discord-message-content .discord-spoiler, .discord-embed-desc .discord-spoiler { background: #1e1f22; color: #1e1f22; border-radius: 3px; padding: 0 3px; cursor: pointer; }
+.discord-message-content .discord-spoiler:hover, .discord-embed-desc .discord-spoiler:hover { color: #dbdee1; }
 .discord-embed { display: flex; gap: 12px; background: #2b2d31; border-radius: 4px; margin-top: 8px; overflow: hidden; }
 .discord-embed-bar { width: 4px; flex-shrink: 0; background: #5865f2; }
 .discord-embed-body { padding: 10px 14px 10px 0; min-width: 0; flex: 1; }

@@ -66,15 +66,17 @@
     out = out.replace(/~~([^~]+)~~/g, '<s>$1</s>');
     out = out.replace(/\|\|([^|]+)\|\|/g, '<span class="discord-spoiler">$1</span>');
 
-    if (!embedMode) {
-      // Block-level formatting only in real message content.
-      out = out.replace(/^### (.+)$/gm, '<h4 class="discord-h4">$1</h4>');
-      out = out.replace(/^## (.+)$/gm, '<h3 class="discord-h3">$1</h3>');
-      out = out.replace(/^# (.+)$/gm, '<h2 class="discord-h2">$1</h2>');
-      out = out.replace(/^&gt; (.+)$/gm, '<blockquote class="discord-quote">$1</blockquote>');
-      out = out.replace(/^- (.+)$/gm, '<span class="discord-li">• $1</span>');
-      out = out.replace(/^\d+\. (.+)$/gm, '<span class="discord-li">$&</span>');
-    }
+    // Block-level formatting. Discord's client parses embed descriptions with
+    // the same markdown engine as message content, so headings, subtext,
+    // blockquotes, and lists render inside embeds too — no embedMode gate.
+    out = out.replace(/^### (.+)$/gm, '<h4 class="discord-h4">$1</h4>');
+    out = out.replace(/^## (.+)$/gm, '<h3 class="discord-h3">$1</h3>');
+    out = out.replace(/^# (.+)$/gm, '<h2 class="discord-h2">$1</h2>');
+    out = out.replace(/^&gt; (.+)$/gm, '<blockquote class="discord-quote">$1</blockquote>');
+    out = out.replace(/^- (.+)$/gm, '<span class="discord-li">• $1</span>');
+    out = out.replace(/^\d+\. (.+)$/gm, '<span class="discord-li">$&</span>');
+    // Subtext (Discord extension): `-# line` renders smaller and greyed out.
+    out = out.replace(/^-# (.+)$/gm, '<span class="discord-subtext">$1</span>');
 
     // Line breaks before restoring code blocks so fenced content keeps its
     // real newlines (white-space: pre in the preview).
