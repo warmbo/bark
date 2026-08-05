@@ -266,7 +266,7 @@ def test_discord_toolbar_covers_discord_markdown_and_images():
     assert 'data-action="image-upload"' not in detail
 
 
-def test_module_workspace_media_picker_handles_uploads_and_urls():
+def test_module_workspace_media_picker_handles_uploads_and_library():
     workspace = source(JS / "module-workspace.js")
     detail = source(TEMPLATES / "pages" / "module_detail.html")
 
@@ -277,14 +277,17 @@ def test_module_workspace_media_picker_handles_uploads_and_urls():
     assert 'button[data-action="link"]' in workspace
     assert 'data-action="image-upload"' not in workspace
     assert 'data-action="image-url"' not in workspace
-    # Media picker wiring: upload + image/video URL prompts, chips, hidden payload.
+    # Media picker wiring: upload + library picker, chips, hidden payload.
     assert "media-picker" in workspace
     assert "media-picker" in detail
     assert 'data-media-action="image-upload"' in detail
-    assert 'data-media-action="image-url"' in detail
-    assert 'data-media-action="video-url"' in detail
+    assert 'data-media-action="image-library"' in detail
+    assert 'data-media-action="image-url"' not in detail
+    assert 'data-media-action="video-url"' not in detail
     assert "guildId}/uploads" in workspace
     assert "FormData" in workspace
+    assert "BarkDialog.pick" in workspace
+    assert 'data-schema-type="array"' in detail
 
 
 def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listener():

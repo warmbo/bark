@@ -70,6 +70,8 @@ const BarkDialog = (() => {
         node.setAttribute('aria-hidden', 'true');
         const inputWrap = node.querySelector('[data-dialog-input-wrap]');
         if (inputWrap) inputWrap.hidden = true;
+        const gridWrap = node.querySelector('[data-dialog-grid-wrap]');
+        if (gridWrap) gridWrap.hidden = true;
         const resolver = node._resolver;
         node._resolver = null;
         if (previousFocus?.isConnected) previousFocus.focus();
@@ -115,6 +117,43 @@ const BarkDialog = (() => {
         input.focus();
         input.select();
     });
+    const pick = ({title, items, message = ''}) => new Promise((resolve) => {
+        const node = overlay();
+        if (!node) { resolve(null); return; }
+        if (!node.hidden) close(false);
+        previousFocus = document.activeElement;
+        node.querySelector('[data-dialog-title]').textContent = title;
+        node.querySelector('[data-dialog-message]').textContent = message;
+        const inputWrap = node.querySelector('[data-dialog-input-wrap]');
+        inputWrap.hidden = true;
+        const gridWrap = node.querySelector('[data-dialog-grid-wrap]');
+        const grid = node.querySelector('[data-dialog-grid]');
+        grid.innerHTML = '';
+        items.forEach((item, index) => {
+            const cell = document.createElement('button');
+            cell.type = 'button';
+            cell.className = 'dialog-grid-cell';
+            cell.setAttribute('aria-label', `Pick ${item.label || item.url}`);
+            const img = document.createElement('img');
+            img.src = item.url;
+            img.alt = item.label || '';
+            img.loading = 'lazy';
+            cell.appendChild(img);
+            cell.addEventListener('click', () => {
+                node.hidden = true; node.setAttribute('aria-hidden', 'true');
+                node._resolver = null;
+                gridWrap.hidden = true;
+                if (previousFocus?.isConnected) previousFocus.focus();
+                resolve(item);
+            });
+            grid.appendChild(cell);
+        });
+        gridWrap.hidden = false;
+        node.hidden = false; node.setAttribute('aria-hidden', 'false');
+        const first = grid.querySelector('button');
+        if (first) first.focus();
+    });
+
     document.addEventListener('click', (event) => {
         if (event.target.matches('[data-dialog-cancel], #app-dialog-overlay')) close(false);
         if (event.target.matches('[data-dialog-confirm]')) close(true);
@@ -136,7 +175,7 @@ const BarkDialog = (() => {
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }
     });
-    return {confirm, prompt, close};
+    return {confirm, prompt, pick, close};
 })();
 
 // ── Shared Utility Functions ──────────────────────────

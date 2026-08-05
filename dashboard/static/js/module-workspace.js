@@ -329,13 +329,22 @@
     };
 
     picker.querySelector('[data-media-action="image-upload"]')?.addEventListener('click', uploadImage);
-    picker.querySelector('[data-media-action="image-url"]')?.addEventListener('click', async () => {
-      const url = await askText('Image URL', 'https://');
-      addMedia('image', url?.trim());
-    });
-    picker.querySelector('[data-media-action="video-url"]')?.addEventListener('click', async () => {
-      const url = await askText('Video URL (YouTube, Vimeo, TikTok, or direct MP4)', 'https://');
-      addMedia('video', url?.trim());
+    picker.querySelector('[data-media-action="image-library"]')?.addEventListener('click', async () => {
+      try {
+        const response = await safeFetch(`/api/v1/guilds/${guildId}/uploads`, {cache: 'no-cache'});
+        const items = response?.data?.items || [];
+        if (!items.length) {
+          showToast('No previously uploaded images — upload one first', 'info');
+          return;
+        }
+        const picked = await BarkDialog.pick({
+          title: 'Previously uploaded images',
+          items: items.map((it) => ({url: it.url, label: it.name})),
+        });
+        if (picked) addMedia('image', picked.url);
+      } catch (error) {
+        showToast(error.message || 'Library load failed', 'error');
+      }
     });
 
     render();

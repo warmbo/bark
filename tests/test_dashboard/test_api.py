@@ -1872,3 +1872,29 @@ async def test_logging_workspace_has_logs_tab(client, app):
     assert "logging-logs-content" in resp.text
     # Workspace JS must be registered on the logging module page
     assert "logging-workspace.js" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_upload_library_lists_previous_uploads(client, app, monkeypatch, tmp_path):
+    """Library endpoint returns previously uploaded images newest-first, gated by permission."""
+    import dashboard.routes.api.uploads as uploads_route
+
+    directory = tmp_path / "uploads"
+    (directory / "alpha.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (directory / "beta.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    (directory / "note.txt").write_bytes(b"skip me")
+    monkeypatch.setattr(uploads_route, "uploads_directory", lambda: directory)
+
+    # Denied without a content-editing permission.
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: False)
+    denied = await client.get("/api/v1/guilds/1/uploads")
+    assert denied.status_code == 403
+
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: True)
+    ok = await client.get("/api/v1/guilds/1/uploads")
+    assert ok.status_code == 200
+    items = ok.json()["data"]["items"]
+    names = [i["name"] for i in items]
+    # Only image files, no .txt; images included.
+    assert set(names) == {"alpha.png", "beta.jpg"}
+    assert all(i["url"].startswith("http://127.0.0.1:8090/media/uploads/") for i in items)

@@ -51,6 +51,29 @@ def _can_upload(request: Request, guild_id: str) -> bool:
     )
 
 
+@router.get("/guilds/{guild_id}/uploads")
+async def list_uploads(request: Request, guild_id: str):
+    """Return previously uploaded images for reuse in Discord markdown."""
+    if not _can_upload(request, guild_id):
+        return api_forbidden()
+
+    directory = uploads_directory()
+    if not directory.exists():
+        return api_success({"items": []})
+
+    public_base = config.dashboard.public_url.rstrip("/")
+    items = []
+    for path in sorted(directory.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        if path.is_file() and path.suffix.lower() in ALLOWED_IMAGE_TYPES.values():
+            items.append(
+                {
+                    "url": f"{public_base}/media/uploads/{path.name}",
+                    "name": path.name,
+                }
+            )
+    return api_success({"items": items})
+
+
 @router.post("/guilds/{guild_id}/uploads")
 async def upload_image(request: Request, guild_id: str, file: UploadFile = File(...)):
     """Upload an image and return a public URL for use in Discord markdown."""

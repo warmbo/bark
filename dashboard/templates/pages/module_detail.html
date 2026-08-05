@@ -82,10 +82,9 @@
                 <div class="media-picker-items" aria-live="polite"></div>
                 <div class="media-picker-actions">
                   <button type="button" class="btn btn-xs" data-media-action="image-upload">{{ icon('upload', 13) }} Upload image</button>
-                  <button type="button" class="btn btn-xs" data-media-action="image-url">{{ icon('image', 13) }} Image URL</button>
-                  <button type="button" class="btn btn-xs" data-media-action="video-url">{{ icon('video', 13) }} Video URL</button>
+                  <button type="button" class="btn btn-xs" data-media-action="image-library">{{ icon('library', 13) }} Library</button>
                 </div>
-                <input type="hidden" name="{{ field.key }}" value="">
+                <input type="hidden" name="{{ field.key }}" value="" data-schema-type="array">
                 <p class="form-hint">{{ field.placeholder }}</p>
               </div>
               {% else %}<input id="{{ field_id }}" class="form-input" type="{{ 'number' if field.type in ['integer','number'] else (field.type or 'text') }}" name="{{ field.key }}" data-schema-type="{{ field.type }}" placeholder="{{ field.placeholder }}" {{ 'required' if field.required else '' }}>{% endif %}
@@ -153,7 +152,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/module-workspace.js?v=11"></script>
+<script src="/static/js/module-workspace.js?v=12"></script>
 {% if module_name == 'auto_voice' %}<script src="/static/js/auto-voice-workspace.js?v=2"></script>{% endif %}
 {% if module_name == 'logging' %}<script src="/static/js/logging-workspace.js?v=1"></script>{% endif %}
 {% if module_name == 'moderation' %}<script src="/static/js/moderation-workspace.js?v=8"></script>{% endif %}
