@@ -77,6 +77,11 @@
               {% elif field.type == 'select' %}<select id="{{ field_id }}" class="form-select" name="{{ field.key }}" {{ 'required' if field.required else '' }}><option value="">{{ field.placeholder or 'Select…' }}</option>{% for option in field.options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}</select>
               {% elif field.type == 'api_select' %}<select id="{{ field_id }}" class="form-select api-select" name="{{ field.key }}" data-api="{{ field.api }}" data-value-key="{{ field.value_key }}" data-label-key="{{ field.label_key }}" data-group-key="{{ field.group_key | default('') }}" data-placeholder="{{ field.placeholder or 'Select…' }}" {{ 'required' if field.required else '' }}><option value="">Loading…</option></select>
               {% elif field.type == 'boolean' %}<label class="checkbox-control"><input id="{{ field_id }}" type="checkbox" name="{{ field.key }}" data-schema-type="boolean" {{ 'checked' if field.default else '' }}><span>{{ field.placeholder or field.label }}</span></label>
+              {% elif field.type == 'color' %}
+              <div class="color-field">
+                <input id="{{ field_id }}" class="form-input color-input" type="color" name="{{ field.key }}" data-schema-type="color" value="{{ field.default | default('#5865F2') }}" aria-label="{{ field.label }}">
+                <input id="{{ field_id }}-hex" class="form-input color-hex-input" type="text" name="{{ field.key }}_hex" maxlength="7" value="{{ field.default | default('#5865F2') }}" aria-label="{{ field.label }} hex value">
+              </div>
               {% elif field.type == 'media_picker' %}
               <div class="media-picker" data-field-id="{{ field_id }}">
                 <div class="media-picker-items" aria-live="polite"></div>
@@ -152,9 +157,9 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/module-workspace.js?v=14"></script>
+<script src="/static/js/module-workspace.js?v=15"></script>
 {% if module_name == 'auto_voice' %}<script src="/static/js/auto-voice-workspace.js?v=2"></script>{% endif %}
-{% if module_name == 'announcements' %}<script src="/static/js/announcements-workspace.js?v=2"></script>{% endif %}
+{% if module_name == 'announcements' %}<script src="/static/js/announcements-workspace.js?v=3"></script>{% endif %}
 {% if module_name == 'logging' %}<script src="/static/js/logging-workspace.js?v=1"></script>{% endif %}
 {% if module_name == 'moderation' %}<script src="/static/js/moderation-workspace.js?v=8"></script>{% endif %}
 {% if module_name == 'reputation' %}<script src="/static/js/reputation-workspace.js?v=2"></script>{% endif %}

@@ -56,6 +56,20 @@ def _force_full_width(embed: discord.Embed) -> None:
         embed.add_field(name="\u200b", value="\u200b", inline=True)
 
 
+def _parse_embed_color(raw: str | None) -> discord.Color:
+    """Parse a #RRGGBB (or RRGGBB) color string, falling back to blurple.
+
+    Discord accepts any 24-bit RGB color for embeds; invalid or empty values
+    should not break posting, so they degrade to the brand accent.
+    """
+    if not raw:
+        return discord.Color.blurple()
+    value = str(raw).strip().lstrip("#")
+    if re.fullmatch(r"[0-9a-fA-F]{6}", value):
+        return discord.Color(int(value, 16))
+    return discord.Color.blurple()
+
+
 class AnnouncementsModule(BarkModule):
     """Post announcements to a selected channel as text or embeds."""
 
@@ -166,6 +180,16 @@ class AnnouncementsModule(BarkModule):
                         "type": "boolean",
                         "required": False,
                         "placeholder": "Use embed formatting",
+                        "default": True,
+                    },
+                    {
+                        "key": "embed_color",
+                        "label": "Embed color",
+                        "type": "color",
+                        "required": False,
+                        "placeholder": "Accent color for the embed sidebar and footer",
+                        "default": "#5865F2",
+                        "depends_on": {"field": "as_embed", "value": "true"},
                     },
                     {
                         "key": "media",
@@ -206,6 +230,7 @@ class AnnouncementsModule(BarkModule):
             title = str(data.get("title", "") or "")
             message = str(data.get("message", "") or "")
             as_embed = bool(data.get("as_embed", False))
+            embed_color = str(data.get("embed_color", "") or "").strip()
             image_url = str(data.get("image_url", "") or "").strip()
             video_url = str(data.get("video_url", "") or "").strip()
 
@@ -256,7 +281,7 @@ class AnnouncementsModule(BarkModule):
                     emb = discord.Embed(
                         title=title or None,
                         description=description or None,
-                        color=discord.Color.blurple(),
+                        color=_parse_embed_color(embed_color),
                         timestamp=datetime.now(timezone.utc),
                     )
                     # Discord only expands an embed to full width when it carries an
@@ -299,6 +324,7 @@ class AnnouncementsModule(BarkModule):
             title="Optional embed title",
             message="Announcement content",
             embed="Send as embed instead of plain text",
+            color="Embed accent color as #RRGGBB (embed mode only)",
             image_url="Optional image URL to embed inline",
             video_url="Optional video URL — appended as Watch Video link in embeds",
         )
@@ -308,6 +334,7 @@ class AnnouncementsModule(BarkModule):
             title: str | None = None,
             message: str = "",
             embed: bool = False,
+            color: str | None = None,
             image_url: str | None = None,
             video_url: str | None = None,
         ):
@@ -331,7 +358,7 @@ class AnnouncementsModule(BarkModule):
                     announcement_embed = discord.Embed(
                         title=title or None,
                         description=message[:4096],
-                        color=discord.Color.blurple(),
+                        color=_parse_embed_color(color),
                         timestamp=datetime.now(timezone.utc),
                     )
                     # Full-width embeds: stack the row-of-fields trigger plus an image.

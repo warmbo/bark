@@ -1674,7 +1674,23 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 /* ── Announcements live Discord preview ───────────────── */
 
-.announcement-preview { margin: var(--space-md) 0 var(--space-lg); }
+.announcement-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-lg);
+    align-items: start;
+}
+.announcement-form-col { min-width: 0; }
+.announcement-preview-col {
+    min-width: 0;
+    position: sticky;
+    top: 90px;
+}
+@media (max-width: 1100px) {
+    .announcement-split { grid-template-columns: minmax(0, 1fr); }
+    .announcement-preview-col { position: static; }
+}
+.announcement-preview { min-width: 0; }
 .announcement-preview-label {
     font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
     color: var(--text-tertiary); margin-bottom: 8px;
@@ -1710,6 +1726,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .discord-embed-desc { color: #dbdee1; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
 .discord-embed-image { max-width: 100%; max-height: 320px; border-radius: 4px; margin-top: 8px; display: block; }
 .discord-embed-footer { color: #949ba4; font-size: 12px; margin-top: 8px; display: flex; gap: 6px; align-items: center; }
+
+/* ── Embed color picker field ─────────────────────────── */
+
+.color-field { display: flex; align-items: center; gap: 10px; }
+.color-input { width: 56px; height: 44px; padding: 4px; cursor: pointer; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: var(--radius-sm); }
+.color-input::-webkit-color-swatch-wrapper { padding: 2px; }
+.color-input::-webkit-color-swatch { border: 0; border-radius: 2px; }
+.color-input::-moz-color-swatch { border: 0; border-radius: 2px; }
+.color-hex-input { width: 110px; font-family: var(--font-mono); text-transform: uppercase; }
+.color-hex-input.invalid { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
 
 /* ── Buttons ──────────────────────────────────────────── */
 

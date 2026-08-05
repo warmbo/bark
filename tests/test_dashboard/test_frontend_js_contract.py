@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 JS = ROOT / "dashboard" / "static" / "js"
+STATIC = ROOT / "dashboard" / "static"
 TEMPLATES = ROOT / "dashboard" / "templates"
 
 
@@ -190,12 +191,40 @@ def test_announcements_workspace_registers_live_discord_preview():
     assert "discord-spoiler" in ann
 
 
+def test_announcements_preview_uses_split_pane_and_color_picker():
+    """The announcements composer must sit beside a sticky preview pane, embed
+    must be the default mode, and the color field must feed the preview bar."""
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
+    ann = source(JS / "announcements-workspace.js")
+    module = source(ROOT / "modules" / "announcements" / "module.py")
+
+    # Split-pane layout: composer column + preview column.
+    assert "announcement-split" in ann
+    assert "announcement-form-col" in ann
+    assert "announcement-preview-col" in ann
+    assert "announcement-split" in source(STATIC / "css" / "main.css")
+    # Embed formatting is the default but the toggle stays.
+    assert '"default": True' in module
+    assert "field.type == 'boolean'" in detail
+    # Color picker: swatch + hex companion rendered in the template, wired in JS.
+    assert "field.type == 'color'" in detail
+    assert "color-input" in detail
+    assert "color-hex-input" in detail
+    assert "action-post_announcement-embed_color" in ann
+    assert "action-post_announcement-embed_color-hex" in ann
+    assert "readColor" in ann
+    assert "colorInput.value" in ann
+    # The backend parses the color and falls back to blurple.
+    assert "_parse_embed_color" in module
+    assert "embed_color" in module
+
+
 def test_discord_markdown_renderer_covers_discord_tokens():
     """The announcements preview's markdown renderer must escape HTML before
     formatting and cover Discord's core inline/block tokens."""
     ann = source(JS / "announcements-workspace.js")
     start = ann.index("function esc(")
-    end = ann.index("// ── Preview UI", start)
+    end = ann.index("// ── Split-pane layout", start)
     renderer = ann[start:end]
 
     script = f"""

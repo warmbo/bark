@@ -2,9 +2,10 @@
  *
  * Mirrors modules/announcements/module.py `post_announcement` rendering so the
  * Operate tab shows exactly what Bark will post: plain-text mode vs embed mode,
- * the title/description, media image, the appended "[Watch Video]" link, and
- * the 2000/4096 character caps. Loaded only on the announcements module detail
- * page (see pages/module_detail.html).
+ * the title/description, embed accent color, media image, the appended
+ * "[Watch Video]" link, and the 2000/4096 character caps. The action card is
+ * re-laid out as a split pane — composer left, live preview right. Loaded only
+ * on the announcements module detail page (see pages/module_detail.html).
  */
 (() => {
   'use strict';
@@ -18,6 +19,8 @@
   const titleInput = document.getElementById('action-post_announcement-title');
   const messageInput = document.getElementById('action-post_announcement-message');
   const embedCheck = document.getElementById('action-post_announcement-as_embed');
+  const colorInput = document.getElementById('action-post_announcement-embed_color');
+  const colorHex = document.getElementById('action-post_announcement-embed_color-hex');
   const picker = card.querySelector('.media-picker');
   const mediaHidden = picker ? picker.querySelector('input[type="hidden"]') : null;
 
@@ -85,6 +88,26 @@
     return out;
   }
 
+  // ── Split-pane layout: composer left, preview right ───────────────────
+
+  const configBody = card.querySelector('.config-body');
+  const form = card.querySelector('.module-action-form');
+  const result = card.querySelector('.action-result');
+
+  const split = document.createElement('div');
+  split.className = 'announcement-split';
+
+  const formCol = document.createElement('div');
+  formCol.className = 'announcement-form-col';
+  if (form) formCol.appendChild(form);
+  if (result) formCol.appendChild(result);
+
+  const previewCol = document.createElement('div');
+  previewCol.className = 'announcement-preview-col';
+
+  split.append(formCol, previewCol);
+  if (configBody) configBody.replaceChildren(split);
+
   // ── Preview UI ────────────────────────────────────────────────────────
 
   const preview = document.createElement('div');
@@ -106,9 +129,7 @@
         '</div>' +
       '</div>' +
     '</div>';
-
-  const mediaGroup = picker ? picker.closest('.form-group') : null;
-  (mediaGroup || card.querySelector('.module-action-form')).after(preview);
+  previewCol.appendChild(preview);
 
   const timestampEl = preview.querySelector('.discord-timestamp');
   const contentEl = preview.querySelector('.discord-message-content');
@@ -133,6 +154,13 @@
     } catch {
       return {image: '', video: ''};
     }
+  }
+
+  /** Current embed accent color: #RRGGBB or blurple fallback. Mirrors the
+   * backend `_parse_embed_color` (invalid/empty degrades to blurple). */
+  function readColor() {
+    const raw = colorInput ? colorInput.value : '';
+    return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw.toLowerCase() : '#5865f2';
   }
 
   /** Hide preview images that fail to load (dead/blocked URLs render as a
@@ -177,7 +205,7 @@
       contentEl.innerHTML = '';
       embedEl.hidden = false;
       embedEl.innerHTML =
-        '<div class="discord-embed-bar"></div>' +
+        `<div class="discord-embed-bar" style="background:${readColor()}"></div>` +
         '<div class="discord-embed-body">' +
           (title ? `<div class="discord-embed-title">${esc(title)}</div>` : '') +
           (description ? `<div class="discord-embed-desc">${renderMarkdown(description, true)}</div>` : '') +
@@ -199,6 +227,48 @@
       }
     }
   }
+
+  // ── Color swatch ↔ hex text sync ──────────────────────────────────────
+
+  const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
+
+  function normalizeHex(raw) {
+    const value = String(raw ?? '').trim();
+    if (!HEX_RE.test(value)) return null;
+    const hex = value.replace(/^#?/, '#');
+    return hex.toLowerCase();
+  }
+
+  function syncHexToSwatch() {
+    const hex = normalizeHex(colorHex ? colorHex.value : '');
+    if (hex && colorInput) {
+      colorInput.value = hex;
+      if (colorHex) colorHex.classList.remove('invalid');
+    } else if (colorHex) {
+      colorHex.classList.add('invalid');
+    }
+    updatePreview();
+  }
+
+  function syncSwatchToHex() {
+    if (colorHex && colorInput) colorHex.value = colorInput.value.toUpperCase();
+    updatePreview();
+  }
+
+  colorHex?.addEventListener('input', syncHexToSwatch);
+  colorHex?.addEventListener('change', () => {
+    // Commit a valid typed value; otherwise restore the swatch's value.
+    const hex = normalizeHex(colorHex.value);
+    if (colorHex && colorInput && hex) {
+      colorHex.value = hex.toUpperCase();
+      colorHex.classList.remove('invalid');
+    } else if (colorHex && colorInput) {
+      colorHex.value = colorInput.value.toUpperCase();
+      colorHex.classList.remove('invalid');
+    }
+    updatePreview();
+  });
+  colorInput?.addEventListener('input', syncSwatchToHex);
 
   // ── Live wiring ───────────────────────────────────────────────────────
 

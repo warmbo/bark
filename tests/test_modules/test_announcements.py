@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
-from modules.announcements.module import AnnouncementsModule
+from modules.announcements.module import AnnouncementsModule, _parse_embed_color
 
 
 @pytest.mark.asyncio
@@ -206,6 +206,204 @@ async def test_post_announcement_maps_media_picker_payload(db, monkeypatch):
     assert sent_embed.image.url == "https://example.com/a.png"
     assert "Watch Video" in (sent_embed.description or "")
     assert "https://youtube.com/watch?v=abc" in (sent_embed.description or "")
+
+
+def test_parse_embed_color_accepts_hex_and_falls_back_to_blurple():
+    """#RRGGBB (with or without the hash) maps to the exact 24-bit color;
+    missing or malformed values degrade to blurple without raising."""
+    assert _parse_embed_color("#FF5500").value == 0xFF5500
+    assert _parse_embed_color("ff5500").value == 0xFF5500
+    assert _parse_embed_color("#FF5500").value == discord.Color(0xFF5500).value
+    # Invalid / empty inputs fall back to blurple.
+    assert _parse_embed_color(None) == discord.Color.blurple()
+    assert _parse_embed_color("") == discord.Color.blurple()
+    assert _parse_embed_color("red") == discord.Color.blurple()
+    assert _parse_embed_color("#12345") == discord.Color.blurple()
+
+
+@pytest.mark.asyncio
+async def test_announce_slash_command_uses_custom_embed_color():
+    module = AnnouncementsModule(MagicMock())
+    command = module._make_announce_command()
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(me=MagicMock()),
+        response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+    channel = MagicMock()
+    channel.permissions_for.return_value.send_messages = True
+    channel.send = AsyncMock()
+
+    await command.callback(
+        interaction,
+        channel,
+        title="Rally",
+        message="Game night!",
+        embed=True,
+        color="#FF5500",
+    )
+
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert sent_embed.color.value == 0xFF5500
+
+
+@pytest.mark.asyncio
+async def test_post_announcement_applies_embed_color(db, monkeypatch):
+    """The dashboard color picker value flows through to the sent embed color."""
+    import base64
+    import json
+    from unittest.mock import AsyncMock
+
+    from httpx import ASGITransport, AsyncClient
+    from itsdangerous import TimestampSigner
+
+    import config
+    from dashboard import create_app
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from database.models.permissions import DashboardUser
+    from services.bark_context import BarkContext
+    from services.dashboard_access import replace_user_guild_access
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        session.add(DashboardUser(discord_id="42", username="Owner", role="admin"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
+        )
+
+    bot = MagicMock()
+    bot.guilds = []
+    bot.user = None
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {"announcements": MagicMock()}
+    bot.modules.is_enabled_for_guild.return_value = True
+
+    guild = MagicMock()
+    channel = MagicMock()
+    channel.send = AsyncMock()
+    guild.get_channel.return_value = channel
+    bot.get_guild.return_value = guild
+
+    dashboard = create_app(bot)
+    module = AnnouncementsModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    session = {
+        "user": {"id": "42", "username": "Owner"},
+        "role": "admin",
+    }
+    payload = base64.b64encode(json.dumps(session).encode("utf-8"))
+    cookie = TimestampSigner("test_secret_key").sign(payload).decode("utf-8")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/announcements/post",
+            json={
+                "channel_id": "55",
+                "message": "Colorful update",
+                "as_embed": True,
+                "embed_color": "#22C55E",
+            },
+        )
+
+    assert response.status_code == 200
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert sent_embed.color.value == 0x22C55E
+
+
+@pytest.mark.asyncio
+async def test_post_announcement_invalid_color_falls_back_to_blurple(db, monkeypatch):
+    """A malformed color from a stale dashboard must not break posting."""
+    import base64
+    import json
+    from unittest.mock import AsyncMock
+
+    from httpx import ASGITransport, AsyncClient
+    from itsdangerous import TimestampSigner
+
+    import config
+    from dashboard import create_app
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from database.models.permissions import DashboardUser
+    from services.bark_context import BarkContext
+    from services.dashboard_access import replace_user_guild_access
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        session.add(DashboardUser(discord_id="42", username="Owner", role="admin"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
+        )
+
+    bot = MagicMock()
+    bot.guilds = []
+    bot.user = None
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {"announcements": MagicMock()}
+    bot.modules.is_enabled_for_guild.return_value = True
+
+    guild = MagicMock()
+    channel = MagicMock()
+    channel.send = AsyncMock()
+    guild.get_channel.return_value = channel
+    bot.get_guild.return_value = guild
+
+    dashboard = create_app(bot)
+    module = AnnouncementsModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    session = {
+        "user": {"id": "42", "username": "Owner"},
+        "role": "admin",
+    }
+    payload = base64.b64encode(json.dumps(session).encode("utf-8"))
+    cookie = TimestampSigner("test_secret_key").sign(payload).decode("utf-8")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/announcements/post",
+            json={
+                "channel_id": "55",
+                "message": "Broken color",
+                "as_embed": True,
+                "embed_color": "not-a-color",
+            },
+        )
+
+    assert response.status_code == 200
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert sent_embed.color == discord.Color.blurple()
 
 
 @pytest.mark.asyncio
