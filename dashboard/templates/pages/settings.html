@@ -118,6 +118,38 @@
         </div>
     </div>
 
+    {% if request.session.get('role') == 'owner' %}
+    <div class="content-card" id="instance-invites">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">{{ icon("share-2", 16) }} Hosted Instance Access</h2>
+                <p class="card-description">Create one-time share links for people allowed to add and manage Bark in servers they administer.</p>
+            </div>
+        </div>
+        <form class="settings-form" id="instance-invite-form">
+            <div class="form-grid form-grid-2">
+                <div class="form-group">
+                    <label class="form-label" for="instance-invite-days">Link lifetime</label>
+                    <select class="form-input" id="instance-invite-days" name="expires_in_days">
+                        <option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option>
+                    </select>
+                    <span class="form-hint">Each link can be redeemed once, then grants ongoing access until you revoke it.</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="instance-invite-note">Note (optional)</label>
+                    <input class="form-input" id="instance-invite-note" name="note" type="text" maxlength="240" placeholder="Who is this for?">
+                </div>
+            </div>
+            <div class="form-actions form-actions-static"><button type="submit" class="btn btn-primary" id="instance-invite-create">{{ icon("link", 16) }} Create secure link</button></div>
+        </form>
+        <div class="form-group" id="instance-invite-result" hidden>
+            <label class="form-label" for="instance-invite-url">Copy this link now — it is intentionally shown only once.</label>
+            <div class="input-row"><input class="form-input" id="instance-invite-url" name="share_url" type="url" readonly><button type="button" class="btn" id="instance-invite-copy">Copy</button></div>
+        </div>
+        <div class="workspace-data-card" id="instance-invite-list" aria-live="polite"></div>
+    </div>
+    {% endif %}
+
     <!-- Bot Customization -->
     <div class="content-card bot-customization-card">
         <div class="card-header">
@@ -448,6 +480,38 @@
         }
     });
 
+    const inviteForm = document.getElementById('instance-invite-form');
+    const inviteList = document.getElementById('instance-invite-list');
+    async function loadInstanceInvites() {
+        if (!inviteList) return;
+        const result = await safeFetch('/api/v1/instance/invites');
+        const invites = result.data?.invites || [];
+        const accessResult = await safeFetch('/api/v1/instance/access');
+        const grants = accessResult.data?.access || [];
+        const inviteRows = invites.map((invite) => `<div class="info-row"><span class="info-label">${escHtml(invite.note || 'Invite #' + invite.id)}</span><span class="info-value">${invite.redeemed_at ? 'Redeemed' : invite.revoked_at ? 'Revoked' : 'Pending'} · expires ${new Date(invite.expires_at).toLocaleDateString()} ${!invite.redeemed_at && !invite.revoked_at ? `<button type="button" class="btn btn-xs" data-revoke-invite="${invite.id}">Revoke</button>` : ''}</span></div>`).join('');
+        const accessRows = grants.map((grant) => `<div class="info-row"><span class="info-label">Discord user ${escHtml(grant.discord_user_id)}</span><span class="info-value">${grant.revoked_at ? 'Revoked' : 'Active'}${!grant.revoked_at ? ` <button type="button" class="btn btn-xs" data-revoke-access="${escHtml(grant.discord_user_id)}">Revoke access</button>` : ''}</span></div>`).join('');
+        inviteList.innerHTML = inviteRows || accessRows ? `${inviteRows}${accessRows}` : '<p class="text-tertiary">No access links created yet.</p>';
+    }
+    inviteForm?.addEventListener('submit', async (event) => {
+        event.preventDefault(); const button = document.getElementById('instance-invite-create'); button.disabled = true;
+        try {
+            const result = await safeFetch('/api/v1/instance/invites', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({expires_in_days: Number(document.getElementById('instance-invite-days').value), note: document.getElementById('instance-invite-note').value.trim()})});
+            if (result.success === false) throw new Error(result.error || 'Could not create invite');
+            document.getElementById('instance-invite-url').value = result.data.share_url;
+            document.getElementById('instance-invite-result').hidden = false;
+            await loadInstanceInvites(); showToast('Secure invite link created', 'success');
+        } catch (error) { showToast(error.message || 'Could not create invite', 'error'); }
+        finally { button.disabled = false; }
+    });
+    document.getElementById('instance-invite-copy')?.addEventListener('click', async () => { await navigator.clipboard.writeText(document.getElementById('instance-invite-url').value); showToast('Invite link copied', 'success'); });
+    inviteList?.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-revoke-invite], [data-revoke-access]');
+        if (!button) return;
+        if (button.dataset.revokeInvite) await safeFetch(`/api/v1/instance/invites/${button.dataset.revokeInvite}`, {method: 'DELETE'});
+        if (button.dataset.revokeAccess) await safeFetch(`/api/v1/instance/access/${encodeURIComponent(button.dataset.revokeAccess)}`, {method: 'DELETE'});
+        await loadInstanceInvites();
+    });
+    loadInstanceInvites();
     loadBotAppearance();
 </script>
 {% endblock %}

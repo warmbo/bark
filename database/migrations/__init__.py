@@ -450,6 +450,36 @@ MIGRATIONS: tuple[Migration, ...] = (
         "0007_fk_indexes",
         _add_fk_indexes,
     ),
+    (
+        "0008_instance_invites",
+        (
+            """
+            CREATE TABLE IF NOT EXISTS instance_invites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash VARCHAR(64) NOT NULL UNIQUE,
+                created_by_discord_id VARCHAR(32) NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME NOT NULL,
+                redeemed_at DATETIME,
+                redeemed_by_discord_id VARCHAR(32),
+                revoked_at DATETIME,
+                note TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_instance_invites_token_hash ON instance_invites (token_hash)",
+            "CREATE INDEX IF NOT EXISTS ix_instance_invites_expires_at ON instance_invites (expires_at)",
+            """
+            CREATE TABLE IF NOT EXISTS instance_access (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                discord_user_id VARCHAR(32) NOT NULL UNIQUE,
+                role VARCHAR(16) NOT NULL DEFAULT 'admin',
+                granted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                revoked_at DATETIME
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_instance_access_discord_user_id ON instance_access (discord_user_id)",
+        ),
+    ),
 )
 
 

@@ -25,6 +25,7 @@ from services.dashboard_access import (
     replace_user_guild_access,
     resolve_dashboard_role,
 )
+from services.instance_invites import authorize_instance_user
 
 logger = logging.getLogger("bark.dashboard.auth")
 
@@ -149,9 +150,23 @@ async def callback(
     )
     derived_role = derive_dashboard_role(guilds, bot_guild_ids)
 
-    # Persist user to database and determine role
+    # Only explicit owners and users who redeemed an owner-issued invite can
+    # use this hosted instance. The signed session holds the token only until
+    # Discord identifies the recipient.
     role = "viewer"
     async with session_scope() as session:
+        is_owner = user["id"] in config.oauth2.owner_discord_ids
+        invite_token = request.session.pop("instance_invite_token", None)
+        if not is_owner and not await authorize_instance_user(
+            session,
+            discord_user_id=user["id"],
+            invite_token=invite_token,
+        ):
+            request.session.clear()
+            logger.warning("Rejected uninvited dashboard login for Discord user %s", user["id"])
+            return RedirectResponse(url="/dashboard?auth_error=invite_required")
+
+        # Persist user to database and determine role
         # Check if this user already has a record
         existing = (
             await session.execute(
@@ -192,6 +207,15 @@ async def callback(
 
     logger.info("User %s authenticated via Discord OAuth2 — role=%s", user["id"], role)
     return RedirectResponse(url="/dashboard")
+
+
+@router.get("/share/{token}")
+async def accept_share_link(request: Request, token: str):
+    """Stage a one-time invite token until the recipient completes Discord OAuth."""
+    if not _oauth_enabled():
+        return RedirectResponse(url="/dashboard?auth_error=oauth_required")
+    request.session["instance_invite_token"] = token
+    return RedirectResponse(url="/auth/login")
 
 
 @router.post("/logout")

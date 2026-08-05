@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from itsdangerous import TimestampSigner
 
 from database.engine import session_scope
-from database.models.permissions import DashboardUser
+from database.models.permissions import DashboardUser, InstanceAccess
 from services.dashboard_access import (
     build_guild_catalog,
     can_manage_discord_guild,
@@ -207,6 +207,7 @@ async def test_dashboard_lists_all_discord_servers_after_login(db, monkeypatch):
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
     async with session_scope() as session:
         session.add(DashboardUser(discord_id="42", username="Cody", role="admin"))
+        session.add(InstanceAccess(discord_user_id="42"))
         await session.flush()
         await replace_user_guild_access(
             session,
@@ -256,6 +257,7 @@ async def test_guild_routes_require_manage_guild_permission(db, monkeypatch):
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
     async with session_scope() as session:
         session.add(DashboardUser(discord_id="42", username="Cody", role="admin"))
+        session.add(InstanceAccess(discord_user_id="42"))
         await session.flush()
         await replace_user_guild_access(
             session,

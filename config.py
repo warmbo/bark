@@ -122,6 +122,10 @@ class Config:
                 "Discord OAuth must be configured before exposing the dashboard "
                 "on a non-loopback BARK_DASHBOARD_HOST"
             )
+        if self.oauth2.enabled and not self.oauth2.owner_discord_ids:
+            raise ConfigurationError(
+                "BARK_OWNER_DISCORD_IDS is required when Discord OAuth is enabled"
+            )
 
     @classmethod
     def load(cls) -> "Config":

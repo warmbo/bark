@@ -30,6 +30,8 @@ def _is_public(path: str) -> bool:
         return True
     if path.startswith("/s/"):
         return True
+    if path.startswith("/auth/share/"):
+        return True
     return False
 
 
@@ -152,6 +154,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
         user = request.session.get("user")
         if user is None:
             return _auth_required_response(path)
+
+        # Hosted Bark instances are closed by default.  Owner identity is
+        # config-backed; every other signed-in user must retain an active
+        # database grant, so access revocation takes effect on the next request.
+        if (
+            config.oauth2.owner_discord_ids
+            and user.get("id") not in config.oauth2.owner_discord_ids
+        ):
+            from database.engine import session_scope
+            from services.instance_invites import is_instance_user_authorized
+
+            async with session_scope() as session:
+                authorized = await is_instance_user_authorized(session, user["id"])
+            if not authorized:
+                request.session.clear()
+                return _access_denied_response(
+                    path,
+                    "Hosted instance access has been revoked",
+                    "Your access to this hosted Bark instance has been revoked.",
+                )
 
         guild_id = _guild_id_from_path(path)
         if guild_id and not await _user_can_manage_guild(user["id"], guild_id):

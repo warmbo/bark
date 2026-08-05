@@ -36,6 +36,18 @@ def test_owner_discord_ids_are_parsed_from_environment(monkeypatch, tmp_path):
     assert loaded.oauth2.owner_discord_ids == {"123", "456"}
 
 
+def test_oauth_requires_an_explicit_owner(monkeypatch, tmp_path):
+    monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("BARK_BOT_TOKEN", "test-token")
+    monkeypatch.setenv("BARK_OAUTH2_CLIENT_ID", "client")
+    monkeypatch.setenv("BARK_OAUTH2_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("BARK_OAUTH2_REDIRECT_URI", "https://example.test/auth/callback")
+    monkeypatch.delenv("BARK_OWNER_DISCORD_IDS", raising=False)
+
+    with pytest.raises(ConfigurationError, match="BARK_OWNER_DISCORD_IDS"):
+        Config.load().validate_startup()
+
+
 def test_secret_key_file_is_private(tmp_path):
     key_file = tmp_path / ".secret_key"
     key_file.write_text("existing-key")

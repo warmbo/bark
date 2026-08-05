@@ -2,9 +2,9 @@
 Dashboard user and permission models.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.engine import Base
@@ -24,6 +24,44 @@ class DashboardUser(Base):
 
     def __repr__(self) -> str:
         return f"<DashboardUser discord_id={self.discord_id} role='{self.role}'>"
+
+
+class InstanceInvite(Base):
+    """A one-time, owner-issued invitation to a hosted Bark instance."""
+
+    __tablename__ = "instance_invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    created_by_discord_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    redeemed_by_discord_id: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, index=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
+class InstanceAccess(Base):
+    """An active grant that permits a Discord user to use this Bark instance."""
+
+    __tablename__ = "instance_access"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    discord_user_id: Mapped[str] = mapped_column(
+        String(32), unique=True, nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class DashboardGuildAccess(Base):
