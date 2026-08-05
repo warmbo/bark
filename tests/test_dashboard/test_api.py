@@ -1898,3 +1898,56 @@ async def test_upload_library_lists_previous_uploads(client, app, monkeypatch, t
     # Only image files, no .txt; images included.
     assert set(names) == {"alpha.png", "beta.jpg"}
     assert all(i["url"].startswith("http://127.0.0.1:8090/media/uploads/") for i in items)
+
+
+@pytest.mark.asyncio
+async def test_upload_delete_removes_file_and_guards_paths(client, app, monkeypatch, tmp_path):
+    """DELETE upload removes the file and rejects traversal/type attacks."""
+    import dashboard.routes.api.uploads as uploads_route
+
+    directory = tmp_path / "uploads"
+    directory.mkdir(parents=True, exist_ok=True)
+    victim = directory / "victim.png"
+    victim.write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(uploads_route, "uploads_directory", lambda: directory)
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: True)
+
+    # Path traversal is rejected (FastAPI may 404 before the handler runs; either way no delete).
+    bad = await client.delete("/api/v1/guilds/1/uploads/..%2Fsecret.png")
+    assert bad.status_code in (400, 404)
+    assert victim.exists()
+
+    # Wrong extension is rejected.
+    wrong = await client.delete("/api/v1/guilds/1/uploads/secret.txt")
+    assert wrong.status_code == 400
+
+    # Missing file yields 404.
+    missing = await client.delete("/api/v1/guilds/1/uploads/nope.png")
+    assert missing.status_code == 404
+
+    # Valid delete removes the file.
+    ok = await client.delete("/api/v1/guilds/1/uploads/victim.png")
+    assert ok.status_code == 200
+    assert not victim.exists()
+
+    # Deletion gated on permission.
+    monkeypatch.setattr(uploads_route, "check_api_permission", lambda *_args, **_kwargs: False)
+    (directory / "locked.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    denied = await client.delete("/api/v1/guilds/1/uploads/locked.png")
+    assert denied.status_code == 403
+    assert (directory / "locked.png").exists()
+
+
+@pytest.mark.asyncio
+async def test_media_uploads_are_public_without_session(client, app, monkeypatch, tmp_path):
+    """/media/uploads must be reachable without auth so Discord can fetch images."""
+    import dashboard.routes.api.uploads as uploads_route
+
+    directory = tmp_path / "uploads"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "public.gif").write_bytes(b"GIF89a")
+    monkeypatch.setattr(uploads_route, "uploads_directory", lambda: directory)
+
+    response = await client.get("/media/uploads/public.gif")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/gif")

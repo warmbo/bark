@@ -117,7 +117,7 @@ const BarkDialog = (() => {
         input.focus();
         input.select();
     });
-    const pick = ({title, items, message = ''}) => new Promise((resolve) => {
+    const pick = ({title, items, message = '', onDelete = null}) => new Promise((resolve) => {
         const node = overlay();
         if (!node) { resolve(null); return; }
         if (!node.hidden) close(false);
@@ -129,28 +129,51 @@ const BarkDialog = (() => {
         const gridWrap = node.querySelector('[data-dialog-grid-wrap]');
         const grid = node.querySelector('[data-dialog-grid]');
         grid.innerHTML = '';
-        items.forEach((item, index) => {
-            const cell = document.createElement('button');
-            cell.type = 'button';
-            cell.className = 'dialog-grid-cell';
-            cell.setAttribute('aria-label', `Pick ${item.label || item.url}`);
-            const img = document.createElement('img');
-            img.src = item.url;
-            img.alt = item.label || '';
-            img.loading = 'lazy';
-            cell.appendChild(img);
-            cell.addEventListener('click', () => {
-                node.hidden = true; node.setAttribute('aria-hidden', 'true');
-                node._resolver = null;
-                gridWrap.hidden = true;
-                if (previousFocus?.isConnected) previousFocus.focus();
-                resolve(item);
+        const renderCells = (list) => {
+            grid.innerHTML = '';
+            list.forEach((item, index) => {
+                const cell = document.createElement('button');
+                cell.type = 'button';
+                cell.className = 'dialog-grid-cell';
+                cell.setAttribute('aria-label', `Pick ${item.label || item.url}`);
+                const img = document.createElement('img');
+                img.src = item.url;
+                img.alt = item.label || '';
+                img.loading = 'lazy';
+                cell.appendChild(img);
+                cell.addEventListener('click', () => {
+                    node.hidden = true; node.setAttribute('aria-hidden', 'true');
+                    node._resolver = null;
+                    gridWrap.hidden = true;
+                    if (previousFocus?.isConnected) previousFocus.focus();
+                    resolve(item);
+                });
+                if (onDelete) {
+                    const del = document.createElement('button');
+                    del.type = 'button';
+                    del.className = 'dialog-grid-delete';
+                    del.setAttribute('aria-label', `Delete ${item.label || item.url}`);
+                    del.textContent = '×';
+                    del.addEventListener('click', async (event) => {
+                        event.stopPropagation();
+                        const ok = await BarkDialog.confirm({title: 'Delete this upload?', message: '', confirmLabel: 'Delete', danger: true});
+                        if (!ok) return;
+                        try {
+                            await onDelete(item);
+                            renderCells(list.filter((_, i) => i !== index));
+                        } catch (error) {
+                            showToast(error.message || 'Delete failed', 'error');
+                        }
+                    });
+                    cell.appendChild(del);
+                }
+                grid.appendChild(cell);
             });
-            grid.appendChild(cell);
-        });
+        };
+        renderCells(items);
         gridWrap.hidden = false;
         node.hidden = false; node.setAttribute('aria-hidden', 'false');
-        const first = grid.querySelector('button');
+        const first = grid.querySelector('button.dialog-grid-cell');
         if (first) first.focus();
     });
 

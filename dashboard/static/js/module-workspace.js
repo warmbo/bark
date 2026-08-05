@@ -340,6 +340,13 @@
         const picked = await BarkDialog.pick({
           title: 'Previously uploaded images',
           items: items.map((it) => ({url: it.url, label: it.name})),
+          onDelete: async (item) => {
+            const name = item.label;
+            if (!name) throw new Error('Missing filename');
+            const del = await safeFetch(`/api/v1/guilds/${guildId}/uploads/${encodeURIComponent(name)}`, {method: 'DELETE'});
+            if (del?.success === false) throw new Error(del.error || 'Delete failed');
+            showToast('Upload deleted', 'success');
+          },
         });
         if (picked) addMedia('image', picked.url);
       } catch (error) {

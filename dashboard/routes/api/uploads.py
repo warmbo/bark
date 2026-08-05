@@ -74,6 +74,31 @@ async def list_uploads(request: Request, guild_id: str):
     return api_success({"items": items})
 
 
+@router.delete("/guilds/{guild_id}/uploads/{name}")
+async def delete_upload(request: Request, guild_id: str, name: str):
+    """Delete a previously uploaded image so it stops appearing in the library."""
+    if not _can_upload(request, guild_id):
+        return api_forbidden()
+
+    # Guard against path traversal: only bare filenames with an allowed image suffix.
+    if "/" in name or "\\" in name or ".." in name:
+        return api_error("Invalid filename", status_code=400)
+    suffix = Path(name).suffix.lower()
+    if suffix not in ALLOWED_IMAGE_TYPES.values():
+        return api_error("Only PNG, JPEG, GIF, and WebP images can be deleted", status_code=400)
+
+    directory = uploads_directory()
+    target = directory / name
+    if not target.is_file():
+        return api_error("Upload not found", status_code=404)
+
+    try:
+        target.unlink()
+    except OSError:
+        return api_error("Could not delete upload", status_code=500)
+    return api_success({"deleted": name})
+
+
 @router.post("/guilds/{guild_id}/uploads")
 async def upload_image(request: Request, guild_id: str, file: UploadFile = File(...)):
     """Upload an image and return a public URL for use in Discord markdown."""
