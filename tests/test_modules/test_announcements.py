@@ -121,3 +121,88 @@ async def test_announce_slash_command_appends_watch_video_link_in_embed():
     sent_embed = channel.send.await_args.kwargs["embed"]
     assert isinstance(sent_embed, discord.Embed)
     assert sent_embed.description == "New trailer.\n\n[Watch Video](https://www.youtube.com/watch?v=demo)"
+
+
+@pytest.mark.asyncio
+async def test_post_announcement_maps_media_picker_payload(db, monkeypatch):
+    """The dashboard media picker sends [{'type','url'}] items that map to embed image + watch-video."""
+    import base64
+    import json
+    from unittest.mock import AsyncMock
+
+    from httpx import ASGITransport, AsyncClient
+    from itsdangerous import TimestampSigner
+
+    import config
+    from dashboard import create_app
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from database.models.permissions import DashboardUser
+    from services.bark_context import BarkContext
+    from services.dashboard_access import replace_user_guild_access
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        session.add(DashboardUser(discord_id="42", username="Owner", role="admin"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
+        )
+
+    bot = MagicMock()
+    bot.guilds = []
+    bot.user = None
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {"announcements": MagicMock()}
+    bot.modules.is_enabled_for_guild.return_value = True
+
+    guild = MagicMock()
+    channel = MagicMock()
+    channel.send = AsyncMock()
+    guild.get_channel.return_value = channel
+    bot.get_guild.return_value = guild
+
+    dashboard = create_app(bot)
+    module = AnnouncementsModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    session = {
+        "user": {"id": "42", "username": "Owner"},
+        "role": "admin",
+    }
+    payload = base64.b64encode(json.dumps(session).encode("utf-8"))
+    cookie = TimestampSigner("test_secret_key").sign(payload).decode("utf-8")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/announcements/post",
+            json={
+                "channel_id": "55",
+                "message": "Check this out",
+                "as_embed": True,
+                "media": [
+                    {"type": "image", "url": "https://example.com/a.png"},
+                    {"type": "video", "url": "https://youtube.com/watch?v=abc"},
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert isinstance(sent_embed, discord.Embed)
+    assert sent_embed.image.url == "https://example.com/a.png"
+    assert "Watch Video" in (sent_embed.description or "")
+    assert "https://youtube.com/watch?v=abc" in (sent_embed.description or "")

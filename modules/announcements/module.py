@@ -142,18 +142,11 @@ class AnnouncementsModule(BarkModule):
                         "placeholder": "Use embed formatting",
                     },
                     {
-                        "key": "image_url",
-                        "label": "Image URL",
-                        "type": "text",
+                        "key": "media",
+                        "label": "Media",
+                        "type": "media_picker",
                         "required": False,
-                        "placeholder": "Optional — also auto-detected from Image/Upload toolbar markdown",
-                    },
-                    {
-                        "key": "video_url",
-                        "label": "Video URL",
-                        "type": "text",
-                        "required": False,
-                        "placeholder": "YouTube / Vimeo / TikTok / direct MP4 — shows Watch Video button in embed",
+                        "placeholder": "Add images or video URLs — images embed inline, videos show a Watch Video link",
                     },
                 ],
             }
@@ -204,6 +197,21 @@ class AnnouncementsModule(BarkModule):
             channel = guild.get_channel(int(channel_id))
             if channel is None:
                 return api_error("Channel not found in this guild")
+
+            # Media picker payload: [{"type": "image"|"video", "url": "..."}]
+            media_raw = data.get("media")
+            if isinstance(media_raw, list):
+                for item in media_raw:
+                    if not isinstance(item, dict):
+                        continue
+                    url = str(item.get("url", "") or "").strip()
+                    mtype = str(item.get("type", "image")).lower()
+                    if not url:
+                        continue
+                    if mtype == "video":
+                        video_url = video_url or url
+                    else:
+                        image_url = image_url or url
 
             image_url = image_url or None
             if not image_url and as_embed and message:

@@ -253,30 +253,38 @@ def test_discord_toolbar_covers_discord_markdown_and_images():
         'data-insert="- "',
         'data-insert="1. "',
         'data-action="link"',
-        'data-action="image-url"',
-        'data-action="image-upload"',
     ):
         assert token in include
 
     # Both renderers reuse the shared include instead of duplicating the toolbar.
     assert '{% include "components/discord_toolbar.html" %}' in primitives
     assert '{% include "components/discord_toolbar.html" %}' in detail
+    # Image/upload moved out of the markdown toolbar into the dedicated media picker.
+    assert 'data-action="image-upload"' not in include
+    assert 'data-action="image-url"' not in include
     assert 'data-action="image-upload"' not in primitives
     assert 'data-action="image-upload"' not in detail
 
 
-def test_module_workspace_toolbar_handles_discord_markdown_and_uploads():
+def test_module_workspace_media_picker_handles_uploads_and_urls():
     workspace = source(JS / "module-workspace.js")
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
 
     assert "WRAP_TOKENS" in workspace
     assert "LINE_PREFIX_TOKENS" in workspace
     assert "prefixLines" in workspace
     assert "replaceSelection" in workspace
     assert 'button[data-action="link"]' in workspace
-    assert 'button[data-action="image-url"]' in workspace
-    assert 'button[data-action="image-upload"]' in workspace
-    assert "FormData" in workspace
+    assert 'data-action="image-upload"' not in workspace
+    assert 'data-action="image-url"' not in workspace
+    # Media picker wiring: upload + image/video URL prompts, chips, hidden payload.
+    assert "media-picker" in workspace
+    assert "media-picker" in detail
+    assert 'data-media-action="image-upload"' in detail
+    assert 'data-media-action="image-url"' in detail
+    assert 'data-media-action="video-url"' in detail
     assert "guildId}/uploads" in workspace
+    assert "FormData" in workspace
 
 
 def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listener():

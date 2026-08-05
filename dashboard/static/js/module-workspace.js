@@ -250,15 +250,62 @@
       replaceSelection(markdown, markdown.length);
     };
 
-    const insertImageUrl = async () => {
-      const url = await askText('Image URL', 'https://');
-      if (!url) return;
-      const alt = (await askText('Alt text (optional)')) || '';
-      const markdown = `![${alt}](${url})`;
-      replaceSelection(markdown, markdown.length);
+    Array.from(toolbar.querySelectorAll('button[data-insert]')).forEach((btn) => {
+      btn.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        insertToken(btn.dataset.insert);
+      });
+    });
+    toolbar.querySelector('button[data-action="link"]')?.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      insertLink();
+    });
+  });
+
+  // ── Media picker (action fields) ─────────────────────────
+  root.querySelectorAll('.media-picker').forEach((picker) => {
+    const hidden = picker.querySelector('input[type="hidden"]');
+    const itemsEl = picker.querySelector('.media-picker-items');
+    const fieldId = picker.dataset.fieldId;
+    let media = [];
+    try { media = JSON.parse(hidden.value || '[]'); } catch { media = []; }
+
+    const render = () => {
+      itemsEl.innerHTML = '';
+      media.forEach((item, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'media-chip';
+        chip.dataset.index = String(index);
+        if (item.type === 'image' && item.url) {
+          chip.innerHTML = `<img src="${item.url}" alt="" loading="lazy">`;
+        } else {
+          chip.innerHTML = `<span class="media-chip-icon">${item.type === 'video' ? '▶' : '🖼'}</span>`;
+        }
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'media-chip-remove';
+        removeBtn.setAttribute('aria-label', `Remove ${item.type}`);
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+          media.splice(index, 1);
+          hidden.value = JSON.stringify(media);
+          render();
+        });
+        chip.appendChild(removeBtn);
+        itemsEl.appendChild(chip);
+      });
+      if (media.length) itemsEl.hidden = false; else itemsEl.hidden = true;
     };
 
-    const insertUploadedImage = () => {
+    const addMedia = (type, url) => {
+      if (!url) return;
+      media = media.filter((m) => m.type !== type); // keep one image + one video
+      media.push({type, url});
+      hidden.value = JSON.stringify(media);
+      render();
+    };
+
+    const uploadImage = () => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/png,image/jpeg,image/gif,image/webp';
@@ -273,9 +320,7 @@
             body: formData,
           });
           if (!response?.data?.url) throw new Error(response?.error || 'Upload failed');
-          const alt = (await askText('Alt text (optional)', file.name)) || file.name;
-          const markdown = `![${alt}](${response.data.url})`;
-          replaceSelection(markdown, markdown.length);
+          addMedia('image', response.data.url);
         } catch (error) {
           showToast(error.message || 'Image upload failed', 'error');
         }
@@ -283,23 +328,16 @@
       input.click();
     };
 
-    Array.from(toolbar.querySelectorAll('button[data-insert]')).forEach((btn) => {
-      btn.addEventListener('mousedown', (event) => {
-        event.preventDefault();
-        insertToken(btn.dataset.insert);
-      });
+    picker.querySelector('[data-media-action="image-upload"]')?.addEventListener('click', uploadImage);
+    picker.querySelector('[data-media-action="image-url"]')?.addEventListener('click', async () => {
+      const url = await askText('Image URL', 'https://');
+      addMedia('image', url?.trim());
     });
-    toolbar.querySelector('button[data-action="link"]')?.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      insertLink();
+    picker.querySelector('[data-media-action="video-url"]')?.addEventListener('click', async () => {
+      const url = await askText('Video URL (YouTube, Vimeo, TikTok, or direct MP4)', 'https://');
+      addMedia('video', url?.trim());
     });
-    toolbar.querySelector('button[data-action="image-url"]')?.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      insertImageUrl();
-    });
-    toolbar.querySelector('button[data-action="image-upload"]')?.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      insertUploadedImage();
-    });
+
+    render();
   });
 })();

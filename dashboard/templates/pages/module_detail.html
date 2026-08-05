@@ -77,6 +77,17 @@
               {% elif field.type == 'select' %}<select id="{{ field_id }}" class="form-select" name="{{ field.key }}" {{ 'required' if field.required else '' }}><option value="">{{ field.placeholder or 'Select…' }}</option>{% for option in field.options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}</select>
               {% elif field.type == 'api_select' %}<select id="{{ field_id }}" class="form-select api-select" name="{{ field.key }}" data-api="{{ field.api }}" data-value-key="{{ field.value_key }}" data-label-key="{{ field.label_key }}" data-group-key="{{ field.group_key | default('') }}" data-placeholder="{{ field.placeholder or 'Select…' }}" {{ 'required' if field.required else '' }}><option value="">Loading…</option></select>
               {% elif field.type == 'boolean' %}<label class="checkbox-control"><input id="{{ field_id }}" type="checkbox" name="{{ field.key }}" data-schema-type="boolean" {{ 'checked' if field.default else '' }}><span>{{ field.placeholder or field.label }}</span></label>
+              {% elif field.type == 'media_picker' %}
+              <div class="media-picker" data-field-id="{{ field_id }}">
+                <div class="media-picker-items" aria-live="polite"></div>
+                <div class="media-picker-actions">
+                  <button type="button" class="btn btn-xs" data-media-action="image-upload">{{ icon('upload', 13) }} Upload image</button>
+                  <button type="button" class="btn btn-xs" data-media-action="image-url">{{ icon('image', 13) }} Image URL</button>
+                  <button type="button" class="btn btn-xs" data-media-action="video-url">{{ icon('video', 13) }} Video URL</button>
+                </div>
+                <input type="hidden" name="{{ field.key }}" value="">
+                <p class="form-hint">{{ field.placeholder }}</p>
+              </div>
               {% else %}<input id="{{ field_id }}" class="form-input" type="{{ 'number' if field.type in ['integer','number'] else (field.type or 'text') }}" name="{{ field.key }}" data-schema-type="{{ field.type }}" placeholder="{{ field.placeholder }}" {{ 'required' if field.required else '' }}>{% endif %}
             </div>
           {% endfor %}
@@ -142,7 +153,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/module-workspace.js?v=10"></script>
+<script src="/static/js/module-workspace.js?v=11"></script>
 {% if module_name == 'auto_voice' %}<script src="/static/js/auto-voice-workspace.js?v=2"></script>{% endif %}
 {% if module_name == 'logging' %}<script src="/static/js/logging-workspace.js?v=1"></script>{% endif %}
 {% if module_name == 'moderation' %}<script src="/static/js/moderation-workspace.js?v=8"></script>{% endif %}
