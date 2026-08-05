@@ -8,29 +8,29 @@
     /* ── Base Colors ── */
     --bg-base: #14141a;
     --bg-elevated: #1b1b23;
-    --bg-card: rgba(35, 35, 45, 0.88);
-    --bg-card-hover: rgba(44, 44, 56, 0.92);
+    --bg-card: rgba(35, 35, 45, 0.62);
+    --bg-card-hover: rgba(44, 44, 56, 0.68);
     --bg-card-solid: #23232d;
-    --bg-input: rgba(40, 40, 52, 0.95);
-    --bg-sidebar: rgba(18, 18, 24, 0.94);
-    --bg-surface: rgba(28, 28, 36, 0.92);
-    --bg-overlay: rgba(0, 0, 0, 0.7);
+    --bg-input: rgba(40, 40, 52, 0.70);
+    --bg-sidebar: rgba(18, 18, 24, 0.68);
+    --bg-surface: rgba(28, 28, 36, 0.66);
+    --bg-overlay: rgba(0, 0, 0, 0.6);
 
     /* ── Frosted Glass ── */
-    --glass-tint: rgba(255, 255, 255, 0.05);
-    --glass-tint-strong: rgba(255, 255, 255, 0.09);
-    --glass-border: rgba(255, 255, 255, 0.12);
-    --glass-border-hover: rgba(255, 255, 255, 0.18);
-    --glass-accent-border: rgba(59, 130, 246, 0.3);
+    --glass-tint: rgba(255, 255, 255, 0.04);
+    --glass-tint-strong: rgba(255, 255, 255, 0.07);
+    --glass-border: rgba(255, 255, 255, 0.09);
+    --glass-border-hover: rgba(255, 255, 255, 0.14);
+    --glass-accent-border: rgba(59, 130, 246, 0.22);
     --glass-blur: blur(16px);
     --glass-blur-light: blur(8px);
     --glass-blur-heavy: blur(24px);
 
     /* ── Borders ── */
-    --border-subtle: rgba(255, 255, 255, 0.1);
-    --border-card: rgba(255, 255, 255, 0.13);
-    --border-input: rgba(255, 255, 255, 0.19);
-    --border-hover: rgba(255, 255, 255, 0.26);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-card: rgba(255, 255, 255, 0.10);
+    --border-input: rgba(255, 255, 255, 0.15);
+    --border-hover: rgba(255, 255, 255, 0.2);
 
     /* ── Accent (single blue) ── */
     --accent: #3b82f6;
@@ -149,8 +149,8 @@ body::after {
     position: fixed;
     inset: 0;
     background:
-        radial-gradient(circle at 50% 40%, transparent 0%, rgba(10, 10, 14, 0.45) 100%),
-        linear-gradient(180deg, rgba(10, 10, 14, 0.25) 0%, rgba(10, 10, 14, 0.08) 30%, rgba(10, 10, 14, 0.08) 70%, rgba(10, 10, 14, 0.4) 100%);
+        radial-gradient(circle at 50% 40%, transparent 0%, rgba(10, 10, 14, 0.38) 100%),
+        linear-gradient(180deg, rgba(10, 10, 14, 0.2) 0%, rgba(10, 10, 14, 0.06) 30%, rgba(10, 10, 14, 0.06) 70%, rgba(10, 10, 14, 0.32) 100%);
     pointer-events: none;
     z-index: -1;
 }
@@ -272,7 +272,7 @@ textarea:focus-visible,
     gap: 6px;
     padding: 10px 12px;
     border-top: 1px solid var(--border-subtle);
-    background: rgba(12, 12, 16, 0.94);
+    background: rgba(12, 12, 16, 0.68);
     flex-shrink: 0;
 }
 
