@@ -162,6 +162,75 @@ def test_auto_voice_workspace_registers_live_template_preview():
     assert "rendered.toLowerCase()" in av
 
 
+def test_announcements_workspace_registers_live_discord_preview():
+    """Announcements' post action must have a live Discord preview wired into
+    the module page that mirrors the backend's embed/text rendering decisions."""
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
+    ann = source(JS / "announcements-workspace.js")
+    workspace = source(JS / "module-workspace.js")
+
+    assert "announcements-workspace.js" in detail
+    assert "moduleName !== 'announcements'" in ann
+    assert "action-post_announcement" in ann
+    assert "announcement-preview" in ann
+    assert "discord-preview" in ann
+    # Live wiring: message/title typing, embed toggle, and media picker changes.
+    assert "action-post_announcement-title" in ann
+    assert "action-post_announcement-message" in ann
+    assert "action-post_announcement-as_embed" in ann
+    assert "bark:media-changed" in ann
+    assert "aria-live" in ann
+    # The media picker must notify the preview when chips are added/removed.
+    assert "CustomEvent('bark:media-changed'" in workspace
+    # Backend-mirrored rendering decisions.
+    assert "message.slice(0, 2000)" in ann
+    assert "message.slice(0, 4096)" in ann
+    assert "Watch Video" in ann
+    assert "renderMarkdown" in ann
+    assert "discord-spoiler" in ann
+
+
+def test_discord_markdown_renderer_covers_discord_tokens():
+    """The announcements preview's markdown renderer must escape HTML before
+    formatting and cover Discord's core inline/block tokens."""
+    ann = source(JS / "announcements-workspace.js")
+    start = ann.index("function esc(")
+    end = ann.index("// ── Preview UI", start)
+    renderer = ann[start:end]
+
+    script = f"""
+{renderer}
+const cases = [
+  ['**bold** and *it*', '<strong>bold</strong> and <em>it</em>'],
+  ['__under__ ~~strike~~', '<u>under</u> <s>strike</s>'],
+  ['||spoil||', '<span class="discord-spoiler">spoil</span>'],
+  ['`code`', '<code class="discord-code">code</code>'],
+  ['```js\\nconst x = 1;\\n```', '<pre class="discord-codeblock">js\\nconst x = 1;\\n</pre>'],
+  ['# Head', '<h2 class="discord-h2">Head</h2>'],
+  ['- item', '<span class="discord-li">• item</span>'],
+  ['> quote', '<blockquote class="discord-quote">quote</blockquote>'],
+  ['[link](https://x.dev)', '<a class="discord-link" href="https://x.dev" target="_blank" rel="noopener noreferrer">link</a>'],
+  ['<script>alert(1)</script>', '&lt;script&gt;alert(1)&lt;/script&gt;'],
+];
+for (const [input, expected] of cases) {{
+  const out = renderMarkdown(input, false);
+  if (!out.includes(expected)) throw new Error(`missing ${{expected}} in ${{out}}`);
+}}
+const embedOut = renderMarkdown('# Head\\n- item', true);
+if (embedOut.includes('discord-h2') || embedOut.includes('discord-li')) {{
+  throw new Error('embeds must not render block-level tokens');
+}}
+console.log('OK');
+"""
+    subprocess.run(
+        ["node", "-e", script],
+        check=True,
+        env={**os.environ, "TZ": "America/New_York"},
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_inline_api_renderers_escape_dynamic_attributes_and_refresh_icons():
     guild = source(TEMPLATES / "pages" / "guild.html")
     members = source(TEMPLATES / "pages" / "members.html")

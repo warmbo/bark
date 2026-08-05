@@ -290,6 +290,7 @@
           media.splice(index, 1);
           hidden.value = JSON.stringify(media);
           render();
+          picker.dispatchEvent(new CustomEvent('bark:media-changed', {bubbles: true}));
         });
         chip.appendChild(removeBtn);
         itemsEl.appendChild(chip);
@@ -303,6 +304,7 @@
       media.push({type, url});
       hidden.value = JSON.stringify(media);
       render();
+      picker.dispatchEvent(new CustomEvent('bark:media-changed', {bubbles: true}));
     };
 
     const uploadImage = () => {
