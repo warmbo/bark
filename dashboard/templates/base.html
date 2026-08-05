@@ -20,7 +20,7 @@
     {% set _avatar = '' %}
     {% endif %}
     <!-- Favicon: live bot avatar (falls back to bundled SVG) -->
-    <link rel="icon" type="image/png" href="{{ _avatar or '/static/img/bark-avatar.png' }}">
+    <link rel="icon" type="image/png" href="/static/img/bark-avatar.png">
     <!-- OpenGraph -->
     <meta property="og:site_name" content="Bark">
     <meta property="og:title" content="{% block og_title %}Bark — {{ self.title() }}{% endblock %}">
@@ -49,7 +49,7 @@
         <aside class="sidebar" id="sidebar" aria-label="Main navigation">
             <div class="sidebar-header">
                 <a href="/dashboard" class="sidebar-logo">
-                    {% if _avatar %}<img class="logo-icon" src="{{ _avatar }}" data-fallback-src="/static/img/bark-avatar.png" alt="Bark logo">{% else %}<img class="logo-icon" src="/static/img/bark-avatar.png" data-fallback-src="/static/img/bark-avatar.png" alt="Bark logo">{% endif %}
+                    <img class="logo-icon" src="/static/img/bark-avatar.png" data-fallback-src="/static/img/bark-avatar.png" alt="Bark logo">
                     <span class="logo-text">Bark</span>
                 </a>
                 <span class="sidebar-version">v{{ request.app.state.version }}</span>
