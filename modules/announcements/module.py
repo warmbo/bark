@@ -31,16 +31,25 @@ logger = logging.getLogger("bark.modules.announcements")
 
 
 def _full_width_spacer_url() -> str:
-    """Public URL of an invisible 1×1 spacer that forces Discord to render embeds full width.
+    """Public URL of an invisible wide spacer that forces Discord to render embeds full width.
 
-    Discord renders text-only embeds at a narrow width; any embed with an image or
-    thumbnail is expanded to the full available width. The spacer is a transparent
-    1×1 PNG served from our own static directory so it is always fetchable by Discord.
+    Discord sizes an embed by its widest intrinsic content. A transparent PNG with
+    a 1600px intrinsic width makes Discord expand the embed to the full available
+    width (capped at the channel's max embed width), while the 1px height keeps it
+    invisible. Served from our own static directory so it is always fetchable by
+    Discord.
     """
     from config import config
 
     base = config.dashboard.public_url.rstrip("/")
-    return f"{base}/static/img/spacer.png"
+    return f"{base}/static/img/spacer-wide.png"
+
+
+# Non-breaking spaces render as ordinary (invisible) width in Discord's embed
+# text but are NOT collapsed or stripped the way zero-width characters are.
+# U+200B (zero-width space) is discarded by the current client, which is why the
+# old invisible-field trick stopped working.
+_FULL_WIDTH_PAD = "\u00a0" * 160
 
 
 def _force_full_width(embed: discord.Embed) -> None:
@@ -48,12 +57,24 @@ def _force_full_width(embed: discord.Embed) -> None:
 
     Discord renders text-only embeds in a narrow column. It only expands an embed
     to the full available width when the embed carries media (an image) or when it
-    has fields laid out in a row. The most reliable, network-independent trigger is
-    three invisible inline fields (zero-width spaces): Discord places up to three
-    inline fields per row, and a row of fields stretches across the full width.
+    has fields laid out in a row. Three inline fields of non-breaking spaces
+    survive the client sanitizer (unlike U+200B) while laying out as an invisible
+    field row that stretches across the full width.
     """
     for _ in range(3):
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.add_field(name="\u00a0", value="\u00a0", inline=True)
+
+
+def _pad_footer_full_width(embed: discord.Embed) -> None:
+    """Pad the embed footer with invisible non-breaking spaces.
+
+    An embed whose footer text is wider than the attached image (or the title /
+    description) spans Discord's maximum embed width. This is the most reliable
+    full-width trigger even when a small real image would otherwise shrink the
+    embed to the image's own width.
+    """
+    base_text = embed.footer.text or "Bark"
+    embed.set_footer(text=f"{base_text}{_FULL_WIDTH_PAD}")
 
 
 def _parse_embed_color(raw: str | None) -> discord.Color:
@@ -284,11 +305,15 @@ class AnnouncementsModule(BarkModule):
                         color=_parse_embed_color(embed_color),
                         timestamp=datetime.now(timezone.utc),
                     )
-                    # Discord only expands an embed to full width when it carries an
-                    # image or a row of fields; a text-only embed renders narrow.
-                    # Stack both triggers: an invisible 1×1 image plus three
-                    # zero-width inline fields, so every embed is full width.
+                    # Discord only expands an embed to full width when it carries
+                    # an image wider than the text, or a row of fields. Stack all
+                    # triggers so every embed spans the maximum width Discord
+                    # allows: three non-breaking-space inline fields (they survive
+                    # the sanitizer, unlike U+200B), a footer padded with invisible
+                    # width (wins even against a small image), and a wide invisible
+                    # image when no real image is attached.
                     _force_full_width(emb)
+                    _pad_footer_full_width(emb)
                     if image_url:
                         emb.set_image(url=image_url)
                     else:
@@ -298,6 +323,10 @@ class AnnouncementsModule(BarkModule):
                     if image_url:
                         emb = discord.Embed(color=discord.Color.blurple())
                         emb.set_image(url=image_url)
+                        # A bare image embed hugs the image's width; pad the
+                        # footer so even image-only posts span full width.
+                        _force_full_width(emb)
+                        _pad_footer_full_width(emb)
                         await channel.send(content=message[:2000], embed=emb)
                     else:
                         await channel.send(content=message[:2000])
@@ -361,8 +390,10 @@ class AnnouncementsModule(BarkModule):
                         color=_parse_embed_color(color),
                         timestamp=datetime.now(timezone.utc),
                     )
-                    # Full-width embeds: stack the row-of-fields trigger plus an image.
+                    # Full-width embeds: stack the row-of-fields trigger, a
+                    # padded footer, and an image (real or wide invisible spacer).
                     _force_full_width(announcement_embed)
+                    _pad_footer_full_width(announcement_embed)
                     if image_url:
                         announcement_embed.set_image(url=image_url)
                     else:
@@ -377,6 +408,9 @@ class AnnouncementsModule(BarkModule):
                     if image_url:
                         img_emb = discord.Embed(color=discord.Color.blurple())
                         img_emb.set_image(url=image_url)
+                        # Pad the footer so the image embed spans full width too.
+                        _force_full_width(img_emb)
+                        _pad_footer_full_width(img_emb)
                         await channel.send(content=message[:2000], embed=img_emb)
                     else:
                         await channel.send(content=message[:2000])

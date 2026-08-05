@@ -221,6 +221,20 @@ def test_parse_embed_color_accepts_hex_and_falls_back_to_blurple():
     assert _parse_embed_color("#12345") == discord.Color.blurple()
 
 
+def test_full_width_spacer_has_large_intrinsic_width():
+    """The invisible spacer must be wider than any small image so Discord
+    expands the embed to its maximum width (the 1px height keeps it hidden)."""
+    import struct
+    from pathlib import Path
+
+    spacer = Path(__file__).resolve().parents[2] / "dashboard" / "static" / "img" / "spacer-wide.png"
+    data = spacer.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    width, height = struct.unpack(">II", data[16:24])
+    assert width >= 1600, "spacer intrinsic width must exceed Discord's max embed width"
+    assert height == 1, "spacer must stay invisible (1px tall)"
+
+
 @pytest.mark.asyncio
 async def test_announce_slash_command_uses_custom_embed_color():
     module = AnnouncementsModule(MagicMock())
@@ -408,7 +422,7 @@ async def test_post_announcement_invalid_color_falls_back_to_blurple(db, monkeyp
 
 @pytest.mark.asyncio
 async def test_announce_embed_without_image_gets_full_width_spacer():
-    """Text-only embeds attach an invisible spacer thumbnail so Discord renders them full width."""
+    """Text-only embeds attach an invisible wide spacer so Discord renders them full width."""
 
     module = AnnouncementsModule(MagicMock())
     command = module._make_announce_command()
@@ -432,16 +446,22 @@ async def test_announce_embed_without_image_gets_full_width_spacer():
     sent_embed = channel.send.await_args.kwargs["embed"]
     assert isinstance(sent_embed, discord.Embed)
     assert sent_embed.image.url is not None
-    assert sent_embed.image.url.endswith("/static/img/spacer.png")
-    # Three invisible zero-width inline fields force the full-width row layout.
+    assert sent_embed.image.url.endswith("/static/img/spacer-wide.png")
+    # Three inline NBSP fields survive Discord's sanitizer (unlike U+200B) and
+    # force the full-width row layout.
     assert len(sent_embed.fields) == 3
     assert all(f.inline for f in sent_embed.fields)
-    assert all(f.name == "\u200b" and f.value == "\u200b" for f in sent_embed.fields)
+    assert all(f.name == "\u00a0" and f.value == "\u00a0" for f in sent_embed.fields)
+    # The footer is padded with invisible width so the embed can never hug a
+    # small image or short text.
+    assert sent_embed.footer.text is not None
+    assert len(sent_embed.footer.text) > 100
+    assert sent_embed.footer.text.endswith("\u00a0")
 
 
 @pytest.mark.asyncio
 async def test_announce_embed_with_image_does_not_use_spacer():
-    """Real images keep the embed image; the row-of-fields full-width trigger remains."""
+    """Real images keep the embed image; the full-width triggers remain."""
     module = AnnouncementsModule(MagicMock())
     command = module._make_announce_command()
     interaction = SimpleNamespace(
