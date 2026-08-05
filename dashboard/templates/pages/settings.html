@@ -118,7 +118,7 @@
         </div>
     </div>
 
-    {% if request.session.get('role') == 'owner' %}
+    {% if request.session.get('user', {}).get('id') in config.oauth2.owner_discord_ids %}
     <div class="content-card" id="instance-invites">
         <div class="card-header">
             <div>

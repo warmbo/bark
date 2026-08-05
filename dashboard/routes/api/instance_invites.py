@@ -21,10 +21,9 @@ router = APIRouter(tags=["instance-invites"])
 
 
 def _is_owner(request: Request) -> bool:
+    """Resolve ownership from the configured Discord IDs, not a stale session role."""
     user = request.session.get("user") or {}
-    return (
-        request.session.get("role") == "owner" and user.get("id") in config.oauth2.owner_discord_ids
-    )
+    return user.get("id") in config.oauth2.owner_discord_ids
 
 
 def _serialize_invite(invite) -> dict:
