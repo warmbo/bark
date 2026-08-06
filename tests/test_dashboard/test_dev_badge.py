@@ -140,6 +140,20 @@ async def test_middleware_skips_non_html_responses(app, monkeypatch, client):
 
 
 @pytest.mark.asyncio
+async def test_middleware_injects_into_bare_html_response(app, monkeypatch, client):
+    """Bare HTML responses without a </body> tag (e.g. 'Guild not found')
+    still get the overlay appended — the subdomain guarantee covers them."""
+    import config
+
+    monkeypatch.setattr(config.config.instance, "dev_badge", True)
+    app.app.state.bot.get_guild.return_value = None  # short-circuit to bare 404 HTML
+    async with client:
+        response = await client.get("/guild/999999/modules/trivia")
+    assert response.status_code == 404
+    assert 'class="dev-badge-overlay"' in response.text
+
+
+@pytest.mark.asyncio
 async def test_middleware_does_not_double_inject(app, monkeypatch, client):
     """A response that already contains the overlay is left untouched."""
     import config

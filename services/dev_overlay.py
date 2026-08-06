@@ -73,9 +73,14 @@ async def dev_overlay_middleware(request: Request, call_next):
 
     # Inject just before </body> so the overlay sits above the page content
     # (fixed positioning does not depend on DOM placement). Idempotent: skip
-    # responses that already carry the overlay.
-    if body and b"dev-badge-overlay" not in body and b"</body>" in body:
-        new_body = body.replace(b"</body>", _MARKUP_BYTES + b"</body>", 1)
+    # responses that already carry the overlay. Bare HTML responses (e.g.
+    # "Module not found" without a <body> tag) get the markup appended —
+    # a fixed-position overlay renders regardless of document structure.
+    if body and b"dev-badge-overlay" not in body:
+        if b"</body>" in body:
+            new_body = body.replace(b"</body>", _MARKUP_BYTES + b"</body>", 1)
+        else:
+            new_body = body + _MARKUP_BYTES
     else:
         new_body = body
 
