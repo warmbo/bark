@@ -11,39 +11,18 @@
     </div>
 
     <div class="settings-grid">
-        <!-- Main column: General, Dashboard Config, Bot Customization -->
+        <!-- Main column: Dashboard Config, Bot Customization -->
         <div class="settings-main">
-            <!-- General -->
-            <div class="content-card">
-                <div class="card-header">
-                    <h2 class="card-title">{{ icon("sliders", 16) }} General</h2>
-                </div>
-                <form class="settings-form" id="general-settings-form">
-                    <div class="form-grid form-grid-2">
-                        <div class="form-group">
-                            <label class="form-label" for="general-prefix">Command Prefix</label>
-                            <input type="text" class="form-input field-width-compact" id="general-prefix" name="prefix" value="" placeholder="!">
-                            <span class="form-hint">Slash command prefix for text commands. Defaults to !.</span>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Server ID</label>
-                            <code class="code-sm">{{ guild.id }}</code>
-                            <span class="form-hint">Discord server identifier (read-only).</span>
-                        </div>
-                    </div>
-                    <div class="form-actions form-actions-static">
-                        <button type="button" class="btn" id="general-settings-discard" disabled>Cancel</button>
-                        <button type="submit" class="btn btn-primary" disabled>{{ icon("save", 16) }} Loading settings...</button>
-                    </div>
-                </form>
-            </div>
-
             <!-- Dashboard Configuration -->
             <div class="content-card">
                 <div class="card-header">
                     <div><h2 class="card-title">{{ icon("radio", 16) }} Dashboard Configuration</h2><p class="card-description">Connection and identity information.</p></div>
                 </div>
                 <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Server ID</span>
+                        <span class="info-value"><code class="code-sm">{{ guild.id }}</code></span>
+                    </div>
                     <div class="info-row">
                         <span class="info-label">Authentication</span>
                         <span class="info-value">
@@ -199,66 +178,6 @@
 {% block scripts %}
 <script>
     const GUILD_ID = '{{ guild.id }}';
-    const generalForm = document.getElementById('general-settings-form');
-    const generalDiscard = document.getElementById('general-settings-discard');
-    let generalBaseline = null;
-
-    function setGeneralDirty(dirty) {
-        if (!generalForm || generalForm.dataset.ready !== 'true') return;
-        generalForm.dataset.dirty = String(dirty);
-        generalForm.querySelector('.btn-primary').disabled = !dirty;
-        generalDiscard.disabled = !dirty;
-    }
-
-    async function loadGeneralSettings() {
-        if (!generalForm) return;
-        const btn = generalForm.querySelector('.btn-primary');
-        try {
-            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings`, {cache: 'no-cache'});
-            const settings = result?.data?.settings || {};
-            if (generalForm.elements.prefix) generalForm.elements.prefix.value = settings.prefix ?? '!';
-            generalForm.dataset.ready = 'true';
-            generalBaseline = Object.fromEntries(new FormData(generalForm).entries());
-            btn.disabled = true;
-            generalDiscard.disabled = true;
-            btn.innerHTML = '{{ icon("save", 16) }} Save';
-        } catch (error) {
-            btn.disabled = true;
-            btn.textContent = 'Settings unavailable';
-            showToast(error.message || 'Could not load general settings', 'error');
-        }
-    }
-
-    generalForm?.addEventListener('input', () => setGeneralDirty(true));
-    generalForm?.addEventListener('change', () => setGeneralDirty(true));
-    generalDiscard?.addEventListener('click', () => {
-        if (!generalBaseline) return;
-        for (const [name, value] of Object.entries(generalBaseline)) generalForm.elements[name].value = value;
-        setGeneralDirty(false);
-    });
-
-    generalForm?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (e.target.dataset.ready !== 'true') return;
-        const btn = e.target.querySelector('.btn-primary');
-        btn.disabled = true; btn.innerHTML = 'Saving...';
-        const data = Object.fromEntries(new FormData(e.target).entries());
-        try {
-            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/general`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-            if (result.success === false) throw new Error(result.error || 'Save failed');
-            generalBaseline = Object.fromEntries(new FormData(e.target).entries());
-            setGeneralDirty(false);
-            showToast('Settings saved', 'success');
-        } catch (err) {
-            showToast(err.message || 'Unable to save settings', 'error');
-            btn.disabled = false;
-        }
-        btn.innerHTML = '{{ icon("save", 16) }} Save';
-    });
 
     async function loadSettingsHealth() {
         const statusEl = document.getElementById('settings-health-status');
@@ -281,7 +200,6 @@
     }
 
     loadSettingsHealth();
-    loadGeneralSettings();
 
     // ── Plugin Manager ─────────────────────────────────
 

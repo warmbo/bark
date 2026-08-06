@@ -291,3 +291,77 @@ async def test_reload_plugin_reloads_code(manager):
     assert await manager.reload_module("ping_plugin") is True
     assert manager.get_module("ping_plugin").version == "3.1.4"
     assert manager.get_module("ping_plugin").enabled is True
+
+
+# ── /bark command namespace ──────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_module_commands_nest_under_single_bark_group(tmp_path):
+    """All module slash commands register as subcommands of one /bark group."""
+    import discord.app_commands as ac
+    from discord.app_commands import CommandTree
+
+    from services.bark_context import BarkContext
+    from services.module_manager import ModuleManager
+
+    bot = FakeBot()
+    from unittest.mock import MagicMock
+
+    bot.http = MagicMock()
+    bot._connection = MagicMock()
+    bot._connection._command_tree = None
+    bot.tree = CommandTree(bot)  # real tree so nesting is observable
+
+    class FakeModule:
+        name = "fake"
+        version = "1.0.0"
+        enabled = False
+
+        def __init__(self, ctx):
+            self.ctx = ctx
+
+        async def enable(self):
+            return True
+
+        async def disable(self):
+            return True
+
+        def get_commands(self):
+            from modules.base import CommandRegistration
+
+            return [CommandRegistration(name="roll", description="Roll dice", slash=True)]
+
+        def get_events(self):
+            return []
+
+        def _make_roll_command(self):
+            @ac.command(name="roll", description="Roll dice")
+            async def roll(interaction: discord.Interaction):
+                return None
+
+            return roll
+
+        def get_dashboard_pages(self):
+            return []
+
+        def get_actions(self):
+            return []
+
+    import discord
+
+    manager = ModuleManager(bot)
+    manager._modules["fake"] = FakeModule(BarkContext(bot, bot._event_bus))
+    assert await manager.enable_module("fake") is True
+
+    bark = manager._get_bark_group()
+    assert bark.name == "bark"
+    assert [c.name for c in bark.commands] == ["roll"]
+    # The group itself is on the tree (global registration), not the subcommand.
+    assert "bark" in bot.tree._global_commands
+    assert "roll" not in bot.tree._global_commands
+
+    # Disabling the module removes its subcommand but keeps the bark group.
+    assert await manager.disable_module("fake") is True
+    assert [c.name for c in bark.commands] == []
+    assert "bark" in bot.tree._global_commands

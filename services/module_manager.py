@@ -17,6 +17,9 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
+if TYPE_CHECKING:
+    from discord.app_commands import Group
+
 from modules.base import BarkModule, PageRegistration
 from services.bark_context import BarkContext
 from services.event_bus import EventBus
@@ -50,6 +53,36 @@ class ModuleManager:
         self._guild_states: dict[tuple[int, str], bool] = {}
         # Runtime-installed single-file plugins: module name -> file path.
         self._plugin_files: dict[str, Path] = {}
+        # The single /bark group that hosts every module command. Created
+        # lazily on first module enable so all commands share one namespace
+        # (e.g. /bark trivia start instead of /trivia start).
+        self._bark_group: Group | None = None
+
+    # ── Command namespace ─────────────────────────────
+
+    def _get_bark_group(self):
+        """Return the shared /bark group, registering it on the tree once."""
+        if self._bark_group is not None:
+            return self._bark_group
+        from discord.app_commands import Group
+
+        group = Group(
+            name="bark",
+            description="Bark commands — every module's commands live under this one.",
+        )
+        self._bark_group = group
+        if getattr(self.bot, "tree", None) is not None:
+            self.bot.tree.add_command(group, guild=self._command_guild())
+        return group
+
+    def _unregister_command(self, command_name: str) -> None:
+        """Remove a module command from the /bark group (if present)."""
+        if self._bark_group is None:
+            return
+        try:
+            self._bark_group.remove_command(command_name)
+        except Exception:
+            logger.exception("Failed to remove command '%s' from bark group", command_name)
 
     # ── Discovery ─────────────────────────────────────
 
@@ -371,9 +404,7 @@ class ModuleManager:
                         if hasattr(app_cmd, "add_check"):
                             app_cmd.add_check(self._command_enabled_check(name))
                         if getattr(self.bot, "tree", None) is not None:
-                            self.bot.tree.add_command(
-                                app_cmd, guild=self._command_guild()
-                            )
+                            self._get_bark_group().add_command(app_cmd)
                         self._registered_commands[name].add(cmd.name)
 
             # Centralized event subscription via EventBus
@@ -406,9 +437,7 @@ class ModuleManager:
             for command_name in self._registered_commands.get(name, set()):
                 if getattr(self.bot, "tree", None) is not None:
                     try:
-                        self.bot.tree.remove_command(
-                            command_name, guild=self._command_guild()
-                        )
+                        self._unregister_command(command_name)
                     except Exception:
                         logger.exception(
                             "Failed to roll back command '%s' for module '%s'",
@@ -437,9 +466,7 @@ class ModuleManager:
                 for cmd_name in self._registered_commands[name]:
                     if hasattr(self.bot, "tree"):
                         try:
-                            self.bot.tree.remove_command(
-                                cmd_name, guild=self._command_guild()
-                            )
+                            self._unregister_command(cmd_name)
                         except Exception:
                             pass
                 self._registered_commands[name].clear()
