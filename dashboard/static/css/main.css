@@ -2074,6 +2074,27 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     font-size: 14px;
     border-bottom: 1px solid var(--glass-border);
 }
+
+/* Settings: fixed label column so values line up cleanly. */
+.module-info-body .info-row { align-items: flex-start; justify-content: flex-start; gap: 12px; }
+.module-info-body .info-label { min-width: 150px; flex-shrink: 0; padding-top: 1px; }
+.module-info-body .info-value { text-align: left; max-width: none; overflow-wrap: anywhere; }
+
+/* Plugins subsection inside the Module Configuration card. */
+.plugins-manager {
+    border-top: 1px solid var(--glass-border);
+    margin-top: 10px;
+    padding: 14px 16px 6px;
+}
+.plugins-manager-header { margin-bottom: 10px; }
+.plugins-upload-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
 .info-row:last-child { border-bottom: none; }
 
 .info-label { color: var(--text-tertiary); font-size: 13px; font-weight: 500; min-width: 100px; }
@@ -2241,18 +2262,21 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 .settings-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
     gap: 16px;
     margin-bottom: 16px;
+    align-items: start;
 }
 
-.settings-right {
+.settings-main,
+.settings-side {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-width: 0;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
     .settings-grid { grid-template-columns: 1fr; }
 }
 

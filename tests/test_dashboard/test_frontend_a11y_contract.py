@@ -77,7 +77,16 @@ def test_literal_form_controls_have_programmatic_labels():
 def test_rendered_page_literal_ids_are_unique_and_aria_references_resolve():
     base = source(TEMPLATES / "base.html")
     for page in PAGES:
-        html = base + "\n" + source(page)
+        page_source = source(page)
+        html = base + "\n" + page_source
+        # Resolve {% include "components/x.html" %} so ids/for-references that
+        # live in partials (e.g. bot customization) are checked with the page.
+        for included in re.findall(
+            r'{%\s*include\s+["\']([^"\']+)["\']\s*%}', page_source
+        ):
+            partial = TEMPLATES / included
+            if partial.is_file():
+                html += "\n" + source(partial)
         if page.name == "module_detail.html":
             html += "\n" + "\n".join(
                 source(path) for path in (TEMPLATES / "module_tabs").glob("*.html")

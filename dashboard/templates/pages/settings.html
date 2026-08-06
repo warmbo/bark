@@ -11,77 +11,9 @@
     </div>
 
     <div class="settings-grid">
-        <!-- Module Configuration -->
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">{{ icon("puzzle", 16) }} Module Configuration</h2>
-            </div>
-            <div class="module-nav-list" id="module-nav-list">
-                {% if request and request.state and request.state.bot is defined %}
-                {% set _mods = request.state.bot.modules.get_all_modules() %}
-                {% set _plugin_names = request.state.bot.modules.plugin_names() %}
-                {% if _mods %}
-                    {% for mod_name, mod in _mods.items() %}
-                    <a href="/guild/{{ guild.id }}/modules/{{ mod_name }}" class="module-nav-item">
-                        <div class="module-nav-icon">{{ icon("puzzle", 20) }}</div>
-                        <div class="module-nav-body">
-                            <span class="module-nav-name">{{ mod_name | replace('_', ' ') | title }}{% if mod_name in _plugin_names %} <span class="badge badge-muted">plugin</span>{% endif %}</span>
-                            <span class="module-nav-desc">{{ mod.description or 'Configure this module' }}</span>
-                        </div>
-                        <span class="module-nav-status {{ 'enabled' if mod.enabled else 'disabled' }}">
-                            {{ 'Enabled' if mod.enabled else 'Disabled' }}
-                        </span>
-                        <span class="module-nav-arrow">{{ icon("chevron-right", 16) }}</span>
-                    </a>
-                    {% endfor %}
-                {% endif %}
-                {% endif %}
-            </div>
-
-            {% if not config.oauth2.owner_discord_ids or request.session.get('user', {}).get('id') in config.oauth2.owner_discord_ids %}
-            <div class="plugins-manager" id="plugins-manager">
-                <div class="plugins-manager-header">
-                    <h3 class="card-subtitle">{{ icon("package-plus", 16) }} Plugins</h3>
-                    <p class="form-hint">Extra single-file modules. Upload a <code>.py</code> file to add functionality; removing one unloads it immediately.</p>
-                </div>
-                <div class="plugins-upload-row">
-                    <input type="file" id="plugin-file-input" name="plugin_file" accept=".py" hidden>
-                    <label class="btn btn-sm" for="plugin-file-input">{{ icon("upload", 14) }} Choose .py file</label>
-                    <span class="form-hint" id="plugin-file-name">No file selected</span>
-                    <button type="button" class="btn btn-primary btn-sm" id="plugin-install-btn" disabled>{{ icon("package-plus", 14) }} Install</button>
-                </div>
-                <div class="workspace-data-card" id="plugins-list" aria-live="polite"></div>
-            </div>
-            {% endif %}
-            <div class="config-health" id="settings-health">
-                <span class="config-health-label">{{ icon("activity", 14) }} Config health</span>
-                <span class="config-health-status" id="settings-health-status">Loading...</span>
-                <div class="config-health-issues mt-1" id="settings-health-issues"></div>
-            </div>
-        </div>
-
-        <!-- Backup & Restore -->
-        <div class="content-card">
-            <div class="card-header">
-                <div><h2 class="card-title">{{ icon("archive", 16) }} Backup & Restore</h2><p class="card-description">Export every module's settings and stats as one editable JSON file, or restore from one.</p></div>
-            </div>
-            <div class="config-body">
-                <div class="plugins-upload-row">
-                    <button type="button" class="btn btn-sm" id="backup-export-btn">{{ icon("download", 14) }} Export backup (.json)</button>
-                    <span class="form-hint">Edit values in the file with any text editor, then re-import to fix settings or restore data.</span>
-                </div>
-                <div class="plugins-upload-row">
-                    <input type="file" id="backup-file-input" name="backup_file" accept=".json,application/json" hidden>
-                    <label class="btn btn-sm" for="backup-file-input">{{ icon("upload", 14) }} Choose backup file</label>
-                    <span class="form-hint" id="backup-file-name">No file selected</span>
-                    <button type="button" class="btn btn-primary btn-sm" id="backup-import-btn" disabled>{{ icon("package-plus", 14) }} Import</button>
-                </div>
-                <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
-            </div>
-        </div>
-
-        <!-- Dashboard Configuration + General Settings -->
-        <div class="settings-right">
+        <!-- Main column: General, Dashboard Config, Bot Customization -->
+        <div class="settings-main">
+            <!-- General -->
             <div class="content-card">
                 <div class="card-header">
                     <h2 class="card-title">{{ icon("sliders", 16) }} General</h2>
@@ -106,6 +38,7 @@
                 </form>
             </div>
 
+            <!-- Dashboard Configuration -->
             <div class="content-card">
                 <div class="card-header">
                     <div><h2 class="card-title">{{ icon("radio", 16) }} Dashboard Configuration</h2><p class="card-description">Connection and identity information.</p></div>
@@ -152,6 +85,79 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Bot Customization -->
+            {% include "components/bot_customization.html" %}
+        </div>
+
+        <!-- Side column: Module Configuration + Plugins, then Backup & Restore -->
+        <div class="settings-side">
+            <div class="content-card">
+                <div class="card-header">
+                    <h2 class="card-title">{{ icon("puzzle", 16) }} Module Configuration</h2>
+                </div>
+                <div class="module-nav-list" id="module-nav-list">
+                    {% if request and request.state and request.state.bot is defined %}
+                    {% set _mods = request.state.bot.modules.get_all_modules() %}
+                    {% set _plugin_names = request.state.bot.modules.plugin_names() %}
+                    {% if _mods %}
+                        {% for mod_name, mod in _mods.items() %}
+                        <a href="/guild/{{ guild.id }}/modules/{{ mod_name }}" class="module-nav-item">
+                            <div class="module-nav-icon">{{ icon("puzzle", 20) }}</div>
+                            <div class="module-nav-body">
+                                <span class="module-nav-name">{{ mod_name | replace('_', ' ') | title }}{% if mod_name in _plugin_names %} <span class="badge badge-muted">plugin</span>{% endif %}</span>
+                                <span class="module-nav-desc">{{ mod.description or 'Configure this module' }}</span>
+                            </div>
+                            <span class="module-nav-status {{ 'enabled' if mod.enabled else 'disabled' }}">{{ 'Enabled' if mod.enabled else 'Disabled' }}</span>
+                            <span class="module-nav-arrow">{{ icon("chevron-right", 16) }}</span>
+                        </a>
+                        {% endfor %}
+                    {% endif %}
+                    {% endif %}
+                </div>
+
+                {% if not config.oauth2.owner_discord_ids or request.session.get('user', {}).get('id') in config.oauth2.owner_discord_ids %}
+                <div class="plugins-manager" id="plugins-manager">
+                    <div class="plugins-manager-header">
+                        <h3 class="card-subtitle">{{ icon("package-plus", 16) }} Plugins</h3>
+                        <p class="form-hint">Extra single-file modules. Upload a <code>.py</code> file to add functionality; removing one unloads it immediately.</p>
+                    </div>
+                    <div class="plugins-upload-row">
+                        <input type="file" id="plugin-file-input" name="plugin_file" accept=".py" hidden>
+                        <label class="btn btn-sm" for="plugin-file-input">{{ icon("upload", 14) }} Choose .py file</label>
+                        <span class="form-hint" id="plugin-file-name">No file selected</span>
+                        <button type="button" class="btn btn-primary btn-sm" id="plugin-install-btn" disabled>{{ icon("package-plus", 14) }} Install</button>
+                    </div>
+                    <div class="workspace-data-card" id="plugins-list" aria-live="polite"></div>
+                </div>
+                {% endif %}
+
+                <div class="config-health" id="settings-health">
+                    <span class="config-health-label">{{ icon("activity", 14) }} Config health</span>
+                    <span class="config-health-status" id="settings-health-status">Loading...</span>
+                    <div class="config-health-issues mt-1" id="settings-health-issues"></div>
+                </div>
+            </div>
+
+            <!-- Backup & Restore -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("archive", 16) }} Backup & Restore</h2><p class="card-description">Export every module's settings and stats as one editable JSON file, or restore from one.</p></div>
+                </div>
+                <div class="config-body">
+                    <div class="plugins-upload-row">
+                        <button type="button" class="btn btn-sm" id="backup-export-btn">{{ icon("download", 14) }} Export backup (.json)</button>
+                        <span class="form-hint">Edit values in the file with any text editor, then re-import to fix settings or restore data.</span>
+                    </div>
+                    <div class="plugins-upload-row">
+                        <input type="file" id="backup-file-input" name="backup_file" accept=".json,application/json" hidden>
+                        <label class="btn btn-sm" for="backup-file-input">{{ icon("upload", 14) }} Choose backup file</label>
+                        <span class="form-hint" id="backup-file-name">No file selected</span>
+                        <button type="button" class="btn btn-primary btn-sm" id="backup-import-btn" disabled>{{ icon("package-plus", 14) }} Import</button>
+                    </div>
+                    <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -187,91 +193,6 @@
     </div>
     {% endif %}
 
-    <!-- Bot Customization -->
-    <div class="content-card bot-customization-card">
-        <div class="card-header">
-            <div><h2 class="card-title">{{ icon("palette", 16) }} Bot Customization</h2><p class="card-description">Change the bot's name, avatar, banner, and Discord presence.</p></div>
-        </div>
-        <div class="bot-customization-body">
-            <div class="bot-custom-sidebar">
-                <!-- Avatar preview -->
-                <div class="avatar-preview-section" id="bot-avatar-section">
-                    <div class="avatar-preview-frame">
-                        <img id="bot-avatar-preview" src="" alt="Bot avatar" class="avatar-preview-img">
-                        <div class="avatar-preview-fallback" id="bot-avatar-fallback" style="display:none">
-                            <span class="avatar-placeholder-icon">{{ icon("bot", 32) }}</span>
-                        </div>
-                    </div>
-                    <div class="avatar-upload-controls">
-                        <strong id="bot-avatar-name">Loading...</strong>
-                        <div class="form-actions form-actions-static">
-                            <input type="file" id="avatar-upload" name="avatar" accept="image/png,image/jpeg,image/gif" hidden>
-                            <label class="btn btn-sm" for="avatar-upload">{{ icon("upload", 14) }} Upload avatar</label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Banner preview + upload -->
-                <div class="banner-section" id="bot-banner-section">
-                    <div class="banner-preview-wrap">
-                        <img id="bot-banner-preview" src="" alt="Bot banner" class="banner-preview-img" style="display:none">
-                        <div class="banner-missing" id="banner-missing" style="display:none">
-                            <span class="text-tertiary">{{ icon("image", 20) }} No banner set</span>
-                        </div>
-                    </div>
-                    <div class="form-actions form-actions-static">
-                        <label class="btn btn-sm" for="banner-upload">{{ icon("upload", 14) }} Upload banner</label>
-                        <input type="file" id="banner-upload" name="banner" accept="image/png,image/jpeg,image/gif" hidden>
-                    </div>
-                    <span class="form-hint" id="banner-status" role="status" aria-live="polite">Requires Discord Nitro on the bot owner's account.</span>
-                </div>
-            </div>
-
-            <div class="bot-custom-main">
-                <!-- Bot name -->
-                <form id="bot-name-form" class="module-config-form">
-                    <fieldset class="config-subsection">
-                        <legend class="config-subsection-title">Bot Name</legend>
-                        <p class="config-subsection-desc">Change the bot's display name (rate-limited to 2 changes per hour by Discord).</p>
-                        <div class="form-group">
-                            <label class="form-label" for="bot-name-input">Display name</label>
-                            <div class="input-row">
-                                <input class="form-input" id="bot-name-input" name="name" type="text" maxlength="32" placeholder="Bark">
-                                <button type="submit" class="btn btn-primary btn-sm">{{ icon("save", 14) }} Save</button>
-                            </div>
-                        </div>
-                    </fieldset>
-                </form>
-
-                <!-- Rich presence -->
-                <form id="bot-presence-form" class="module-config-form">
-                    <fieldset class="config-subsection">
-                        <legend class="config-subsection-title">Rich Presence</legend>
-                        <p class="config-subsection-desc">Controls what the bot is "playing", "watching", etc.</p>
-                        <div class="form-grid form-grid-2">
-                            <div class="form-group">
-                                <label class="form-label" for="bot-activity-type">Activity type</label>
-                                <select class="form-select" id="bot-activity-type" name="activity_type">
-                                    <option value="playing">Playing</option>
-                                    <option value="streaming">Streaming</option>
-                                    <option value="listening">Listening to</option>
-                                    <option value="watching">Watching</option>
-                                    <option value="competing">Competing in</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="bot-activity-name">Activity name</label>
-                                <input class="form-input" id="bot-activity-name" name="activity_name" type="text" placeholder="with the dashboard" maxlength="128">
-                            </div>
-                        </div>
-                        <div class="form-actions form-actions-static">
-                            <button type="submit" class="btn btn-primary" id="bot-presence-save">{{ icon("save", 16) }} Update presence</button>
-                        </div>
-                    </fieldset>
-                </form>
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
