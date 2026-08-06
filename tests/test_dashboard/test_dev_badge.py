@@ -2,10 +2,28 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+ROOT = Path(__file__).resolve().parents[2]
+PAGES = ROOT / "dashboard" / "templates" / "pages"
+
+
+def test_every_page_template_carries_the_dev_badge():
+    """Every page must either extend base.html (which includes the badge) or
+    include components/dev_badge.html directly — no page can bypass it."""
+    offenders = []
+    for path in sorted(PAGES.glob("*.html")):
+        src = path.read_text(encoding="utf-8")
+        if 'extends "base.html"' in src:
+            continue
+        if "components/dev_badge.html" in src:
+            continue
+        offenders.append(path.name)
+    assert offenders == [], f"pages missing the dev-badge include: {offenders}"
 
 
 @pytest.fixture
