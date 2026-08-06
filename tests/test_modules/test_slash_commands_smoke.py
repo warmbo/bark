@@ -353,3 +353,14 @@ async def test_every_bark_slash_command_responds(tree):
 
     assert not failures, "failing commands:\n" + "\n".join(failures)
     assert len(tested) >= 20, f"expected a full command tree, got {len(tested)}: {tested}"
+    for required in (
+        "/bark help",
+        "/bark serverinfo",
+        "/bark fact",
+        "/bark poll",
+        "/bark dice_roller roll",
+        "/bark trivia start",
+        "/bark moderation warn",
+        "/bark reputation leaderboard",
+    ):
+        assert required in tested, f"missing command from tree: {required} in {tested}"
