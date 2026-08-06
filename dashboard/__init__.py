@@ -169,6 +169,11 @@ def create_app(bot: BarkBot) -> DashboardApp:
         if bot and bot.user and bot.user.display_avatar:
             avatar_url = bot.user.display_avatar.url
 
+        from dashboard.routes.auth import AUTH_ERROR_MESSAGES
+
+        auth_error_code = request.query_params.get("auth_error", "")
+        auth_error = AUTH_ERROR_MESSAGES.get(auth_error_code, "")
+
         tmpl = request.app.state.templates
         return tmpl.TemplateResponse(
             request,
@@ -176,6 +181,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
             {
                 "config": config,
                 "avatar_url": avatar_url,
+                "auth_error": auth_error,
             },
         )
 

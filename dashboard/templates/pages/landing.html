@@ -275,6 +275,27 @@
             margin: 0 8px;
         }
 
+        /* ── Auth error banner (from ?auth_error=, e.g. invite_required) ── */
+        .auth-error-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin: 0 0 24px;
+            padding: 12px 14px;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 8px;
+            color: #fca5a5;
+            font-size: 14px;
+            line-height: 1.5;
+            text-align: left;
+        }
+
+        .auth-error-banner .auth-error-icon {
+            flex-shrink: 0;
+            line-height: 1.4;
+        }
+
         /* ── Mobile ── */
         @media (max-width: 480px) {
             .landing {
@@ -292,6 +313,12 @@
 <body>
     <canvas id="shader-canvas"></canvas>
     <div class="landing">
+        {% if auth_error %}
+        <div class="auth-error-banner" role="alert">
+            <span class="auth-error-icon">⚠️</span>
+            <span>{{ auth_error }}</span>
+        </div>
+        {% endif %}
         {% if avatar_url %}
         <img class="landing-avatar" src="{{ avatar_url }}" data-fallback-src="/static/img/bark-avatar.png" alt="Bark avatar" width="96" height="96">
         {% else %}
