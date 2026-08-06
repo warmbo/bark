@@ -74,6 +74,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     # Templates
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    templates.env.globals.setdefault("config", config)
 
     # Make templates available on app state
     app.state.templates = templates
