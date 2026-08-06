@@ -65,7 +65,7 @@
       <article class="content-card action-card" id="action-{{ action.id }}">
         <div class="card-header"><div><h2 class="card-title">{{ icon('zap', 16) }} {{ action.label }}</h2>{% if action.description %}<p class="card-description">{{ action.description }}</p>{% endif %}</div>{% if action.destructive %}{{ status_badge('Destructive', 'danger') }}{% endif %}</div>
         <div class="config-body">
-          <form class="module-action-form" data-action="{{ action.id }}" data-endpoint="{{ action.endpoint }}" data-label="{{ action.label }}" data-destructive="{{ 'true' if action.destructive else 'false' }}">
+          <form class="module-action-form" data-action="{{ action.id }}" data-endpoint="{{ action.endpoint }}" data-label="{{ action.label }}" data-destructive="{{ 'true' if action.destructive else 'false' }}" data-auto-run="{{ 'true' if action.auto_run else 'false' }}">
           {% for field in action.fields %}{% set field_id = 'action-' ~ action.id ~ '-' ~ field.key %}
             <div class="form-group" {% if field.depends_on %}hidden data-depends="{{ field.depends_on.field }}" data-depends-value="{{ field.depends_on.value }}"{% endif %}>
               <label class="form-label" for="{{ field_id }}">{{ field.label }}{% if field.required %}<span aria-hidden="true"> *</span><span class="sr-only"> required</span>{% endif %}</label>

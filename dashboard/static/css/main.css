@@ -2359,6 +2359,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .action-result.success { background: var(--green-muted); border-color: var(--green); color: #86efac; }
 .action-result.error { background: var(--red-muted); border-color: var(--red); color: #fca5a5; }
 .action-result.hidden { display: none; }
+.action-result .data-table { color: var(--text-primary); }
+.action-result .data-table th { color: var(--text-tertiary); }
 
 /* ── Toast ────────────────────────────────────────────── */
 

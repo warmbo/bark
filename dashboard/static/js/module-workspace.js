@@ -177,9 +177,14 @@
         });
         if (response.success === false) throw new Error(response.error || 'Operation failed');
         result.className = 'action-result success';
-        result.textContent = response.message || response.data?.message || `${form.dataset.label} completed`;
+        const table = response.data?.table;
+        if (table && Array.isArray(table.columns) && Array.isArray(table.rows)) {
+          result.innerHTML = buildDataTable(table);
+        } else {
+          result.textContent = response.message || response.data?.message || `${form.dataset.label} completed`;
+        }
         result.hidden = false;
-        showToast(result.textContent, 'success');
+        showToast(response.message || response.data?.message || `${form.dataset.label} completed`, 'success');
         window.dispatchEvent(new CustomEvent('bark:module-action-complete', {detail: {moduleName, endpoint: form.dataset.endpoint}}));
       } catch (error) {
         result.className = 'action-result error'; result.textContent = error.message; result.hidden = false;
@@ -193,6 +198,26 @@
   });
   document.addEventListener('click', (event) => {
     if (roleMenu?.open && !roleMenu.contains(event.target)) roleMenu.open = false;
+  });
+
+  function escapeCell(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  function buildDataTable(table) {
+    const head = table.columns.map((c) => `<th>${escapeCell(c)}</th>`).join('');
+    const body = table.rows.map((row) =>
+      `<tr>${row.map((cell) => `<td>${escapeCell(cell)}</td>`).join('')}</tr>`
+    ).join('');
+    return `<div style="overflow-x:auto"><table class="data-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  // Actions marked data-auto-run="true" (e.g. the trivia leaderboard) run
+  // immediately so their result displays without a click.
+  root.querySelectorAll('.module-action-form[data-auto-run="true"]').forEach((form) => {
+    form.requestSubmit();
   });
 
   root.querySelectorAll('.discord-toolbar').forEach((toolbar) => {
