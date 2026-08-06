@@ -155,6 +155,22 @@ class BarkModule(abc.ABC):
         """
         return []
 
+    # ── Module Stats (backup/export support) ──────────
+
+    async def export_stats(self, guild_id: int) -> dict[str, Any]:
+        """Return this module's stats for the guild as JSON-safe data.
+
+        Included in the dashboard Export backup. Default: no stats.
+        """
+        return {}
+
+    async def import_stats(self, guild_id: int, stats: dict[str, Any]) -> list[str]:
+        """Apply stats restored from an exported backup for the guild.
+
+        Return a list of human-readable summary lines for the import report.
+        """
+        return []
+
     # ── Helpers ───────────────────────────────────────
 
     async def _get_setting(self, guild_id: int, section: str, key: str, default=None):

@@ -19,6 +19,167 @@ from services.response import (
 
 router = APIRouter(tags=["api-settings"])
 
+# ── Backup & Restore (settings + module stats) ──────
+
+BACKUP_FORMAT = "bark-backup"
+BACKUP_VERSION = 1
+
+
+@router.get("/guilds/{guild_id}/settings/export")
+async def export_settings(request: Request, guild_id: int):
+    """Export all guild settings + module configs/stats as an editable JSON file."""
+    if not check_api_permission(request, "settings.general"):
+        return api_forbidden()
+
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from database.models.guild import GuildSetting
+    from database.models.module import ModuleConfig
+
+    async with session_scope() as session:
+        setting_rows = await session.execute(
+            select(GuildSetting).where(GuildSetting.guild_id == str(guild_id))
+        )
+        settings = {s.key: s.value for s in setting_rows.scalars().all()}
+
+        module_rows = await session.execute(
+            select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
+        )
+        module_configs = {m.module_name: m for m in module_rows.scalars().all()}
+
+    modules = {}
+    bot = request.state.bot
+    manager = getattr(bot, "modules", None)
+    all_modules = manager.get_all_modules() if manager else {}
+    for name, module in all_modules.items():
+        entry = {"enabled": True, "priority": 100, "config": {}, "stats": {}}
+        dbc = module_configs.get(name)
+        if dbc is not None:
+            entry["enabled"] = bool(dbc.enabled)
+            entry["priority"] = dbc.priority if dbc.priority is not None else 100
+            if dbc.config:
+                try:
+                    entry["config"] = json.loads(dbc.config)
+                except json.JSONDecodeError:
+                    entry["config"] = {}
+        try:
+            entry["stats"] = await module.export_stats(guild_id)
+        except Exception:
+            entry["stats"] = {}
+        modules[name] = entry
+
+    return api_success(
+        {
+            "backup": {
+                "format": BACKUP_FORMAT,
+                "version": BACKUP_VERSION,
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "guild_id": str(guild_id),
+                "settings": settings,
+                "modules": modules,
+            }
+        }
+    )
+
+
+@router.post("/guilds/{guild_id}/settings/import")
+async def import_settings(request: Request, guild_id: int):
+    """Apply an exported backup (settings + module configs/stats)."""
+    if not check_api_permission(request, "settings.general"):
+        return api_forbidden()
+
+    from sqlalchemy import select
+
+    from database.models.guild import GuildSetting
+    from database.models.module import ModuleConfig
+
+    body = await request.json()
+    backup = body.get("backup") or body
+    if backup.get("format") != BACKUP_FORMAT:
+        return api_error("Not a bark backup file (missing 'bark-backup' format marker)")
+    if int(backup.get("version", 0)) != BACKUP_VERSION:
+        return api_error(f"Unsupported backup version: {backup.get('version')}")
+
+    report: list[str] = []
+
+    # Settings
+    settings = backup.get("settings") or {}
+    restored_settings = 0
+    async with session_scope() as session:
+        for key, value in settings.items():
+            result = await session.execute(
+                select(GuildSetting).where(
+                    GuildSetting.guild_id == str(guild_id),
+                    GuildSetting.key == key,
+                )
+            )
+            setting = result.scalar_one_or_none()
+            if setting is None:
+                setting = GuildSetting(
+                    guild_id=str(guild_id), key=key, value=str(value)
+                )
+                session.add(setting)
+            else:
+                setting.value = str(value)
+            restored_settings += 1
+        await session.commit()
+    report.append(f"settings: restored {restored_settings} key(s)")
+
+    # Module configs + stats
+    modules = backup.get("modules") or {}
+    bot = request.state.bot
+    manager = getattr(bot, "modules", None)
+    all_modules = manager.get_all_modules() if manager else {}
+
+    restored_configs = 0
+    for name, entry in modules.items():
+        module = all_modules.get(name)
+        config = entry.get("config") or {}
+        enabled = bool(entry.get("enabled", True))
+        if module is not None:
+            try:
+                await module.save_dashboard_config(guild_id, config)
+                restored_configs += 1
+            except Exception:
+                report.append(f"{name}: config failed to apply")
+            try:
+                if manager is not None and enabled and not manager.is_enabled_for_guild(guild_id, name):
+                    await manager.set_guild_enabled(guild_id, name, True)
+            except Exception:
+                pass
+        else:
+            # Module not loaded (e.g. plugin not installed) — still persist
+            # the config row so it takes effect when the module is installed.
+            async with session_scope() as session:
+                result = await session.execute(
+                    select(ModuleConfig).where(
+                        ModuleConfig.guild_id == str(guild_id),
+                        ModuleConfig.module_name == name,
+                    )
+                )
+                dbc = result.scalar_one_or_none()
+                if dbc is None:
+                    dbc = ModuleConfig(
+                        guild_id=str(guild_id), module_name=name, enabled=enabled
+                    )
+                    session.add(dbc)
+                dbc.enabled = enabled
+                dbc.config = json.dumps(config)
+                await session.commit()
+            restored_configs += 1
+        stats = entry.get("stats") or {}
+        if stats and module is not None:
+            try:
+                report.extend(await module.import_stats(guild_id, stats))
+            except Exception:
+                report.append(f"{name}: stats failed to import")
+    report.append(f"modules: restored {restored_configs} configuration(s)")
+
+    return api_success({"imported": True, "report": report})
+
+
 # ── Config Health ─────────────────────────────────
 
 

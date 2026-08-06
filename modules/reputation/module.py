@@ -637,6 +637,94 @@ class ReputationModule(BarkModule):
 
     # ── Scoring helpers ──────────────────────────────────
 
+    async def export_stats(self, guild_id: int) -> dict:
+        """Backup reputation profiles for this guild (JSON-safe rows)."""
+        from sqlalchemy import select
+
+        from database.engine import session_scope
+        from database.models.reputation import ReputationProfile
+
+        async with session_scope() as session:
+            result = await session.execute(
+                select(ReputationProfile).where(
+                    ReputationProfile.guild_id == str(guild_id)
+                )
+            )
+            profiles = []
+            for p in result.scalars().all():
+                profiles.append(
+                    {
+                        "user_id": p.user_id,
+                        "total_score": p.total_score,
+                        "level": p.level,
+                        "current_tier": p.current_tier,
+                        "weekly_score": p.weekly_score,
+                        "monthly_score": p.monthly_score,
+                        "thanks_received": p.thanks_received,
+                        "messages_count": p.messages_count,
+                        "reactions_received": p.reactions_received,
+                        "voice_minutes": p.voice_minutes,
+                        "last_activity": (
+                            p.last_activity.isoformat() if p.last_activity else None
+                        ),
+                        "week_start": p.week_start.isoformat(),
+                        "month_start": p.month_start.isoformat(),
+                    }
+                )
+            return {"profiles": profiles}
+
+    async def import_stats(self, guild_id: int, stats: dict) -> list[str]:
+        """Restore reputation profiles from a backup (upsert by user)."""
+        from datetime import date
+
+        from sqlalchemy import select
+
+        from database.engine import session_scope
+        from database.models.reputation import ReputationProfile
+
+        profiles = stats.get("profiles") or []
+        if not profiles:
+            return []
+        restored = 0
+        async with session_scope() as session:
+            for row in profiles:
+                user_id = str(row.get("user_id", ""))
+                if not user_id:
+                    continue
+                result = await session.execute(
+                    select(ReputationProfile).where(
+                        ReputationProfile.guild_id == str(guild_id),
+                        ReputationProfile.user_id == user_id,
+                    )
+                )
+                prof = result.scalar_one_or_none()
+                if prof is None:
+                    prof = ReputationProfile(guild_id=str(guild_id), user_id=user_id)
+                    session.add(prof)
+                prof.total_score = float(row.get("total_score", prof.total_score))
+                prof.level = int(row.get("level", prof.level))
+                prof.current_tier = str(row.get("current_tier", prof.current_tier))
+                prof.weekly_score = float(row.get("weekly_score", prof.weekly_score))
+                prof.monthly_score = float(row.get("monthly_score", prof.monthly_score))
+                prof.thanks_received = int(row.get("thanks_received", prof.thanks_received))
+                prof.messages_count = int(row.get("messages_count", prof.messages_count))
+                prof.reactions_received = int(
+                    row.get("reactions_received", prof.reactions_received)
+                )
+                prof.voice_minutes = int(row.get("voice_minutes", prof.voice_minutes))
+                try:
+                    prof.week_start = date.fromisoformat(
+                        str(row.get("week_start", prof.week_start.isoformat()))
+                    )
+                    prof.month_start = date.fromisoformat(
+                        str(row.get("month_start", prof.month_start.isoformat()))
+                    )
+                except ValueError:
+                    pass
+                restored += 1
+            await session.commit()
+        return [f"reputation: restored {restored} profile(s)"]
+
     async def _add_points(
         self,
         guild_id: int,

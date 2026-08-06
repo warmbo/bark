@@ -2052,3 +2052,154 @@ async def test_media_uploads_are_public_without_session(client, app, monkeypatch
     response = await client.get("/media/uploads/1/public.gif")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/gif")
+
+
+# ── Backup & Restore (export/import) ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_settings_export_returns_backup_with_settings_and_modules(client, app, db):
+    """Export bundles guild settings + module configs/stats as editable JSON."""
+    from database.engine import session_scope
+    from database.models.guild import GuildSetting
+    from database.models.module import ModuleConfig
+
+    async with session_scope() as session:
+        session.add(GuildSetting(guild_id="1", key="prefix", value="!"))
+        session.add(
+            ModuleConfig(
+                guild_id="1",
+                module_name="trivia",
+                enabled=True,
+                config='{"difficulty": "medium"}',
+            )
+        )
+        await session.commit()
+
+    class FakeModule:
+        name = "trivia"
+
+        async def export_stats(self, guild_id):
+            return {"scores": [{"user_id": "9", "points": 5}]}
+
+        async def import_stats(self, guild_id, stats):
+            return [f"trivia: restored {len(stats.get('scores', []))} row(s)"]
+
+        async def save_dashboard_config(self, guild_id, config):
+            return True
+
+    fake = FakeModule()
+    app.state.bot.modules.get_all_modules.return_value = {"trivia": fake}
+
+    response = await client.get("/api/v1/guilds/1/settings/export")
+    assert response.status_code == 200
+    backup = response.json()["data"]["backup"]
+    assert backup["format"] == "bark-backup"
+    assert backup["guild_id"] == "1"
+    assert backup["settings"] == {"prefix": "!"}
+    assert backup["modules"]["trivia"]["enabled"] is True
+    assert backup["modules"]["trivia"]["config"] == {"difficulty": "medium"}
+    assert backup["modules"]["trivia"]["stats"] == {
+        "scores": [{"user_id": "9", "points": 5}]
+    }
+
+
+@pytest.mark.asyncio
+async def test_settings_import_applies_settings_configs_and_stats(client, app, db):
+    """Import writes settings + module configs and reports stats restore."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.guild import GuildSetting
+
+    fake_module = MagicMock()
+    fake_module.save_dashboard_config = AsyncMock()
+    fake_module.import_stats = AsyncMock(return_value=["trivia: restored 2 row(s)"])
+    fake_module.export_stats = AsyncMock(return_value={})
+    app.state.bot.modules.get_all_modules.return_value = {"trivia": fake_module}
+
+    backup = {
+        "format": "bark-backup",
+        "version": 1,
+        "exported_at": "2026-08-06T00:00:00Z",
+        "guild_id": "1",
+        "settings": {"prefix": "?", "language": "en"},
+        "modules": {
+            "trivia": {
+                "enabled": True,
+                "priority": 100,
+                "config": {"difficulty": "hard"},
+                "stats": {"scores": [{"user_id": "9", "points": 5}]},
+            }
+        },
+    }
+    response = await client.post(
+        "/api/v1/guilds/1/settings/import", json={"backup": backup}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["imported"] is True
+    assert any("settings: restored 2" in line for line in data["report"])
+    fake_module.save_dashboard_config.assert_awaited_once_with(1, {"difficulty": "hard"})
+    fake_module.import_stats.assert_awaited_once()
+
+    async with session_scope() as session:
+        settings = (
+            await session.execute(
+                select(GuildSetting).where(GuildSetting.guild_id == "1")
+            )
+        ).scalars().all()
+        assert {s.key: s.value for s in settings} == {"prefix": "?", "language": "en"}
+
+
+@pytest.mark.asyncio
+async def test_settings_import_rejects_non_backup_files(client, app, db):
+    response = await client.post(
+        "/api/v1/guilds/1/settings/import",
+        json={"backup": {"format": "other", "version": 1}},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_settings_import_persists_config_for_missing_module(client, app, db):
+    """Config rows for not-yet-installed modules still persist for later installs."""
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.module import ModuleConfig
+
+    app.state.bot.modules.get_all_modules.return_value = {}
+
+    backup = {
+        "format": "bark-backup",
+        "version": 1,
+        "guild_id": "1",
+        "settings": {},
+        "modules": {
+            "dice_roller": {
+                "enabled": True,
+                "priority": 100,
+                "config": {"max": 20},
+                "stats": {},
+            }
+        },
+    }
+    response = await client.post(
+        "/api/v1/guilds/1/settings/import", json={"backup": backup}
+    )
+    assert response.status_code == 200
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(ModuleConfig).where(
+                    ModuleConfig.guild_id == "1",
+                    ModuleConfig.module_name == "dice_roller",
+                )
+            )
+        ).scalar_one()
+    assert row.enabled is True
+    assert '"max": 20' in row.config

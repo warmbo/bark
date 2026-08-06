@@ -60,6 +60,26 @@
             </div>
         </div>
 
+        <!-- Backup & Restore -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("archive", 16) }} Backup & Restore</h2><p class="card-description">Export every module's settings and stats as one editable JSON file, or restore from one.</p></div>
+            </div>
+            <div class="config-body">
+                <div class="plugins-upload-row">
+                    <button type="button" class="btn btn-sm" id="backup-export-btn">{{ icon("download", 14) }} Export backup (.json)</button>
+                    <span class="form-hint">Edit values in the file with any text editor, then re-import to fix settings or restore data.</span>
+                </div>
+                <div class="plugins-upload-row">
+                    <input type="file" id="backup-file-input" name="backup_file" accept=".json,application/json" hidden>
+                    <label class="btn btn-sm" for="backup-file-input">{{ icon("upload", 14) }} Choose backup file</label>
+                    <span class="form-hint" id="backup-file-name">No file selected</span>
+                    <button type="button" class="btn btn-primary btn-sm" id="backup-import-btn" disabled>{{ icon("package-plus", 14) }} Import</button>
+                </div>
+                <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
+            </div>
+        </div>
+
         <!-- Dashboard Configuration + General Settings -->
         <div class="settings-right">
             <div class="content-card">
@@ -417,6 +437,75 @@
     });
 
     loadPlugins();
+
+    // ── Backup & Restore ──────────────────────────────
+
+    const backupExportBtn = document.getElementById('backup-export-btn');
+    const backupFileInput = document.getElementById('backup-file-input');
+    const backupFileName = document.getElementById('backup-file-name');
+    const backupImportBtn = document.getElementById('backup-import-btn');
+    const backupResult = document.getElementById('backup-result');
+
+    backupExportBtn?.addEventListener('click', async () => {
+        try {
+            backupExportBtn.disabled = true;
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/export`, { cache: 'no-cache' });
+            if (result.success === false) throw new Error(result.error || 'Export failed');
+            const backup = result.data?.backup;
+            if (!backup) throw new Error('Empty export payload');
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bark-backup-${GUILD_ID}-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            showToast('Backup exported — edit it in any text editor and re-import when ready', 'success');
+        } catch (error) {
+            showToast(error.message || 'Export failed', 'error');
+        } finally {
+            backupExportBtn.disabled = false;
+        }
+    });
+
+    backupFileInput?.addEventListener('change', () => {
+        const file = backupFileInput.files?.[0];
+        if (backupFileName) backupFileName.textContent = file ? file.name : 'No file selected';
+        if (backupImportBtn) backupImportBtn.disabled = !file;
+        if (backupResult) backupResult.hidden = true;
+    });
+
+    backupImportBtn?.addEventListener('click', async () => {
+        const file = backupFileInput.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const backup = parsed.backup || parsed;
+            if (backup.format !== 'bark-backup') throw new Error('Not a bark backup file');
+            backupImportBtn.disabled = true;
+            backupImportBtn.innerHTML = 'Importing...';
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backup })
+            });
+            if (result.success === false) throw new Error(result.error || 'Import failed');
+            const report = (result.data?.report || []).map((line) => `<div class="info-row"><span class="info-value">${escHtml(line)}</span></div>`).join('');
+            if (backupResult) {
+                backupResult.hidden = false;
+                backupResult.innerHTML = `<div class="state-panel"><div><strong>Import complete</strong>${report}</div></div>`;
+            }
+            showToast('Backup imported', 'success');
+        } catch (error) {
+            showToast(error.message || 'Import failed', 'error');
+        } finally {
+            backupImportBtn.disabled = !backupFileInput?.files?.[0];
+            backupImportBtn.innerHTML = '{{ icon("package-plus", 14) }} Import';
+        }
+    });
 
     // ── Bot Customization ─────────────────────────────────
 

@@ -2350,21 +2350,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 }
 
 .action-result { padding: 10px; margin: 0 var(--space-xl) var(--space-lg); font-size: 13px; border-left: 2px solid var(--accent); background: var(--bg-elevated); }
-/* Auto-run actions (e.g. trivia leaderboard) render as a two-pane layout:
-   controls left, live result right. The card spans the full operate row so
-   the result table gets real width. */
+/* Auto-run actions (e.g. trivia leaderboard) display their result
+   immediately — no submit button needed, the table fills the card. */
 .operation-grid:has(.action-card.auto-run) { grid-template-columns: minmax(0, 1fr); }
 .action-card.auto-run .config-body {
     display: grid;
-    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
     align-items: start;
 }
+.action-card.auto-run .action-submit-btn { display: none; }
 .action-card.auto-run .action-result {
     margin: 0;
     min-height: 120px;
-    border-left: none;
-    border: 1px solid var(--glass-border);
+    border-left: 2px solid var(--accent);
     border-radius: var(--radius-md);
 }
 .action-result.success { background: var(--green-muted); border-color: var(--green); color: #86efac; }
