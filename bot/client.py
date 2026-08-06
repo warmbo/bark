@@ -118,8 +118,10 @@ class BarkBot(commands.Bot):
         if config.bot.sync_commands:
             try:
                 if config.bot.sync_guild_id:
-                    # Sync to the configured guild directly by id — no guild
-                    # cache dependency, instant registration for dev instances.
+                    # Dev instances: clear stale global registrations, then
+                    # sync instantly to the configured test guild. Guild
+                    # commands bypass Discord's global-command cache entirely.
+                    await self.tree.sync()
                     await self.tree.sync(
                         guild=discord.Object(id=config.bot.sync_guild_id)
                     )

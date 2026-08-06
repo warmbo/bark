@@ -371,7 +371,9 @@ class ModuleManager:
                         if hasattr(app_cmd, "add_check"):
                             app_cmd.add_check(self._command_enabled_check(name))
                         if getattr(self.bot, "tree", None) is not None:
-                            self.bot.tree.add_command(app_cmd)
+                            self.bot.tree.add_command(
+                                app_cmd, guild=self._command_guild()
+                            )
                         self._registered_commands[name].add(cmd.name)
 
             # Centralized event subscription via EventBus
@@ -404,7 +406,9 @@ class ModuleManager:
             for command_name in self._registered_commands.get(name, set()):
                 if getattr(self.bot, "tree", None) is not None:
                     try:
-                        self.bot.tree.remove_command(command_name)
+                        self.bot.tree.remove_command(
+                            command_name, guild=self._command_guild()
+                        )
                     except Exception:
                         logger.exception(
                             "Failed to roll back command '%s' for module '%s'",
@@ -433,7 +437,9 @@ class ModuleManager:
                 for cmd_name in self._registered_commands[name]:
                     if hasattr(self.bot, "tree"):
                         try:
-                            self.bot.tree.remove_command(cmd_name)
+                            self.bot.tree.remove_command(
+                                cmd_name, guild=self._command_guild()
+                            )
                         except Exception:
                             pass
                 self._registered_commands[name].clear()
@@ -532,6 +538,23 @@ class ModuleManager:
             return guild_id is None or self.is_enabled_for_guild(guild_id, module_name)
 
         return enabled_for_interaction
+
+    def _command_guild(self):
+        """Return the sync-guild Object when BARK_SYNC_GUILD_ID is configured.
+
+        Commands registered with a guild scope sync instantly to that guild
+        (no global-command cache), which is ideal for dev instances.
+        """
+        try:
+            import discord
+
+            from config import config
+
+            if config.bot.sync_guild_id:
+                return discord.Object(id=config.bot.sync_guild_id)
+        except Exception:
+            pass
+        return None
 
     @staticmethod
     def _event_guild_id(data: dict) -> int | None:
