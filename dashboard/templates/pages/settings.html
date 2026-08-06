@@ -65,6 +65,41 @@
                 </div>
             </div>
 
+            <!-- Updates -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("refresh-cw", 16) }} Updates</h2><p class="card-description">Pull the latest build from the git remote and restart the instance.</p></div>
+                </div>
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Channel</span>
+                        <span class="info-value">
+                            <select id="update-channel" name="update_channel" class="form-select form-select-sm" aria-label="Update channel">
+                                <option value="main" selected>Stable (main)</option>
+                                <option value="dev">Dev (dev)</option>
+                            </select>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Current Build</span>
+                        <span class="info-value"><code class="code-sm" id="update-current">—</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Available Build</span>
+                        <span class="info-value"><code class="code-sm" id="update-available">—</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Repository</span>
+                        <span class="info-value"><code class="code-sm" id="update-repo">—</code></span>
+                    </div>
+                </div>
+                <div class="form-actions form-actions-static">
+                    <button type="button" class="btn" id="update-check-btn">{{ icon("search", 14) }} Check</button>
+                    <button type="button" class="btn btn-primary" id="update-apply-btn" disabled>{{ icon("download", 14) }} Update &amp; Restart</button>
+                </div>
+                <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
+            </div>
+
             <!-- Bot Customization -->
             {% include "components/bot_customization.html" %}
         </div>
@@ -200,6 +235,70 @@
     }
 
     loadSettingsHealth();
+    loadUpdateStatus();
+
+    // ── Updates ────────────────────────────────────────
+
+    const updateChannel = document.getElementById('update-channel');
+    const updateCurrent = document.getElementById('update-current');
+    const updateAvailable = document.getElementById('update-available');
+    const updateRepo = document.getElementById('update-repo');
+    const updateCheckBtn = document.getElementById('update-check-btn');
+    const updateApplyBtn = document.getElementById('update-apply-btn');
+    const updateResult = document.getElementById('update-result');
+
+    let lastStatus = null;
+
+    async function loadUpdateStatus() {
+        if (!updateCurrent) return;
+        try {
+            const branch = updateChannel?.value || 'main';
+            const result = await safeFetch(`/api/v1/instance/update/status?branch=${encodeURIComponent(branch)}`, {cache: 'no-cache'});
+            const status = result?.data || {};
+            lastStatus = status;
+            updateCurrent.textContent = status.current_commit ? `${status.current_commit.slice(0, 7)}${status.current_branch ? ` (${status.current_branch})` : ''}` : '—';
+            updateAvailable.textContent = status.available_commit ? status.available_commit.slice(0, 7) : '—';
+            updateRepo.textContent = status.repo_dir || '—';
+            updateApplyBtn.disabled = !status.update_available;
+            if (updateResult) {
+                updateResult.innerHTML = status.update_available
+                    ? '<div class="state-panel"><div><strong>Update available</strong><p>Pull the new build and restart the instance.</p></div></div>'
+                    : (status.error ? `<div class="state-panel state-error"><div><strong>Check failed</strong><p>${escHtml(status.error)}</p></div></div>` : '');
+            }
+        } catch (error) {
+            updateCurrent.textContent = '—';
+            updateApplyBtn.disabled = true;
+            if (updateResult) updateResult.innerHTML = `<div class="state-panel state-error"><div><strong>Update check unavailable</strong><p>${escHtml(error.message || 'Could not reach the update API')}</p></div></div>`;
+        }
+    }
+
+    updateCheckBtn?.addEventListener('click', loadUpdateStatus);
+    updateChannel?.addEventListener('change', loadUpdateStatus);
+    updateApplyBtn?.addEventListener('click', async () => {
+        if (!lastStatus?.update_available) return;
+        const branch = updateChannel?.value || 'main';
+        const ok = await BarkDialog.confirm({
+            title: `Update to ${branch === 'dev' ? 'dev' : 'stable'}?`,
+            message: `Pull ${lastStatus.available_commit.slice(0, 7)} from origin/${branch} and restart the instance? The dashboard will briefly go offline.`,
+            confirmLabel: 'Update & restart',
+            danger: false,
+        });
+        if (!ok) return;
+        updateApplyBtn.disabled = true;
+        try {
+            const result = await safeFetch('/api/v1/instance/update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({branch}),
+            });
+            if (result.success === false) throw new Error(result.error || 'Update failed');
+            updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>The page will reload once the instance is back online.</p></div></div>`;
+            setTimeout(() => window.location.reload(), 12000);
+        } catch (error) {
+            updateApplyBtn.disabled = false;
+            updateResult.innerHTML = `<div class="state-panel state-error"><div><strong>Update failed</strong><p>${escHtml(error.message || 'Could not start the update')}</p></div></div>`;
+        }
+    });
 
     // ── Plugin Manager ─────────────────────────────────
 

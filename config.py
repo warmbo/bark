@@ -54,6 +54,15 @@ class DatabaseConfig:
 
 
 @dataclass
+class InstanceConfig:
+    """Self-update settings — the instance's git checkout + systemd unit."""
+
+    repo_dir: str = ""  # empty = auto-detect from the package location
+    service_name: str = "bark"  # systemd unit name (used for the restart hint)
+    update_branch: str = "main"  # default channel: stable (main) or dev
+
+
+@dataclass
 class OAuth2Config:
     client_id: str = ""
     client_secret: str = ""
@@ -95,6 +104,7 @@ class Config:
     bot: BotConfig = field(default_factory=BotConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    instance: InstanceConfig = field(default_factory=InstanceConfig)
     oauth2: OAuth2Config = field(default_factory=OAuth2Config)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
 
@@ -196,6 +206,11 @@ class Config:
 
         # Invite URL
         cfg.dashboard.invite_url = os.getenv("BARK_INVITE_URL", "")
+
+        # Self-update
+        cfg.instance.repo_dir = os.getenv("BARK_REPO_DIR", "")
+        cfg.instance.service_name = os.getenv("BARK_SERVICE_NAME", "bark")
+        cfg.instance.update_branch = os.getenv("BARK_UPDATE_BRANCH", "main")
 
         return cfg
 
