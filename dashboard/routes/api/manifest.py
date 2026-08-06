@@ -228,7 +228,11 @@ def _module_actions(
 
 def _build_navigation(pages_list: list[dict[str, object]]) -> dict[str, dict[str, object]]:
     """Group manifest pages into navigation categories by page metadata."""
-    core_pages = [page for page in pages_list if not page.get("category")]
+    core_pages = [
+        page
+        for page in pages_list
+        if not page.get("category") and not page.get("is_plugin")
+    ]
     community_pages = [
         page
         for page in pages_list

@@ -1040,6 +1040,11 @@ async def test_manifest_groups_plugins_under_addon_modules(client, app):
     assert [p["module"] for p in core_pages] == ["alpha"]
     assert all(p["is_plugin"] is False for p in core_pages)
 
+    # The unlabeled core section must never duplicate plugin entries.
+    assert "beta" not in [
+        p.get("module") for p in categories.get("_core", {}).get("pages", [])
+    ]
+
     assert categories["_plugins"]["label"] == "Add-on Modules"
     plugin_pages = categories["_plugins"]["pages"]
     assert [p["module"] for p in plugin_pages] == ["beta"]
