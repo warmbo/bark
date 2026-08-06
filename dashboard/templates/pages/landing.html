@@ -73,10 +73,13 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            /* NOTE: justify-content: center would clip the top overflow and
+               make tall content unscrollable on short viewports. Center via
+               margin: auto on .landing instead — auto margins collapse to 0
+               on overflow so the card stays reachable by scrolling. */
             padding: 24px;
             position: relative;
-            overflow: hidden;
+            overflow-x: hidden;  /* kill horizontal scroll only; vertical must flow */
             background: var(--bg);
         }
 
@@ -125,6 +128,7 @@
         .landing {
             max-width: 520px;
             width: 100%;
+            margin: auto;  /* centers in the flex column; collapses on overflow */
             background: var(--bg-card);
             border: 1px solid var(--border-card);
             border-radius: var(--radius);
