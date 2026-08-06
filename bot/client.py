@@ -197,6 +197,24 @@ class BarkBot(commands.Bot):
         await self._register_guild(guild)
         logger.info("Joined guild: %s (%s)", guild.name, guild.id)
 
+        # A guild joined after startup may need modules that were not enabled
+        # when the tree last synced (e.g. the bot started with zero guilds).
+        # Enable them now and re-sync so slash commands appear without a
+        # restart. Fresh guilds default to enabled via is_enabled_for_guild.
+        for name in list(self.modules.get_all_modules().keys()):
+            module = self.modules.get_module(name)
+            if (
+                module is not None
+                and not module.enabled
+                and self.modules.should_run_globally(name)
+            ):
+                await self.modules.enable_module(name)
+        if config.bot.sync_commands:
+            try:
+                await self.tree.sync()
+            except Exception:
+                logger.exception("Failed to sync slash commands after guild join")
+
     # ── Event → EventBus bridge ───────────────────────
 
     async def on_message(self, message: discord.Message) -> None:
