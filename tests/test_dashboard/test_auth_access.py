@@ -78,12 +78,14 @@ def test_discord_guild_management_requires_owner_admin_or_manage_guild():
 
 
 def test_dashboard_role_is_recomputed_from_current_shared_guilds():
-    managed = [{"id": "100", "owner": False, "permissions": str(0x20)}]
+    admin = [{"id": "100", "owner": False, "permissions": str(0x8)}]
+    manager = [{"id": "100", "owner": False, "permissions": str(0x20)}]
     member_only = [{"id": "100", "owner": False, "permissions": "0"}]
 
-    assert derive_dashboard_role(managed, {"100"}) == "admin"
-    assert derive_dashboard_role(member_only, {"100"}) == "moderator"
-    assert derive_dashboard_role(managed, set()) == "viewer"
+    assert derive_dashboard_role(admin, {"100"}) == "admin"
+    assert derive_dashboard_role(manager, {"100"}) == "moderator"
+    assert derive_dashboard_role(member_only, {"100"}) == "viewer"
+    assert derive_dashboard_role(manager, set()) == "viewer"
 
 
 def test_dashboard_owner_requires_configured_discord_id():
@@ -249,7 +251,9 @@ async def test_dashboard_lists_all_discord_servers_after_login(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_guild_routes_require_manage_guild_permission(db, monkeypatch):
+async def test_guild_routes_open_for_members_of_connected_servers(db, monkeypatch):
+    """Any member of a server where Bark is installed may view its dashboard;
+    servers Bark is not in have nothing behind /guild/{id} (403)."""
     import config
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
@@ -263,41 +267,195 @@ async def test_guild_routes_require_manage_guild_permission(db, monkeypatch):
             session,
             "42",
             [
-                {"id": "100", "name": "Managed", "permissions": str(0x20)},
+                {"id": "100", "name": "Connected", "permissions": str(0x20)},
                 {"id": "300", "name": "Read Only", "permissions": "0"},
             ],
         )
 
     bot_guild = MagicMock()
     bot_guild.id = 100
-    bot_guild.name = "Managed"
+    bot_guild.name = "Connected"
     bot_guild.icon = None
     bot = MagicMock()
     bot.guilds = [bot_guild]
     bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
     app = _dashboard_app(bot)
-    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "admin"})
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "viewer"})
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
-        cookies={"session": cookie},
+        cookies=dict(session=cookie),
         follow_redirects=False,
     ) as client:
         allowed = await client.get("/guild/100")
         denied = await client.get("/guild/300")
         denied_api = await client.get("/api/v1/guilds/300")
 
-    owner_cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "owner"})
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-        cookies={"session": owner_cookie},
-    ) as client:
-        owner_denied = await client.get("/api/v1/guilds/300")
-
     assert allowed.status_code == 200
     assert denied.status_code == 403
     assert denied_api.status_code == 403
-    assert owner_denied.status_code == 403
-    assert denied_api.json()["error"] == "You cannot manage this Discord server"
+    assert "You are not a member of this Discord server" in denied_api.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_guild_mutations_require_manage_permission(db, monkeypatch):
+    """A plain member can view a connected guild, but write actions still
+    require manage access — membership opens the dashboard, not the controls."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [
+                {"id": "100", "name": "Connected", "permissions": "0"},
+            ],
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Connected"
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "viewer"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+        follow_redirects=False,
+    ) as client:
+        allowed = await client.get("/guild/100")
+        denied_write = await client.post("/api/v1/guilds/100/notes", json={"note": "hi"})
+
+    assert allowed.status_code == 200
+    assert denied_write.status_code == 403
+
+
+class _FakeResponse:
+    """Minimal stand-in for httpx.Response in OAuth callback tests."""
+
+    def __init__(self, status_code: int, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> dict:
+        return self._payload
+
+
+class _FakeDiscordClient:
+    """Mocks the OAuth callback's httpx.AsyncClient usage."""
+
+    def __init__(self, *, user: dict, guilds: list[dict]):
+        self.user = user
+        self.guilds = guilds
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def post(self, url: str, **kwargs):
+        if "oauth2/token" in url:
+            return _FakeResponse(200, {"access_token": "tok"})
+        return _FakeResponse(500, {})
+
+    async def get(self, url: str, **kwargs):
+        if "users/@me/guilds" in url:
+            return _FakeResponse(200, self.guilds)
+        if "users/@me" in url:
+            return _FakeResponse(200, self.user)
+        return _FakeResponse(500, {})
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_admits_member_of_bark_server_without_invite(db, monkeypatch):
+    """A Discord user who belongs to a server where Bark is installed can sign
+    in and see the dashboard — no dashboard invite required. Membership is the
+    admission criterion; invites are for adding Bark to a server."""
+    import config
+    import dashboard.routes.auth as auth_module
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    monkeypatch.setattr(config.config.oauth2, "owner_discord_ids", {"42"})
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {}
+
+    fake = _FakeDiscordClient(
+        user={"id": "999", "username": "member", "avatar": None, "global_name": None},
+        guilds=[{"id": "100", "name": "War Lab", "permissions": "0"}],
+    )
+    monkeypatch.setattr(auth_module.httpx, "AsyncClient", lambda **kw: fake)
+
+    from dashboard import create_app
+
+    app = create_app(bot).app
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", follow_redirects=False
+    ) as client:
+        # Prime oauth_state exactly like /auth/login does.
+        client.cookies.set("session", _session_cookie({"oauth_state": "state-123"}))
+        response = await client.get("/auth/callback?code=abc&state=state-123")
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/dashboard"
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_rejects_user_with_no_shared_guild(db, monkeypatch):
+    """A Discord user who is not in any server where Bark is installed is
+    rejected with a clear landing-page message — never a login loop."""
+    import config
+    import dashboard.routes.auth as auth_module
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    monkeypatch.setattr(config.config.oauth2, "owner_discord_ids", {"42"})
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {}
+
+    fake = _FakeDiscordClient(
+        user={"id": "777", "username": "stranger", "avatar": None, "global_name": None},
+        guilds=[{"id": "555", "name": "Elsewhere", "permissions": "0"}],
+    )
+    monkeypatch.setattr(auth_module.httpx, "AsyncClient", lambda **kw: fake)
+
+    from dashboard import create_app
+
+    app = create_app(bot).app
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", follow_redirects=False
+    ) as client:
+        client.cookies.set("session", _session_cookie({"oauth_state": "state-456"}))
+        response = await client.get("/auth/callback?code=abc&state=state-456")
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/?auth_error=no_shared_guild"

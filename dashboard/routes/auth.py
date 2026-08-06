@@ -44,12 +44,41 @@ def _oauth_enabled() -> bool:
     return config.oauth2.enabled
 
 
+# Human-readable messages for ?auth_error= codes surfaced on the public
+# landing page. NEVER redirect auth failures to /dashboard — it is auth-gated,
+# so AuthMiddleware would bounce to /auth/login → Discord authorize → loop
+# (observed 2026-08-06: uninvited user's login rejected, redirected to
+# /dashboard?auth_error=invite_required, bounced back to Discord, repeat).
+AUTH_ERROR_MESSAGES = {
+    "denied": "Sign-in was cancelled.",
+    "invalid_state": "Your sign-in session expired — please try again.",
+    "no_code": "Discord didn't return a code — please try again.",
+    "token_failed": "Discord rejected the sign-in — please try again.",
+    "user_fetch_failed": "Couldn't load your Discord profile — please try again.",
+    "guild_fetch_failed": "Couldn't load your servers — please try again.",
+    "invite_required": "This Bark instance is invite-only. Ask the owner for an invite link.",
+    "no_shared_guild": "You need to be a member of a server where Bark is installed to use the dashboard.",
+    "oauth_required": "Sign-in isn't set up on this instance yet.",
+}
+
+
+def _auth_error_redirect(code: str) -> RedirectResponse:
+    """Land auth failures on the PUBLIC landing page so the user sees the
+    message instead of being bounced back into the Discord authorize loop."""
+    return RedirectResponse(url=f"/?auth_error={code}", status_code=302)
+
+
 @router.get("/login")
 async def login(request: Request):
     """Redirect user to Discord OAuth2 authorize URL."""
     if not _oauth_enabled():
         logger.warning("OAuth2 login attempted but not configured")
         return RedirectResponse(url="/dashboard")
+
+    # Already authenticated — never re-fire the Discord authorize flow (a
+    # logged-in user hitting /auth/login would otherwise loop through Discord).
+    if request.session.get("user"):
+        return RedirectResponse(url="/dashboard", status_code=302)
 
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
@@ -78,16 +107,16 @@ async def callback(
     # Check for error from Discord
     if error:
         logger.warning("Discord OAuth error: %s", error)
-        return RedirectResponse(url="/dashboard?auth_error=denied")
+        return _auth_error_redirect("denied")
 
     # Validate state
     saved_state = request.session.pop("oauth_state", None)
     if not state or not saved_state or state != saved_state:
         logger.warning("OAuth state mismatch")
-        return RedirectResponse(url="/dashboard?auth_error=invalid_state")
+        return _auth_error_redirect("invalid_state")
 
     if not code:
-        return RedirectResponse(url="/dashboard?auth_error=no_code")
+        return _auth_error_redirect("no_code")
 
     # Exchange code for token. Timeout is essential — a hung Discord call
     # would otherwise stall the login request indefinitely (audit finding).
@@ -110,7 +139,7 @@ async def callback(
             # Log status only — the body can contain provider error details but
             # never the exchange secret; keep it out of logs to avoid leakage.
             logger.error("Token exchange failed with status %s", token_resp.status_code)
-            return RedirectResponse(url="/dashboard?auth_error=token_failed")
+            return _auth_error_redirect("token_failed")
 
         token_json = token_resp.json()
         access_token = token_json["access_token"]
@@ -122,7 +151,7 @@ async def callback(
         )
         if user_resp.status_code != 200:
             logger.error("Failed to fetch user info: %s", user_resp.status_code)
-            return RedirectResponse(url="/dashboard?auth_error=user_fetch_failed")
+            return _auth_error_redirect("user_fetch_failed")
 
         user = user_resp.json()
 
@@ -133,7 +162,7 @@ async def callback(
         )
         if guilds_resp.status_code != 200:
             logger.error("Failed to fetch Discord guilds: %s", guilds_resp.status_code)
-            return RedirectResponse(url="/dashboard?auth_error=guild_fetch_failed")
+            return _auth_error_redirect("guild_fetch_failed")
         guilds = guilds_resp.json()
 
     # Store user info in session
@@ -151,21 +180,27 @@ async def callback(
     )
     derived_role = derive_dashboard_role(guilds, bot_guild_ids)
 
-    # Only explicit owners and users who redeemed an owner-issued invite can
-    # use this hosted instance. The signed session holds the token only until
-    # Discord identifies the recipient.
+    # Only explicit owners and users who are members of a server where Bark
+    # is installed can use this dashboard. Login is always required, but no
+    # dashboard invite is needed for server members — invites are for adding
+    # Bark to a server, not for dashboard access. Active hosted-instance
+    # grants remain a fallback admission path.
     role = "viewer"
     async with session_scope() as session:
         is_owner = user["id"] in config.oauth2.owner_discord_ids
         invite_token = request.session.pop("instance_invite_token", None)
-        if not is_owner and not await authorize_instance_user(
+        shared_guild_ids = {str(g.get("id")) for g in guilds} & bot_guild_ids
+        if not is_owner and not shared_guild_ids and not await authorize_instance_user(
             session,
             discord_user_id=user["id"],
             invite_token=invite_token,
         ):
             request.session.clear()
-            logger.warning("Rejected uninvited dashboard login for Discord user %s", user["id"])
-            return RedirectResponse(url="/dashboard?auth_error=invite_required")
+            logger.warning(
+                "Rejected dashboard login for Discord user %s: not a member of any Bark server",
+                user["id"],
+            )
+            return _auth_error_redirect("no_shared_guild")
 
         # Persist user to database and determine role
         # Check if this user already has a record
@@ -214,7 +249,7 @@ async def callback(
 async def accept_share_link(request: Request, token: str):
     """Stage a one-time invite token until the recipient completes Discord OAuth."""
     if not _oauth_enabled():
-        return RedirectResponse(url="/dashboard?auth_error=oauth_required")
+        return _auth_error_redirect("oauth_required")
     request.session["instance_invite_token"] = token
     return RedirectResponse(url="/auth/login")
 
