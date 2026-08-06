@@ -22,6 +22,7 @@ class BotConfig:
     token: str = ""
     command_prefix: str = "!"
     sync_commands: bool = True
+    sync_guild_id: int | None = None  # if set, sync slash commands to this guild only (instant, no global cache)
     intents: int = 0  # Default: 0 (all intents via defaults)
     activity_type: str = "playing"
     activity_text: str = "with the dashboard"
@@ -149,6 +150,11 @@ class Config:
                     cfg.bot.token = token_path.read_text().strip()
         cfg.bot.command_prefix = os.getenv("BARK_COMMAND_PREFIX", "!")
         cfg.bot.sync_commands = os.getenv("BARK_SYNC_COMMANDS", "true").lower() == "true"
+        raw_sync_guild = os.getenv("BARK_SYNC_GUILD_ID", "")
+        try:
+            cfg.bot.sync_guild_id = int(raw_sync_guild) if raw_sync_guild else None
+        except ValueError:
+            cfg.bot.sync_guild_id = None
 
         # Dashboard
         cfg.dashboard.host = os.getenv("BARK_DASHBOARD_HOST", cfg.dashboard.host)

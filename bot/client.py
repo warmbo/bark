@@ -117,7 +117,10 @@ class BarkBot(commands.Bot):
 
         if config.bot.sync_commands:
             try:
-                await self.tree.sync()
+                if config.bot.sync_guild_id:
+                    await self.tree.sync(guild=self.get_guild(config.bot.sync_guild_id))
+                else:
+                    await self.tree.sync()
                 logger.info("Slash commands synced")
             except Exception:
                 logger.exception("Failed to sync slash commands")
@@ -211,7 +214,10 @@ class BarkBot(commands.Bot):
                 await self.modules.enable_module(name)
         if config.bot.sync_commands:
             try:
-                await self.tree.sync()
+                if config.bot.sync_guild_id:
+                    await self.tree.sync(guild=self.get_guild(config.bot.sync_guild_id))
+                else:
+                    await self.tree.sync()
             except Exception:
                 logger.exception("Failed to sync slash commands after guild join")
 
