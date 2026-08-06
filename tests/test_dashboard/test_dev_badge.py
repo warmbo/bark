@@ -57,7 +57,8 @@ async def test_landing_page_shows_dev_badge_when_enabled(app, monkeypatch):
         response = await client.get("/")
     assert response.status_code == 200
     assert 'class="dev-badge-overlay"' in response.text
-    assert "DEV VERSION" in response.text
+    assert "dev-badge-corner" not in response.text  # corner badge removed
+    assert "DEV VERSION" in response.text  # tiled pattern (inline style data URI)
 
 
 @pytest.mark.asyncio
