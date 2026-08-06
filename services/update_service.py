@@ -141,8 +141,9 @@ async def apply_update_async(branch: str) -> dict:
     """Run the update in a worker thread, then exit so systemd restarts us."""
     await asyncio.sleep(1.5)  # let the HTTP response flush first
     result = await asyncio.to_thread(apply_update, branch)
-    if result.get("ok"):
+    if result.get("restarted"):
         logger.info("Exiting process for restart (pid %s)", os.getpid())
         os._exit(0)
-    logger.error("Update did not apply; staying on current build: %s", result)
+    if not result.get("ok"):
+        logger.error("Update did not apply; staying on current build: %s", result)
     return result
