@@ -227,3 +227,160 @@ async def test_tier_update_rejects_role_not_in_guild(db, _seeded_tiers, monkeypa
 
     assert response.status_code == 400
     assert "not found" in response.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_tier_create_appends_to_ladder(db, _seeded_tiers, monkeypatch):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/reputation/tiers",
+            json={"name": "Overlord", "min_level": 50, "assign_role": True},
+        )
+
+    assert response.status_code == 200
+    tier = response.json()["data"]["tier"]
+    assert tier["name"] == "Overlord"
+    assert tier["sort_order"] == 2  # appended after Recruit(0) + Scout(1)
+    assert tier["min_level"] == 50
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        listing = await client.get("/api/v1/guilds/1/modules/reputation/tiers")
+    names = [t["name"] for t in listing.json()["data"]["tiers"]]
+    assert names == ["Recruit", "Scout", "Overlord"]
+
+
+@pytest.mark.asyncio
+async def test_tier_create_rejects_duplicate_name(db, _seeded_tiers, monkeypatch):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/reputation/tiers", json={"name": "Scout"}
+        )
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_tier_delete_removes_and_re_tiers_profiles(
+    db, _seeded_tiers, monkeypatch
+):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from datetime import date
+
+    from database.models.reputation import ReputationProfile
+
+    async with session_scope() as session:
+        session.add(
+            ReputationProfile(
+                guild_id="1",
+                user_id="77",
+                total_score=31250.0,  # level 25, current tier Scout
+                current_tier="Scout",
+                week_start=date.today(),
+                month_start=date.today().replace(day=1),
+            )
+        )
+        await session.commit()
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.delete(
+            "/api/v1/guilds/1/modules/reputation/tiers/Scout"
+        )
+
+    assert response.status_code == 200
+
+    async with session_scope() as session:
+        from sqlalchemy import select
+
+        prof = (
+            await session.execute(
+                select(ReputationProfile).where(
+                    ReputationProfile.guild_id == "1",
+                    ReputationProfile.user_id == "77",
+                )
+            )
+        ).scalar_one()
+        # Re-tiered from remaining ladder: level 25 → highest remaining is Recruit
+        assert prof.current_tier == "Recruit"
+
+
+@pytest.mark.asyncio
+async def test_tier_delete_rejects_last_tier(db, _seeded_tiers, monkeypatch):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        first = await client.delete(
+            "/api/v1/guilds/1/modules/reputation/tiers/Scout"
+        )
+        assert first.status_code == 200
+        last = await client.delete(
+            "/api/v1/guilds/1/modules/reputation/tiers/Recruit"
+        )
+
+    assert last.status_code == 400
+    assert "last tier" in last.json()["error"]

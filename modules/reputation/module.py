@@ -492,6 +492,165 @@ class ReputationModule(BarkModule):
                 }
             )
 
+        @router.post("/guilds/{guild_id}/modules/reputation/tiers")
+        async def reputation_tier_create(request: Request, guild_id: str, payload: dict):
+            """Create a new tier at the bottom of the ladder."""
+            await get_module_min_role("reputation", guild_id)
+            if not check_api_permission(request, "reputation.manage", guild_id):
+                return api_error("Insufficient permissions")
+            gid = int(guild_id)
+            bot: "BarkBot" = request.state.bot
+            guild = bot.get_guild(gid)
+            if guild is None:
+                return api_not_found("Guild")
+
+            name = (payload.get("name") or "").strip()
+            if not name:
+                return api_error("Tier name is required", status_code=400)
+            role_id = payload.get("role_id")
+            if role_id:
+                role = guild.get_role(int(role_id))
+                if role is None:
+                    return api_error("Role not found in this guild", status_code=400)
+                role_id = str(role.id)
+            elif "role_id" in payload:
+                role_id = None
+
+            async with session_scope() as session:
+                from sqlalchemy import func, select
+
+                existing = await session.execute(
+                    select(ReputationTier).where(
+                        ReputationTier.guild_id == str(gid),
+                        ReputationTier.name == name,
+                    )
+                )
+                if existing.scalar_one_or_none() is not None:
+                    return api_error(
+                        f"A tier named '{name}' already exists", status_code=400
+                    )
+                max_order = (
+                    await session.execute(
+                        select(func.max(ReputationTier.sort_order)).where(
+                            ReputationTier.guild_id == str(gid)
+                        )
+                    )
+                ).scalar_one()
+                tier = ReputationTier(
+                    guild_id=str(gid),
+                    name=name,
+                    symbol=str(payload.get("symbol") or "⭐")[:16],
+                    min_level=max(0, int(payload.get("min_level") or 0)),
+                    min_score=max(0.0, float(payload.get("min_score") or 0)),
+                    color_hex=str(payload.get("color_hex") or "#99aab5")[:7],
+                    role_id=role_id,
+                    assign_role=bool(payload.get("assign_role", False)),
+                    sort_order=(max_order or 0) + 1,
+                    is_default=False,
+                )
+                session.add(tier)
+                await session.commit()
+
+            return api_success(
+                {
+                    "tier": {
+                        "name": tier.name,
+                        "symbol": tier.symbol,
+                        "min_level": tier.min_level,
+                        "min_score": round(float(tier.min_score), 1),
+                        "color_hex": tier.color_hex,
+                        "role_id": tier.role_id,
+                        "assign_role": tier.assign_role,
+                        "sort_order": tier.sort_order,
+                    }
+                }
+            )
+
+        @router.delete("/guilds/{guild_id}/modules/reputation/tiers/{tier_name}")
+        async def reputation_tier_delete(request: Request, guild_id: str, tier_name: str):
+            """Remove a tier. Profiles referencing it are re-tiered; roles stay."""
+            await get_module_min_role("reputation", guild_id)
+            if not check_api_permission(request, "reputation.manage", guild_id):
+                return api_error("Insufficient permissions")
+            gid = int(guild_id)
+
+            async with session_scope() as session:
+                from sqlalchemy import func, select, update
+
+                result = await session.execute(
+                    select(ReputationTier).where(
+                        ReputationTier.guild_id == str(gid),
+                        ReputationTier.name == tier_name,
+                    )
+                )
+                tier = result.scalar_one_or_none()
+                if tier is None:
+                    return api_not_found("ReputationTier")
+                remaining = (
+                    await session.execute(
+                        select(func.count(ReputationTier.id)).where(
+                            ReputationTier.guild_id == str(gid)
+                        )
+                    )
+                ).scalar_one()
+                if remaining <= 1:
+                    return api_error(
+                        "Cannot delete the last tier", status_code=400
+                    )
+
+                # Re-tier profiles that referenced this tier using the ladder
+                # that will remain (so nobody is stranded on a stale name).
+                tiers_result = await session.execute(
+                    select(ReputationTier)
+                    .where(
+                        ReputationTier.guild_id == str(gid),
+                        ReputationTier.name != tier_name,
+                    )
+                    .order_by(ReputationTier.sort_order, ReputationTier.min_level)
+                )
+                tier_rows = list(tiers_result.scalars().all())
+                tier_dicts = [
+                    {
+                        "name": t.name,
+                        "symbol": t.symbol,
+                        "min_score": t.min_score,
+                        "min_level": t.min_level,
+                        "color_hex": t.color_hex,
+                        "sort_order": t.sort_order,
+                        "role_id": t.role_id,
+                        "assign_role": t.assign_role,
+                    }
+                    for t in tier_rows
+                ]
+                config = await self.load_dashboard_config(gid)
+                level_const = float(config.get("level_constant", 50.0))
+                profiles_result = await session.execute(
+                    select(ReputationProfile).where(
+                        ReputationProfile.guild_id == str(gid),
+                        ReputationProfile.current_tier == tier_name,
+                    )
+                )
+                for prof in profiles_result.scalars().all():
+                    prof.level = level_from_score(prof.total_score, level_const)
+                    resolved = resolve_tier(
+                        tier_dicts, prof.level, prof.total_score
+                    )
+                    prof.current_tier = resolved["name"]
+
+                # Rewards gated on the removed tier can never fire — clear them.
+                await session.execute(
+                    update(ReputationReward)
+                    .where(
+                        ReputationReward.guild_id == str(gid),
+                        ReputationReward.required_tier == tier_name,
+                    )
+                    .values(required_tier=None)
+                )
+                await session.delete(tier)
+                await session.commit()
+
+            return api_success({"message": f"Tier '{tier_name}' deleted"})
+
         return router
 
     def get_settings_schema(self) -> dict:

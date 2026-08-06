@@ -101,6 +101,7 @@
       ]);
       const tiers = (tiersRes.data || tiersRes).tiers || [];
       const roles = (rolesRes.data || rolesRes).roles || [];
+      window.__repTierRoles = roles;
       if (!tiers.length) {
         container.innerHTML = statePanel('empty', 'No tiers configured', 'Tiers will be created automatically for this guild.', 'tiers');
         refreshIcons(); return;
@@ -115,8 +116,9 @@
         <td><input type="number" min="0" step="0.5" class="form-input form-input-sm tier-score" value="${Number(t.min_score)}" aria-label="Min score"></td>
         <td><input type="text" class="form-input form-input-sm tier-color" value="${escHtml(t.color_hex)}" aria-label="Tier color" size="8"></td>
         <td><select class="form-select form-select-sm tier-role" aria-label="Linked role">${roleOptions(t.role_id)}</select></td>
-        <td><input type="checkbox" class="tier-assign" ${t.assign_role ? 'checked' : ''} aria-label="Auto-assign role"></td>
-        <td><button type="button" class="btn btn-sm tier-save" data-name="${escHtml(t.name)}">Save</button></td>
+        <td><input type="checkbox" class="tier-assign" ${t.assign_role ? 'checked' : ''} aria-label="Auto-assign role on level-up" title="Auto-assign: grant this role automatically when a member reaches this tier's level"></td>
+        <td><button type="button" class="btn btn-sm tier-save" data-name="${escHtml(t.name)}">Save</button>
+            <button type="button" class="btn btn-sm btn-danger tier-delete" data-name="${escHtml(t.name)}" aria-label="Delete tier">Delete</button></td>
       </tr>`).join('');
       container.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr>
         <th>Symbol</th><th>Name</th><th>Min Level</th><th>Min Score</th><th>Color</th><th>Linked Role</th><th>Auto</th><th></th>
@@ -128,8 +130,31 @@
     }
   }
 
+  function addTierRow() {
+    const container = byId('rep-tiers-content');
+    if (!container) return;
+    const tbody = container.querySelector('tbody');
+    const roles = window.__repTierRoles || [];
+    const roleOptions = (selectedId) => ['<option value="">— no role —</option>']
+      .concat(roles.map(r => `<option value="${escHtml(r.id)}"${String(r.id) === String(selectedId) ? ' selected' : ''}>${escHtml(r.name)}</option>`))
+      .join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="form-input form-input-sm tier-symbol" value="⭐" aria-label="Tier symbol" size="3"></td>
+      <td><input class="form-input form-input-sm tier-name" value="" placeholder="New tier name" aria-label="Tier name"></td>
+      <td><input type="number" min="0" class="form-input form-input-sm tier-level" value="0" aria-label="Min level"></td>
+      <td><input type="number" min="0" step="0.5" class="form-input form-input-sm tier-score" value="0" aria-label="Min score"></td>
+      <td><input type="text" class="form-input form-input-sm tier-color" value="#99aab5" aria-label="Tier color" size="8"></td>
+      <td><select class="form-select form-select-sm tier-role" aria-label="Linked role">${roleOptions(null)}</select></td>
+      <td><input type="checkbox" class="tier-assign" aria-label="Auto-assign role on level-up" title="Auto-assign: grant this role automatically when a member reaches this tier's level"></td>
+      <td><button type="button" class="btn btn-sm btn-primary tier-save" data-new="true">Save</button></td>`;
+    if (tbody) tbody.appendChild(tr);
+    tr.querySelector('.tier-name').focus();
+  }
+
   async function saveTier(row) {
-    const originalName = row.querySelector('.tier-save').dataset.name;
+    const isNew = row.querySelector('.tier-save').dataset.new === 'true';
+    const originalName = row.querySelector('.tier-save').dataset.name || '';
     const payload = {
       name: row.querySelector('.tier-name').value.trim(),
       symbol: row.querySelector('.tier-symbol').value,
@@ -141,16 +166,34 @@
     };
     if (!payload.name) { showToast('Tier name is required', 'error'); return; }
     try {
-      const result = await safeFetch(api(`tiers/${encodeURIComponent(originalName)}`), {
-        method: 'PUT',
+      const result = await safeFetch(api(`tiers${isNew ? '' : `/${encodeURIComponent(originalName)}`}`), {
+        method: isNew ? 'POST' : 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload),
       });
       if (result.success === false) throw new Error(result.error || 'Save failed');
-      showToast(`Tier ${payload.name} saved`, 'success');
+      showToast(`Tier ${payload.name} ${isNew ? 'created' : 'saved'}`, 'success');
       loadTiers();
     } catch (error) {
       showToast(error.message || 'Unable to save tier', 'error');
+    }
+  }
+
+  async function deleteTier(name) {
+    const ok = await BarkDialog.confirm({
+      title: `Delete tier "${name}"?`,
+      message: 'Members who reached this tier keep their role; profiles that referenced it are re-tiered, and rewards gated on it are cleared. This cannot be undone from the dashboard.',
+      confirmLabel: 'Delete tier',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const result = await safeFetch(api(`tiers/${encodeURIComponent(name)}`), { method: 'DELETE' });
+      if (result.success === false) throw new Error(result.error || 'Delete failed');
+      showToast(`Tier ${name} deleted`, 'success');
+      loadTiers();
+    } catch (error) {
+      showToast(error.message || 'Unable to delete tier', 'error');
     }
   }
 
@@ -162,7 +205,9 @@
     const target = event.target.closest('button');
     if (!target || !root.contains(target)) return;
     if (target.dataset.refreshSection) loaders[target.dataset.refreshSection]?.();
+    if (target.dataset.addTier !== undefined) addTierRow();
     if (target.classList.contains('tier-save')) saveTier(target.closest('tr'));
+    if (target.classList.contains('tier-delete')) deleteTier(target.dataset.name);
   });
 
   document.addEventListener('change', (event) => {
