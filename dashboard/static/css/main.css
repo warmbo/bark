@@ -2998,15 +2998,3 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 /* Reputation thanks search input width */
 .rep-search-input { width: 200px; }
-
-/* ── Dev-build watermark (BARK_DEV_BADGE=true) ─────────────
-   Tiled diagonal "DEV VERSION" text over the whole page.
-   pointer-events: none so nothing is clickable. */
-.dev-badge-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483000;
-  pointer-events: none;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22320%22 viewBox=%220 0 320 320%22><text x=%22160%22 y=%22160%22 transform=%22rotate(-30 160 160)%22 fill=%22%23ffffff%22 font-family=%22Inter,Arial,sans-serif%22 font-size=%2226%22 font-weight=%22800%22 letter-spacing=%224%22 text-anchor=%22middle%22 opacity=%220.08%22>DEV VERSION</text></svg>');
-  background-size: 320px 320px;
-}

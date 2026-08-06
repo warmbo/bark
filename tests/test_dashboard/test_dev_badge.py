@@ -1,29 +1,42 @@
-"""The DEV VERSION watermark renders only when BARK_DEV_BADGE is enabled."""
+"""The DEV VERSION watermark renders only when BARK_DEV_BADGE is enabled.
+
+Injected by an HTTP middleware (services/dev_overlay.py) so EVERY page on the
+subdomain carries it — base.html pages, the standalone landing page, module
+detail pages (which render via their own Jinja env without `config`), member
+pages, error responses, and any future route. Template-level guarantees are
+obsolete; the middleware is the single source of truth.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-ROOT = Path(__file__).resolve().parents[2]
-PAGES = ROOT / "dashboard" / "templates" / "pages"
+
+def _make_guild(guild_id: int = 123456789) -> MagicMock:
+    guild = MagicMock()
+    guild.id = guild_id
+    guild.name = "Test Guild"
+    guild.icon = None
+    return guild
 
 
-def test_every_page_template_carries_the_dev_badge():
-    """Every page must either extend base.html (which includes the badge) or
-    include components/dev_badge.html directly — no page can bypass it."""
-    offenders = []
-    for path in sorted(PAGES.glob("*.html")):
-        src = path.read_text(encoding="utf-8")
-        if 'extends "base.html"' in src:
-            continue
-        if "components/dev_badge.html" in src:
-            continue
-        offenders.append(path.name)
-    assert offenders == [], f"pages missing the dev-badge include: {offenders}"
+def _make_module() -> MagicMock:
+    module = MagicMock()
+    module.version = "1.0.0"
+    module.description = "Test module"
+    module.author = "test"
+    module.load_dashboard_config = AsyncMock(return_value={})
+    module.get_settings_schema.return_value = {"properties": {}}
+    module.get_extra_tabs.return_value = []
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    module.get_actions.return_value = []
+    module.get_about.return_value = {}
+    return module
 
 
 @pytest.fixture
@@ -31,29 +44,39 @@ def app(monkeypatch):
     import config
     from dashboard import create_app
 
-    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
-    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
-    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    # Leave oauth2.enabled False (permissive mode) so every dashboard route
+    # renders instead of 302-redirecting to /auth/login.
+    monkeypatch.setattr(config.config.oauth2, "client_id", "")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "")
 
     bot = MagicMock()
     bot.guilds = []
     bot.user = None
+    bot.is_ready.return_value = False
+    bot.is_connected.return_value = False
+    bot.wait_until_ready = AsyncMock()
+    bot.get_guild.return_value = _make_guild()
     bot.modules = MagicMock()
     bot.modules.event_bus.get_subscribers.return_value = {}
     bot.modules.event_bus.event_types = []
     bot.modules.get_all_modules.return_value = {}
+    bot.modules.get_module.return_value = _make_module()
 
     return create_app(bot)
 
 
+@pytest.fixture
+def client(app):
+    return AsyncClient(transport=ASGITransport(app=app.app), base_url="http://test")
+
+
 @pytest.mark.asyncio
-async def test_landing_page_shows_dev_badge_when_enabled(app, monkeypatch):
+async def test_landing_page_shows_dev_badge_when_enabled(app, monkeypatch, client):
     import config
 
     monkeypatch.setattr(config.config.instance, "dev_badge", True)
-    async with AsyncClient(
-        transport=ASGITransport(app=app.app), base_url="http://test"
-    ) as client:
+    async with client:
         response = await client.get("/")
     assert response.status_code == 200
     assert 'class="dev-badge-overlay"' in response.text
@@ -62,13 +85,66 @@ async def test_landing_page_shows_dev_badge_when_enabled(app, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_landing_page_hides_dev_badge_when_disabled(app, monkeypatch):
+async def test_landing_page_hides_dev_badge_when_disabled(app, monkeypatch, client):
     import config
 
     monkeypatch.setattr(config.config.instance, "dev_badge", False)
-    async with AsyncClient(
-        transport=ASGITransport(app=app.app), base_url="http://test"
-    ) as client:
+    async with client:
         response = await client.get("/")
     assert response.status_code == 200
     assert 'class="dev-badge-overlay"' not in response.text
+
+
+@pytest.mark.asyncio
+async def test_middleware_injects_badge_into_every_html_response(
+    app, monkeypatch, client, db
+):
+    """Every HTML response on the subdomain carries the overlay — including
+    module detail pages rendered WITHOUT `config` in context (the bug that
+    motivated the middleware: web/modules.py uses its own Jinja env) and
+    HTML error responses."""
+    import config
+
+    monkeypatch.setattr(config.config.instance, "dev_badge", True)
+
+    routes = [
+        "/",                                # landing (standalone page)
+        "/dashboard",                       # dashboard home
+        "/guild/123456789/settings",        # settings page
+        "/guild/123456789/modules/roles",   # module detail via web/modules.py (no config ctx)
+        "/guild/123456789/members",         # members page
+        "/guild/123456789",                 # guild overview
+        "/guild/999999/settings",           # error page (HTMLResponse 404)
+    ]
+    async with client:
+        for route in routes:
+            response = await client.get(route)
+            assert 'class="dev-badge-overlay"' in response.text, (
+                f"overlay missing on {route} (status {response.status_code})"
+            )
+
+
+@pytest.mark.asyncio
+async def test_middleware_skips_non_html_responses(app, monkeypatch, client):
+    """API JSON, static CSS, and JSON error responses must NOT get the overlay."""
+    import config
+
+    monkeypatch.setattr(config.config.instance, "dev_badge", True)
+    async with client:
+        api = await client.get("/api/v1/health")
+        css = await client.get("/static/css/main.css")
+        notfound = await client.get("/nonexistent-page-xyz")
+    assert 'class="dev-badge-overlay"' not in api.text
+    assert 'class="dev-badge-overlay"' not in css.text
+    assert 'class="dev-badge-overlay"' not in notfound.text
+
+
+@pytest.mark.asyncio
+async def test_middleware_does_not_double_inject(app, monkeypatch, client):
+    """A response that already contains the overlay is left untouched."""
+    import config
+
+    monkeypatch.setattr(config.config.instance, "dev_badge", True)
+    async with client:
+        response = await client.get("/")
+    assert response.text.count('class="dev-badge-overlay"') == 1

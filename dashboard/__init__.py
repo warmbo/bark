@@ -113,6 +113,13 @@ def create_app(bot: BarkBot) -> DashboardApp:
             response.headers["Expires"] = "0"
         return response
 
+    # Dev-build watermark: applied at the HTTP layer so EVERY page/module on
+    # the subdomain carries it (module detail pages render via their own Jinja
+    # envs without `config`, so the old template include was bypassed there).
+    from services.dev_overlay import dev_overlay_middleware
+
+    app.middleware("http")(dev_overlay_middleware)
+
     # ── Web Routes ────────────────────────────────────
 
     from dashboard.routes.web.home import router as home_router
