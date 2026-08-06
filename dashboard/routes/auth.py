@@ -89,8 +89,9 @@ async def callback(
     if not code:
         return RedirectResponse(url="/dashboard?auth_error=no_code")
 
-    # Exchange code for token
-    async with httpx.AsyncClient() as client:
+    # Exchange code for token. Timeout is essential — a hung Discord call
+    # would otherwise stall the login request indefinitely (audit finding).
+    async with httpx.AsyncClient(timeout=15.0) as client:
         token_data = {
             "client_id": config.oauth2.client_id,
             "client_secret": config.oauth2.client_secret,

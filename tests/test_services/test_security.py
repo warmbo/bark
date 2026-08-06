@@ -162,11 +162,19 @@ async def test_oauth_mutation_rbac_denies_viewer_and_allows_admin(monkeypatch):
         return TimestampSigner("test-secret").sign(payload).decode()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        client.cookies.set("session", cookie("viewer"))
-        viewer_write = await client.post("/api/v1/save")
-        viewer_read = await client.get("/api/v1/save")
-        client.cookies.set("session", cookie("admin"))
-        admin_write = await client.post("/api/v1/save")
+        # Send cookies explicitly per-request. Sliding renewal re-emits
+        # Set-Cookie on every authenticated response, which makes manual
+        # client.cookies.set() calls collide in httpx's jar — real browsers
+        # replace the cookie, httpx does not.
+        viewer_write = await client.post(
+            "/api/v1/save", headers={"cookie": f"session={cookie('viewer')}"}
+        )
+        viewer_read = await client.get(
+            "/api/v1/save", headers={"cookie": f"session={cookie('viewer')}"}
+        )
+        admin_write = await client.post(
+            "/api/v1/save", headers={"cookie": f"session={cookie('admin')}"}
+        )
 
     assert viewer_write.status_code == 403
     assert viewer_write.json()["required_capability"] == "guild.manage"
@@ -192,3 +200,50 @@ async def test_oauth_disabled_mutation_mode_remains_permissive(monkeypatch):
         response = await client.post("/api/v1/save")
 
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_authenticated_request_renews_sliding_session(monkeypatch):
+    """Every authenticated request re-signs the cookie (fresh Max-Age) so an
+    active user never hits the session_ttl wall — inactivity is what expires
+    the login, not elapsed time."""
+    import base64
+    import json
+
+    from itsdangerous import TimestampSigner
+    from starlette.middleware.sessions import SessionMiddleware
+
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "client")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/callback")
+
+    app = FastAPI()
+    app.add_middleware(AuthMiddleware)
+    app.add_middleware(SessionMiddleware, secret_key="test-secret", max_age=3600)
+
+    @app.get("/api/v1/private")
+    async def private():
+        return {"ok": True}
+
+    data = {"user": {"id": "42"}, "role": "admin"}
+    payload = base64.b64encode(json.dumps(data).encode())
+    cookie = TimestampSigner("test-secret").sign(payload).decode()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/api/v1/private", headers={"cookie": f"session={cookie}"}
+        )
+
+    assert response.status_code == 200
+    # The middleware must have written _renewed back into the session, which
+    # causes Starlette to re-emit a Set-Cookie with a fresh Max-Age.
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "session=" in set_cookie
+    assert "Max-Age=3600" in set_cookie
+    # Verify the re-signed payload actually contains the renewal marker.
+    raw = set_cookie.split("session=", 1)[1].split(";", 1)[0]
+    unsigned = TimestampSigner("test-secret").unsign(raw, max_age=3600)
+    decoded = json.loads(base64.b64decode(unsigned))
+    assert "_renewed" in decoded

@@ -99,3 +99,29 @@ def test_startup_validation_rejects_public_dashboard_without_oauth(monkeypatch, 
 
     with pytest.raises(ConfigurationError, match="OAuth"):
         loaded.validate_startup()
+
+
+def test_session_ttl_defaults_to_thirty_days(monkeypatch, tmp_path):
+    monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("BARK_DASHBOARD_SESSION_TTL", raising=False)
+
+    loaded = Config.load()
+
+    assert loaded.dashboard.session_ttl == 30 * 24 * 60 * 60
+
+
+def test_session_ttl_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("BARK_DASHBOARD_SESSION_TTL", "3600")
+
+    loaded = Config.load()
+
+    assert loaded.dashboard.session_ttl == 3600
+
+
+def test_session_ttl_invalid_env_fails_with_setting_name(monkeypatch, tmp_path):
+    monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("BARK_DASHBOARD_SESSION_TTL", "not-a-ttl")
+
+    with pytest.raises(ConfigurationError, match="BARK_DASHBOARD_SESSION_TTL"):
+        Config.load()

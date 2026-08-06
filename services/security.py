@@ -158,6 +158,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if user is None:
             return _auth_required_response(path)
 
+        # Sliding session renewal: write a rotating value on every
+        # authenticated request so Starlette re-signs the cookie with a fresh
+        # Max-Age. An active user stays logged in indefinitely; inactivity
+        # beyond session_ttl still expires the cookie (signer max_age).
+        request.session["_renewed"] = int(time.monotonic())
+
         # Hosted Bark instances are closed by default.  Owner identity is
         # config-backed; every other signed-in user must retain an active
         # database grant, so access revocation takes effect on the next request.
