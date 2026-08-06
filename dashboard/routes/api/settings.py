@@ -104,6 +104,14 @@ async def import_settings(request: Request, guild_id: int):
 
     report: list[str] = []
 
+    # Ensure the guild row exists (FK target for settings/module configs).
+    from database.models.guild import Guild
+
+    async with session_scope() as session:
+        if await session.get(Guild, str(guild_id)) is None:
+            session.add(Guild(discord_id=str(guild_id), name=f"Guild {guild_id}"))
+            await session.commit()
+
     # Settings
     settings = backup.get("settings") or {}
     restored_settings = 0
