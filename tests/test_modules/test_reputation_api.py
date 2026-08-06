@@ -63,9 +63,167 @@ async def test_reputation_read_routes_enforce_module_view_permission(db, monkeyp
     async with AsyncClient(
         transport=ASGITransport(app=dashboard.app),
         base_url="http://test",
-        cookies={"session": _session_cookie("viewer")},
+        cookies=dict(session=_session_cookie("viewer")),
     ) as client:
         response = await client.get("/api/v1/guilds/1/modules/reputation/leaderboard")
 
     assert response.status_code == 403
     assert response.json()["error"] == "Insufficient permissions"
+
+
+def _manager_bot():
+    """A MagicMock bot whose guild exposes a controllable role resolver."""
+    from types import SimpleNamespace
+
+    bot = MagicMock()
+    bot.guilds = []
+    bot.user = None
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {"reputation": MagicMock()}
+    bot.modules.is_enabled_for_guild.return_value = True
+
+    guild = SimpleNamespace(id=1, get_role=lambda rid: SimpleNamespace(id=rid))
+    bot.get_guild.return_value = guild
+    return bot
+
+
+def test_reputation_module_declares_tiers_tab():
+    """The Tiers tab must be part of the module's dashboard tabs."""
+    from modules.reputation.module import ReputationModule
+
+    bot = MagicMock()
+    bot.guilds = []
+    bot.modules = MagicMock()
+    bot.modules.event_bus = MagicMock()
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    tabs = [t["id"] for t in module.get_extra_tabs()]
+    assert "tiers" in tabs
+    assert tabs.index("tiers") == 0  # primary tab for role linking
+
+
+@pytest.fixture
+async def _seeded_tiers(db):
+    from database.models.reputation import ReputationTier
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        session.add(DashboardUser(discord_id="42", username="Auditor", role="admin"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "1", "name": "Test Guild", "permissions": str(0x20)}],
+        )
+        session.add(
+            ReputationTier(
+                guild_id="1",
+                name="Recruit",
+                symbol="⬜",
+                min_level=0,
+                color_hex="#99aab5",
+                sort_order=0,
+            )
+        )
+        session.add(
+            ReputationTier(
+                guild_id="1",
+                name="Scout",
+                symbol="🥉",
+                min_level=10,
+                color_hex="#cd7f32",
+                sort_order=1,
+            )
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_tiers_list_returns_ladder_sorted_by_sort_order(
+    db, _seeded_tiers, monkeypatch
+):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.get("/api/v1/guilds/1/modules/reputation/tiers")
+
+    assert response.status_code == 200
+    tiers = response.json()["data"]["tiers"]
+    assert [t["name"] for t in tiers] == ["Recruit", "Scout"]
+    assert all("role_id" in t and "assign_role" in t for t in tiers)
+
+
+@pytest.mark.asyncio
+async def test_tier_update_links_role(db, _seeded_tiers, monkeypatch):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.put(
+            "/api/v1/guilds/1/modules/reputation/tiers/Scout",
+            json={"role_id": "777", "assign_role": True, "min_level": 12},
+        )
+
+    assert response.status_code == 200
+    tier = response.json()["data"]["tier"]
+    assert tier["role_id"] == "777"
+    assert tier["assign_role"] is True
+    assert tier["min_level"] == 12
+
+
+@pytest.mark.asyncio
+async def test_tier_update_rejects_role_not_in_guild(db, _seeded_tiers, monkeypatch):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    bot = _manager_bot()
+    bot.get_guild.return_value.get_role = lambda rid: None  # no such role
+
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.put(
+            "/api/v1/guilds/1/modules/reputation/tiers/Scout",
+            json={"role_id": "999999"},
+        )
+
+    assert response.status_code == 400
+    assert "not found" in response.json()["error"]

@@ -1,0 +1,17 @@
+<article class="content-card workspace-data-card" data-section="tiers">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("shield-half", 16) }} Reputation Tiers</h2><p class="card-description">Link each tier to a Discord role — members get the role automatically when they level up. Higher tiers can then be granted access to more channels.</p></div>
+    <div class="card-header-actions">
+      <button type="button" class="btn btn-sm" data-refresh-section="tiers" aria-label="Refresh tiers">{{ icon("refresh-cw", 14) }} Refresh</button>
+    </div>
+  </div>
+  <div class="form-group">
+    <p class="form-hint">
+      Set channel permissions in Discord for each linked role to control access — the tier role is the access role, and roles are only ever granted, never revoked.
+      Keep tier roles above roles that restrict channels, and above the bot's highest role, so the bot can assign them.
+    </p>
+  </div>
+  <div id="rep-tiers-content" aria-live="polite">
+    <div class="skeleton skeleton-card"></div>
+  </div>
+</article>

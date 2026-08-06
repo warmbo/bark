@@ -88,14 +88,81 @@
     refreshIcons();
   }
 
+  // ── Tiers ───────────────────────────────────────────
+
+  async function loadTiers() {
+    const container = byId('rep-tiers-content');
+    if (!container) return;
+    loading(container);
+    try {
+      const [tiersRes, rolesRes] = await Promise.all([
+        safeFetch(api('tiers'), {cache: 'no-cache'}),
+        safeFetch(`/api/v1/guilds/${guildId}/roles`, {cache: 'no-cache'}),
+      ]);
+      const tiers = (tiersRes.data || tiersRes).tiers || [];
+      const roles = (rolesRes.data || rolesRes).roles || [];
+      if (!tiers.length) {
+        container.innerHTML = statePanel('empty', 'No tiers configured', 'Tiers will be created automatically for this guild.', 'tiers');
+        refreshIcons(); return;
+      }
+      const roleOptions = (selectedId) => ['<option value="">— no role —</option>']
+        .concat(roles.map(r => `<option value="${escHtml(r.id)}"${String(r.id) === String(selectedId) ? ' selected' : ''}>${escHtml(r.name)}</option>`))
+        .join('');
+      const rows = tiers.map((t) => `<tr>
+        <td><input class="form-input form-input-sm tier-symbol" value="${escHtml(t.symbol)}" aria-label="Tier symbol" size="3"></td>
+        <td><input class="form-input form-input-sm tier-name" value="${escHtml(t.name)}" aria-label="Tier name"></td>
+        <td><input type="number" min="0" class="form-input form-input-sm tier-level" value="${Number(t.min_level)}" aria-label="Min level"></td>
+        <td><input type="number" min="0" step="0.5" class="form-input form-input-sm tier-score" value="${Number(t.min_score)}" aria-label="Min score"></td>
+        <td><input type="text" class="form-input form-input-sm tier-color" value="${escHtml(t.color_hex)}" aria-label="Tier color" size="8"></td>
+        <td><select class="form-select form-select-sm tier-role" aria-label="Linked role">${roleOptions(t.role_id)}</select></td>
+        <td><input type="checkbox" class="tier-assign" ${t.assign_role ? 'checked' : ''} aria-label="Auto-assign role"></td>
+        <td><button type="button" class="btn btn-sm tier-save" data-name="${escHtml(t.name)}">Save</button></td>
+      </tr>`).join('');
+      container.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr>
+        <th>Symbol</th><th>Name</th><th>Min Level</th><th>Min Score</th><th>Color</th><th>Linked Role</th><th>Auto</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+      refreshIcons();
+    } catch (error) {
+      container.innerHTML = statePanel('error', 'Tiers unavailable', error.message || 'Could not load tiers.', 'tiers');
+      refreshIcons();
+    }
+  }
+
+  async function saveTier(row) {
+    const originalName = row.querySelector('.tier-save').dataset.name;
+    const payload = {
+      name: row.querySelector('.tier-name').value.trim(),
+      symbol: row.querySelector('.tier-symbol').value,
+      min_level: Number(row.querySelector('.tier-level').value || 0),
+      min_score: Number(row.querySelector('.tier-score').value || 0),
+      color_hex: row.querySelector('.tier-color').value,
+      role_id: row.querySelector('.tier-role').value || null,
+      assign_role: row.querySelector('.tier-assign').checked,
+    };
+    if (!payload.name) { showToast('Tier name is required', 'error'); return; }
+    try {
+      const result = await safeFetch(api(`tiers/${encodeURIComponent(originalName)}`), {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (result.success === false) throw new Error(result.error || 'Save failed');
+      showToast(`Tier ${payload.name} saved`, 'success');
+      loadTiers();
+    } catch (error) {
+      showToast(error.message || 'Unable to save tier', 'error');
+    }
+  }
+
   // ── Event wiring ──────────────────────────────────────
 
-  const loaders = { leaderboard: loadLeaderboard, thanks: loadThanks };
+  const loaders = { leaderboard: loadLeaderboard, thanks: loadThanks, tiers: loadTiers };
 
   document.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !root.contains(target)) return;
     if (target.dataset.refreshSection) loaders[target.dataset.refreshSection]?.();
+    if (target.classList.contains('tier-save')) saveTier(target.closest('tr'));
   });
 
   document.addEventListener('change', (event) => {

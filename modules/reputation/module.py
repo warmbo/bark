@@ -173,6 +173,11 @@ class ReputationModule(BarkModule):
     def get_extra_tabs(self) -> list[dict]:
         return [
             {
+                "id": "tiers",
+                "label": "Tiers",
+                "template": "module_tabs/reputation_tiers.html",
+            },
+            {
                 "id": "leaderboard",
                 "label": "Leaderboard",
                 "template": "module_tabs/reputation_leaderboard.html",
@@ -350,6 +355,141 @@ class ReputationModule(BarkModule):
                 await session.commit()
 
             return api_success({"message": "Reputation reset"})
+
+        @router.get("/guilds/{guild_id}/modules/reputation/tiers")
+        async def reputation_tiers(request: Request, guild_id: str):
+            """Return the tier ladder with linked role info."""
+            await get_module_min_role("reputation", guild_id)
+            if not check_api_permission(request, "reputation.view", guild_id):
+                return api_error("Insufficient permissions", status_code=403)
+            gid = int(guild_id)
+
+            async with session_scope() as session:
+                from sqlalchemy import select
+
+                result = await session.execute(
+                    select(ReputationTier)
+                    .where(ReputationTier.guild_id == str(gid))
+                    .order_by(ReputationTier.sort_order, ReputationTier.min_level)
+                )
+                tiers = [
+                    {
+                        "name": t.name,
+                        "symbol": t.symbol,
+                        "min_level": t.min_level,
+                        "min_score": round(float(t.min_score), 1),
+                        "color_hex": t.color_hex,
+                        "role_id": t.role_id,
+                        "assign_role": t.assign_role,
+                        "sort_order": t.sort_order,
+                    }
+                    for t in result.scalars().all()
+                ]
+
+            return api_success({"tiers": tiers})
+
+        @router.put("/guilds/{guild_id}/modules/reputation/tiers/{tier_name}")
+        async def reputation_tier_update(
+            request: Request, guild_id: str, tier_name: str, payload: dict
+        ):
+            """Update a tier: threshold, presentation, and linked Discord role."""
+            await get_module_min_role("reputation", guild_id)
+            if not check_api_permission(request, "reputation.manage", guild_id):
+                return api_error("Insufficient permissions")
+            gid = int(guild_id)
+            bot: "BarkBot" = request.state.bot
+            guild = bot.get_guild(gid)
+            if guild is None:
+                return api_not_found("Guild")
+
+            # Resolve tier by name, then apply a possible rename in one place.
+            new_name = (payload.get("name") or tier_name).strip()
+            role_id = payload.get("role_id")
+            if role_id:
+                role = guild.get_role(int(role_id))
+                if role is None:
+                    return api_error("Role not found in this guild", status_code=400)
+                role_id = str(role.id)
+            elif "role_id" in payload:
+                role_id = None
+
+            async with session_scope() as session:
+                from sqlalchemy import select, update
+
+                result = await session.execute(
+                    select(ReputationTier).where(
+                        ReputationTier.guild_id == str(gid),
+                        ReputationTier.name == tier_name,
+                    )
+                )
+                tier = result.scalar_one_or_none()
+                if tier is None:
+                    return api_not_found("ReputationTier")
+
+                old_name = tier.name
+                if new_name != old_name:
+                    existing = await session.execute(
+                        select(ReputationTier).where(
+                            ReputationTier.guild_id == str(gid),
+                            ReputationTier.name == new_name,
+                        )
+                    )
+                    if existing.scalar_one_or_none() is not None:
+                        return api_error(
+                            f"A tier named '{new_name}' already exists",
+                            status_code=400,
+                        )
+
+                if "symbol" in payload:
+                    tier.symbol = str(payload["symbol"])[:16]
+                if "color_hex" in payload:
+                    tier.color_hex = str(payload["color_hex"])[:7]
+                if "min_level" in payload:
+                    tier.min_level = max(0, int(payload["min_level"]))
+                if "min_score" in payload:
+                    tier.min_score = max(0.0, float(payload["min_score"]))
+                if "sort_order" in payload:
+                    tier.sort_order = max(0, int(payload["sort_order"]))
+                tier.role_id = role_id
+                if "assign_role" in payload:
+                    tier.assign_role = bool(payload["assign_role"])
+                tier.name = new_name
+
+                # Renaming must follow dependent references (rewards + profiles
+                # store the tier name as a string).
+                if new_name != old_name:
+                    await session.execute(
+                        update(ReputationReward)
+                        .where(
+                            ReputationReward.guild_id == str(gid),
+                            ReputationReward.required_tier == old_name,
+                        )
+                        .values(required_tier=new_name)
+                    )
+                    await session.execute(
+                        update(ReputationProfile)
+                        .where(
+                            ReputationProfile.guild_id == str(gid),
+                            ReputationProfile.current_tier == old_name,
+                        )
+                        .values(current_tier=new_name)
+                    )
+                await session.commit()
+
+            return api_success(
+                {
+                    "tier": {
+                        "name": tier.name,
+                        "symbol": tier.symbol,
+                        "min_level": tier.min_level,
+                        "min_score": round(float(tier.min_score), 1),
+                        "color_hex": tier.color_hex,
+                        "role_id": tier.role_id,
+                        "assign_role": tier.assign_role,
+                        "sort_order": tier.sort_order,
+                    }
+                }
+            )
 
         return router
 
