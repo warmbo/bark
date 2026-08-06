@@ -235,6 +235,18 @@ class BarkBot(commands.Bot):
 
     # ── Event → EventBus bridge ───────────────────────
 
+    async def on_interaction(self, interaction) -> None:
+        """Log every incoming application interaction for diagnostics."""
+        data = interaction.data or {}
+        logger.info(
+            "Interaction: name=%s id=%s type=%s guild=%s user=%s",
+            data.get("name"),
+            data.get("id"),
+            interaction.type,
+            interaction.guild_id,
+            getattr(interaction.user, "id", None),
+        )
+
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
             return
