@@ -197,6 +197,27 @@
     }
   }
 
+  async function generateTierRoles() {
+    const ok = await BarkDialog.confirm({
+      title: 'Generate Discord roles for tiers?',
+      message: 'The bot creates one role per tier that has none linked, names it after the tier, colors it with the tier color, and links it with auto-assign turned on. The bot needs the Manage Roles permission.',
+      confirmLabel: 'Generate roles',
+      danger: false,
+    });
+    if (!ok) return;
+    try {
+      const result = await safeFetch(api('tiers/generate-roles'), { method: 'POST' });
+      if (result.success === false) throw new Error(result.error || 'Generation failed');
+      const data = result.data || {};
+      const created = (data.created || []).length;
+      const skipped = (data.skipped || []).length;
+      showToast(`Created ${created} role(s)${skipped ? `, skipped ${skipped}` : ''}`, created ? 'success' : 'info');
+      loadTiers();
+    } catch (error) {
+      showToast(error.message || 'Unable to generate roles', 'error');
+    }
+  }
+
   // ── Event wiring ──────────────────────────────────────
 
   const loaders = { leaderboard: loadLeaderboard, thanks: loadThanks, tiers: loadTiers };
@@ -205,6 +226,7 @@
     const target = event.target.closest('button');
     if (!target || !root.contains(target)) return;
     if (target.dataset.refreshSection) loaders[target.dataset.refreshSection]?.();
+    if (target.dataset.generateTierRoles !== undefined) generateTierRoles();
     if (target.dataset.addTier !== undefined) addTierRow();
     if (target.classList.contains('tier-save')) saveTier(target.closest('tr'));
     if (target.classList.contains('tier-delete')) deleteTier(target.dataset.name);

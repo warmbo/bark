@@ -384,3 +384,127 @@ async def test_tier_delete_rejects_last_tier(db, _seeded_tiers, monkeypatch):
 
     assert last.status_code == 400
     assert "last tier" in last.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_generate_roles_creates_and_links_missing_roles(
+    db, _seeded_tiers, monkeypatch
+):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from types import SimpleNamespace
+
+    async with session_scope() as session:
+        from sqlalchemy import select
+
+        from database.models.reputation import ReputationTier
+
+        scout = (
+            await session.execute(
+                select(ReputationTier).where(
+                    ReputationTier.guild_id == "1",
+                    ReputationTier.name == "Scout",
+                )
+            )
+        ).scalar_one()
+        scout.role_id = "777"  # already linked — generation must skip it
+        await session.commit()
+
+    created_roles = []
+
+    class FakeGuild:
+        id = 1
+
+        async def create_role(self, **kwargs):
+            created_roles.append(kwargs)
+            return SimpleNamespace(id=555 + len(created_roles))
+
+        def get_role(self, rid):
+            return None
+
+    bot = _manager_bot()
+    bot.get_guild.return_value = FakeGuild()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/reputation/tiers/generate-roles"
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert [c["name"] for c in data["created"]] == ["Recruit"]  # Scout already linked
+    assert [s["name"] for s in data["skipped"]] == ["Scout"]
+    assert created_roles[0]["name"] == "Recruit"
+
+    async with session_scope() as session:
+        from sqlalchemy import select
+
+        from database.models.reputation import ReputationTier
+
+        recruit = (
+            await session.execute(
+                select(ReputationTier).where(
+                    ReputationTier.guild_id == "1",
+                    ReputationTier.name == "Recruit",
+                )
+            )
+        ).scalar_one()
+        assert recruit.role_id == "556"
+        assert recruit.assign_role is True
+
+
+@pytest.mark.asyncio
+async def test_generate_roles_reports_missing_permission(
+    db, _seeded_tiers, monkeypatch
+):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from unittest.mock import MagicMock
+
+    import discord
+
+    class NoPermGuild:
+        id = 1
+
+        async def create_role(self, **kwargs):
+            raise discord.Forbidden(
+                response=MagicMock(status=403), message="no perms"
+            )
+
+        def get_role(self, rid):
+            return None
+
+    bot = _manager_bot()
+    bot.get_guild.return_value = NoPermGuild()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/reputation/tiers/generate-roles"
+        )
+
+    assert response.status_code == 403
+    assert "Manage Roles" in response.json()["error"]

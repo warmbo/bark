@@ -651,6 +651,79 @@ class ReputationModule(BarkModule):
 
             return api_success({"message": f"Tier '{tier_name}' deleted"})
 
+        @router.post("/guilds/{guild_id}/modules/reputation/tiers/generate-roles")
+        async def reputation_tier_generate_roles(request: Request, guild_id: str):
+            """Create a Discord role for every tier that has none linked."""
+            await get_module_min_role("reputation", guild_id)
+            if not check_api_permission(request, "reputation.manage", guild_id):
+                return api_error("Insufficient permissions")
+            gid = int(guild_id)
+            bot: "BarkBot" = request.state.bot
+            guild = bot.get_guild(gid)
+            if guild is None:
+                return api_not_found("Guild")
+
+            async with session_scope() as session:
+                from sqlalchemy import select
+
+                tiers = list(
+                    (
+                        await session.execute(
+                            select(ReputationTier)
+                            .where(ReputationTier.guild_id == str(gid))
+                            .order_by(
+                                ReputationTier.sort_order, ReputationTier.min_level
+                            )
+                        )
+                    ).scalars().all()
+                )
+
+            created: list[dict] = []
+            skipped: list[dict] = []
+            for tier in tiers:
+                if tier.role_id:
+                    skipped.append({"name": tier.name, "reason": "role already linked"})
+                    continue
+                role_name = self._safe_role_name(tier.name)
+                try:
+                    role = await guild.create_role(
+                        name=role_name,
+                        colour=(
+                            discord.Color(int(tier.color_hex.lstrip("#"), 16))
+                            if tier.color_hex
+                            else discord.Color.default()
+                        ),
+                        reason="Bark Reputation: generated tier role",
+                    )
+                except discord.Forbidden:
+                    return api_error(
+                        "The bot needs the Manage Roles permission to create roles",
+                        status_code=403,
+                    )
+                except discord.HTTPException as exc:
+                    return api_error(
+                        f"Discord refused role creation: {exc}", status_code=400
+                    )
+
+                async with session_scope() as session:
+                    from sqlalchemy import select
+
+                    row = (
+                        await session.execute(
+                            select(ReputationTier).where(
+                                ReputationTier.guild_id == str(gid),
+                                ReputationTier.name == tier.name,
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if row is not None:
+                        row.role_id = str(role.id)
+                        row.assign_role = True  # the point of the feature
+                        await session.commit()
+                created.append({"name": tier.name, "role_id": str(role.id)})
+
+            return api_success({"created": created, "skipped": skipped})
+
         return router
 
     def get_settings_schema(self) -> dict:
@@ -2011,6 +2084,15 @@ class ReputationModule(BarkModule):
         filled = int(ratio * width)
         filled = max(0, min(width, filled))
         return "██" * filled + "░░" * (width - filled)
+
+    @staticmethod
+    def _safe_role_name(name: str) -> str:
+        """Sanitize a tier name into a valid Discord role name."""
+        import re
+
+        cleaned = re.sub(r"[@#]", "", name or "")
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()[:100]
+        return cleaned or "Tier"
 
     async def _get_level_constant(self, guild_id: int) -> float:
         config = await self.load_dashboard_config(guild_id)
