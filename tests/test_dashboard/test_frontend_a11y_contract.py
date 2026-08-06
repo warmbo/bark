@@ -22,6 +22,34 @@ def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def test_all_templates_compile():
+    """Every template must parse — catches stray {% endif %}/tag typos that
+    source-regex checks can't see (e.g. settings.html line 131 regression)."""
+    from unittest.mock import MagicMock
+
+    from dashboard import create_app
+
+    bot = MagicMock()
+    bot.guilds = []
+    bot.user = None
+    bot.modules = MagicMock()
+    bot.modules.event_bus = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {}
+
+    app = create_app(bot)
+    env = app.app.state.templates.env
+    offenders = []
+    for path in ALL_TEMPLATES:
+        rel = path.relative_to(TEMPLATES).as_posix()
+        try:
+            env.get_template(rel)
+        except Exception as exc:  # noqa: BLE001 — report every broken template
+            offenders.append(f"{rel}: {exc}")
+    assert offenders == [], f"templates that fail to compile: {offenders}"
+
+
 def test_templates_do_not_use_inline_event_handlers():
     offenders = []
     for path in ALL_TEMPLATES:
