@@ -3,6 +3,7 @@ and the ModuleManager plugin lifecycle)."""
 
 from __future__ import annotations
 
+import discord
 import pytest
 
 from services.plugin_manager import (
@@ -317,6 +318,7 @@ async def test_module_commands_nest_under_single_bark_group(tmp_path):
         name = "fake"
         version = "1.0.0"
         enabled = False
+        description = "fake module"
 
         def __init__(self, ctx):
             self.ctx = ctx
@@ -348,14 +350,13 @@ async def test_module_commands_nest_under_single_bark_group(tmp_path):
         def get_actions(self):
             return []
 
-    import discord
-
     manager = ModuleManager(bot)
     manager._modules["fake"] = FakeModule(BarkContext(bot, bot._event_bus))
     assert await manager.enable_module("fake") is True
 
     bark = manager._get_bark_group()
     assert bark.name == "bark"
+    # Single-command modules hang directly off /bark: /bark roll
     assert [c.name for c in bark.commands] == ["roll"]
     # The group itself is on the tree (global registration), not the subcommand.
     assert "bark" in bot.tree._global_commands
@@ -365,3 +366,152 @@ async def test_module_commands_nest_under_single_bark_group(tmp_path):
     assert await manager.disable_module("fake") is True
     assert [c.name for c in bark.commands] == []
     assert "bark" in bot.tree._global_commands
+
+
+@pytest.mark.asyncio
+async def test_multi_command_module_gets_subgroup(tmp_path):
+    """Multi-command modules nest under a per-module subgroup (/bark mod a)."""
+    import discord.app_commands as ac
+    from discord.app_commands import CommandTree
+
+    from services.bark_context import BarkContext
+    from services.module_manager import ModuleManager
+
+    bot = FakeBot()
+    from unittest.mock import MagicMock
+
+    bot.http = MagicMock()
+    bot._connection = MagicMock()
+    bot._connection._command_tree = None
+    bot.tree = CommandTree(bot)
+
+    class MultiModule:
+        name = "mod"
+        version = "1.0.0"
+        enabled = False
+        description = "multi module"
+
+        def __init__(self, ctx):
+            self.ctx = ctx
+
+        async def enable(self):
+            return True
+
+        async def disable(self):
+            return True
+
+        def get_commands(self):
+            from modules.base import CommandRegistration
+
+            return [
+                CommandRegistration(name="alpha", description="Alpha", slash=True),
+                CommandRegistration(name="beta", description="Beta", slash=True),
+            ]
+
+        def get_events(self):
+            return []
+
+        def _make_alpha_command(self):
+            @ac.command(name="alpha", description="Alpha")
+            async def alpha(interaction: discord.Interaction):
+                return None
+
+            return alpha
+
+        def _make_beta_command(self):
+            @ac.command(name="beta", description="Beta")
+            async def beta(interaction: discord.Interaction):
+                return None
+
+            return beta
+
+        def get_dashboard_pages(self):
+            return []
+
+        def get_actions(self):
+            return []
+
+    manager = ModuleManager(bot)
+    manager._modules["mod"] = MultiModule(BarkContext(bot, bot._event_bus))
+    assert await manager.enable_module("mod") is True
+
+    bark = manager._get_bark_group()
+    assert [c.name for c in bark.commands] == ["mod"]
+    subgroup = bark.commands[0]
+    assert [c.name for c in subgroup.commands] == ["alpha", "beta"]
+
+    assert await manager.disable_module("mod") is True
+    # Empty subgroups are dropped so the /bark group never syncs empty groups.
+    assert [c.name for c in bark.commands] == []
+
+
+@pytest.mark.asyncio
+async def test_namespaced_group_command_hangs_directly_off_bark(tmp_path):
+    """A module exposing a namespaced group (e.g. /bark trivia start) is a
+    direct child of /bark rather than wrapped in another subgroup."""
+    from discord.app_commands import CommandTree, Group
+
+    from services.bark_context import BarkContext
+    from services.module_manager import ModuleManager
+
+    bot = FakeBot()
+    from unittest.mock import MagicMock
+
+    bot.http = MagicMock()
+    bot._connection = MagicMock()
+    bot._connection._command_tree = None
+    bot.tree = CommandTree(bot)
+
+    class GroupModule:
+        name = "trivia"
+        version = "1.0.0"
+        enabled = False
+        description = "Trivia game"
+
+        def __init__(self, ctx):
+            self.ctx = ctx
+
+        async def enable(self):
+            return True
+
+        async def disable(self):
+            return True
+
+        def get_commands(self):
+            from modules.base import CommandRegistration
+
+            return [
+                CommandRegistration(name="trivia", description="Trivia game", slash=True)
+            ]
+
+        def get_events(self):
+            return []
+
+        def _make_trivia_command(self):
+            group = Group(name="trivia", description="Trivia game")
+            for sub in ("start", "stop"):
+
+                async def cb(interaction: discord.Interaction, _name: str = sub):
+                    return None
+
+                cb.__name__ = f"trivia_{sub}"
+                group.command(name=sub, description=sub)(cb)
+            return group
+
+        def get_dashboard_pages(self):
+            return []
+
+        def get_actions(self):
+            return []
+
+    manager = ModuleManager(bot)
+    manager._modules["trivia"] = GroupModule(BarkContext(bot, bot._event_bus))
+    assert await manager.enable_module("trivia") is True
+
+    bark = manager._get_bark_group()
+    assert [c.name for c in bark.commands] == ["trivia"]
+    trivia_group = bark.commands[0]
+    assert [c.name for c in trivia_group.commands] == ["start", "stop"]
+
+    assert await manager.disable_module("trivia") is True
+    assert [c.name for c in bark.commands] == []

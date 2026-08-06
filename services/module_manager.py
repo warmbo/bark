@@ -57,6 +57,8 @@ class ModuleManager:
         # lazily on first module enable so all commands share one namespace
         # (e.g. /bark trivia start instead of /trivia start).
         self._bark_group: Group | None = None
+        # module -> {command name -> owning subgroup (None = direct /bark child)}
+        self._command_owners: dict[str, dict[str, object]] = {}
 
     # ── Command namespace ─────────────────────────────
 
@@ -75,14 +77,44 @@ class ModuleManager:
             self.bot.tree.add_command(group, guild=self._command_guild())
         return group
 
-    def _unregister_command(self, command_name: str) -> None:
-        """Remove a module command from the /bark group (if present)."""
+    def _module_subgroup(self, module_name: str, description: str):
+        """Return (creating once) the /bark subgroup for a module's commands.
+
+        Discord limits a group to 25 children, so plain commands are grouped
+        per module (/bark moderation warn) while modules that already expose a
+        namespaced group (e.g. /bark trivia start) hang directly off /bark.
+        """
+        from discord.app_commands import Group
+
+        bark = self._get_bark_group()
+        existing = next((c for c in bark.commands if c.name == module_name), None)
+        if existing is None:
+            existing = Group(
+                name=module_name,
+                description=(description or f"{module_name} commands")[:100],
+            )
+            bark.add_command(existing)
+        return existing
+
+    def _unregister_command(self, module_name: str, command_name: str) -> None:
+        """Remove a module command from the /bark namespace."""
         if self._bark_group is None:
             return
         try:
-            self._bark_group.remove_command(command_name)
+            parent = self._command_owners.get(module_name, {}).get(command_name)
+            if parent is None:
+                self._bark_group.remove_command(command_name)
+            else:
+                parent.remove_command(command_name)
+                # Discord rejects groups without children — drop empty subgroups.
+                if not getattr(parent, "commands", None):
+                    self._bark_group.remove_command(parent.name)
         except Exception:
-            logger.exception("Failed to remove command '%s' from bark group", command_name)
+            logger.exception(
+                "Failed to remove command '%s' for module '%s'",
+                command_name,
+                module_name,
+            )
 
     # ── Discovery ─────────────────────────────────────
 
@@ -404,7 +436,22 @@ class ModuleManager:
                         if hasattr(app_cmd, "add_check"):
                             app_cmd.add_check(self._command_enabled_check(name))
                         if getattr(self.bot, "tree", None) is not None:
-                            self._get_bark_group().add_command(app_cmd)
+                            from discord.app_commands import Group
+
+                            single_command_module = (
+                                len([c for c in module.get_commands() if c.slash]) == 1
+                            )
+                            if isinstance(app_cmd, Group) or single_command_module:
+                                # /bark trivia start or /bark roll — namespaced
+                                # groups and single-command modules hang directly
+                                # off /bark (staying under Discord's 25-child cap).
+                                self._get_bark_group().add_command(app_cmd)
+                                self._command_owners.setdefault(name, {})[cmd.name] = None
+                            else:
+                                # Multi-command module: subgroup, e.g. /bark moderation warn
+                                subgroup = self._module_subgroup(name, module.description)
+                                subgroup.add_command(app_cmd)
+                                self._command_owners.setdefault(name, {})[cmd.name] = subgroup
                         self._registered_commands[name].add(cmd.name)
 
             # Centralized event subscription via EventBus
@@ -437,7 +484,7 @@ class ModuleManager:
             for command_name in self._registered_commands.get(name, set()):
                 if getattr(self.bot, "tree", None) is not None:
                     try:
-                        self._unregister_command(command_name)
+                        self._unregister_command(name, command_name)
                     except Exception:
                         logger.exception(
                             "Failed to roll back command '%s' for module '%s'",
@@ -466,7 +513,7 @@ class ModuleManager:
                 for cmd_name in self._registered_commands[name]:
                     if hasattr(self.bot, "tree"):
                         try:
-                            self._unregister_command(cmd_name)
+                            self._unregister_command(name, cmd_name)
                         except Exception:
                             pass
                 self._registered_commands[name].clear()
