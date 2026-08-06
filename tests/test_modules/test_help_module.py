@@ -91,9 +91,12 @@ async def test_help_dms_every_command_and_dashboard_info():
     import config as cfg
 
     public_url = cfg.config.dashboard.public_url
-    assert public_url in embed.description or any(
-        public_url in field.value for field in embed.fields
-    )
+    field_values = " ".join(field.value for field in embed.fields)
+    assert public_url in field_values
+    # the invite link is advertised as the SHORT branded URL, never the long
+    # discord.com/oauth2 link
+    assert f"{public_url}/invite" in field_values
+    assert "discord.com/oauth2" not in field_values
     # ephemeral confirmation sent in-channel
     assert interaction.response.messages and "Sent you a DM" in interaction.response.messages[0]
 

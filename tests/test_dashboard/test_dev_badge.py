@@ -148,3 +148,30 @@ async def test_middleware_does_not_double_inject(app, monkeypatch, client):
     async with client:
         response = await client.get("/")
     assert response.text.count('class="dev-badge-overlay"') == 1
+
+
+@pytest.mark.asyncio
+async def test_invite_route_redirects_to_discord_oauth(app, monkeypatch, client):
+    """GET /invite redirects to the real Discord OAuth invite URL and is
+    public (no auth required, no overlay needed on a redirect)."""
+    import config
+
+    target = "https://discord.com/oauth2/authorize?client_id=123&scope=bot"
+    monkeypatch.setattr(config.config.dashboard, "invite_url", target)
+    async with client:
+        response = await client.get("/invite", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == target
+
+
+@pytest.mark.asyncio
+async def test_invite_route_falls_back_to_public_url(app, monkeypatch, client):
+    """Without an invite_url configured, /invite still redirects somewhere
+    useful instead of erroring."""
+    import config
+
+    monkeypatch.setattr(config.config.dashboard, "invite_url", "")
+    async with client:
+        response = await client.get("/invite", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"].startswith("http")

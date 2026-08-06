@@ -172,6 +172,19 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     # ── Root Route ────────────────────────────────────
 
+    @app.get("/invite")
+    async def invite_redirect(request: Request):
+        """Short invite link — redirect to the real Discord OAuth invite URL.
+
+        The help command advertises `{public_url}/invite` so the bot's invite
+        link is short and branded instead of the long discord.com/oauth2 URL.
+        """
+        from fastapi.responses import RedirectResponse
+
+        if config.dashboard.invite_url:
+            return RedirectResponse(config.dashboard.invite_url, status_code=302)
+        return RedirectResponse(config.dashboard.public_url, status_code=302)
+
     @app.get("/")
     async def root(request: Request):
         """Serve the Bark landing/welcome page with OG tags."""

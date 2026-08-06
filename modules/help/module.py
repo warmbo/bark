@@ -67,8 +67,12 @@ class HelpModule(BarkModule):
             access_lines = []
             if getattr(config.dashboard, "public_url", ""):
                 access_lines.append(f"**Dashboard:** {config.dashboard.public_url}")
-            if getattr(config.dashboard, "invite_url", ""):
-                access_lines.append(f"**Invite:** {config.dashboard.invite_url}")
+            # Advertise the SHORT branded invite link ({public_url}/invite),
+            # which the dashboard's /invite route redirects to the real
+            # Discord OAuth URL — keep the long discord.com/oauth2 link out
+            # of user-facing output.
+            if getattr(config.dashboard, "public_url", ""):
+                access_lines.append(f"**Invite:** {config.dashboard.public_url}/invite")
             if access_lines:
                 embed.add_field(
                     name="Manage Bark",
