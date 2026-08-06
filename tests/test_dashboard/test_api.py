@@ -1003,6 +1003,49 @@ async def test_manifest(client):
         assert "categories" in data["data"]
 
 
+@pytest.mark.asyncio
+async def test_manifest_groups_plugins_under_addon_modules(client, app):
+    """Plugin modules land in the 'Add-on Modules' nav category, defaults in 'Modules'."""
+    from types import SimpleNamespace
+
+    def make_module(name: str, label: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            version="1.0.0",
+            description=f"{label} module",
+            get_dashboard_pages=lambda: [
+                SimpleNamespace(
+                    route=f"/guild/{{guild_id}}/modules/{name}",
+                    label=label,
+                    icon="zap",
+                    category="",
+                )
+            ],
+            get_actions=lambda: [],
+            get_commands=lambda: [],
+            get_settings_schema=lambda: {},
+        )
+
+    core = make_module("alpha", "Alpha")
+    plugin = make_module("beta", "Beta")
+    bot = app.state.bot
+    bot.modules.get_all_modules.return_value = {"alpha": core, "beta": plugin}
+    bot.modules.is_plugin.side_effect = lambda name: name == "beta"
+
+    resp = await client.get("/api/v1/guilds/1/manifest")
+    assert resp.status_code == 200
+    categories = resp.json()["data"]["categories"]
+
+    assert categories["_modules"]["label"] == "Modules"
+    core_pages = categories["_modules"]["pages"]
+    assert [p["module"] for p in core_pages] == ["alpha"]
+    assert all(p["is_plugin"] is False for p in core_pages)
+
+    assert categories["_plugins"]["label"] == "Add-on Modules"
+    plugin_pages = categories["_plugins"]["pages"]
+    assert [p["module"] for p in plugin_pages] == ["beta"]
+    assert all(p["is_plugin"] is True for p in plugin_pages)
+
+
 # ── Stats ─────────────────────────────────────────────
 
 

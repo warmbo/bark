@@ -84,7 +84,16 @@ async def get_guild_manifest(request: Request, guild_id: int):
                 is_plugin=bot.modules.is_plugin(name),
             )
         )
-        pages_list.extend(_module_pages(name, module, guild_id, enabled_by_module, pages))
+        pages_list.extend(
+            _module_pages(
+                name,
+                module,
+                guild_id,
+                enabled_by_module,
+                pages,
+                is_plugin=bot.modules.is_plugin(name),
+            )
+        )
         actions_list.extend(_module_actions(name, module, guild_id, actions))
     categories = _build_navigation(pages_list)
     case_count = await _count_cases(guild_id)
@@ -104,7 +113,7 @@ async def get_guild_manifest(request: Request, guild_id: int):
                 key: value
                 for key, value in sorted(
                     categories.items(),
-                    key=lambda item: int(str(item[1].get("priority", 99)) or 99),
+                    key=lambda item: float(str(item[1].get("priority", 99)) or 99),
                 )
             },
             "stats": {
@@ -166,6 +175,7 @@ def _module_pages(
     guild_id: int,
     enabled_by_module: dict[str, bool],
     pages,
+    is_plugin: bool = False,
 ) -> list[dict[str, object]]:
     """Render a module's dashboard pages into manifest entries."""
     rendered = []
@@ -177,6 +187,7 @@ def _module_pages(
                 "icon": page.icon or "puzzle",
                 "category": page.category or "",
                 "module": name,
+                "is_plugin": is_plugin,
                 "enabled": enabled_by_module.get(name, True),
             }
         )
@@ -209,7 +220,12 @@ def _build_navigation(pages_list: list[dict[str, object]]) -> dict[str, dict[str
         for page in pages_list
         if page.get("category") == "community" and not page.get("module")
     ]
-    module_pages = [page for page in pages_list if page.get("module")]
+    default_module_pages = [
+        page for page in pages_list if page.get("module") and not page.get("is_plugin")
+    ]
+    plugin_module_pages = [
+        page for page in pages_list if page.get("module") and page.get("is_plugin")
+    ]
     settings_pages = [page for page in pages_list if page.get("category") == "settings"]
 
     categories: dict[str, dict[str, object]] = {}
@@ -227,12 +243,19 @@ def _build_navigation(pages_list: list[dict[str, object]]) -> dict[str, dict[str
             "priority": 2,
             "pages": community_pages,
         }
-    if module_pages:
+    if default_module_pages:
         categories["_modules"] = {
             "label": "Modules",
             "icon": "puzzle",
             "priority": 3,
-            "pages": module_pages,
+            "pages": default_module_pages,
+        }
+    if plugin_module_pages:
+        categories["_plugins"] = {
+            "label": "Add-on Modules",
+            "icon": "puzzle",
+            "priority": 3.5,
+            "pages": plugin_module_pages,
         }
     if settings_pages:
         categories["settings"] = {

@@ -1238,6 +1238,27 @@ textarea:focus-visible,
     gap: 12px;
 }
 
+.modules-section { margin-bottom: 28px; }
+.modules-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 0 4px;
+}
+.modules-section-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    opacity: 0.8;
+    margin: 0 0 12px;
+}
+.modules-section + .modules-section {
+    padding-top: 20px;
+    border-top: 1px solid var(--border-subtle);
+}
+
 .module-card {
     background: var(--bg-card);
     backdrop-filter: var(--glass-blur);

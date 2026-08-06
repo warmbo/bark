@@ -3,6 +3,50 @@
 
 {% block content %}
 {% set active_page = "modules" %}
+{% set core_names = modules.keys() | reject("in", plugin_names) | list %}
+{% set addon_names = modules.keys() | select("in", plugin_names) | list %}
+
+{% macro module_card(name, module, is_enabled, guild) %}
+<article class="module-card {{ 'is-enabled' if is_enabled else 'is-disabled' }}" data-module="{{ name }}">
+    <div class="module-card-header">
+        <div class="module-card-title">
+            <h3><a href="/guild/{{ guild.id }}/modules/{{ name }}">{{ icon("puzzle", 16) }} {{ name | replace('_', ' ') | title }}</a>{% if name in plugin_names %} <span class="badge badge-muted">plugin</span>{% endif %}</h3>
+            <span class="module-version">v{{ module.version }}</span>
+        </div>
+        <label class="module-toggle-control" for="module-toggle-{{ name }}">
+            <span class="module-state-label">{{ 'On' if is_enabled else 'Off' }}</span>
+            <span class="toggle-switch">
+            <input type="checkbox" class="module-toggle" id="module-toggle-{{ name }}" name="module_enabled"
+                   data-module="{{ name }}" aria-label="Enable {{ name | replace('_', ' ') | title }}"
+                   {{ 'checked' if is_enabled else '' }}>
+            <span class="toggle-slider"></span>
+            </span>
+        </label>
+    </div>
+    {% if module.description %}
+    <p class="module-description">{{ module.description }}</p>
+    {% endif %}
+    <div class="module-meta">
+        {% set command_count = module.get_commands() | length %}
+        {% set event_count = module.get_events() | length %}
+        <span class="module-meta-item">{{ command_count }} command{{ '' if command_count == 1 else 's' }}</span>
+        <span class="module-meta-item">{{ event_count }} event{{ '' if event_count == 1 else 's' }}</span>
+        {% if module.get_dashboard_pages() %}
+        {% set page_count = module.get_dashboard_pages() | length %}
+        <span class="module-meta-item">{{ page_count }} page{{ '' if page_count == 1 else 's' }}</span>
+        {% endif %}
+    </div>
+    <div class="module-commands">
+        {% for cmd in module.get_commands()[:4] %}
+        <code class="cmd-badge">/{{ cmd.name }}</code>
+        {% endfor %}
+        {% if module.get_commands() | length > 4 %}<span class="cmd-more">+{{ (module.get_commands() | length) - 4 }} more</span>{% endif %}
+    </div>
+    <div class="module-card-footer">
+        <a href="/guild/{{ guild.id }}/modules/{{ name }}" class="card-footer-link">Configure {{ icon("arrow-right", 14) }}</a>
+    </div>
+</article>
+{% endmacro %}
 
 <div class="page-container">
     <div class="page-header">
@@ -10,52 +54,33 @@
         <p class="page-subtitle">Enable, disable, and configure Bark modules</p>
     </div>
 
-    <div class="modules-grid">
-        {% for name, module in modules.items() %}
-        {% set is_enabled = module_states.get(name, true) %}
-        <article class="module-card {{ 'is-enabled' if is_enabled else 'is-disabled' }}" data-module="{{ name }}">
-            <div class="module-card-header">
-                <div class="module-card-title">
-                    <h3><a href="/guild/{{ guild.id }}/modules/{{ name }}">{{ icon("puzzle", 16) }} {{ name | replace('_', ' ') | title }}</a>{% if name in plugin_names %} <span class="badge badge-muted">plugin</span>{% endif %}</h3>
-                    <span class="module-version">v{{ module.version }}</span>
-                </div>
-                <label class="module-toggle-control" for="module-toggle-{{ name }}">
-                    <span class="module-state-label">{{ 'On' if is_enabled else 'Off' }}</span>
-                    <span class="toggle-switch">
-                    <input type="checkbox" class="module-toggle" id="module-toggle-{{ name }}" name="module_enabled"
-                           data-module="{{ name }}" aria-label="Enable {{ name | replace('_', ' ') | title }}"
-                           {{ 'checked' if is_enabled else '' }}>
-                    <span class="toggle-slider"></span>
-                    </span>
-                </label>
-            </div>
-            {% if module.description %}
-            <p class="module-description">{{ module.description }}</p>
-            {% endif %}
-            <div class="module-meta">
-                {% set command_count = module.get_commands() | length %}
-                {% set event_count = module.get_events() | length %}
-                <span class="module-meta-item">{{ command_count }} command{{ '' if command_count == 1 else 's' }}</span>
-                <span class="module-meta-item">{{ event_count }} event{{ '' if event_count == 1 else 's' }}</span>
-                {% if module.get_dashboard_pages() %}
-                {% set page_count = module.get_dashboard_pages() | length %}
-                <span class="module-meta-item">{{ page_count }} page{{ '' if page_count == 1 else 's' }}</span>
-                {% endif %}
-            </div>
-            <div class="module-commands">
-                {% for cmd in module.get_commands()[:4] %}
-                <code class="cmd-badge">/{{ cmd.name }}</code>
-                {% endfor %}
-                {% if module.get_commands() | length > 4 %}<span class="cmd-more">+{{ (module.get_commands() | length) - 4 }} more</span>{% endif %}
-            </div>
-            <div class="module-card-footer">
-                <a href="/guild/{{ guild.id }}/modules/{{ name }}" class="card-footer-link">Configure {{ icon("arrow-right", 14) }}</a>
-            </div>
-        </article>
+    <section class="modules-section" aria-labelledby="modules-core-title">
+        <h2 id="modules-core-title" class="modules-section-title">{{ icon("layers", 16) }} Core Modules</h2>
+        <p class="modules-section-subtitle">Built into every Bark instance.</p>
+        {% if core_names %}
+        <div class="modules-grid">
+            {% for name in core_names %}
+            {{ module_card(name, modules[name], module_states.get(name, true), guild) }}
+            {% endfor %}
+        </div>
         {% else %}
-        <div class="state-panel state-empty full-width" role="status"><div><strong>No modules installed</strong><p>Install a Bark module package and restart the service.</p></div></div>
-        {% endfor %}
-    </div>
+        <div class="state-panel state-empty" role="status"><div><strong>No core modules</strong><p>This instance has no built-in modules.</p></div></div>
+        {% endif %}
+    </section>
+
+    <section class="modules-section" aria-labelledby="modules-addon-title">
+        <h2 id="modules-addon-title" class="modules-section-title">{{ icon("package-plus", 16) }} Add-on Modules</h2>
+        <p class="modules-section-subtitle">Single-file plugins — add or remove them in Settings → Modules → Plugins.</p>
+        {% if addon_names %}
+        <div class="modules-grid">
+            {% for name in addon_names %}
+            {{ module_card(name, modules[name], module_states.get(name, true), guild) }}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="state-panel state-empty" role="status"><div><strong>No add-on modules</strong><p>Upload a plugin file in Settings → Modules → Plugins to add one.</p></div></div>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}
 
