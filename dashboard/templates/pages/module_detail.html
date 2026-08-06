@@ -62,7 +62,7 @@
   {% if has_operations %}<section class="tab-panel active" id="tab-operate" role="tabpanel" aria-labelledby="workspace-tab-operate" tabindex="0">
     <div class="operation-grid">
     {% for action in module_data.actions %}
-      <article class="content-card action-card" id="action-{{ action.id }}">
+      <article class="content-card action-card {{ 'auto-run' if action.auto_run else '' }}" id="action-{{ action.id }}">
         <div class="card-header"><div><h2 class="card-title">{{ icon('zap', 16) }} {{ action.label }}</h2>{% if action.description %}<p class="card-description">{{ action.description }}</p>{% endif %}</div>{% if action.destructive %}{{ status_badge('Destructive', 'danger') }}{% endif %}</div>
         <div class="config-body">
           <form class="module-action-form" data-action="{{ action.id }}" data-endpoint="{{ action.endpoint }}" data-label="{{ action.label }}" data-destructive="{{ 'true' if action.destructive else 'false' }}" data-auto-run="{{ 'true' if action.auto_run else 'false' }}">

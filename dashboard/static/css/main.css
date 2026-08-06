@@ -2349,12 +2349,23 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     padding: var(--space-md) 0;
 }
 
-.action-result {
-    padding: 10px;
-    margin: 0 var(--space-xl) var(--space-lg);
-    font-size: 13px;
-    border-left: 2px solid var(--accent);
-    background: var(--bg-elevated);
+.action-result { padding: 10px; margin: 0 var(--space-xl) var(--space-lg); font-size: 13px; border-left: 2px solid var(--accent); background: var(--bg-elevated); }
+/* Auto-run actions (e.g. trivia leaderboard) render as a two-pane layout:
+   controls left, live result right. The card spans the full operate row so
+   the result table gets real width. */
+.operation-grid:has(.action-card.auto-run) { grid-template-columns: minmax(0, 1fr); }
+.action-card.auto-run .config-body {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+.action-card.auto-run .action-result {
+    margin: 0;
+    min-height: 120px;
+    border-left: none;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
 }
 .action-result.success { background: var(--green-muted); border-color: var(--green); color: #86efac; }
 .action-result.error { background: var(--red-muted); border-color: var(--red); color: #fca5a5; }
