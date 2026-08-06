@@ -34,7 +34,7 @@ class DashboardConfig:
     port: int = 8090
     public_url: str = "http://127.0.0.1:8090"
     secret_key: str = ""
-    session_ttl: int = 86400  # 24 hours
+    session_ttl: int = 2592000  # 30 days — signed session cookie lifetime
     cors_origins: list[str] = field(default_factory=lambda: ["*"])
     force_https: bool = False
     rate_limit_per_minute: int = 60
@@ -171,6 +171,13 @@ class Config:
         cfg.dashboard.public_url = os.getenv("BARK_PUBLIC_URL", cfg.dashboard.public_url).rstrip(
             "/"
         )
+        raw_session_ttl = os.getenv("BARK_DASHBOARD_SESSION_TTL", "")
+        try:
+            cfg.dashboard.session_ttl = int(raw_session_ttl) if raw_session_ttl else cfg.dashboard.session_ttl
+        except ValueError:
+            raise ConfigurationError(
+                f"BARK_DASHBOARD_SESSION_TTL must be an integer number of seconds, got {raw_session_ttl!r}"
+            ) from None
         env_key = os.getenv("BARK_SECRET_KEY", "")
         cfg.dashboard.secret_key = env_key or _get_or_generate_secret_key(cfg.data_dir)
 
