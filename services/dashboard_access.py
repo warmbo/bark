@@ -24,17 +24,26 @@ def derive_dashboard_role(
     guilds: Iterable[dict[str, Any]],
     bot_guild_ids: set[str],
 ) -> str:
-    """Derive the global UI role from the user's current shared guilds."""
+    """Derive the global UI role from the user's current shared guilds.
+
+    Tiering matches Discord permissions: an owner or ADMINISTRATOR of any
+    shared guild becomes admin; a MANAGE_GUILD holder becomes moderator;
+    every other member of a shared guild is a read-only viewer. Users who
+    share no guild with the bot are viewers too (they have nothing to see).
+    """
     shared = [guild for guild in guilds if str(guild.get("id")) in bot_guild_ids]
     if any(
-        can_manage_discord_guild(
-            owner=bool(guild.get("owner", False)),
-            permissions=_permission_value(guild.get("permissions")),
-        )
+        bool(guild.get("owner", False))
+        or (_permission_value(guild.get("permissions")) & DISCORD_ADMINISTRATOR)
         for guild in shared
     ):
         return "admin"
-    return "moderator" if shared else "viewer"
+    if any(
+        _permission_value(guild.get("permissions")) & DISCORD_MANAGE_GUILD
+        for guild in shared
+    ):
+        return "moderator"
+    return "viewer"
 
 
 def resolve_dashboard_role(
@@ -113,6 +122,47 @@ async def user_can_manage_guild(
         )
     )
     return bool(result.scalar_one_or_none())
+
+
+async def user_is_guild_member(
+    session: AsyncSession,
+    discord_user_id: str,
+    guild_id: int | str,
+) -> bool:
+    """Return whether Discord reported the user as a member of the guild.
+
+    Any guild the user belongs to (regardless of permissions) has an access
+    row written at login, so membership is a separate, broader check than
+    ``user_can_manage_guild``.
+    """
+    result = await session.execute(
+        select(DashboardGuildAccess.user_discord_id).where(
+            DashboardGuildAccess.user_discord_id == discord_user_id,
+            DashboardGuildAccess.guild_id == str(guild_id),
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def user_shares_guild_with_bot(
+    session: AsyncSession,
+    discord_user_id: str,
+    bot_guild_ids: set[str],
+) -> bool:
+    """Return whether the user is a member of any guild where Bark is installed.
+
+    This is the admission criterion for the dashboard: anyone who belongs to
+    a server Bark is in can sign in and view it (login always required).
+    """
+    if not bot_guild_ids:
+        return False
+    result = await session.execute(
+        select(DashboardGuildAccess.user_discord_id).where(
+            DashboardGuildAccess.user_discord_id == discord_user_id,
+            DashboardGuildAccess.guild_id.in_(list(bot_guild_ids)),
+        )
+    )
+    return result.scalar_one_or_none() is not None
 
 
 def build_bot_invite_url(client_id: str, guild_id: str) -> str:

@@ -68,9 +68,9 @@ async def test_auth_error_surfaces_message_on_landing(oauth_app):
     async with AsyncClient(
         transport=ASGITransport(app=oauth_app), base_url="http://test"
     ) as client:
-        response = await client.get("/?auth_error=invite_required")
+        response = await client.get("/?auth_error=no_shared_guild")
     assert response.status_code == 200
-    assert AUTH_ERROR_MESSAGES["invite_required"] in response.text
+    assert AUTH_ERROR_MESSAGES["no_shared_guild"] in response.text
     assert "auth-error-banner" in response.text
 
 

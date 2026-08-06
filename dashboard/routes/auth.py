@@ -57,6 +57,7 @@ AUTH_ERROR_MESSAGES = {
     "user_fetch_failed": "Couldn't load your Discord profile — please try again.",
     "guild_fetch_failed": "Couldn't load your servers — please try again.",
     "invite_required": "This Bark instance is invite-only. Ask the owner for an invite link.",
+    "no_shared_guild": "You need to be a member of a server where Bark is installed to use the dashboard.",
     "oauth_required": "Sign-in isn't set up on this instance yet.",
 }
 
@@ -179,21 +180,27 @@ async def callback(
     )
     derived_role = derive_dashboard_role(guilds, bot_guild_ids)
 
-    # Only explicit owners and users who redeemed an owner-issued invite can
-    # use this hosted instance. The signed session holds the token only until
-    # Discord identifies the recipient.
+    # Only explicit owners and users who are members of a server where Bark
+    # is installed can use this dashboard. Login is always required, but no
+    # dashboard invite is needed for server members — invites are for adding
+    # Bark to a server, not for dashboard access. Active hosted-instance
+    # grants remain a fallback admission path.
     role = "viewer"
     async with session_scope() as session:
         is_owner = user["id"] in config.oauth2.owner_discord_ids
         invite_token = request.session.pop("instance_invite_token", None)
-        if not is_owner and not await authorize_instance_user(
+        shared_guild_ids = {str(g.get("id")) for g in guilds} & bot_guild_ids
+        if not is_owner and not shared_guild_ids and not await authorize_instance_user(
             session,
             discord_user_id=user["id"],
             invite_token=invite_token,
         ):
             request.session.clear()
-            logger.warning("Rejected uninvited dashboard login for Discord user %s", user["id"])
-            return _auth_error_redirect("invite_required")
+            logger.warning(
+                "Rejected dashboard login for Discord user %s: not a member of any Bark server",
+                user["id"],
+            )
+            return _auth_error_redirect("no_shared_guild")
 
         # Persist user to database and determine role
         # Check if this user already has a record

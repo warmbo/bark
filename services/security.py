@@ -131,6 +131,19 @@ async def _user_can_manage_guild(user_id: str, guild_id: str) -> bool:
         return await user_can_manage_guild(session, user_id, guild_id)
 
 
+async def _user_is_guild_member(user_id: str, guild_id: str) -> bool:
+    """Check whether Discord reported the user as a member of the guild.
+
+    Membership is broader than manage access: any member of a server where
+    Bark is installed may view its dashboard (mutations stay role-gated).
+    """
+    from database.engine import session_scope
+    from services.dashboard_access import user_is_guild_member
+
+    async with session_scope() as session:
+        return await user_is_guild_member(session, user_id, guild_id)
+
+
 def _access_denied_response(path: str, api_message: str, html_message: str) -> Response:
     """Return the 403 response (JSON envelope for API paths, HTML otherwise)."""
     if path.startswith("/api/"):
@@ -164,33 +177,49 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # beyond session_ttl still expires the cookie (signer max_age).
         request.session["_renewed"] = int(time.monotonic())
 
-        # Hosted Bark instances are closed by default.  Owner identity is
-        # config-backed; every other signed-in user must retain an active
-        # database grant, so access revocation takes effect on the next request.
+        # Bark instances admit any Discord user who is a member of a server
+        # where Bark is installed — login is always required, but no dashboard
+        # invite is needed for server members. Owner identity is config-backed;
+        # an active hosted-instance grant remains a fallback admission path so
+        # access revocation still takes effect on the next request.
         if (
             config.oauth2.owner_discord_ids
             and user.get("id") not in config.oauth2.owner_discord_ids
         ):
             from database.engine import session_scope
+            from services.dashboard_access import user_shares_guild_with_bot
             from services.instance_invites import is_instance_user_authorized
 
+            bot = getattr(request.app.state, "bot", None)
+            bot_guild_ids = {str(g.id) for g in bot.guilds} if bot is not None else set()
             async with session_scope() as session:
-                authorized = await is_instance_user_authorized(session, user["id"])
-            if not authorized:
+                shared = await user_shares_guild_with_bot(session, user["id"], bot_guild_ids)
+                if not shared:
+                    shared = await is_instance_user_authorized(session, user["id"])
+            if not shared:
                 request.session.clear()
                 return _access_denied_response(
                     path,
-                    "Hosted instance access has been revoked",
-                    "Your access to this hosted Bark instance has been revoked.",
+                    "You must be a member of a server where Bark is installed",
+                    "You must be a member of a server where Bark is installed to use this dashboard.",
                 )
 
         guild_id = _guild_id_from_path(path)
-        if guild_id and not await _user_can_manage_guild(user["id"], guild_id):
-            return _access_denied_response(
-                path,
-                "You cannot manage this Discord server",
-                "You do not have permission to manage this Discord server.",
-            )
+        if guild_id:
+            # Guild pages are open to: any member of a server where Bark is
+            # installed (connected), and any manager of a server who may still
+            # be setting it up (the "Add Bark" tier). A plain non-member of an
+            # uninstalled server has nothing behind /guild/{id}.
+            bot = getattr(request.app.state, "bot", None)
+            bot_guild_ids = {str(g.id) for g in bot.guilds} if bot is not None else set()
+            is_member = await _user_is_guild_member(user["id"], guild_id)
+            can_manage = await _user_can_manage_guild(user["id"], guild_id)
+            if not is_member or (str(guild_id) not in bot_guild_ids and not can_manage):
+                return _access_denied_response(
+                    path,
+                    "You are not a member of this Discord server",
+                    "You do not have access to this Discord server.",
+                )
 
         action = mutation_capability(request.method, path)
         if action is not None:
