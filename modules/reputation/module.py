@@ -105,6 +105,7 @@ class ReputationModule(BarkModule):
             EventRegistration("discord_message", handler="_on_message"),
             EventRegistration("raw_reaction_add", handler="_on_reaction_add"),
             EventRegistration("discord_voice_state", handler="_on_voice_state"),
+            EventRegistration("discord_member_join", handler="_on_member_join"),
         ]
 
     def get_commands(self) -> list[CommandRegistration]:
@@ -760,7 +761,151 @@ class ReputationModule(BarkModule):
         for guild in self.ctx.guilds:
             guild_id = int(guild.id)
             await self._ensure_default_tiers(guild_id)
+            # Catch-up: members who leveled while the bot was offline (or
+            # before a role was linked) get their tier roles on boot.
+            asyncio.create_task(self._sync_tier_roles_delayed(guild_id))
         self._voice_task = asyncio.create_task(self._voice_tick_loop())
+
+    async def _sync_tier_roles_delayed(self, guild_id: int) -> None:
+        """Run the tier-role catch-up sync shortly after boot, never blocking it."""
+        try:
+            await asyncio.sleep(3)
+            await self._sync_tier_roles(guild_id)
+        except Exception:
+            self._logger.exception(
+                "Tier role sync failed for guild %s", guild_id
+            )
+
+    async def _sync_tier_roles(self, guild_id: int) -> int:
+        """Assign missing tier roles to eligible members. Returns count assigned.
+
+        Roles are only ever added here (no demotion), matching the live
+        promotion behavior.
+        """
+        guild = self.ctx.get_guild(guild_id)
+        if guild is None:
+            return 0
+
+        async with session_scope() as session:
+            from sqlalchemy import select
+
+            tiers_result = await session.execute(
+                select(ReputationTier)
+                .where(ReputationTier.guild_id == str(guild_id))
+                .order_by(ReputationTier.sort_order, ReputationTier.min_level)
+            )
+            tier_rows = list(tiers_result.scalars().all())
+            assignable = [t for t in tier_rows if t.assign_role and t.role_id]
+            if not assignable:
+                return 0
+            profiles_result = await session.execute(
+                select(ReputationProfile).where(
+                    ReputationProfile.guild_id == str(guild_id),
+                    ReputationProfile.total_score > 0,
+                )
+            )
+            profiles = list(profiles_result.scalars().all())
+
+        assigned = 0
+        for profile in profiles:
+            try:
+                if await self._sync_member_tier_role(guild_id, int(profile.user_id)):
+                    assigned += 1
+            except Exception:
+                self._logger.exception(
+                    "Failed to sync tier role for user %s in guild %s",
+                    profile.user_id,
+                    guild_id,
+                )
+        if assigned:
+            self._logger.info(
+                "Tier role sync for guild %s assigned %d role(s)",
+                guild_id,
+                assigned,
+            )
+        return assigned
+
+    async def _sync_member_tier_role(self, guild_id: int, user_id: int) -> bool:
+        """Assign the tier role for one member if they've leveled past it.
+
+        Returns True when a role was assigned. Never removes roles (no
+        demotion). Mirrors the live promotion behavior.
+        """
+        guild = self.ctx.get_guild(guild_id)
+        if guild is None:
+            return False
+
+        async with session_scope() as session:
+            from sqlalchemy import select
+
+            tiers_result = await session.execute(
+                select(ReputationTier)
+                .where(ReputationTier.guild_id == str(guild_id))
+                .order_by(ReputationTier.sort_order, ReputationTier.min_level)
+            )
+            tier_rows = list(tiers_result.scalars().all())
+            profile = (
+                await session.execute(
+                    select(ReputationProfile).where(
+                        ReputationProfile.guild_id == str(guild_id),
+                        ReputationProfile.user_id == str(user_id),
+                    )
+                )
+            ).scalar_one_or_none()
+        if profile is None:
+            return False
+        assignable = [t for t in tier_rows if t.assign_role and t.role_id]
+        if not assignable:
+            return False
+
+        config = await self.load_dashboard_config(guild_id)
+        level_const = float(config.get("level_constant", 50.0))
+        tier_dicts = [
+            {
+                "name": t.name,
+                "symbol": t.symbol,
+                "min_score": t.min_score,
+                "min_level": t.min_level,
+                "color_hex": t.color_hex,
+                "sort_order": t.sort_order,
+                "role_id": t.role_id,
+                "assign_role": t.assign_role,
+            }
+            for t in tier_rows
+        ]
+
+        member = guild.get_member(user_id)
+        if member is None:
+            return False
+        level = level_from_score(profile.total_score, level_const)
+        resolved = resolve_tier(tier_dicts, level, profile.total_score)
+        if not (resolved.get("assign_role") and resolved.get("role_id")):
+            return False
+        role = guild.get_role(int(resolved["role_id"]))
+        if role is None or role in member.roles:
+            return False
+        await self._assign_tier_role(guild_id, user_id, resolved["role_id"], tier_rows)
+        return True
+
+    async def _on_member_join(self, event_type: str, **data) -> None:
+        """Re-grant tier roles to a returning member shortly after join."""
+        member = data.get("member")
+        if member is None or getattr(member, "bot", False):
+            return
+        guild_id = getattr(member, "guild", None)
+        guild_id = getattr(guild_id, "id", None)
+        if guild_id is None:
+            return
+        try:
+            # Give Discord a moment to finish the member chunk before roles exist.
+            await asyncio.sleep(1)
+            await self._sync_member_tier_role(int(guild_id), int(member.id))
+        except Exception:
+            self._logger.exception(
+                "Failed to sync tier role on join for user %s in guild %s",
+                member.id,
+                guild_id,
+            )
 
     async def disable(self) -> None:
         self._logger.info("Disabling reputation module")
@@ -815,18 +960,41 @@ class ReputationModule(BarkModule):
 
     async def import_stats(self, guild_id: int, stats: dict) -> list[str]:
         """Restore reputation profiles from a backup (upsert by user)."""
-        from datetime import date
+        from datetime import date, timedelta
 
         from sqlalchemy import select
 
         from database.engine import session_scope
-        from database.models.reputation import ReputationProfile
+        from database.models.reputation import ReputationProfile, ReputationTier
 
         profiles = stats.get("profiles") or []
         if not profiles:
             return []
         restored = 0
         async with session_scope() as session:
+            tiers_result = await session.execute(
+                select(ReputationTier)
+                .where(ReputationTier.guild_id == str(guild_id))
+                .order_by(ReputationTier.sort_order, ReputationTier.min_level)
+            )
+            tier_rows = list(tiers_result.scalars().all())
+            tier_dicts = [
+                {
+                    "name": t.name,
+                    "symbol": t.symbol,
+                    "min_score": t.min_score,
+                    "min_level": t.min_level,
+                    "color_hex": t.color_hex,
+                    "sort_order": t.sort_order,
+                    "role_id": t.role_id,
+                    "assign_role": t.assign_role,
+                }
+                for t in tier_rows
+            ]
+            config = await self.load_dashboard_config(guild_id)
+            level_const = float(config.get("level_constant", 50.0))
+
+            today = date.today()
             for row in profiles:
                 user_id = str(row.get("user_id", ""))
                 if not user_id:
@@ -839,11 +1007,14 @@ class ReputationModule(BarkModule):
                 )
                 prof = result.scalar_one_or_none()
                 if prof is None:
-                    prof = ReputationProfile(guild_id=str(guild_id), user_id=user_id)
+                    prof = ReputationProfile(
+                        guild_id=str(guild_id),
+                        user_id=user_id,
+                        week_start=today - timedelta(days=today.weekday()),
+                        month_start=today.replace(day=1),
+                    )
                     session.add(prof)
                 prof.total_score = float(row.get("total_score", prof.total_score))
-                prof.level = int(row.get("level", prof.level))
-                prof.current_tier = str(row.get("current_tier", prof.current_tier))
                 prof.weekly_score = float(row.get("weekly_score", prof.weekly_score))
                 prof.monthly_score = float(row.get("monthly_score", prof.monthly_score))
                 prof.thanks_received = int(row.get("thanks_received", prof.thanks_received))
@@ -861,6 +1032,11 @@ class ReputationModule(BarkModule):
                     )
                 except ValueError:
                     pass
+                # Level and tier are derived from total_score so imported
+                # profiles display and role-gate exactly like live ones.
+                prof.level = level_from_score(prof.total_score, level_const)
+                resolved = resolve_tier(tier_dicts, prof.level, prof.total_score)
+                prof.current_tier = resolved["name"]
                 restored += 1
             await session.commit()
         return [f"reputation: restored {restored} profile(s)"]
@@ -1185,9 +1361,15 @@ class ReputationModule(BarkModule):
                 inline=False,
             )
         if tier_changed:
+            value = f"Promoted to **{tier_data['name']}**!"
+            if tier_data.get("assign_role") and tier_data.get("role_id"):
+                value += (
+                    f"\nYou unlocked the role <@&{tier_data['role_id']}> — "
+                    "it may grant access to more channels!"
+                )
             embed.add_field(
                 name=f"{tier_data['symbol']} New Tier: {tier_data['name']}",
-                value=f"Promoted to **{tier_data['name']}**!",
+                value=value,
                 inline=False,
             )
         if new_rewards:
