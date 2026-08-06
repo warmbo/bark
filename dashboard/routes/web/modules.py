@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from config import config
 from database.engine import session_scope
 from database.models.module import ModuleConfig
 from database.models.permissions import ModuleRoleAccess
@@ -15,7 +16,6 @@ from services.response import check_api_permission, set_cached_module_min_role
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-
 router = APIRouter(tags=["web-modules"])
 
 
@@ -51,6 +51,7 @@ async def modules_page(request: Request, guild_id: int):
             "modules": all_modules,
             "module_states": module_states,
             "plugin_names": plugin_names,
+            "config": config,
         },
     )
 
@@ -161,4 +162,19 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
             "module_name": module_name,
             "module_data": module_data,
         },
+    )
+
+
+@router.get("/plugins", response_class=HTMLResponse)
+async def plugin_catalog_page(request: Request, guild_id: int):
+    bot = request.state.bot
+    guild = bot.get_guild(guild_id)
+
+    if guild is None:
+        return HTMLResponse("Guild not found", status_code=404)
+
+    return templates.TemplateResponse(
+        request,
+        "pages/plugin_catalog.html",
+        {"guild": guild},
     )

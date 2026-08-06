@@ -70,7 +70,7 @@
 
     <section class="modules-section" aria-labelledby="modules-addon-title">
         <h2 id="modules-addon-title" class="modules-section-title">{{ icon("package-plus", 16) }} Add-on Modules</h2>
-        <p class="modules-section-subtitle">Single-file plugins — add or remove them in Settings → Modules → Plugins.</p>
+        <p class="modules-section-subtitle">Single-file plugins — install and remove them in the Plugin Manager below.</p>
         {% if addon_names %}
         <div class="modules-grid">
             {% for name in addon_names %}
@@ -78,7 +78,25 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="state-panel state-empty" role="status"><div><strong>No add-on modules</strong><p>Upload a plugin file in Settings → Modules → Plugins to add one.</p></div></div>
+        <div class="state-panel state-empty" role="status"><div><strong>No add-on modules</strong><p>Upload a plugin file in the Plugin Manager below to add one.</p></div></div>
+        {% endif %}
+    </section>
+
+    <section class="modules-section" aria-labelledby="modules-plugins-title">
+        <h2 id="modules-plugins-title" class="modules-section-title">{{ icon("package-plus", 16) }} Plugin Manager</h2>
+        <p class="modules-section-subtitle">Extra single-file modules. Upload a <code>.py</code> file to add functionality; removing one unloads it immediately.</p>
+        {% if not config.oauth2.owner_discord_ids or request.session.get('user', {}).get('id') in config.oauth2.owner_discord_ids %}
+        <div class="content-card">
+            <div class="plugins-upload-row">
+                <input type="file" id="plugin-file-input" name="plugin_file" accept=".py" hidden>
+                <label class="btn btn-sm" for="plugin-file-input">{{ icon("upload", 14) }} Choose .py file</label>
+                <span class="form-hint" id="plugin-file-name">No file selected</span>
+                <button type="button" class="btn btn-primary btn-sm" id="plugin-install-btn" disabled>{{ icon("package-plus", 14) }} Install</button>
+            </div>
+            <div class="workspace-data-card" id="plugins-list" aria-live="polite"></div>
+        </div>
+        {% else %}
+        <div class="state-panel state-empty" role="status"><div><strong>Owner access required</strong><p>Only instance owners can install or remove plugins.</p></div></div>
         {% endif %}
     </section>
 </div>
@@ -86,6 +104,84 @@
 
 {% block scripts %}
 <script>
+    // ── Plugin Manager ─────────────────────────────────
+
+    const pluginFileInput = document.getElementById('plugin-file-input');
+    const pluginFileName = document.getElementById('plugin-file-name');
+    const pluginInstallBtn = document.getElementById('plugin-install-btn');
+    const pluginsList = document.getElementById('plugins-list');
+
+    async function loadPlugins() {
+        if (!pluginsList) return;
+        try {
+            const result = await safeFetch('/api/v1/instance/plugins');
+            const plugins = result?.data?.plugins || [];
+            if (!plugins.length) {
+                pluginsList.innerHTML = '<div class="state-panel state-empty"><div><strong>No plugins installed</strong><p>Upload a single-file .py module to add extra functionality.</p></div></div>';
+                return;
+            }
+            pluginsList.innerHTML = plugins.map(p => `
+                <div class="info-row">
+                    <span class="info-label"><strong>${escHtml(p.name)}</strong> <span class="text-tertiary">v${escHtml(p.version)}</span></span>
+                    <span class="info-value">${escHtml(p.description || 'No description')}
+                        <button type="button" class="btn btn-xs" data-remove-plugin="${escHtml(p.name)}">Remove</button>
+                    </span>
+                </div>`).join('');
+        } catch (error) {
+            pluginsList.innerHTML = `<div class="state-panel state-empty"><div><strong>Plugins unavailable</strong><p>${escHtml(error.message || 'Could not load plugins')}</p></div></div>`;
+        }
+    }
+
+    pluginFileInput?.addEventListener('change', () => {
+        const file = pluginFileInput.files?.[0];
+        if (pluginFileName) pluginFileName.textContent = file ? file.name : 'No file selected';
+        if (pluginInstallBtn) pluginInstallBtn.disabled = !file;
+    });
+
+    pluginInstallBtn?.addEventListener('click', async () => {
+        const file = pluginFileInput.files?.[0];
+        if (!file) return;
+        pluginInstallBtn.disabled = true;
+        pluginInstallBtn.innerHTML = 'Installing...';
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const result = await safeFetch('/api/v1/instance/plugins', { method: 'POST', body: formData });
+            if (result.success === false) throw new Error(result.error || 'Install failed');
+            showToast(`Plugin ${result.data?.name || ''} installed`, 'success');
+            pluginFileInput.value = '';
+            if (pluginFileName) pluginFileName.textContent = 'No file selected';
+            await loadPlugins();
+            location.reload();
+        } catch (error) {
+            showToast(error.message || 'Install failed', 'error');
+        } finally {
+            pluginInstallBtn.disabled = true;
+            pluginInstallBtn.innerHTML = '{{ icon("package-plus", 14) }} Install';
+        }
+    });
+
+    pluginsList?.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-remove-plugin]');
+        if (!button) return;
+        const name = button.dataset.removePlugin;
+        try {
+            const confirmed = await BarkDialog.confirm({ title: `Remove plugin "${name}"?`, message: 'This unloads it immediately and deletes its file.', confirmLabel: 'Remove', danger: true });
+            if (!confirmed) return;
+            const result = await safeFetch(`/api/v1/instance/plugins/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (result.success === false) throw new Error(result.error || 'Remove failed');
+            showToast(`Plugin ${name} removed`, 'success');
+            await loadPlugins();
+            location.reload();
+        } catch (error) {
+            showToast(error.message || 'Remove failed', 'error');
+        }
+    });
+
+    loadPlugins();
+
+    // ── Module toggles ─────────────────────────────────
+
     document.querySelectorAll('.module-toggle').forEach(toggle => {
         toggle.addEventListener('change', async (e) => {
             const moduleName = e.target.dataset.module;
