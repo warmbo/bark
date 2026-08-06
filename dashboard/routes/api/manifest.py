@@ -191,6 +191,20 @@ def _module_pages(
                 "enabled": enabled_by_module.get(name, True),
             }
         )
+    # Plugins without custom dashboard pages still need a nav entry so they
+    # appear under "Add-on Modules" in the sidebar (linked to the module page).
+    if not rendered and is_plugin:
+        rendered.append(
+            {
+                "route": f"/guild/{guild_id}/modules/{name}",
+                "label": name.replace("_", " ").title(),
+                "icon": "puzzle",
+                "category": "",
+                "module": name,
+                "is_plugin": True,
+                "enabled": enabled_by_module.get(name, True),
+            }
+        )
     return rendered
 
 
