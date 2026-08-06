@@ -34,9 +34,10 @@
         <td>Level ${m.level}</td>
         <td>${m.tier}</td>
         <td><strong>${Number(m.total_score).toLocaleString()}</strong></td>
+        <td><button type="button" class="btn btn-xs" data-adjust-score="${escHtml(m.user_id)}" data-name="${escHtml(m.tag)}" data-score="${m.total_score}">Edit</button></td>
       </tr>`).join('');
       container.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr>
-        <th>#</th><th></th><th>Member</th><th>Level</th><th>Tier</th><th>Score</th>
+        <th>#</th><th></th><th>Member</th><th>Level</th><th>Tier</th><th>Score</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table></div>`;
       refreshIcons();
     } catch (error) {
@@ -218,6 +219,36 @@
     }
   }
 
+  // ── Leaderboard admin edit ───────────────────────────
+
+  async function adjustScore(userId, name, currentScore) {
+    const input = await BarkDialog.prompt({
+      title: `Edit score for ${name}`,
+      message: `Set the total reputation score (currently ${Number(currentScore).toLocaleString()}). Level, tier, and role sync automatically.`,
+      defaultValue: String(currentScore),
+      placeholder: 'New total score',
+      confirmLabel: 'Save',
+    });
+    if (input === null) return;
+    const score = Number(input);
+    if (!Number.isFinite(score) || score < 0) {
+      showToast('Score must be a non-negative number', 'error');
+      return;
+    }
+    try {
+      const result = await safeFetch(api(`leaderboard/${encodeURIComponent(userId)}/score`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ score, reason: 'dashboard leaderboard edit' }),
+      });
+      if (result.success === false) throw new Error(result.error || 'Update failed');
+      showToast(`Score set to ${Number(result.data.total_score).toLocaleString()}`, 'success');
+      loadLeaderboard();
+    } catch (error) {
+      showToast(error.message || 'Could not update score', 'error');
+    }
+  }
+
   // ── Event wiring ──────────────────────────────────────
 
   const loaders = { leaderboard: loadLeaderboard, thanks: loadThanks, tiers: loadTiers };
@@ -230,6 +261,9 @@
     if (target.dataset.addTier !== undefined) addTierRow();
     if (target.classList.contains('tier-save')) saveTier(target.closest('tr'));
     if (target.classList.contains('tier-delete')) deleteTier(target.dataset.name);
+    if (target.dataset.adjustScore) {
+      adjustScore(target.dataset.adjustScore, target.dataset.name || 'member', Number(target.dataset.score || 0));
+    }
   });
 
   document.addEventListener('change', (event) => {

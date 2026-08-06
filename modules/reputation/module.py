@@ -273,6 +273,37 @@ class ReputationModule(BarkModule):
 
             return api_success({"leaderboard": leaderboard, "total": len(leaderboard)})
 
+        @router.post("/guilds/{guild_id}/modules/reputation/leaderboard/{user_id}/score")
+        async def reputation_leaderboard_set_score(
+            request: Request, guild_id: str, user_id: str, payload: dict
+        ):
+            """Admin: set a member's total score on the leaderboard.
+
+            Recomputes level + tier and keeps role rules consistent; the
+            change is recorded as an ``admin_adjust`` event.
+            """
+            await get_module_min_role("reputation", guild_id)
+            if not check_api_permission(request, "reputation.manage", guild_id):
+                return api_error("Insufficient permissions", status_code=403)
+            raw = payload.get("score")
+            try:
+                score = float(raw) if raw is not None else None
+            except (TypeError, ValueError):
+                return api_error("Score must be a number", status_code=400)
+            if score is None or score < 0 or score > 1_000_000_000:
+                return api_error("Score out of range", status_code=400)
+            try:
+                result = await self._admin_set_score(
+                    int(guild_id),
+                    int(user_id),
+                    score,
+                    actor_id=(request.session.get("user") or {}).get("id"),
+                    reason=str(payload.get("reason") or ""),
+                )
+            except ValueError as exc:
+                return api_error(str(exc), status_code=404)
+            return api_success(result)
+
         @router.get("/guilds/{guild_id}/modules/reputation/thanks")
         async def reputation_thanks(
             request: Request,
@@ -1453,6 +1484,103 @@ class ReputationModule(BarkModule):
             "new_tier": new_tier_data["name"],
             "old_tier": old_tier,
             "new_rewards": new_rewards,
+        }
+
+    async def _admin_set_score(
+        self,
+        guild_id: int,
+        user_id: int,
+        new_total: float,
+        *,
+        actor_id: int | None = None,
+        reason: str = "",
+    ) -> dict:
+        """Admin override: set a member's total reputation score.
+
+        Bypasses daily/weekly caps (an admin correction must not be blocked),
+        recomputes level + tier exactly like earned points would, keeps the
+        no-demotion role rule, and records an ``admin_adjust`` audit event.
+        """
+        guild = self.ctx.get_guild(guild_id)
+        if guild is None:
+            raise ValueError("Guild not found")
+        config = await self.load_dashboard_config(guild_id)
+        level_const = float(config.get("level_constant", 50.0))
+        new_total = max(0.0, float(new_total))
+
+        async with session_scope() as session:
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(ReputationProfile).where(
+                    ReputationProfile.guild_id == str(guild_id),
+                    ReputationProfile.user_id == str(user_id),
+                )
+            )
+            profile = result.scalar_one_or_none()
+            if profile is None:
+                today = date.today()
+                profile = ReputationProfile(
+                    guild_id=str(guild_id),
+                    user_id=str(user_id),
+                    week_start=today - timedelta(days=today.weekday()),
+                    month_start=today.replace(day=1),
+                )
+                session.add(profile)
+                await session.flush()
+
+            old_score = profile.total_score
+            old_tier = profile.current_tier
+            profile.total_score = new_total
+            profile.level = level_from_score(new_total, level_const)
+
+            tiers_result = await session.execute(
+                select(ReputationTier).where(ReputationTier.guild_id == str(guild_id))
+            )
+            tier_rows = list(tiers_result.scalars().all())
+            tier_dicts = [
+                {
+                    "name": t.name,
+                    "symbol": t.symbol,
+                    "min_score": t.min_score,
+                    "min_level": t.min_level,
+                    "color_hex": t.color_hex,
+                    "sort_order": t.sort_order,
+                    "role_id": t.role_id,
+                    "assign_role": t.assign_role,
+                }
+                for t in tier_rows
+            ]
+            new_tier_data = resolve_tier(tier_dicts, profile.level, profile.total_score)
+            tier_changed = new_tier_data["name"] != old_tier
+            if tier_changed:
+                profile.current_tier = new_tier_data["name"]
+                if new_tier_data.get("assign_role") and new_tier_data.get("role_id"):
+                    await self._assign_tier_role(
+                        guild_id, user_id, new_tier_data["role_id"], tier_rows
+                    )
+
+            delta = round(profile.total_score - old_score, 1)
+            event = ReputationEvent(
+                guild_id=str(guild_id),
+                actor_id=str(actor_id) if actor_id else str(user_id),
+                target_id=str(user_id),
+                event_type="admin_adjust",
+                points=delta,
+                metadata_json=json.dumps(
+                    {"reason": reason or "leaderboard edit", "old_score": round(old_score, 1)}
+                ),
+            )
+            session.add(event)
+            session.add(profile)
+
+        return {
+            "user_id": str(user_id),
+            "total_score": round(profile.total_score, 1),
+            "level": profile.level,
+            "tier": profile.current_tier,
+            "tier_changed": tier_changed,
+            "delta": delta,
         }
 
     async def _assign_tier_role(

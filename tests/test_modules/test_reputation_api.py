@@ -508,3 +508,158 @@ async def test_generate_roles_reports_missing_permission(
 
     assert response.status_code == 403
     assert "Manage Roles" in response.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_admin_set_score_updates_profile(
+    db, _seeded_tiers, monkeypatch
+):
+    from datetime import date, timedelta
+
+    from sqlalchemy import select
+
+    import config
+    from database.models.reputation import ReputationEvent, ReputationProfile
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    today = date.today()
+    async with session_scope() as session:
+        session.add(
+            ReputationProfile(
+                guild_id="1",
+                user_id="43",
+                total_score=60000.0,
+                level=34,
+                current_tier="Scout",
+                week_start=today - timedelta(days=today.weekday()),
+                month_start=today.replace(day=1),
+            )
+        )
+        await session.commit()
+
+    from dashboard import create_app
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/reputation/leaderboard/43/score",
+            json={"score": 120000, "reason": "manual correction"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total_score"] == 120000
+    assert data["level"] == 48  # isqrt(120000 / 50)
+    assert data["delta"] == 60000
+
+    async with session_scope() as session:
+        profile = (
+            await session.execute(
+                select(ReputationProfile).where(
+                    ReputationProfile.guild_id == "1",
+                    ReputationProfile.user_id == "43",
+                )
+            )
+        ).scalar_one()
+        assert profile.total_score == 120000.0
+        assert profile.level == 48
+        events = list(
+            (
+                await session.execute(
+                    select(ReputationEvent).where(
+                        ReputationEvent.guild_id == "1",
+                        ReputationEvent.event_type == "admin_adjust",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(events) == 1
+        assert events[0].points == 60000.0
+        assert events[0].target_id == "43"
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_set_score_requires_manage_permission(db, monkeypatch):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        session.add(DashboardUser(discord_id="42", username="Auditor", role="viewer"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "1", "name": "Test Guild", "permissions": str(0x20)}],
+        )
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("viewer")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/1/modules/reputation/leaderboard/43/score",
+            json={"score": 100},
+        )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_set_score_rejects_bad_values(db, _seeded_tiers, monkeypatch):
+    import config
+    from dashboard import create_app
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    bot = _manager_bot()
+    dashboard = create_app(bot)
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    dashboard.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=dashboard.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("admin")),
+    ) as client:
+        negative = await client.post(
+            "/api/v1/guilds/1/modules/reputation/leaderboard/43/score",
+            json={"score": -5},
+        )
+        non_numeric = await client.post(
+            "/api/v1/guilds/1/modules/reputation/leaderboard/43/score",
+            json={"score": "abc"},
+        )
+        missing = await client.post(
+            "/api/v1/guilds/1/modules/reputation/leaderboard/43/score",
+            json={},
+        )
+
+    assert negative.status_code == 400
+    assert non_numeric.status_code == 400
+    assert missing.status_code == 400
