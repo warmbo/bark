@@ -236,7 +236,7 @@ class BarkBot(commands.Bot):
     # ── Event → EventBus bridge ───────────────────────
 
     async def on_interaction(self, interaction) -> None:
-        """Log every incoming application interaction for diagnostics."""
+        """Log every incoming application interaction, then dispatch it."""
         data = interaction.data or {}
         logger.info(
             "Interaction: name=%s id=%s type=%s guild=%s user=%s",
@@ -246,6 +246,24 @@ class BarkBot(commands.Bot):
             interaction.guild_id,
             getattr(interaction.user, "id", None),
         )
+        # Dispatch to the command tree — without this, slash commands and
+        # components are logged but never executed.
+        try:
+            await self.tree.interaction(interaction)
+        except Exception:
+            logger.exception(
+                "Failed to process interaction: name=%s id=%s",
+                data.get("name"),
+                data.get("id"),
+            )
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "Something went wrong processing that command.",
+                        ephemeral=True,
+                    )
+            except Exception:
+                logger.exception("Failed to report interaction error")
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
