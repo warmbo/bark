@@ -236,7 +236,18 @@ class BarkBot(commands.Bot):
     # ── Event → EventBus bridge ───────────────────────
 
     async def on_interaction(self, interaction) -> None:
-        """Log every incoming application interaction, then dispatch it."""
+        """Log every incoming application interaction.
+
+        discord.py 2.7.1 already dispatches application commands to the
+        command tree (ConnectionState.parse_interaction_create →
+        tree._from_interaction) and routes components/modals through the
+        view store, so this listener must NOT dispatch again. Calling
+        ``self.tree.interaction(...)`` (a method that does not exist in
+        2.7.1) raised AttributeError here, whose error handler then sent a
+        bogus "Something went wrong" message — acknowledging the interaction
+        before the real command ran and failing it with error 40060
+        (Interaction has already been acknowledged).
+        """
         data = interaction.data or {}
         logger.info(
             "Interaction: name=%s id=%s type=%s guild=%s user=%s",
@@ -246,24 +257,6 @@ class BarkBot(commands.Bot):
             interaction.guild_id,
             getattr(interaction.user, "id", None),
         )
-        # Dispatch to the command tree — without this, slash commands and
-        # components are logged but never executed.
-        try:
-            await self.tree.interaction(interaction)
-        except Exception:
-            logger.exception(
-                "Failed to process interaction: name=%s id=%s",
-                data.get("name"),
-                data.get("id"),
-            )
-            try:
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "Something went wrong processing that command.",
-                        ephemeral=True,
-                    )
-            except Exception:
-                logger.exception("Failed to report interaction error")
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:

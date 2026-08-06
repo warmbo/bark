@@ -39,16 +39,27 @@ async def test_voice_transition_channels_are_snapshotted_before_handlers_can_mut
 
 
 @pytest.mark.asyncio
-async def test_on_interaction_dispatches_to_command_tree():
-    """Slash commands must reach the tree — logging alone breaks every command."""
-    dispatched = []
+async def test_on_interaction_logs_without_dispatching():
+    """The framework (ConnectionState.parse_interaction_create) dispatches
+    commands to the tree — on_interaction must only log. Calling a
+    nonexistent tree.interaction() used to raise AttributeError and then
+    send a bogus 'Something went wrong' response, failing the real command
+    with error 40060 (already acknowledged)."""
 
-    class FakeTree:
-        async def interaction(self, interaction):
-            dispatched.append(interaction)
+    class RealisticTree:
+        """Matches discord.py 2.7.1's CommandTree — no .interaction method."""
+
+    sent = []
+
+    class Response:
+        def is_done(self):
+            return False
+
+        async def send_message(self, content, ephemeral=False):
+            sent.append(content)
 
     bot = SimpleNamespace(
-        tree=FakeTree(),
+        tree=RealisticTree(),
         modules=SimpleNamespace(event_bus=SimpleNamespace(emit=lambda *a, **k: None)),
     )
     interaction = SimpleNamespace(
@@ -56,24 +67,34 @@ async def test_on_interaction_dispatches_to_command_tree():
         type="application_command",
         guild_id=1,
         user=SimpleNamespace(id=42),
-        response=SimpleNamespace(is_done=lambda: True),
+        response=Response(),
     )
 
+    # Must not raise and must not respond — the tree owns dispatch.
     await BarkBot.on_interaction(bot, interaction)
-
-    assert dispatched == [interaction]
+    assert sent == []
 
 
 @pytest.mark.asyncio
-async def test_on_interaction_still_dispatches_when_response_already_done():
-    """Dispatch must not crash when the interaction was already responded to."""
+async def test_on_interaction_never_sends_error_message_for_framework_dispatch():
+    """Even when the tree has no interaction method, on_interaction must not
+    acknowledge the interaction with a fallback message (40060 double-ack)."""
 
-    class FailingTree:
-        async def interaction(self, interaction):
-            raise RuntimeError("boom")
+    class NoDispatchTree:
+        def __getattr__(self, name):
+            raise AttributeError(f"{name} does not exist")
+
+    sent = []
+
+    class Response:
+        def is_done(self):
+            return False
+
+        async def send_message(self, content, ephemeral=False):
+            sent.append(content)
 
     bot = SimpleNamespace(
-        tree=FailingTree(),
+        tree=NoDispatchTree(),
         modules=SimpleNamespace(event_bus=SimpleNamespace(emit=lambda *a, **k: None)),
     )
     interaction = SimpleNamespace(
@@ -81,10 +102,8 @@ async def test_on_interaction_still_dispatches_when_response_already_done():
         type="application_command",
         guild_id=1,
         user=SimpleNamespace(id=42),
-        response=SimpleNamespace(
-            is_done=lambda: True, send_message=lambda *a, **k: None
-        ),
+        response=Response(),
     )
 
-    # Should log the failure without raising out of the gateway listener.
     await BarkBot.on_interaction(bot, interaction)
+    assert sent == []
