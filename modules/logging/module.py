@@ -148,15 +148,9 @@ class LoggingModule(BarkModule):
         }
 
     def get_actions(self) -> list[dict]:
-        return [
-            {
-                "id": "test_log",
-                "label": "Test Log",
-                "description": "Send a test embed to each configured log channel to verify logging works.",
-                "endpoint": "test",
-                "fields": [],
-            },
-        ]
+        # No Operate tab: log configuration lives in Configure and the Logs
+        # tab is the read-only surface. (Test Log was the only action.)
+        return []
 
     def get_extra_tabs(self) -> list[dict]:
         return [
@@ -621,6 +615,82 @@ class LoggingModule(BarkModule):
                 )
 
             return api_success({"entries": entries, "total": len(entries)})
+
+        @router.get("/guilds/{guild_id}/modules/logging/logs/export")
+        async def export_logs(request: Request, guild_id: str, limit: int = Query(1000, ge=1, le=5000)):
+            """Download audit-log entries for this guild as CSV.
+
+            Same permission gate as list_logs; the download button on the
+            Logs tab hits this with an Accept: text/csv header and the
+            browser saves the attachment.
+            """
+            await get_module_min_role("logging", guild_id)
+            if not check_api_permission(request, "logging.view", guild_id):
+                return api_error("Insufficient permissions", status_code=403)
+            gid = int(guild_id)
+            bot = request.state.bot
+            guild = bot.get_guild(gid)
+            if guild is None:
+                return api_not_found("Guild")
+
+            from sqlalchemy import desc, select
+
+            from database.models.moderation import AuditLog
+
+            async with session_scope() as session:
+                result = await session.execute(
+                    select(AuditLog)
+                    .where(AuditLog.guild_id == str(gid))
+                    .order_by(desc(AuditLog.created_at))
+                    .limit(min(limit, 5000))
+                )
+                rows = list(result.scalars().all())
+
+            def member_name(user_id: str | None, fallback: str | None = None) -> str:
+                if user_id:
+                    try:
+                        member = guild.get_member(int(user_id))
+                    except (TypeError, ValueError):
+                        member = None
+                    if member is not None:
+                        return str(getattr(member, "display_name", None) or member)
+                return fallback or user_id or "Unknown"
+
+            import csv
+            import io
+
+            buffer = io.StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow(["id", "action", "actor_id", "actor", "target_id", "target", "channel", "details", "created_at"])
+            for row in rows:
+                details: dict[str, Any] = {}
+                try:
+                    details = json.loads(row.details) if row.details else {}
+                except (json.JSONDecodeError, TypeError):
+                    details = {}
+                writer.writerow(
+                    [
+                        row.id,
+                        row.action,
+                        row.actor_id or "",
+                        member_name(row.actor_id, details.get("actor_tag")),
+                        row.target_id or "",
+                        member_name(row.target_id, details.get("target_tag")),
+                        details.get("channel") or "",
+                        json.dumps(details, ensure_ascii=False),
+                        row.created_at.isoformat() if row.created_at else "",
+                    ]
+                )
+
+            from fastapi.responses import Response
+
+            return Response(
+                content=buffer.getvalue(),
+                media_type="text/csv; charset=utf-8",
+                headers={
+                    "Content-Disposition": f'attachment; filename="bark-logs-{guild_id}.csv"',
+                },
+            )
 
         return router
 

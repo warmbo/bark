@@ -2,6 +2,7 @@
   <div class="card-header">
     <div><h2 class="card-title">{{ icon("scroll-text", 16) }} Recent Logs</h2><p class="card-description">Events Bark has recorded for this server — edits, deletes, links, joins, and voice activity.</p></div>
     <div class="card-header-actions">
+      <a class="btn btn-sm" href="/api/v1/guilds/{{ guild.id }}/modules/logging/logs/export" download aria-label="Download logs as CSV">{{ icon("download", 14) }} Download</a>
       <button type="button" class="btn btn-sm" data-refresh-section="logs" aria-label="Refresh logs">{{ icon("refresh-cw", 14) }} Refresh</button>
     </div>
   </div>

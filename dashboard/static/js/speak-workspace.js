@@ -39,7 +39,9 @@
       actions.hidden = true;
       return;
     }
-    container.innerHTML = entries.map(([k, v]) => rowHtml(k, v)).join('');
+    container.innerHTML =
+      '<div class="speak-column-headers" aria-hidden="true"><span>Key</span><span>Phrase text</span><span></span></div>' +
+      entries.map(([k, v]) => rowHtml(k, v)).join('');
     actions.hidden = false;
     if (window.lucide) lucide.createIcons();
   }

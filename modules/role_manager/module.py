@@ -201,6 +201,10 @@ class RoleManagerModule(BarkModule):
             },
         }
 
+    # The single behavior setting lives in the Rules tab (combined with the
+    # rule list) — no separate Configure screen.
+    show_configure_tab = False
+
     # ── Lifecycle ───────────────────────────────────────
 
     async def enable(self) -> None:

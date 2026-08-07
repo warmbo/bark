@@ -93,6 +93,10 @@ class AutoVoiceModule(BarkModule):
     description = "AVC-compatible temporary voice channels with dashboard configuration"
     author = "ZENHAWX"
 
+    # Five config groups read more cleanly dispersed into columns than as a
+    # single tall stack of fieldsets.
+    config_layout = "columns"
+
     def __init__(self, ctx) -> None:
         super().__init__(ctx)
         self._managed_channels: dict[int, ManagedChannel] = {}

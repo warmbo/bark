@@ -5,8 +5,9 @@
   if (!root) return;
 
   const guildId = root.dataset.guildId;
+  const moduleName = 'role_manager';
   const canManage = root.dataset.canManage === 'true';
-  const api = (path) => `/api/v1/guilds/${guildId}/modules/role_manager/${path}`;
+  const api = (path) => `/api/v1/guilds/${guildId}/modules/${moduleName}/${path}`;
   const byId = (id) => document.getElementById(id);
   const icon = (name, size = 13) => typeof getIconSvg === 'function' ? getIconSvg(name, size) : '';
   const loading = (container, count = 2) => { if (container) showSkeleton(container, count, 'card'); };
@@ -214,6 +215,50 @@
   });
   Object.entries(loaders).forEach(([name, loader]) => {
     byId(`workspace-tab-${name}`)?.addEventListener('click', () => loader());
+  });
+
+  // ── Behavior settings (tenure interval, merged from the old Configure tab) ──
+
+  const rmConfigForm = byId('rm-config-form');
+  const rmSaveBtn = byId('rm-save-config-btn');
+  const rmDiscardBtn = byId('rm-discard-config-btn');
+  const snapshotRmConfig = () => rmConfigForm ? [...rmConfigForm.elements]
+    .filter(field => field.name)
+    .map(field => ({field, value: field.value, checked: field.checked})) : [];
+  let rmBaseline = snapshotRmConfig();
+  const setRmDirty = (dirty) => {
+    if (!rmConfigForm) return;
+    rmConfigForm.dataset.dirty = String(dirty);
+    if (rmSaveBtn) rmSaveBtn.disabled = !dirty;
+    if (rmDiscardBtn) rmDiscardBtn.disabled = !dirty;
+  };
+  rmConfigForm?.addEventListener('input', () => setRmDirty(true));
+  rmConfigForm?.addEventListener('change', () => setRmDirty(true));
+  rmDiscardBtn?.addEventListener('click', () => {
+    rmBaseline.forEach(({field, value, checked}) => {
+      field.value = value;
+      if (field.type === 'checkbox' || field.type === 'radio') field.checked = checked;
+    });
+    setRmDirty(false);
+  });
+  rmConfigForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!rmConfigForm.reportValidity()) return;
+    const idle = rmSaveBtn.innerHTML;
+    rmSaveBtn.disabled = true; rmSaveBtn.setAttribute('aria-busy', 'true'); rmSaveBtn.textContent = 'Saving…';
+    try {
+      const config = BarkForms.serializeFields(rmConfigForm.querySelectorAll('[name]'));
+      const response = await safeFetch(`/api/v1/guilds/${guildId}/modules/${moduleName}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({config})
+      });
+      if (response.success === false) throw new Error(response.details?.join('; ') || response.error || 'Save failed');
+      rmBaseline = snapshotRmConfig();
+      setRmDirty(false);
+      showToast('Configuration saved', 'success');
+    } catch (error) {
+      showToast(error.message || 'Unable to save configuration', 'error');
+      rmSaveBtn.disabled = false;
+    } finally { rmSaveBtn.removeAttribute('aria-busy'); rmSaveBtn.innerHTML = idle; }
   });
 
   // Initial loads

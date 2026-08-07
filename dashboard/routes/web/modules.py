@@ -161,6 +161,8 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
         "actions": module.get_actions(),
         "about": module.get_about(),
         "extra_tabs": extra_tabs,
+        "show_configure_tab": module.show_configure_tab,
+        "config_layout": module.config_layout,
         "role_access_override": role_access.min_role if role_access else None,
         "minimum_role": minimum_role,
         "can_manage_module": can_manage_module,

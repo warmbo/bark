@@ -36,8 +36,8 @@
   const setDirty = (dirty) => {
     if (!configForm) return;
     configForm.dataset.dirty = String(dirty);
-    saveButton.disabled = !dirty;
-    discardButton.disabled = !dirty;
+    if (saveButton) saveButton.disabled = !dirty;
+    if (discardButton) discardButton.disabled = !dirty;
   };
   configForm?.addEventListener('input', () => setDirty(true));
   configForm?.addEventListener('change', () => setDirty(true));

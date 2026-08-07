@@ -263,14 +263,25 @@
             const roles = (rolesResult?.data?.roles) || [];
             const savedRaw = (settingsResult?.data?.settings || {})['dashboard_moderator_roles'] || '';
             // Tolerate the legacy JSON-array format ("[\"555\"]") and the
-            // current plain single role ID ("555").
+            // current plain single role ID ("555"). Only JSON.parse when the
+            // value actually looks like JSON: parsing a bare numeric snowflake
+            // succeeds but loses precision (snowflakes exceed Number.MAX_SAFE_INTEGER),
+            // so the stringified result would never match the role id and the
+            // saved choice would appear lost.
             let selectedId = '';
-            try {
-                const parsed = JSON.parse(savedRaw);
-                if (Array.isArray(parsed)) selectedId = String(parsed[0] || '');
-                else selectedId = String(parsed || '');
-            } catch {
-                selectedId = String(savedRaw || '').split(',')[0] || '';
+            const trimmed = String(savedRaw || '').trim();
+            if (trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) selectedId = String(parsed[0] || '');
+                } catch { selectedId = ''; }
+            } else if (trimmed.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    selectedId = String(parsed?.role_id || parsed?.id || '');
+                } catch { selectedId = ''; }
+            } else {
+                selectedId = trimmed.split(',')[0] || '';
             }
             modRolesSelect.innerHTML = roles.length
                 ? '<option value="">No moderator role…</option>' + roles.map(r =>

@@ -84,30 +84,6 @@
 
         <!-- Right Column -->
         <div>
-            <!-- Quick Actions -->
-            <div class="content-card">
-                <div class="card-header">
-                    <h2 class="card-title">{{ icon("zap", 16) }} Quick Actions</h2>
-                </div>
-                <div class="quick-action-grid">
-                    <a href="/guild/{{ guild.id }}/members" class="qa-card">
-                        <span class="qa-icon">{{ icon("users", 20) }}</span>
-                        <span class="qa-label">Members</span>
-                        <span class="qa-count">{{ guild.member_count }}</span>
-                    </a>
-                    <a href="/guild/{{ guild.id }}/moderation" class="qa-card">
-                        <span class="qa-icon">{{ icon("scroll-text", 20) }}</span>
-                        <span class="qa-label">Cases</span>
-                        <span class="qa-count" id="case-count">—</span>
-                    </a>
-                    <a href="/guild/{{ guild.id }}/modules" class="qa-card">
-                        <span class="qa-icon">{{ icon("puzzle", 20) }}</span>
-                        <span class="qa-label">Modules</span>
-                        <span class="qa-count">{{ bot.modules.get_all_modules() | length }}</span>
-                    </a>
-                </div>
-            </div>
-
             <!-- Server Info -->
             <div class="content-card">
                 <div class="card-header">

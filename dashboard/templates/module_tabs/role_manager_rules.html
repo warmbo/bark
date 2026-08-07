@@ -7,6 +7,20 @@
     </div>
   </div>
 
+  <details class="behavior-guide" open>
+    <summary>{{ icon("settings", 14) }} Behavior settings</summary>
+    <div class="config-body" style="padding: 12px 16px;">
+      {% if module_data.settings_schema and module_data.settings_schema.properties %}
+      <form class="rm-config-form" id="rm-config-form" data-module="{{ module_name }}">
+        <div class="form-grid form-grid-2">
+          {% for key, prop in module_data.settings_schema.properties.items() %}{{ schema_field(key, prop, module_data.config.get(key, prop.default), 'rm-config-' ~ key) }}{% endfor %}
+        </div>
+        <div class="form-actions form-actions-static"><button type="button" class="btn" id="rm-discard-config-btn" disabled>Cancel</button><button type="submit" class="btn btn-primary" id="rm-save-config-btn" disabled>{{ icon("save", 14) }} Save Changes</button></div>
+      </form>
+      {% endif %}
+    </div>
+  </details>
+
   <details class="behavior-guide">
     <summary>{{ icon("book-open", 14) }} How each rule type behaves</summary>
     <div class="behavior-guide-grid">

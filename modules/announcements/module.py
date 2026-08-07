@@ -109,6 +109,10 @@ class AnnouncementsModule(BarkModule):
     description = "Send text or embed announcements to a configurable channel"
     author = "ZENHAWX"
 
+    # Announcement defaults are optional conveniences; the module is fully
+    # usable from the Operate tab and /announce without a Configure screen.
+    show_configure_tab = False
+
     def get_events(self) -> list[EventRegistration]:
         return []
 

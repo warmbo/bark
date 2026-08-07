@@ -103,6 +103,16 @@ class BarkModule(abc.ABC):
         """
         return {}
 
+    # Whether the dashboard renders the Configure tab. Modules that manage
+    # configuration purely through other means (e.g. a dedicated tab or the
+    # slash command surface) can hide the generic settings form.
+    show_configure_tab: bool = True
+
+    # Configure-panel layout: None (stacked single column) or "columns" —
+    # modules with many grouped subsections disperse them into a balanced
+    # multi-column grid for readability.
+    config_layout: str | None = None
+
     def normalize_config(self, raw: dict[str, Any]) -> dict[str, Any]:
         """
         Normalize a stored config into the shape declared by

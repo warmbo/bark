@@ -1421,11 +1421,36 @@ textarea:focus-visible,
 }
 .config-subsection:last-child { margin-bottom: 0; }
 
+/* Modules with many grouped settings (e.g. auto_voice) disperse their
+   subsections into balanced columns instead of one tall stack. */
+.config-layout-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    align-items: start;
+}
+.config-layout-columns .config-subsection { margin-bottom: 0; }
+@media (max-width: 900px) {
+    .config-layout-columns { grid-template-columns: 1fr; }
+}
+
 .config-subsection-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+/* Readability pass: larger headings/labels inside module config panels —
+   especially helpful for long flat forms like the Welcome module. */
+.module-workspace .config-body .form-label {
     font-size: 14px;
     font-weight: 600;
-    margin-bottom: 6px;
     color: var(--text-secondary);
+}
+.module-workspace .config-body .card-title,
+.module-workspace .workspace-form-card .card-title {
+    font-size: 18px;
 }
 
 .config-subsection-desc {
@@ -2218,6 +2243,25 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 /* ── Settings Form ──────────────────────────────────── */
 
 .settings-form { padding: 16px 20px; }
+
+/* Hosted Instance Access: give the card's internal sections room to
+   breathe — the share form, result, and invite list previously sat flush
+   against the card edges. */
+#instance-invites .settings-form { padding: 20px; }
+#instance-invites .form-group { margin-bottom: 14px; }
+#instance-invites #instance-invite-result {
+    margin: 0 20px 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+    border-radius: 8px;
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.02));
+}
+#instance-invites #instance-invite-list {
+    margin: 0 20px 20px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+    border-radius: 8px;
+}
 
 
 /* ── Bot Appearance ──────────────────────────────────── */
@@ -3062,19 +3106,44 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     gap: 8px;
     align-items: center;
     margin-bottom: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+    border-radius: 8px;
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.02));
 }
 .speak-row .speak-key {
     font-family: var(--font-mono, "JetBrains Mono", monospace);
     font-size: 13px;
 }
+.speak-row .speak-text {
+    font-size: 13px;
+}
 .speak-row .speak-remove {
     flex-shrink: 0;
     color: var(--text-tertiary);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
 }
 .speak-row .speak-remove:hover {
     color: var(--red, #f38ba8);
+    background: rgba(243, 139, 168, 0.1);
+}
+.speak-column-headers {
+    display: grid;
+    grid-template-columns: minmax(120px, 220px) 1fr auto;
+    gap: 8px;
+    padding: 0 12px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary, #8a8f98);
 }
 @media (max-width: 700px) {
+    .speak-column-headers { display: none; }
     .speak-row {
         grid-template-columns: 1fr auto;
     }

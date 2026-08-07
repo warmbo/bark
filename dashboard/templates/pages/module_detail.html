@@ -54,9 +54,9 @@
 
   <div class="tabs workspace-tabs" role="tablist" aria-label="{{ module_name | replace('_', ' ') | title }} workspace">
     {% if has_operations %}<button id="workspace-tab-operate" class="tab active" type="button" role="tab" aria-controls="tab-operate" aria-selected="true">Operate</button>{% endif %}
-    <button id="workspace-tab-configure" class="tab {{ '' if has_operations else 'active' }}" type="button" role="tab" aria-controls="tab-configure" aria-selected="{{ 'false' if has_operations else 'true' }}" {{ 'tabindex="-1"' if has_operations else '' }}>Configure</button>
+    {% if module_data.show_configure_tab %}<button id="workspace-tab-configure" class="tab {{ '' if has_operations else 'active' }}" type="button" role="tab" aria-controls="tab-configure" aria-selected="{{ 'false' if has_operations else 'true' }}" {{ 'tabindex="-1"' if has_operations else '' }}>Configure</button>{% endif %}
     {% for tab in module_data.extra_tabs %}<button id="workspace-tab-{{ tab.id }}" class="tab" type="button" role="tab" aria-controls="tab-{{ tab.id }}" aria-selected="false" tabindex="-1">{{ tab.label }}</button>{% endfor %}
-    <button id="workspace-tab-about" class="tab" type="button" role="tab" aria-controls="tab-about" aria-selected="false" tabindex="-1">About</button>
+    <button id="workspace-tab-about" class="tab {{ 'active' if not has_operations and not module_data.show_configure_tab else '' }}" type="button" role="tab" aria-controls="tab-about" aria-selected="{{ 'true' if not has_operations and not module_data.show_configure_tab else 'false' }}" {{ 'tabindex="-1"' if has_operations or module_data.show_configure_tab else '' }}>About</button>
   </div>
 
   {% if has_operations %}<section class="tab-panel active" id="tab-operate" role="tabpanel" aria-labelledby="workspace-tab-operate" tabindex="0">
@@ -104,12 +104,12 @@
     </div>
   </section>{% endif %}
 
-  <section class="tab-panel {{ '' if has_operations else 'active' }}" id="tab-configure" role="tabpanel" aria-labelledby="workspace-tab-configure" tabindex="0" {{ 'hidden' if has_operations else '' }}>
+  {% if module_data.show_configure_tab %}<section class="tab-panel {{ '' if has_operations else 'active' }}" id="tab-configure" role="tabpanel" aria-labelledby="workspace-tab-configure" tabindex="0" {{ 'hidden' if has_operations else '' }}>
     <article class="content-card workspace-form-card">
       <div class="card-header"><div><h2 class="card-title">{{ icon('settings', 16) }} Configuration</h2><p class="card-description">Changes apply to this server only.</p></div></div>
       <div class="config-body">
       {% if module_data.settings_schema and module_data.settings_schema.properties %}
-        <form class="module-config-form" id="module-config-form" data-module="{{ module_name }}">
+        <form class="module-config-form {{ 'config-layout-columns' if module_data.config_layout == 'columns' else '' }}" id="module-config-form" data-module="{{ module_name }}">
         {% for key, prop in module_data.settings_schema.properties.items() %}
           {% if prop.type == 'object' and prop.properties %}
           <fieldset class="config-subsection"><legend class="config-subsection-title">{{ prop.title | default(key | replace('_', ' ') | title) }}</legend>{% if prop.description %}<p class="config-subsection-desc">{{ prop.description }}</p>{% endif %}
@@ -136,7 +136,7 @@
       </article>
     </details>
     {% endif %}
-  </section>
+  </section>{% endif %}
 
   {% for tab in module_data.extra_tabs %}<section class="tab-panel" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" hidden>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
 

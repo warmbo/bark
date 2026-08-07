@@ -279,13 +279,14 @@
     byId(`workspace-tab-${name}`)?.addEventListener('click', () => loader());
   });
 
-  // Initial load for the active tab
-  const activeTab = root.querySelector('.tab-panel:not([hidden])');
-  if (activeTab) {
-    const section = activeTab.querySelector('[data-section]')?.dataset.section;
-    if (section && loaders[section]) loaders[section]();
-  } else {
-    // Load all on first visit
-    Object.values(loaders).forEach(loader => loader());
-  }
+  // Initial load: every section rendered in the DOM loads on first visit,
+  // not just the section inside the initially-active tab. Reputation's
+  // active tab is Operate (it has actions) which carries no data-section,
+  // so gating on the active panel left the leaderboard empty until a tab
+  // was clicked. Sections hidden in inactive tabs still fetch once; their
+  // data is ready when the user switches to them.
+  Object.entries(loaders).forEach(([name, loader]) => {
+    const sectionEl = root.querySelector(`[data-section="${name}"]`);
+    if (sectionEl) loader();
+  });
 })();
