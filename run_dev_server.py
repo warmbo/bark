@@ -27,8 +27,6 @@ def _boot_mock() -> None:
 
     logging.basicConfig(level=logging.WARNING)
 
-    import discord
-
     from dashboard import create_app
     from database import engine as db_engine
     from database.engine import Base

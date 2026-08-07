@@ -815,8 +815,6 @@ def test_user_ready_to_manage_owner_admin_manage_or_configured_moderator_role():
 
 @pytest.mark.asyncio
 async def test_get_dashboard_moderator_roles_loads_per_guild_setting(db):
-    from sqlalchemy import select
-
     from database.models.guild import Guild, GuildSetting
     from services.dashboard_access import get_dashboard_moderator_roles
 
