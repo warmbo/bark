@@ -20,6 +20,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from bark_version import __version__
 from config import config
 from dashboard.app import DashboardApp
+from dashboard.middleware.compression import SafeGzipMiddleware
 from services.security import AuthMiddleware, SecurityMiddleware
 
 if TYPE_CHECKING:
@@ -138,6 +139,11 @@ def create_app(bot: BarkBot) -> DashboardApp:
     from services.dev_overlay import dev_overlay_middleware
 
     app.middleware("http")(dev_overlay_middleware)
+
+    # Outermost middleware: compresses the final response. Registered last so
+    # Starlette runs it first (outermost) — inner middleware (e.g. the dev
+    # overlay, which rewrites raw HTML bodies) must see the uncompressed body.
+    app.add_middleware(SafeGzipMiddleware, minimum_size=500)
 
     # ── Web Routes ────────────────────────────────────
 

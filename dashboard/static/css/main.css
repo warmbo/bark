@@ -441,6 +441,25 @@ textarea:focus-visible,
     padding: 8px 10px 4px;
 }
 
+/* Collapsible nav sections (e.g. Add-on Modules) */
+.nav-collapse-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+.nav-collapse-toggle:hover { color: var(--text-secondary); }
+.nav-collapse-chevron {
+    display: inline-flex;
+    transition: transform var(--transition-fast);
+}
+.nav-collapse-toggle.is-collapsed .nav-collapse-chevron {
+    transform: rotate(-90deg);
+}
+.nav-collapse-group[hidden] { display: none; }
+
 .nav-item {
     display: flex;
     align-items: center;
