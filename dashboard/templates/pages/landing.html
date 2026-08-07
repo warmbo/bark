@@ -279,6 +279,12 @@
             margin: 0 8px;
         }
 
+        .landing-footer .landing-version {
+            color: var(--text-tertiary);
+            font-size: 12px;
+            letter-spacing: 0.03em;
+        }
+
         /* ── Auth error banner (from ?auth_error=, e.g. invite_required) ── */
         .auth-error-banner {
             display: flex;
@@ -370,6 +376,8 @@
             <a href="{{ config.dashboard.invite_url or '#' }}" {% if config.dashboard.invite_url %}target="_blank" rel="noopener"{% else %}onclick="return false" style="pointer-events:none;opacity:0.5"{% endif %}>Add to Server</a>
             {% if config.dashboard.invite_url %}<span class="dot">&middot;</span>{% endif %}
             <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener">GitHub</a>
+            <span class="dot">&middot;</span>
+            <span class="landing-version">v{{ request.app.state.version }}</span>
         </div>
     </div>
     <script src="/static/js/image-fallbacks.js?v=1"></script>
