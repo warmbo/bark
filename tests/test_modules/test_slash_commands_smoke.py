@@ -353,14 +353,22 @@ async def test_every_bark_slash_command_responds(tree):
 
     assert not failures, "failing commands:\n" + "\n".join(failures)
     assert len(tested) >= 20, f"expected a full command tree, got {len(tested)}: {tested}"
+    # Core module commands must always be deployed. The plugin commands
+    # (serverinfo, fact, poll, dice_roller, trivia) only exist when the
+    # bark-plugins sibling repo is present on the machine — a fresh checkout
+    # has no plugins, so those are asserted conditionally below.
     for required in (
         "/bark help",
-        "/bark serverinfo",
-        "/bark fact",
-        "/bark poll",
-        "/bark dice_roller roll",
-        "/bark trivia start",
         "/bark moderation warn",
         "/bark reputation leaderboard",
     ):
         assert required in tested, f"missing command from tree: {required} in {tested}"
+    if PLUGINS_DIR.exists():
+        for plugin_cmd in (
+            "/bark serverinfo",
+            "/bark fact",
+            "/bark poll",
+            "/bark dice_roller roll",
+            "/bark trivia start",
+        ):
+            assert plugin_cmd in tested, f"missing plugin command from tree: {plugin_cmd} in {tested}"
