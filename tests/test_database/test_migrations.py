@@ -366,3 +366,74 @@ async def test_canonical_feature_foreign_key_is_enforced(tmp_path):
                 "INSERT INTO warnings (id, guild_id) VALUES (1, 'unknown')"
             )
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_guild_access_dedupes_and_enforces_unique(tmp_path):
+    """Migration 0010 removes duplicate (user, guild) rows — keeping the
+    strongest (owner first, then highest permissions, then newest) — and
+    adds the unique index that legacy databases never received."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'legacy.db'}")
+    async with engine.begin() as connection:
+        # Legacy tables: no UNIQUE constraint, no roles column yet.
+        await connection.exec_driver_sql(
+            "CREATE TABLE dashboard_users ("
+            "id INTEGER PRIMARY KEY, discord_id VARCHAR(32) UNIQUE NOT NULL, "
+            "username VARCHAR(64) NOT NULL, avatar_url VARCHAR(512) NOT NULL, "
+            "role VARCHAR(16) NOT NULL, last_login DATETIME)"
+        )
+        await connection.exec_driver_sql(
+            "CREATE TABLE dashboard_guild_access ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "user_discord_id VARCHAR(32) NOT NULL, guild_id VARCHAR(32) NOT NULL, "
+            "name VARCHAR(100) NOT NULL, icon_hash VARCHAR(128), "
+            "permissions INTEGER NOT NULL DEFAULT 0, owner BOOLEAN NOT NULL DEFAULT 0, "
+            "can_manage BOOLEAN NOT NULL DEFAULT 0)"
+        )
+        await connection.exec_driver_sql(
+            "INSERT INTO dashboard_users (discord_id, username, avatar_url, role) "
+            "VALUES ('42', 'Cody', '', 'owner')"
+        )
+        # Duplicate pairs: (42, 100) has a weak row + a strong owner row;
+        # (42, 200) has two equal non-owner rows (newest id should win).
+        await connection.exec_driver_sql(
+            "INSERT INTO dashboard_guild_access "
+            "(user_discord_id, guild_id, name, permissions, owner) VALUES "
+            "('42', '100', 'Guild', 0, 0), "
+            "('42', '100', 'Guild', 2147483647, 1), "
+            "('42', '200', 'Guild2', 8, 0), "
+            "('42', '200', 'Guild2', 8, 0)"
+        )
+        await apply_migrations(connection)
+
+        rows = (
+            await connection.exec_driver_sql(
+                "SELECT user_discord_id, guild_id, owner, permissions, id "
+                "FROM dashboard_guild_access ORDER BY guild_id"
+            )
+        ).fetchall()
+        assert len(rows) == 2
+        assert (rows[0][0], rows[0][1], rows[0][2]) == ("42", "100", 1)  # owner row kept
+        assert rows[1][0] == "42" and rows[1][1] == "200" and rows[1][3] == 8
+        assert rows[1][4] > 1  # newest id kept for the equal-pair group
+
+        indexes = {
+            row[1]
+            for row in (
+                await connection.exec_driver_sql(
+                    'PRAGMA index_list("dashboard_guild_access")'
+                )
+            ).fetchall()
+        }
+        assert "uq_dashboard_user_guild" in indexes
+
+        # The constraint is now enforced: inserting a duplicate must fail.
+        from sqlalchemy.exc import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            await connection.exec_driver_sql(
+                "INSERT INTO dashboard_guild_access "
+                "(user_discord_id, guild_id, name, permissions, owner) VALUES "
+                "('42', '100', 'Guild', 0, 0)"
+            )
+    await engine.dispose()
