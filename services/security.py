@@ -4,6 +4,7 @@ import re
 import time
 from collections import OrderedDict
 from typing import Callable
+from urllib.parse import urlsplit
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -21,6 +22,12 @@ PUBLIC_PATHS = {
     "/api/v1/health",
     "/api/v1/ping",
 }
+
+# Origins allowed for state-changing requests (CSRF). The public hostname is
+# added at request time; these are the LAN/direct-access hosts also trusted by
+# TrustedHostMiddleware (see dashboard/__init__.py). Hostname-only comparison
+# tolerates scheme/port differences (http vs https, :8091).
+_TRUSTED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "10.0.0.227"}
 
 
 def _is_public(path: str) -> bool:
@@ -347,11 +354,16 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             return RedirectResponse(url=url, status_code=301)
 
         origin = request.headers.get("origin")
+        origin_host = urlsplit(origin).hostname if origin else None
+        allowed_origins = _TRUSTED_ORIGIN_HOSTS
+        public_host = urlsplit(config.dashboard.public_url).hostname
+        if public_host:
+            allowed_origins = allowed_origins | {public_host}
         if (
             (request.url.path.startswith("/api/") or request.url.path == "/auth/logout")
             and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
             and origin
-            and origin.rstrip("/") != config.dashboard.public_url
+            and origin_host not in allowed_origins
         ):
             return _json_error(403, "Cross-origin write rejected")
 

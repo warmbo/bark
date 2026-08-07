@@ -62,6 +62,29 @@ async def test_cross_origin_api_write_is_rejected():
 
 
 @pytest.mark.asyncio
+async def test_lan_origin_api_write_is_allowed():
+    """Direct LAN access (http://10.0.0.227:8091) is a supported dashboard
+    path, so state-changing requests from that origin must not be treated
+    as cross-origin."""
+    app = FastAPI()
+    app.add_middleware(SecurityMiddleware)
+
+    @app.post("/api/v1/save")
+    async def save():
+        return {"saved": True}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://10.0.0.227:8091"
+    ) as client:
+        response = await client.post(
+            "/api/v1/save", headers={"Origin": "http://10.0.0.227:8091"}
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"saved": True}
+
+
+@pytest.mark.asyncio
 async def test_public_https_configuration_emits_hsts(monkeypatch):
     import config
 
