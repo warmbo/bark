@@ -38,6 +38,9 @@ def app(db, monkeypatch):
     bot.modules.get_all_modules.return_value = {}
 
     dashboard = create_app(bot)
+    # Deterministic channel state for API tests (real git config is not
+    # consulted); the one-way rule is exercised by dedicated tests below.
+    monkeypatch.setattr(updates_api, "get_channel", lambda: "stable")
     return dashboard
 
 
@@ -58,7 +61,8 @@ async def test_update_status_returns_build_info(app, monkeypatch):
         updates_api,
         "check_update",
         lambda branch=None: {
-            "branch": branch or "main",
+            "channel": "stable",
+            "branch": "master",
             "current_commit": "aaaaaaa",
             "current_branch": "main",
             "available_commit": "bbbbbbb",
@@ -77,6 +81,8 @@ async def test_update_status_returns_build_info(app, monkeypatch):
     data = response.json()["data"]
     assert data["current_commit"] == "aaaaaaa"
     assert data["update_available"] is True
+    assert data["channel"] == "stable"
+    assert data["branch"] == "master"
 
 
 @pytest.mark.asyncio
@@ -123,4 +129,62 @@ async def test_perform_update_accepts_and_reports_restart(app, monkeypatch):
         )
     assert response.status_code == 200
     assert "restart" in response.json()["data"]["message"].lower()
+    assert started == ["dev"]
+
+
+@pytest.mark.asyncio
+async def test_perform_update_rejects_stable_when_on_dev_channel(app, monkeypatch):
+    """The Dev channel is one-way: once an instance is on Dev, updating to
+    Stable (main) must be rejected."""
+    monkeypatch.setattr(updates_api, "get_channel", lambda: "dev")
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/instance/update", json={"branch": "main"}
+        )
+    assert response.status_code == 403
+    assert "switching back to Stable" in response.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_perform_update_allows_stable_when_on_stable_channel(app, monkeypatch):
+    started = []
+
+    async def fake_apply(branch):
+        started.append(branch)
+
+    monkeypatch.setattr(updates_api, "apply_update_async", fake_apply)
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/instance/update", json={"branch": "main"}
+        )
+    assert response.status_code == 200
+    assert started == ["main"]
+
+
+@pytest.mark.asyncio
+async def test_perform_update_allows_dev_when_on_dev_channel(app, monkeypatch):
+    started = []
+
+    async def fake_apply(branch):
+        started.append(branch)
+
+    monkeypatch.setattr(updates_api, "get_channel", lambda: "dev")
+    monkeypatch.setattr(updates_api, "apply_update_async", fake_apply)
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/instance/update", json={"branch": "dev"}
+        )
+    assert response.status_code == 200
     assert started == ["dev"]

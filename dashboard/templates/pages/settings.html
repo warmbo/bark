@@ -101,9 +101,10 @@
                         <span class="info-label">Channel</span>
                         <span class="info-value">
                             <select id="update-channel" name="update_channel" class="form-select form-select-sm" aria-label="Update channel">
-                                <option value="main" selected>Stable (main)</option>
+                                <option value="main">Stable (master)</option>
                                 <option value="dev">Dev (dev)</option>
                             </select>
+                            <p class="form-hint" id="update-channel-hint">The Stable channel tracks the master branch. The Dev channel is one-way: once an instance moves to Dev it cannot switch back to Stable.</p>
                         </span>
                     </div>
                     <div class="info-row">
@@ -336,8 +337,20 @@
             const result = await safeFetch(`/api/v1/instance/update/status?branch=${encodeURIComponent(branch)}`, {cache: 'no-cache'});
             const status = result?.data || {};
             lastStatus = status;
+            // Reflect the instance's persisted channel; once on Dev the
+            // Stable option is disabled (one-way switch).
+            if (status.channel) {
+                const value = status.channel === 'dev' ? 'dev' : 'main';
+                if (updateChannel.value !== value) updateChannel.value = value;
+                const stableOption = updateChannel.querySelector('option[value="main"]');
+                if (stableOption) stableOption.disabled = status.channel === 'dev';
+                const hint = document.getElementById('update-channel-hint');
+                if (hint && status.channel === 'dev') {
+                    hint.textContent = 'This instance is on the Dev channel. Switching back to Stable is not allowed.';
+                }
+            }
             updateCurrent.textContent = status.current_commit ? `${status.current_commit.slice(0, 7)}${status.current_branch ? ` (${status.current_branch})` : ''}` : '—';
-            updateAvailable.textContent = status.available_commit ? status.available_commit.slice(0, 7) : '—';
+            updateAvailable.textContent = status.available_commit ? `${status.available_commit.slice(0, 7)}${status.branch ? ` (${status.branch})` : ''}` : '—';
             updateRepo.textContent = status.repo_dir || '—';
             updateApplyBtn.disabled = !status.update_available;
             if (updateResult) {
@@ -356,10 +369,11 @@
     updateChannel?.addEventListener('change', loadUpdateStatus);
     updateApplyBtn?.addEventListener('click', async () => {
         if (!lastStatus?.update_available) return;
-        const branch = updateChannel?.value || 'main';
+        const channel = updateChannel?.value || 'main';
+        const branchLabel = lastStatus.branch || channel;
         const ok = await BarkDialog.confirm({
-            title: `Update to ${branch === 'dev' ? 'dev' : 'stable'}?`,
-            message: `Pull ${lastStatus.available_commit.slice(0, 7)} from origin/${branch} and restart the instance? The dashboard will briefly go offline.`,
+            title: `Update to ${channel === 'dev' ? 'Dev' : 'Stable'}?`,
+            message: `Pull ${lastStatus.available_commit.slice(0, 7)} from origin/${branchLabel} and restart the instance? The dashboard will briefly go offline.`,
             confirmLabel: 'Update & restart',
             danger: false,
         });
@@ -369,7 +383,7 @@
             const result = await safeFetch('/api/v1/instance/update', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({branch}),
+                body: JSON.stringify({branch: channel}),
             });
             if (result.success === false) throw new Error(result.error || 'Update failed');
             updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>The page will reload once the instance is back online.</p></div></div>`;

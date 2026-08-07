@@ -1,14 +1,21 @@
 """Self-update support: pull the latest build from the git remote.
 
 The instance is expected to be a git checkout (production and dev both are).
-``apply_update`` resets the working tree to ``origin/<branch>``, installs any
-new dependencies, then exits the process — the systemd unit has
+``apply_update`` resets the working tree to ``<update_remote>/<branch>``,
+installs any new dependencies, then exits the process — the systemd unit has
 ``Restart=always``, so the service comes back up on the new build.
 
 Security: updates are gated behind instance-owner auth in the API layer, and
-git only ever fetches from the configured remotes — no arbitrary URLs are
-accepted. The branch is resolved across remotes (e.g. GitHub's ``main`` when
-the primary remote only tracks ``master``/``dev``).
+git only ever fetches from the configured ``update_remote`` (default
+``origin``) — no other remotes and no arbitrary URLs are consulted. The
+stable channel maps to the repo's stable branch (``config.instance.
+stable_branch``, else the remote's default branch, else ``master``) rather
+than a hard-coded ``main``.
+
+Channel rules: an instance may move from the stable channel to the dev
+channel, but not back (enforced in the API layer). The current channel is
+persisted in the local git config (``bark.update.channel``) so it survives
+``reset --hard``.
 """
 
 from __future__ import annotations
@@ -22,6 +29,8 @@ from pathlib import Path
 from config import config
 
 logger = logging.getLogger("bark.update")
+
+CHANNEL_CONFIG_KEY = "bark.update.channel"
 
 
 def repo_root() -> Path:
@@ -60,12 +69,6 @@ def current_branch() -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def _git_remotes() -> list[str]:
-    """Return configured git remote names (empty when not a checkout)."""
-    result = _run(["git", "remote"])
-    return result.stdout.split() if result.returncode == 0 else []
-
-
 def _remote_has_branch(remote: str, branch: str) -> bool:
     """Return whether ``remote/<branch>`` exists locally (after a fetch)."""
     result = _run(["git", "rev-parse", "--verify", "--quiet", f"{remote}/{branch}"])
@@ -79,22 +82,60 @@ def _fetch_remote_branch(remote: str, branch: str) -> bool:
 
 
 def _resolve_remote(branch: str) -> str | None:
-    """Pick the remote that carries ``branch``.
+    """Fetch ``branch`` from the configured update remote.
 
-    Prefers the configured ``update_remote`` (default ``origin``), then falls
-    back to other remotes (e.g. GitHub's ``main`` when Forgejo only has
-    ``master``/``dev``). Returns the first remote where the fetch succeeded
-    and the branch ref exists, or ``None``.
+    Only ``config.instance.update_remote`` (default ``origin``) is ever
+    consulted — other remotes (e.g. a GitHub mirror with a stale ``main``)
+    are never used for updates. Returns the remote name on success, else
+    ``None``.
     """
-    remotes = _git_remotes()
-    if not remotes:
+    remote = config.instance.update_remote
+    if not remote:
         return None
-    preferred = config.instance.update_remote
-    ordered = [preferred] + [r for r in remotes if r != preferred]
-    for remote in ordered:
-        if _fetch_remote_branch(remote, branch) and _remote_has_branch(remote, branch):
-            return remote
+    if _fetch_remote_branch(remote, branch) and _remote_has_branch(remote, branch):
+        return remote
     return None
+
+
+def channel_to_branch(channel: str) -> str:
+    """Map a UI channel name to the actual git branch to track.
+
+    ``dev`` maps to the ``dev`` branch. The stable channel maps to
+    ``config.instance.stable_branch`` when configured, otherwise to the
+    remote's default branch (``origin/HEAD``), otherwise ``master``.
+    """
+    if channel == "dev":
+        return "dev"
+    if config.instance.stable_branch:
+        return config.instance.stable_branch
+    result = _run(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+    if result.returncode == 0 and result.stdout.strip():
+        ref = result.stdout.strip()
+        for prefix in ("origin/", "refs/remotes/"):
+            if ref.startswith(prefix):
+                return ref[len(prefix):]
+        return ref
+    return "master"
+
+
+def get_channel() -> str:
+    """The instance's update channel: persisted value, else a sensible default.
+
+    ``"stable"`` or ``"dev"``. The default derives from the checked-out
+    branch so a dev-branch checkout is treated as the dev channel even
+    before the first update persists the value.
+    """
+    result = _run(["git", "config", "--get", CHANNEL_CONFIG_KEY])
+    if result.returncode == 0 and result.stdout.strip() in ("stable", "dev"):
+        return result.stdout.strip()
+    return "dev" if current_branch() == "dev" else "stable"
+
+
+def set_channel(channel: str) -> None:
+    """Persist the channel in the local git config (survives resets)."""
+    if channel not in ("stable", "dev"):
+        raise ValueError(f"invalid channel: {channel}")
+    _run(["git", "config", "--local", CHANNEL_CONFIG_KEY, channel])
 
 
 def _remote_commit(remote: str, branch: str) -> str:
@@ -102,9 +143,14 @@ def _remote_commit(remote: str, branch: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def check_update(branch: str | None = None) -> dict:
-    """Fetch the branch and compare with the running build."""
-    branch = branch or config.instance.update_branch
+def check_update(channel: str | None = None) -> dict:
+    """Fetch the channel's branch and compare with the running build.
+
+    ``channel`` is a UI channel name (``main``/``stable`` or ``dev``); it is
+    mapped to the actual git branch via :func:`channel_to_branch`.
+    """
+    channel = channel or config.instance.update_branch
+    branch = channel_to_branch(channel)
     current = current_commit()
     available = ""
     error = ""
@@ -113,11 +159,12 @@ def check_update(branch: str | None = None) -> dict:
         if remote is not None:
             available = _remote_commit(remote, branch)
         else:
-            error = f"could not find branch '{branch}' on any git remote"
+            error = f"could not find branch '{branch}' on remote '{config.instance.update_remote}'"
     except Exception as exc:  # network down / not a checkout
         logger.warning("Update check failed: %s", exc)
         error = str(exc)
     return {
+        "channel": get_channel(),
         "branch": branch,
         "current_commit": current,
         "current_branch": current_branch(),
@@ -134,16 +181,24 @@ def _requirements_changed(old_commit: str) -> bool:
     return bool(changed & {"requirements.txt", "pyproject.toml"})
 
 
-def apply_update(branch: str) -> dict:
-    """Pull ``<remote>/<branch>`` into the checkout.
+def apply_update(channel: str) -> dict:
+    """Pull the channel's branch into the checkout.
 
-    Returns before the caller exits the process; systemd restarts the unit.
+    ``channel`` is a UI channel name (``main``/``stable`` or ``dev``). The
+    channel is persisted after a successful pull so the one-way
+    stable → dev rule survives restarts. Returns before the caller exits
+    the process; systemd restarts the unit.
     """
     old_commit = current_commit()
+    branch = channel_to_branch(channel)
+    channel_label = "stable" if channel != "dev" else "dev"
     try:
         remote = _resolve_remote(branch)
         if remote is None:
-            return {"ok": False, "error": f"could not find branch '{branch}' on any git remote"}
+            return {
+                "ok": False,
+                "error": f"could not find branch '{branch}' on remote '{config.instance.update_remote}'",
+            }
         available = _remote_commit(remote, branch)
     except Exception as exc:
         logger.exception("Update fetch failed")
@@ -151,6 +206,7 @@ def apply_update(branch: str) -> dict:
     if not available:
         return {"ok": False, "error": f"could not resolve {remote}/{branch}"}
     if available == old_commit:
+        set_channel(channel_label)
         return {"ok": True, "restarted": False, "message": "already up to date"}
 
     try:
@@ -160,6 +216,7 @@ def apply_update(branch: str) -> dict:
         return {"ok": False, "error": f"reset failed: {exc}"}
 
     new_commit = current_commit()
+    set_channel(channel_label)
 
     # Install any new dependencies before restarting.
     if _requirements_changed(old_commit):
@@ -170,13 +227,14 @@ def apply_update(branch: str) -> dict:
             except Exception as exc:
                 logger.warning("pip install failed after update: %s", exc)
 
-    logger.info("Update applied: %s -> %s (%s)", old_commit, new_commit, branch)
+    logger.info("Update applied: %s -> %s (%s/%s)", old_commit, new_commit, channel, branch)
     return {
         "ok": True,
         "restarted": True,
         "old_commit": old_commit,
         "new_commit": new_commit,
         "branch": branch,
+        "channel": channel_label,
     }
 
 
