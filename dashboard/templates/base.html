@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Bark — {% block title %}Dashboard{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/main.css?v=68">
+    <link rel="stylesheet" href="/static/css/main.css?v=69">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
@@ -45,6 +45,10 @@
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
     <div class="app-shell">
+        <!-- Mobile nav drawer controls (hidden on desktop) -->
+        <button type="button" class="menu-toggle" id="sidebar-toggle" data-toggle-sidebar aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation menu">{{ icon("menu", 18) }}</button>
+        <div class="nav-scrim" id="nav-scrim" data-close-sidebar aria-hidden="true"></div>
+
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar" aria-label="Main navigation">
             <div class="sidebar-header">
@@ -53,6 +57,7 @@
                     <span class="logo-text">Bark</span>
                 </a>
                 <span class="sidebar-version">v{{ request.app.state.version }}</span>
+                <button type="button" class="sidebar-close" data-close-sidebar aria-label="Close navigation menu">{{ icon("x", 16) }}</button>
             </div>
 
             <nav class="sidebar-nav" id="sidebar-nav" aria-label="Server pages">
@@ -164,7 +169,7 @@
 
     <script src="/static/js/forms.js?v=1"></script>
     <script src="/static/js/image-fallbacks.js?v=1"></script>
-    <script src="/static/js/main.js?v=26"></script>
+    <script src="/static/js/main.js?v=27"></script>
     <script src="/static/js/realtime.js?v=4"></script>
     <script src="/static/js/palette.js?v=5"></script>
     <script src="/static/js/shortcuts.js?v=3"></script>

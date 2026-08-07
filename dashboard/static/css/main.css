@@ -2676,24 +2676,76 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 /* ── Responsive: Mobile ────────────────────────────── */
 
+/* Mobile drawer controls — hidden on desktop */
+.menu-toggle,
+.sidebar-close {
+    display: none;
+}
+
 @media (max-width: 768px) {
-    .sidebar { width: var(--sidebar-collapsed-width); }
+    /* Slide-out navigation drawer: closed off-canvas, opens with full labels */
+    .menu-toggle {
+        display: grid;
+        place-items: center;
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 95; /* above the scrim (90), below the sidebar (100) */
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-full, 999px);
+        background: var(--bg-card-solid, #1e1e2e);
+        color: var(--text-primary);
+        cursor: pointer;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    }
+
+    .sidebar-close {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--text-tertiary);
+        cursor: pointer;
+    }
+    .sidebar-close:hover { color: var(--text-primary); }
+
+    .sidebar-version { display: none; }
+
+    .nav-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 90; /* under the sidebar (100), over content */
+        background: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--transition-normal, 0.2s ease);
+    }
+    .nav-scrim.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .sidebar {
+        width: min(320px, 85vw);
+        transform: translateX(-100%);
+        transition: transform var(--transition-normal, 0.25s ease);
+        will-change: transform;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    }
+    .sidebar.open { transform: translateX(0); }
+
     .sidebar-header, .sidebar-footer { padding: 10px; }
-    .sidebar-logo .logo-text,
-    .sidebar-version,
-    .sidebar-nav-items .nav-item span:not(.nav-icon),
-    .nav-section-label,
-    .sidebar-guild-copy,
-    .sidebar-guild-link > svg,
-    .sidebar-user-copy,
-    .sidebar-logout,
-    .sidebar-footer-top a,
-    .sidebar-footer-top .sidebar-status { display: none; }
-    .main-content { margin-left: var(--sidebar-collapsed-width); }
+    .main-content { margin-left: 0; }
     .guild-grid { grid-template-columns: 1fr; }
     .modules-grid { grid-template-columns: 1fr; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .save-bar { left: var(--sidebar-collapsed-width); }
+    .save-bar { left: 0; }
 }
 
 @media (min-width: 769px) {

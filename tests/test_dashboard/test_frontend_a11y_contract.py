@@ -404,3 +404,42 @@ def test_danger_zones_are_tab_specific():
     voice_has_admin = "Admin only" in voice or "admin-only" in voice or "can_manage_module" in voice
     assert voice_has_admin, "Voice danger zone should be admin-only"
     assert "danger-zone" in workspace or "retention-danger-zone" in workspace
+
+
+def test_mobile_drawer_contract():
+    """Mobile nav drawer: base.html exposes a hamburger + scrim + close
+    control wired to the sidebar, and main.js implements slide/gesture
+    open-close behaviour with proper inert/aria state."""
+    base = source(TEMPLATES / "base.html")
+    js = source(STATIC / "js" / "main.js")
+
+    # Hamburger toggle: labelled, controls the sidebar, reflects state
+    toggle = re.search(
+        r"<button[^>]*data-toggle-sidebar[^>]*>", base, re.I | re.S
+    )
+    assert toggle, "base.html must have a data-toggle-sidebar button"
+    tag = toggle.group(0)
+    assert 'type="button"' in tag
+    assert 'aria-controls="sidebar"' in tag
+    assert 'aria-expanded="false"' in tag
+    assert 'aria-label="Open navigation menu"' in tag
+
+    # Scrim + close control exist and are wired the same way
+    assert 'id="nav-scrim"' in base and 'data-close-sidebar' in base
+    assert re.search(
+        r'<button[^>]*class="sidebar-close"[^>]*>', base, re.I
+    ), "sidebar needs a visible close button for the open drawer"
+    assert 'data-close-sidebar' in base
+
+    # JS: drawer init + gesture handlers + focus/inert management
+    for key in (
+        "initMobileDrawer",
+        "matchMedia('(max-width: 768px)')",
+        "touchstart",
+        "touchend",
+        "sidebar.classList.add('open')",
+        "sidebar.setAttribute('inert'",
+        "aria-expanded",
+        "preventScroll",
+    ):
+        assert key in js, f"main.js missing drawer behaviour: {key}"

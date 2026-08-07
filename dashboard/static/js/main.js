@@ -399,6 +399,9 @@ async function loadSection(url, container, renderFn, opts = {}) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // ── Mobile navigation drawer (slide/gesture menu) ──
+    initMobileDrawer();
+
     // ── Load Manifest & Build Sidebar ─────────────────
     const navItems = document.getElementById('sidebar-nav-items');
     if (navItems) loadSidebarManifest(navItems);
@@ -416,6 +419,115 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => hint.style.opacity = '1', 2000);
     }
 });
+
+// ── Mobile Navigation Drawer ────────────────────────────
+// The sidebar becomes a slide-out drawer below 769px: closed off-canvas,
+// opened by the hamburger (top-left), an edge swipe, or — on open — closed
+// by the scrim, the X, a left swipe, Escape, or picking a nav item.
+
+function initMobileDrawer() {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.querySelector('[data-toggle-sidebar]');
+    const scrim = document.getElementById('nav-scrim');
+    if (!sidebar || !toggle || !scrim) return;
+
+    const mobileQuery = window.matchMedia('(max-width: 768px)');
+    const closeTriggers = document.querySelectorAll('[data-close-sidebar]');
+
+    function isMobile() { return mobileQuery.matches; }
+
+    function openDrawer() {
+        if (!isMobile()) return;
+        sidebar.classList.add('open');
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.setAttribute('aria-label', 'Close navigation menu');
+        scrim.classList.add('show');
+        scrim.setAttribute('aria-hidden', 'false');
+        sidebar.removeAttribute('inert');
+        // Focus the drawer so keyboard users land inside it
+        sidebar.setAttribute('tabindex', '-1');
+        sidebar.focus({ preventScroll: true });
+    }
+
+    function closeDrawer() {
+        sidebar.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', 'Open navigation menu');
+        scrim.classList.remove('show');
+        scrim.setAttribute('aria-hidden', 'true');
+        if (isMobile()) sidebar.setAttribute('inert', '');
+    }
+
+    // Keep the drawer in sync with the viewport (desktop = always open).
+    function syncViewport() {
+        if (isMobile()) {
+            if (!sidebar.classList.contains('open')) sidebar.setAttribute('inert', '');
+        } else {
+            sidebar.classList.remove('open');
+            sidebar.removeAttribute('inert');
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.setAttribute('aria-label', 'Open navigation menu');
+            scrim.classList.remove('show');
+            scrim.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    // Hamburger / X
+    toggle.addEventListener('click', () => {
+        if (sidebar.classList.contains('open')) closeDrawer();
+        else openDrawer();
+    });
+
+    // Scrim tap + drawer close buttons (delegated)
+    document.addEventListener('click', (event) => {
+        if (!closeTriggers.length) return;
+        for (const trigger of closeTriggers) {
+            if (trigger.contains(event.target) && sidebar.classList.contains('open')) {
+                closeDrawer();
+                return;
+            }
+        }
+    });
+
+    // Escape closes the drawer
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && sidebar.classList.contains('open')) closeDrawer();
+    });
+
+    // Picking a nav item closes the drawer on mobile
+    sidebar.addEventListener('click', (event) => {
+        const link = event.target.closest('a[href]');
+        if (link && isMobile()) closeDrawer();
+    });
+
+    // Swipe gestures: right edge-swipe opens; left swipe (open) closes.
+    let touchStartX = null;
+    let touchStartY = null;
+    document.addEventListener('touchstart', (event) => {
+        if (event.touches.length !== 1) { touchStartX = null; return; }
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (event) => {
+        if (touchStartX === null) return;
+        const startX = touchStartX;
+        const endX = event.changedTouches[0].clientX;
+        const endY = event.changedTouches[0].clientY;
+        const dx = endX - startX;
+        const dy = endY - touchStartY;
+        touchStartX = null;
+        touchStartY = null;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return; // not a horizontal swipe
+        const isOpen = sidebar.classList.contains('open');
+        if (!isOpen && startX < 32 && dx > 0) openDrawer();  // edge swipe right
+        if (isOpen && dx < 0) closeDrawer();                 // swipe left to dismiss
+    }, { passive: true });
+
+    // Initial state (mobile closed => inert; desktop => inert removed)
+    syncViewport();
+    mobileQuery.addEventListener('change', syncViewport);
+}
 
 // ── API-driven Select Fields ────────────────────────────
 
