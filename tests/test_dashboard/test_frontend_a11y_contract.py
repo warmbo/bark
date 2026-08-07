@@ -238,7 +238,7 @@ def test_desktop_viewport_and_zoom_contract_is_present():
 def test_guild_images_are_intrinsic_not_fixed_height():
     css = source(STATIC / "css" / "main.css")
     rule = re.search(
-        r"\.guild-icon-small, \.guild-card-icon img \{([^}]+)\}", css
+        r"\.guild-icon-small, \.guild-bar-icon, \.guild-card-icon img \{([^}]+)\}", css
     )
     assert rule
     declarations = rule.group(1)
