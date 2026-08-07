@@ -62,7 +62,12 @@ class ReputationEvent(Base):
     __tablename__ = "reputation_events"
     __table_args__ = (
         UniqueConstraint(
-            "guild_id", "event_type", "actor_id", "message_id", name="uq_reputation_event"
+            "guild_id",
+            "event_type",
+            "actor_id",
+            "message_id",
+            "emoji",
+            name="uq_reputation_event",
         ),
     )
 
@@ -77,6 +82,10 @@ class ReputationEvent(Base):
     points: Mapped[float] = mapped_column(Float, nullable=False)
     message_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     channel_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    emoji: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    """Distinguishes distinct reactions on the same message so each emoji is
+    its own event (the dedup key would otherwise collapse a second emoji from
+    the same reactor into the first and silently lose its points)."""
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), index=True

@@ -347,6 +347,14 @@ async def _mod_action(request: Request, guild_id: str, action: str, executor):
     if not target_id:
         return api_error("target_id is required")
 
+    # Discord timeouts are capped at 28 days (40320 minutes); anything else
+    # is a client error, not a 502 from a later timedelta()/API failure.
+    if action == "timeout":
+        if duration is None:
+            return api_error("duration is required for timeout")
+        if isinstance(duration, bool) or not isinstance(duration, int) or not 1 <= duration <= 40320:
+            return api_error("duration must be an integer between 1 and 40320 minutes (28 days)")
+
     try:
         target_id_int = int(target_id)
     except (ValueError, TypeError):

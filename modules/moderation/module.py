@@ -1432,6 +1432,14 @@ class ModerationModule(BarkModule):
                 for g in stale_rs:
                     self._ruleset_cache.pop(g, None)
                     self._ruleset_cache_ttl.pop(g, None)
+
+                # Prune anti-raid content/mention trackers: deques are bounded
+                # but (guild, user) keys were never evicted, so a user who
+                # posted once kept an entry forever. Idle 10 minutes → drop.
+                for gid in set(self._anti_raid._recent_content.keys()) | set(
+                    self._anti_raid._mention_track.keys()
+                ):
+                    self._anti_raid.prune_idle_users(int(gid), idle_seconds=600)
         except asyncio.CancelledError:
             pass
 

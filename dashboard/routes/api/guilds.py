@@ -529,14 +529,18 @@ async def _load_reputation_items(session, guild_id: int, guild) -> list[dict]:
     icons = {"thanks": "🙏", "award": "🏆", "tier_up": "⬆️", "level_up": "⭐"}
     result = await session.execute(
         select(ReputationEvent)
-        .where(ReputationEvent.guild_id == str(guild_id))
+        .where(
+            ReputationEvent.guild_id == str(guild_id),
+            # Filter noisy per-message scoring in SQL, not Python — fetching 50
+            # recent rows and discarding most of them could return an empty
+            # feed on a busy server even when notable events exist.
+            ReputationEvent.event_type.notin_(list(noisy_events)),
+        )
         .order_by(desc(ReputationEvent.created_at))
         .limit(50)
     )
     items = []
     for event in result.scalars():
-        if event.event_type in noisy_events:
-            continue
         target = _member_name(guild, event.target_id)
         actor = _member_name(guild, event.actor_id)
         label = labels.get(event.event_type, event.event_type.replace("_", " ").title())

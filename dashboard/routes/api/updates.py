@@ -46,7 +46,9 @@ async def update_status(request: Request, branch: str | None = None):
     """Check the remote for a newer build (owner-only)."""
     if not _can_manage_instance(request):
         return api_error("Owner access required", status_code=403)
-    return api_success(check_update(branch))
+    # check_update runs blocking `git fetch` subprocesses (up to 120s per
+    # remote) — never run that on the event loop.
+    return api_success(await asyncio.to_thread(check_update, branch))
 
 
 @router.post("/instance/update")

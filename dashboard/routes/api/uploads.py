@@ -20,6 +20,7 @@ from services.response import (
     api_success,
     check_api_permission,
 )
+from services.security import read_upload_limited
 
 router = APIRouter(tags=["api-uploads"])
 
@@ -119,7 +120,7 @@ async def upload_image(request: Request, guild_id: str, file: UploadFile = File(
     if extension is None:
         return api_error("Only PNG, JPEG, GIF, and WebP images are supported", status_code=400)
 
-    payload = await file.read()
+    payload = await read_upload_limited(file, MAX_UPLOAD_BYTES)
     if len(payload) == 0:
         return api_error("Uploaded file is empty", status_code=400)
     if len(payload) > MAX_UPLOAD_BYTES:

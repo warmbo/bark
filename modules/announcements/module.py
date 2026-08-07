@@ -12,6 +12,7 @@ Placeholders are not required here; announcement text is freeform.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -28,6 +29,15 @@ from modules.base import (
 )
 
 logger = logging.getLogger("bark.modules.announcements")
+
+# Discord REST sends can stall (rate limits, API latency); cap them so a hung
+# request cannot block the dashboard handler or the slash command forever.
+_SEND_TIMEOUT_SECONDS = 10.0
+
+
+async def _send_with_timeout(channel, *, content=None, embed=None) -> None:
+    """Send a message with a hard timeout so a stalled Discord call fails fast."""
+    await asyncio.wait_for(channel.send(content=content, embed=embed), timeout=_SEND_TIMEOUT_SECONDS)
 
 
 def _full_width_spacer_url() -> str:
@@ -318,7 +328,7 @@ class AnnouncementsModule(BarkModule):
                         emb.set_image(url=image_url)
                     else:
                         emb.set_image(url=_full_width_spacer_url())
-                    await channel.send(embed=emb)
+                    await _send_with_timeout(channel, embed=emb)
                 else:
                     if image_url:
                         emb = discord.Embed(color=discord.Color.blurple())
@@ -327,9 +337,9 @@ class AnnouncementsModule(BarkModule):
                         # footer so even image-only posts span full width.
                         _force_full_width(emb)
                         _pad_footer_full_width(emb)
-                        await channel.send(content=message[:2000], embed=emb)
+                        await _send_with_timeout(channel, content=message[:2000], embed=emb)
                     else:
-                        await channel.send(content=message[:2000])
+                        await _send_with_timeout(channel, content=message[:2000])
             except discord.Forbidden:
                 return api_error("Missing permission to send to that channel")
             except discord.HTTPException as exc:
@@ -403,7 +413,7 @@ class AnnouncementsModule(BarkModule):
                         link = f"[Watch Video]({vid})"
                         desc = announcement_embed.description or ""
                         announcement_embed.description = f"{desc}\n\n{link}" if desc else link
-                    await channel.send(embed=announcement_embed)
+                    await _send_with_timeout(channel, embed=announcement_embed)
                 else:
                     if image_url:
                         img_emb = discord.Embed(color=discord.Color.blurple())
@@ -411,9 +421,9 @@ class AnnouncementsModule(BarkModule):
                         # Pad the footer so the image embed spans full width too.
                         _force_full_width(img_emb)
                         _pad_footer_full_width(img_emb)
-                        await channel.send(content=message[:2000], embed=img_emb)
+                        await _send_with_timeout(channel, content=message[:2000], embed=img_emb)
                     else:
-                        await channel.send(content=message[:2000])
+                        await _send_with_timeout(channel, content=message[:2000])
                 await interaction.followup.send(
                     f"Announcement sent to {channel.mention}.", ephemeral=True
                 )

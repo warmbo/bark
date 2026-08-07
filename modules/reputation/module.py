@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 from fastapi import Query, Request
+from sqlalchemy.exc import IntegrityError
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -70,7 +71,6 @@ EMOJI_RE = re.compile(r"[\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]")
 THANKS_COOLDOWN_SECONDS = 300  # 5 minutes between thanks to the same user
 THANKS_SELF_COOLDOWN_SECONDS = 60  # 1 minute between any thanks by same actor
 VOICE_TICK_SECONDS = 60  # Check voice duration every 60s
-VOICE_IDLE_TIMEOUT = 120  # Mark member as idle after 2min in same channel
 MAX_SHOWOFF_PER_HOUR = 6  # Max showoff announcements per hour per guild
 
 
@@ -357,7 +357,7 @@ class ReputationModule(BarkModule):
             """Reset a member's reputation profile (admin action)."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.manage", guild_id):
-                return api_error("Insufficient permissions")
+                return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
 
             async with session_scope() as session:
@@ -427,7 +427,7 @@ class ReputationModule(BarkModule):
             """Update a tier: threshold, presentation, and linked Discord role."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.manage", guild_id):
-                return api_error("Insufficient permissions")
+                return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
             bot: "BarkBot" = request.state.bot
             guild = bot.get_guild(gid)
@@ -528,7 +528,7 @@ class ReputationModule(BarkModule):
             """Create a new tier at the bottom of the ladder."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.manage", guild_id):
-                return api_error("Insufficient permissions")
+                return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
             bot: "BarkBot" = request.state.bot
             guild = bot.get_guild(gid)
@@ -602,7 +602,7 @@ class ReputationModule(BarkModule):
             """Remove a tier. Profiles referencing it are re-tiered; roles stay."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.manage", guild_id):
-                return api_error("Insufficient permissions")
+                return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
 
             async with session_scope() as session:
@@ -687,7 +687,7 @@ class ReputationModule(BarkModule):
             """Create a Discord role for every tier that has none linked."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.manage", guild_id):
-                return api_error("Insufficient permissions")
+                return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
             bot: "BarkBot" = request.state.bot
             guild = bot.get_guild(gid)
@@ -1315,6 +1315,7 @@ class ReputationModule(BarkModule):
         target_id: int | None = None,
         message_id: int | None = None,
         channel_id: int | None = None,
+        emoji: str | None = None,
         metadata: dict | None = None,
         config: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
@@ -1437,7 +1438,10 @@ class ReputationModule(BarkModule):
                         guild_id, user_id, new_tier_data["role_id"], tier_rows
                     )
 
-            # Record event
+            # Record event. A duplicate (same emoji re-added by the same
+            # reactor, or a redelivered event) must not abort the transaction
+            # or double-award: the unique key now includes the emoji, so only
+            # true duplicates collide, and those are already recorded.
             event = ReputationEvent(
                 guild_id=str(guild_id),
                 actor_id=str(actor_id or user_id),
@@ -1446,10 +1450,24 @@ class ReputationModule(BarkModule):
                 points=points,
                 message_id=str(message_id) if message_id else None,
                 channel_id=str(channel_id) if channel_id else None,
+                emoji=emoji,
                 metadata_json=json.dumps(metadata) if metadata else None,
             )
             session.add(event)
-            await session.flush()
+            try:
+                await session.flush()
+            except IntegrityError:
+                # The event already exists — the award was recorded earlier.
+                # Rolling back also discards this transaction's profile delta,
+                # which is correct: the duplicate must not award points twice.
+                await session.rollback()
+                self._logger.debug(
+                    "Duplicate reputation event ignored for guild %s user %s type %s",
+                    guild_id,
+                    user_id,
+                    event_type,
+                )
+                return None
 
             # Save profile
             session.add(profile)
@@ -1858,6 +1876,7 @@ class ReputationModule(BarkModule):
 
         target_id = int(message.author.id)
         actor_id = int(payload.user_id)
+        emoji = str(payload.emoji) if getattr(payload, "emoji", None) is not None else None
 
         # Reaction giver gets small points too
         if config.get("enabled_sources", {}).get("reactions", True):
@@ -1871,6 +1890,7 @@ class ReputationModule(BarkModule):
                 target_id=target_id,
                 message_id=int(payload.message_id),
                 channel_id=int(payload.channel_id),
+                emoji=emoji,
                 config=config,
             )
 
@@ -1885,6 +1905,7 @@ class ReputationModule(BarkModule):
             target_id=target_id,
             message_id=int(payload.message_id),
             channel_id=int(payload.channel_id),
+            emoji=emoji,
             config=config,
         )
 
@@ -2159,34 +2180,45 @@ class ReputationModule(BarkModule):
             config = await self.load_dashboard_config(guild_id)
             await interaction.response.defer(ephemeral=True)
 
-            # Points for giver
-            given_points = compute_thanks_given_points(config)
-            await self._add_points(
-                guild_id,
-                actor_id,
-                given_points,
-                "thanks_given",
-                actor_id=actor_id,
-                target_id=target_id,
-                metadata={"reason": reason, "target": str(target_id)},
-                config=config,
-            )
-
-            # Points for receiver
-            received_points = compute_thanks_received_points(config)
-            await self._add_points(
-                guild_id,
-                target_id,
-                received_points,
-                "thanks",
-                actor_id=actor_id,
-                target_id=target_id,
-                metadata={"reason": reason, "giver": str(actor_id)},
-                config=config,
-            )
-
+            # Claim both cooldowns BEFORE the award awaits. Writing them only
+            # after _add_points completes leaves a double-click window where
+            # two concurrent invocations both pass the check and both award.
+            # If the award then fails, restore the previous values so the
+            # failure does not silently burn the user's cooldown.
+            prev_pair = self._thanks_cooldowns.get(pair_key, 0)
+            prev_self = self._thanks_self_cooldowns.get(actor_id, 0)
             self._thanks_cooldowns[pair_key] = now
             self._thanks_self_cooldowns[actor_id] = now
+            try:
+                # Points for giver
+                given_points = compute_thanks_given_points(config)
+                await self._add_points(
+                    guild_id,
+                    actor_id,
+                    given_points,
+                    "thanks_given",
+                    actor_id=actor_id,
+                    target_id=target_id,
+                    metadata={"reason": reason, "target": str(target_id)},
+                    config=config,
+                )
+
+                # Points for receiver
+                received_points = compute_thanks_received_points(config)
+                await self._add_points(
+                    guild_id,
+                    target_id,
+                    received_points,
+                    "thanks",
+                    actor_id=actor_id,
+                    target_id=target_id,
+                    metadata={"reason": reason, "giver": str(actor_id)},
+                    config=config,
+                )
+            except Exception:
+                self._thanks_cooldowns[pair_key] = prev_pair
+                self._thanks_self_cooldowns[actor_id] = prev_self
+                raise
 
             msg = f"{interaction.user.mention} thanked {member.mention}"
             if reason:

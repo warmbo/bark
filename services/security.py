@@ -131,20 +131,33 @@ def _json_error(
     return JSONResponse(status_code=status_code, content=content, headers=headers)
 
 
+async def read_upload_limited(file, max_bytes: int) -> bytes:
+    """Read an uploaded file without buffering more than ``max_bytes``.
+
+    ``UploadFile.read()`` with no argument buffers the entire stream into
+    memory before any size check, so a malicious client could stream an
+    unbounded body and exhaust the process. Reading in capped chunks aborts
+    as soon as the limit is exceeded.
+    """
+    chunk_size = 64 * 1024
+    remaining = max_bytes + 1
+    payload = bytearray()
+    while remaining > 0:
+        chunk = await file.read(min(chunk_size, remaining))
+        if not chunk:
+            break
+        payload.extend(chunk)
+        remaining -= len(chunk)
+        if len(payload) > max_bytes:
+            break
+    return bytes(payload)
+
+
 def _auth_required_response(path: str) -> Response:
     """Return the 401/302 response for a missing session on the given path."""
     if path.startswith("/api/"):
         return _json_error(401, "Authentication required")
     return RedirectResponse(url="/auth/login", status_code=302)
-
-
-async def _user_can_manage_guild(user_id: str, guild_id: str) -> bool:
-    """Check persisted dashboard access for the user on the guild."""
-    from database.engine import session_scope
-    from services.dashboard_access import user_can_manage_guild
-
-    async with session_scope() as session:
-        return await user_can_manage_guild(session, user_id, guild_id)
 
 
 def _access_denied_response(path: str, api_message: str, html_message: str) -> Response:

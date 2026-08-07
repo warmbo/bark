@@ -458,6 +458,77 @@ async def _dedupe_dashboard_guild_access(connection: AsyncConnection) -> None:
     )
 
 
+async def _add_reputation_event_emoji(connection: AsyncConnection) -> None:
+    """Add the emoji column and include it in the reputation-event dedup key.
+
+    Two different emojis on the same message by the same reactor used to hit
+    the (guild_id, event_type, actor_id, message_id) unique constraint, which
+    silently dropped the second award (an unhandled IntegrityError rolled back
+    the whole points transaction). SQLite cannot ALTER a UNIQUE constraint, so
+    rebuild the table with the emoji column folded into the key.
+    """
+    table_exists = (
+        await connection.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='reputation_events'"
+        )
+    ).first()
+    if table_exists is None:
+        return
+    has_emoji = (
+        await connection.exec_driver_sql(
+            "SELECT 1 FROM pragma_table_info('reputation_events') WHERE name = 'emoji'"
+        )
+    ).first()
+    if has_emoji is not None:
+        return
+
+    rows = (
+        await connection.exec_driver_sql(
+            "SELECT id, guild_id, actor_id, target_id, event_type, points, "
+            "message_id, channel_id, metadata_json, created_at "
+            "FROM reputation_events"
+        )
+    ).fetchall()
+    await connection.exec_driver_sql(
+        """
+        CREATE TABLE reputation_events_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id VARCHAR(32) NOT NULL,
+            actor_id VARCHAR(32) NOT NULL,
+            target_id VARCHAR(32),
+            event_type VARCHAR(32) NOT NULL,
+            points FLOAT NOT NULL,
+            message_id VARCHAR(32),
+            channel_id VARCHAR(32),
+            emoji VARCHAR(64),
+            metadata_json TEXT,
+            created_at DATETIME,
+            CONSTRAINT uq_reputation_event
+                UNIQUE (guild_id, event_type, actor_id, message_id, emoji),
+            FOREIGN KEY(guild_id) REFERENCES guilds (discord_id)
+        )
+        """
+    )
+    if rows:
+        await connection.exec_driver_sql(
+            "INSERT INTO reputation_events_new "
+            "(id, guild_id, actor_id, target_id, event_type, points, message_id, "
+            "channel_id, metadata_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [tuple(row) for row in rows],
+        )
+    await connection.exec_driver_sql("DROP TABLE reputation_events")
+    await connection.exec_driver_sql("ALTER TABLE reputation_events_new RENAME TO reputation_events")
+    for index_sql in (
+        "CREATE INDEX IF NOT EXISTS ix_reputation_events_guild_id ON reputation_events (guild_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reputation_events_actor_id ON reputation_events (actor_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reputation_events_target_id ON reputation_events (target_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reputation_events_channel_id ON reputation_events (channel_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reputation_events_created_at ON reputation_events (created_at)",
+    ):
+        await connection.exec_driver_sql(index_sql)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -540,6 +611,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     (
         "0010_dashboard_guild_access_unique",
         _dedupe_dashboard_guild_access,
+    ),
+    (
+        "0011_reputation_event_emoji",
+        _add_reputation_event_emoji,
     ),
 )
 

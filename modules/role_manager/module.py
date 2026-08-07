@@ -37,7 +37,6 @@ from modules.base import (
 logger = logging.getLogger("bark.modules.role_manager")
 
 TENURE_CHECK_INTERVAL_SECONDS = 300  # 5 minutes
-TENURE_RULE_TYPES = ("tenure",)
 VOICE_RULE_TYPES = ("voice",)
 STREAM_RULE_TYPES = ("stream",)
 

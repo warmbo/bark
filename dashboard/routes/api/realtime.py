@@ -30,7 +30,6 @@ router = APIRouter(tags=["api-realtime"])
 # ── Constants ──────────────────────────────────────────
 
 HEARTBEAT_INTERVAL = 30.0  # seconds
-CONNECTION_TIMEOUT = 60.0  # seconds — max idle before disconnect
 
 # ── Helpers ────────────────────────────────────────────
 

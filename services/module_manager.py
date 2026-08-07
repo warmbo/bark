@@ -586,15 +586,27 @@ class ModuleManager:
         )
 
     async def set_guild_enabled(self, guild_id: int, module_name: str, enabled: bool) -> bool:
-        """Update guild policy and reconcile shared module lifecycle."""
+        """Update guild policy and reconcile shared module lifecycle.
+
+        ``_guild_states`` is only committed after the lifecycle transition
+        succeeds; on failure it is restored so persisted policy and runtime
+        state never diverge (the API layer persists the DB row afterwards).
+        """
         if module_name not in self._modules:
             return False
+        previous = self._guild_states.get((int(guild_id), module_name), True)
         self._guild_states[(int(guild_id), module_name)] = bool(enabled)
         if enabled:
-            return await self.enable_module(module_name)
-        if not self.should_run_globally(module_name):
-            return await self.disable_module(module_name)
-        return True
+            if await self.enable_module(module_name):
+                return True
+        elif not self.should_run_globally(module_name):
+            if await self.disable_module(module_name):
+                return True
+        else:
+            return True
+        # Lifecycle transition failed — restore the previous policy.
+        self._guild_states[(int(guild_id), module_name)] = previous
+        return False
 
     def _guard_event_handler(self, module_name: str, handler: Callable) -> Callable:
         @wraps(handler)

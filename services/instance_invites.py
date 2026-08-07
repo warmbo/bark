@@ -28,12 +28,6 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is not None and value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
-
-
 async def create_instance_invite(
     session: AsyncSession,
     *,

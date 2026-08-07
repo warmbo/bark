@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
@@ -26,14 +27,11 @@ logger = logging.getLogger("bark.services.anti_raid")
 DEFAULT_JOIN_THRESHOLD = 5  # joins
 DEFAULT_JOIN_WINDOW = 30  # seconds
 DEFAULT_ACCOUNT_AGE_DAYS = 3  # min account age
-DEFAULT_ESCALATION_STRIKES = 3  # AutoMod violations before escalation
 DEFAULT_ESCALATION = {  # strike count → action
     1: "warn",
     3: "timeout",
     5: "kick",
 }
-DEFAULT_SIMILARITY_RATIO = 0.85  # content similarity threshold
-DEFAULT_MENTION_LIMIT = 10  # mentions per 60s
 
 
 class AntiRaidService:
@@ -205,3 +203,44 @@ class AntiRaidService:
         self._violation_count[guild_id].pop(user_id, None)
         self._escalation_cooldown[guild_id].pop(user_id, None)
         self._violation_seen[guild_id].pop(user_id, None)
+
+    # ── Content/mention tracker eviction ─────────────────
+    # The per-user deques are bounded, but the (guild, user) keys themselves
+    # are never evicted — a user who posted once a year ago keeps an entry
+    # forever. Called from the moderation module's periodic cleanup loop.
+
+    def prune_trackers(self, guild_id: int, user_id: int) -> None:
+        """Drop an idle user's content/mention tracking entries."""
+        self._recent_content[guild_id].pop(user_id, None)
+        if not self._recent_content[guild_id]:
+            self._recent_content.pop(guild_id, None)
+        self._mention_track[guild_id].pop(user_id, None)
+        if not self._mention_track[guild_id]:
+            self._mention_track.pop(guild_id, None)
+
+    def prune_idle_users(self, guild_id: int, idle_seconds: int) -> int:
+        """Evict users whose content/mention entries are older than the idle
+        window; returns the number of user entries removed."""
+        removed = 0
+        for tracker in (self._recent_content, self._mention_track):
+            by_user = tracker.get(guild_id)
+            if not by_user:
+                continue
+            cutoff = time.time() - idle_seconds
+            for user_id, deque_ref in list(by_user.items()):
+                # Deques store datetimes (recent_content) or tuples with a
+                # datetime first (mention_track). Compare the newest entry;
+                # an empty deque is immediately idle.
+                newest = None
+                for entry in deque_ref:
+                    candidate = entry[0] if isinstance(entry, tuple) else entry
+                    if newest is None or candidate > newest:
+                        newest = candidate
+                if newest is None:
+                    newest = datetime.now(timezone.utc)  # empty — treat as idle
+                if newest.timestamp() < cutoff:
+                    by_user.pop(user_id, None)
+                    removed += 1
+            if not by_user:
+                tracker.pop(guild_id, None)
+        return removed

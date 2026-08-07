@@ -78,6 +78,23 @@ def create_app(bot: BarkBot) -> DashboardApp:
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     templates.env.globals.setdefault("config", config)
 
+    # Every API error goes through the standard envelope. FastAPI's default
+    # HTTPException handler returns {"detail": ...}, the one non-{success,error}
+    # shape in the app (e.g. the plugin-removal route guard). Override it so
+    # dependency-raised HTTP errors match api_error() output.
+    from fastapi import HTTPException
+    from fastapi.exception_handlers import http_exception_handler
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(HTTPException)
+    async def _envelope_http_exception(request: Request, exc: HTTPException):
+        if request.url.path.startswith("/api/"):
+            content = {"success": False, "error": str(exc.detail or "Request failed")}
+            return JSONResponse(
+                status_code=exc.status_code, content=content, headers=exc.headers
+            )
+        return await http_exception_handler(request, exc)
+
     # Make templates available on app state
     app.state.templates = templates
     app.state.version = __version__

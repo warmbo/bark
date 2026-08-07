@@ -349,6 +349,37 @@ async def test_module_toggle_updates_only_the_target_guild(client, app):
 
 
 @pytest.mark.asyncio
+async def test_module_toggle_failure_does_not_persist(client, app):
+    """If the runtime enable/disable transition fails, the DB row must NOT be
+    written and the API returns 409 — persisted and live state can't diverge."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.module import ModuleConfig
+
+    module = MagicMock()
+    module.save_dashboard_config = AsyncMock()
+    app.state.bot.modules.get_module.return_value = module
+    app.state.bot.modules.set_guild_enabled = AsyncMock(return_value=False)
+
+    resp = await client.post("/api/v1/guilds/1/modules/logging/toggle", json={"enabled": True})
+
+    assert resp.status_code == 409
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(ModuleConfig).where(
+                    ModuleConfig.guild_id == "1",
+                    ModuleConfig.module_name == "logging",
+                )
+            )
+        ).scalar_one_or_none()
+    assert row is None, "ModuleConfig must not be written when the transition fails"
+
+
+@pytest.mark.asyncio
 async def test_saving_fresh_module_config_preserves_default_enabled_state(client, app):
     """A first settings save must not silently disable a default-enabled module."""
     from unittest.mock import AsyncMock, MagicMock
@@ -1293,6 +1324,49 @@ async def test_guild_activity_aggregates_all_logged_sources(client, db):
     # Chronological ordering — newest first
     stamps = [a.get("timestamp") or "" for a in activity]
     assert stamps == sorted(stamps, reverse=True)
+
+
+@pytest.mark.asyncio
+async def test_activity_reputation_feed_filters_noise_in_sql(client, db):
+    """When the 50 most recent reputation events are all noisy (message /
+    reaction), older notable events must still surface — the filter must run
+    in SQL, not after fetching the newest 50 rows."""
+    from datetime import datetime, timedelta, timezone
+
+    from database.engine import session_scope
+    from database.models.reputation import ReputationEvent
+
+    async with session_scope() as session:
+        now = datetime.now(timezone.utc)
+        # 60 noisy events all newer than the single notable one.
+        session.add_all(
+            ReputationEvent(
+                guild_id="1",
+                actor_id="800",
+                target_id="902",
+                event_type="message" if i % 2 else "reaction",
+                points=1.0,
+                created_at=now - timedelta(seconds=i + 1),
+            )
+            for i in range(60)
+        )
+        session.add(
+            ReputationEvent(
+                guild_id="1",
+                actor_id="800",
+                target_id="902",
+                event_type="thanks",
+                points=2.0,
+                created_at=now - timedelta(minutes=5),
+            )
+        )
+        await session.commit()
+
+    resp = await client.get("/api/v1/guilds/1/activity")
+    assert resp.status_code == 200
+    rep_items = [a for a in resp.json()["data"]["activity"] if a["type"] == "reputation"]
+    assert rep_items, "notable reputation events must not be hidden by noisy ones"
+    assert any(a["action"] == "thanks" for a in rep_items)
 
 
 @pytest.mark.asyncio

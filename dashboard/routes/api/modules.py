@@ -35,16 +35,23 @@ async def list_modules(request: Request, guild_id: str):
 
     modules_list = []
     async with session_scope() as session:
-        for name, module in all_modules.items():
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            result = await session.execute(
-                select(ModuleConfig).where(
-                    ModuleConfig.guild_id == str(guild_id),
-                    ModuleConfig.module_name == name,
+        # One query for the guild's module configs, mapped by module name —
+        # avoids an N+1 SELECT per module.
+        rows = (
+            (
+                await session.execute(
+                    select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
                 )
             )
-            db_config = result.scalar_one_or_none()
+            .scalars()
+            .all()
+        )
+        configs_by_name = {row.module_name: row for row in rows}
+
+        for name, module in all_modules.items():
+            db_config = configs_by_name.get(name)
 
             modules_list.append(
                 {
@@ -273,6 +280,13 @@ async def toggle_module(request: Request, guild_id: str, module_name: str):
     data = await request.json()
     enable = data.get("enabled", False)
 
+    # Apply the runtime transition first. set_guild_enabled reverts its own
+    # in-memory policy on failure, so the DB row below is only written when
+    # the live module state actually changed — persisted and runtime state
+    # can never diverge.
+    if not await bot.modules.set_guild_enabled(int(guild_id), module_name, enable):
+        return api_error(f"Module '{module_name}' could not be {'enabled' if enable else 'disabled'}", status_code=409)
+
     async with session_scope() as session:
         from sqlalchemy import select
 
@@ -294,8 +308,6 @@ async def toggle_module(request: Request, guild_id: str, module_name: str):
         else:
             db_config.enabled = enable
         await session.commit()
-
-    await bot.modules.set_guild_enabled(int(guild_id), module_name, enable)
 
     return api_success({"module": module_name, "enabled": enable})
 

@@ -5,6 +5,20 @@
   if (!root) return;
   const guildId = root.dataset.guildId;
   const moduleName = root.dataset.moduleName;
+
+  // Only http(s) media URLs may be embedded. This also blocks javascript: /
+  // data:text/html schemes that would execute when injected into an <img src>
+  // (or a markdown embed rendered elsewhere) — the media picker accepts
+  // arbitrary user/plugin strings, so the scheme is validated here, not
+  // trusted from the client.
+  const isSafeMediaUrl = (value) => {
+    try {
+      const parsed = new URL(String(value || ''), window.location.origin);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
   const configForm = root.querySelector('.module-config-form');
   const saveButton = document.getElementById('save-config-btn');
   const discardButton = document.getElementById('discard-config-btn');
@@ -301,8 +315,12 @@
         const chip = document.createElement('span');
         chip.className = 'media-chip';
         chip.dataset.index = String(index);
-        if (item.type === 'image' && item.url) {
-          chip.innerHTML = `<img src="${item.url}" alt="" loading="lazy">`;
+        if (item.type === 'image' && isSafeMediaUrl(item.url)) {
+          const img = document.createElement('img');
+          img.src = item.url;
+          img.alt = '';
+          img.loading = 'lazy';
+          chip.appendChild(img);
         } else {
           chip.innerHTML = `<span class="media-chip-icon">${item.type === 'video' ? '▶' : '🖼'}</span>`;
         }
@@ -325,6 +343,7 @@
 
     const addMedia = (type, url) => {
       if (!url) return;
+      if (type === 'image' && !isSafeMediaUrl(url)) return;
       media = media.filter((m) => m.type !== type); // keep one image + one video
       media.push({type, url});
       hidden.value = JSON.stringify(media);

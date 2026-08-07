@@ -16,6 +16,9 @@ from services.response import (
     api_success,
     check_api_permission,
 )
+from services.security import read_upload_limited
+
+MAX_APPEARANCE_UPLOAD_BYTES = 10 * 1024 * 1024
 
 logger = logging.getLogger("bark.api.bot_appearance")
 
@@ -29,8 +32,6 @@ ACTIVITY_TYPES = {
     "watching": 3,
     "competing": 5,
 }
-
-ACTIVITY_TYPE_NAMES = {v: k for k, v in ACTIVITY_TYPES.items()}
 
 
 @router.get("/guilds/{guild_id}/bot/appearance")
@@ -114,8 +115,8 @@ async def update_avatar(request: Request, guild_id: str, file: UploadFile = File
     import asyncio
 
     try:
-        image_data = await file.read()
-        if len(image_data) > 10 * 1024 * 1024:
+        image_data = await read_upload_limited(file, MAX_APPEARANCE_UPLOAD_BYTES)
+        if len(image_data) > MAX_APPEARANCE_UPLOAD_BYTES:
             return api_error("Image must be under 10MB")
 
         # Discord's REST call can hang (large uploads, API latency); cap it so
@@ -151,8 +152,8 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
 
     bot = request.state.bot
     try:
-        image_data = await file.read()
-        if len(image_data) > 10 * 1024 * 1024:
+        image_data = await read_upload_limited(file, MAX_APPEARANCE_UPLOAD_BYTES)
+        if len(image_data) > MAX_APPEARANCE_UPLOAD_BYTES:
             return api_error("Image must be under 10MB")
 
         # Cap the Discord REST call so a slow API never turns into a 502

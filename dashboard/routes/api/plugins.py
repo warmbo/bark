@@ -14,8 +14,9 @@ import logging
 from fastapi import APIRouter, File, Request, UploadFile
 
 from config import config
-from services.plugin_manager import PluginValidationError
+from services.plugin_manager import MAX_PLUGIN_BYTES, PluginValidationError
 from services.response import api_deleted, api_error, api_success
+from services.security import read_upload_limited
 
 logger = logging.getLogger("bark.dashboard.plugins")
 
@@ -44,7 +45,7 @@ async def install_plugin(request: Request, file: UploadFile = File(...)):
     """Install a single-file plugin module."""
     if not _can_manage_plugins(request):
         return api_error("Owner access required", status_code=403)
-    payload = await file.read()
+    payload = await read_upload_limited(file, MAX_PLUGIN_BYTES)
     try:
         metadata = await request.state.bot.modules.install_plugin(
             payload, file.filename or ""

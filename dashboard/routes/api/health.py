@@ -25,29 +25,17 @@ _start_time = datetime.now(timezone.utc)
 
 @router.get("/health")
 async def health_check(request: Request):
-    """Comprehensive system health check."""
+    """Comprehensive system health check.
+
+    This endpoint is public (used by uptime monitors), so it deliberately
+    exposes no per-guild or per-module internals: no bot username, no guild
+    count, no module inventory or versions.
+    """
     bot = request.state.bot
 
     # Bot status
     bot_ready = bot.is_ready() if hasattr(bot, "is_ready") else False
     bot_connected = bot.is_connected() if hasattr(bot, "is_connected") else bot_ready
-
-    # Module health
-    modules = {}
-    if bot_ready:
-        try:
-            for name, module in bot.modules.get_all_modules().items():
-                modules[name] = {
-                    "version": module.version,
-                    "enabled": module.enabled,
-                    "commands": len(module.get_commands()),
-                    "events": len(module.get_events()),
-                    "settings": bool(module.get_settings_schema()),
-                    "actions": len(module.get_actions()) if hasattr(module, "get_actions") else 0,
-                }
-        except Exception as exc:
-            logger.warning("Module health collection failed (%s)", type(exc).__name__)
-            modules = {}
 
     # Database health
     db_healthy = False
@@ -77,22 +65,10 @@ async def health_check(request: Request):
             "bot": {
                 "connected": bot_connected,
                 "ready": bot_ready,
-                "guilds": len(bot.guilds) if bot_ready else 0,
-                "user": str(bot.user) if bot_ready and bot.user else None,
             },
             "database": {
                 "healthy": db_healthy,
                 "status": "connected" if db_healthy else "unavailable",
-            },
-            "modules": {
-                "total": len(modules),
-                "enabled": sum(1 for m in modules.values() if m.get("enabled")),
-                "list": modules,
-            },
-            "memory": {
-                "total_events": len(bot.modules.event_bus.event_types)
-                if hasattr(bot, "modules")
-                else 0,
             },
         }
     )
