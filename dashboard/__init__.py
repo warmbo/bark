@@ -56,7 +56,9 @@ def create_app(bot: BarkBot) -> DashboardApp:
     public_host = urlparse(config.dashboard.public_url).hostname
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=[host for host in (public_host, "localhost", "127.0.0.1", "test") if host],
+        # The dev instance is also reached directly over LAN by IP
+        # (http://10.0.0.227:8091), not only via the public hostname.
+        allowed_hosts=[host for host in (public_host, "localhost", "127.0.0.1", "test", "10.0.0.227") if host],
     )
 
     # Static files
