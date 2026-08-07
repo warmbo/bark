@@ -20,6 +20,20 @@ def can_manage_discord_guild(*, owner: bool, permissions: int) -> bool:
     return owner or bool(permissions & (DISCORD_ADMINISTRATOR | DISCORD_MANAGE_GUILD))
 
 
+def role_from_access(*, owner: bool, permissions: int) -> str:
+    """Map Discord guild permissions to the dashboard role tier for that guild.
+
+    Mirrors ``derive_dashboard_role`` at guild granularity: an owner or
+    ADMINISTRATOR is admin, a MANAGE_GUILD holder is moderator, and every
+    other member is a read-only viewer.
+    """
+    if owner or (_permission_value(permissions) & DISCORD_ADMINISTRATOR):
+        return "admin"
+    if _permission_value(permissions) & DISCORD_MANAGE_GUILD:
+        return "moderator"
+    return "viewer"
+
+
 def derive_dashboard_role(
     guilds: Iterable[dict[str, Any]],
     bot_guild_ids: set[str],
@@ -31,19 +45,17 @@ def derive_dashboard_role(
     every other member of a shared guild is a read-only viewer. Users who
     share no guild with the bot are viewers too (they have nothing to see).
     """
-    shared = [guild for guild in guilds if str(guild.get("id")) in bot_guild_ids]
-    if any(
-        bool(guild.get("owner", False))
-        or (_permission_value(guild.get("permissions")) & DISCORD_ADMINISTRATOR)
-        for guild in shared
-    ):
-        return "admin"
-    if any(
-        _permission_value(guild.get("permissions")) & DISCORD_MANAGE_GUILD
-        for guild in shared
-    ):
-        return "moderator"
-    return "viewer"
+    tiers = {"viewer": 0, "moderator": 1, "admin": 2}
+    best = 0
+    for guild in guilds:
+        if str(guild.get("id")) not in bot_guild_ids:
+            continue
+        role = role_from_access(
+            owner=bool(guild.get("owner", False)),
+            permissions=_permission_value(guild.get("permissions")),
+        )
+        best = max(best, tiers[role])
+    return {0: "viewer", 1: "moderator", 2: "admin"}[best]
 
 
 def resolve_dashboard_role(
@@ -122,6 +134,26 @@ async def user_can_manage_guild(
         )
     )
     return bool(result.scalar_one_or_none())
+
+
+async def get_user_guild_access_row(
+    session: AsyncSession,
+    discord_user_id: str,
+    guild_id: int | str,
+) -> DashboardGuildAccess | None:
+    """Return the persisted Discord access snapshot for one guild.
+
+    The snapshot is written at login from Discord's OAuth payload, so it is
+    the authoritative per-guild owner/permission record available without a
+    fresh Discord call.
+    """
+    result = await session.execute(
+        select(DashboardGuildAccess).where(
+            DashboardGuildAccess.user_discord_id == discord_user_id,
+            DashboardGuildAccess.guild_id == str(guild_id),
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 async def user_is_guild_member(

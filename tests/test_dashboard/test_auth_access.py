@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from itsdangerous import TimestampSigner
 
 from database.engine import session_scope
+from database.models.guild import Guild
 from database.models.permissions import DashboardUser, InstanceAccess
 from services.dashboard_access import (
     build_guild_catalog,
@@ -459,3 +460,183 @@ async def test_oauth_callback_rejects_user_with_no_shared_guild(db, monkeypatch)
 
     assert response.status_code == 302
     assert response.headers["location"] == "/?auth_error=no_shared_guild"
+
+
+def _module_stub():
+    """Return a minimal module object for rendering the module detail page."""
+    module = MagicMock()
+    module.version = "1.0.0"
+    module.description = "Announcements"
+    module.author = "test"
+    module.load_dashboard_config = AsyncMock(return_value={})
+    module.get_settings_schema.return_value = {"properties": {}}
+    module.get_extra_tabs.return_value = []
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    module.get_actions.return_value = []
+    module.get_about.return_value = ""
+    return module
+
+
+def test_role_from_access_tiers_discord_permissions():
+    from services.dashboard_access import role_from_access
+
+    assert role_from_access(owner=True, permissions=0) == "admin"
+    assert role_from_access(owner=False, permissions=0x8) == "admin"
+    assert role_from_access(owner=False, permissions=0x20) == "moderator"
+    assert role_from_access(owner=False, permissions=0x400) == "viewer"
+    assert role_from_access(owner=False, permissions=0) == "viewer"
+
+
+@pytest.mark.asyncio
+async def test_module_page_open_to_owner_with_stale_session_role(db, monkeypatch):
+    """Reported prod case: a user invited before Bark joined their own server
+    carries a stale login-time role in their session cookie. The module page
+    must still open for the server owner — the middleware re-derives the role
+    for this guild from the persisted Discord snapshot on every request."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="moderator"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [
+                {
+                    "id": "100",
+                    "name": "Lil Gups",
+                    "permissions": str(2147483647),
+                    "owner": True,
+                }
+            ],
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Lil Gups"
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    bot.modules.get_module.return_value = _module_stub()
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "moderator"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+        follow_redirects=False,
+    ) as client:
+        response = await client.get("/guild/100/modules/announcements")
+
+    assert response.status_code == 200
+    assert "Insufficient permissions" not in response.text
+    assert 'data-user-role="admin"' in response.text
+    assert 'data-can-manage="true"' in response.text
+
+
+@pytest.mark.asyncio
+async def test_module_page_open_to_plain_member_read_only(db, monkeypatch):
+    """A plain member (no manage perms) may VIEW a module page; the page
+    advertises can_manage=false so controls stay hidden. Mutations remain
+    role-gated — membership opens the dashboard, not the controls."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "100", "name": "Connected", "permissions": "0", "owner": False}],
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Connected"
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    bot.modules.get_module.return_value = _module_stub()
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "viewer"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+        follow_redirects=False,
+    ) as client:
+        response = await client.get("/guild/100/modules/announcements")
+        denied_write = await client.post(
+            "/api/v1/guilds/100/notes",
+            json={"user_id": "999", "content": "hi"},
+        )
+
+    assert response.status_code == 200
+    assert 'data-user-role="viewer"' in response.text
+    assert 'data-can-manage="false"' in response.text
+    assert denied_write.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_module_mutation_allowed_for_owner_with_stale_session_role(db, monkeypatch):
+    """The stale cookie role must not block a server owner from mutating their
+    own guild: the middleware refreshes the role before the mutation check."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="moderator"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        session.add(Guild(discord_id="100", name="Lil Gups", owner_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [
+                {
+                    "id": "100",
+                    "name": "Lil Gups",
+                    "permissions": str(2147483647),
+                    "owner": True,
+                }
+            ],
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Lil Gups"
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "moderator"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+        follow_redirects=False,
+    ) as client:
+        response = await client.post(
+            "/api/v1/guilds/100/notes",
+            json={"user_id": "999", "content": "hi"},
+        )
+
+    assert response.status_code == 200

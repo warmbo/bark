@@ -12,7 +12,8 @@ from config import config
 from database.engine import session_scope
 from database.models.module import ModuleConfig
 from database.models.permissions import ModuleRoleAccess
-from services.response import check_api_permission, set_cached_module_min_role
+from services.dashboard_access import user_is_guild_member
+from services.response import set_cached_module_min_role
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -108,8 +109,19 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
         guild_id,
         role_access.min_role if role_access else None,
     )
-    if not check_api_permission(request, f"{module_name}.access", guild_id):
-        return HTMLResponse("Insufficient permissions", status_code=403)
+    # Any member of the guild may open a module page — AuthMiddleware already
+    # enforced membership on the way in, so this is defense-in-depth. Module
+    # *mutations* stay role-gated; the page only hides controls it can't use.
+    # Permissive (no-OAuth) instances open the page to everyone, matching
+    # check_api_permission's permissive shortcut.
+    if config.oauth2.enabled:
+        user_id = (request.session.get("user") or {}).get("id")
+        if not user_id:
+            return HTMLResponse("Insufficient permissions", status_code=403)
+        async with session_scope() as session:
+            is_member = await user_is_guild_member(session, str(user_id), guild_id)
+        if not is_member:
+            return HTMLResponse("Insufficient permissions", status_code=403)
     # Module hooks keep specialized modules on one authoritative config store.
     raw_config = await module.load_dashboard_config(guild_id)
     schema = module.get_settings_schema()

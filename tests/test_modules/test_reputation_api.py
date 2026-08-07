@@ -111,10 +111,12 @@ async def _seeded_tiers(db):
         session.add(Guild(discord_id="1", name="Test Guild"))
         session.add(DashboardUser(discord_id="42", username="Auditor", role="admin"))
         await session.flush()
+        # Administrator-tier access row so the persisted per-guild snapshot
+        # matches the admin session role the tests assert with.
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x20)}],
+            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
         )
         session.add(
             ReputationTier(

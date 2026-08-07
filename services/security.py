@@ -131,19 +131,6 @@ async def _user_can_manage_guild(user_id: str, guild_id: str) -> bool:
         return await user_can_manage_guild(session, user_id, guild_id)
 
 
-async def _user_is_guild_member(user_id: str, guild_id: str) -> bool:
-    """Check whether Discord reported the user as a member of the guild.
-
-    Membership is broader than manage access: any member of a server where
-    Bark is installed may view its dashboard (mutations stay role-gated).
-    """
-    from database.engine import session_scope
-    from services.dashboard_access import user_is_guild_member
-
-    async with session_scope() as session:
-        return await user_is_guild_member(session, user_id, guild_id)
-
-
 def _access_denied_response(path: str, api_message: str, html_message: str) -> Response:
     """Return the 403 response (JSON envelope for API paths, HTML otherwise)."""
     if path.startswith("/api/"):
@@ -212,14 +199,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # uninstalled server has nothing behind /guild/{id}.
             bot = getattr(request.app.state, "bot", None)
             bot_guild_ids = {str(g.id) for g in bot.guilds} if bot is not None else set()
-            is_member = await _user_is_guild_member(user["id"], guild_id)
-            can_manage = await _user_can_manage_guild(user["id"], guild_id)
+            from database.engine import session_scope
+            from services.dashboard_access import get_user_guild_access_row, role_from_access
+
+            async with session_scope() as session:
+                access = await get_user_guild_access_row(session, user["id"], guild_id)
+            is_member = access is not None
+            can_manage = access.can_manage if access is not None else False
             if not is_member or (str(guild_id) not in bot_guild_ids and not can_manage):
                 return _access_denied_response(
                     path,
                     "You are not a member of this Discord server",
                     "You do not have access to this Discord server.",
                 )
+            # The cookie role is a login-time snapshot. Re-derive it for this
+            # guild from the persisted Discord snapshot every request, so
+            # changes since login (the bot joining a server, an invite
+            # redemption, a promotion) take effect without forcing a re-login.
+            request.session["role"] = role_from_access(
+                owner=access.owner,
+                permissions=access.permissions,
+            )
 
         action = mutation_capability(request.method, path)
         if action is not None:
