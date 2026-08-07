@@ -3083,3 +3083,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
         grid-row: 2;
     }
 }
+
+/* Auto Voice: name-template preview/help spans the whole config grid row */
+.template-preview, .template-help { grid-column: 1 / -1; }

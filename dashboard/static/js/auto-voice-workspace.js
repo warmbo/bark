@@ -10,8 +10,12 @@
   const root = document.querySelector('.module-workspace');
   if (!root || root.dataset.moduleName !== 'auto_voice') return;
 
-  const templateInput = document.getElementById('config-channel_name_template');
-  const fallbackInput = document.getElementById('config-fallback_name');
+  // Grouped schema (module v0.4.0) prefixes field ids with the section name;
+  // fall back to the legacy flat ids for older renders.
+  const templateInput = document.getElementById('config-channel-channel_name_template')
+    || document.getElementById('config-channel_name_template');
+  const fallbackInput = document.getElementById('config-channel-fallback_name')
+    || document.getElementById('config-fallback_name');
   if (!templateInput) return;
 
   // ── Renderer (mirrors the Python implementation) ──────────────
@@ -107,9 +111,9 @@
 
   const previewName = document.getElementById('auto-voice-preview-name');
   const caseInputs = [
-    document.getElementById('config-name_uppercase'),
-    document.getElementById('config-name_lowercase'),
-    document.getElementById('config-name_titlecase'),
+    document.getElementById('config-naming-name_uppercase') || document.getElementById('config-name_uppercase'),
+    document.getElementById('config-naming-name_lowercase') || document.getElementById('config-name_lowercase'),
+    document.getElementById('config-naming-name_titlecase') || document.getElementById('config-name_titlecase'),
   ].filter(Boolean);
 
   const readCaseFlags = () => ({

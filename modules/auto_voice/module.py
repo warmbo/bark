@@ -31,11 +31,57 @@ class ManagedChannel:
     sequence: int = 1
 
 
+# Config groups — the dashboard schema is organised into these sections;
+# each group maps to its flat keys so legacy (pre-grouping) configs keep
+# working and are lifted into the grouped shape on read.
+CONFIG_GROUPS: dict[str, list[str]] = {
+    "channel": ["primary_channel_id", "channel_name_template", "fallback_name"],
+    "naming": ["name_uppercase", "name_lowercase", "name_titlecase"],
+    "limits": ["user_limit", "bitrate_kbps"],
+    "access": [
+        "inherit_permissions",
+        "private_by_default",
+        "required_role_id",
+        "owner_can_rename",
+        "owner_can_limit",
+        "owner_can_lock",
+    ],
+    "cleanup": ["empty_delete_delay_seconds"],
+}
+
+_KEY_TO_GROUP: dict[str, str] = {
+    key: group for group, keys in CONFIG_GROUPS.items() for key in keys
+}
+
+
+def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
+    """Lift legacy flat keys into the grouped shape the dashboard schema uses.
+
+    New saves are already grouped (``{"channel": {"primary_channel_id": …}}``);
+    older configs stored the keys flat at the top level. Returns a merged
+    dict so both shapes read identically, preferring the grouped values.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    grouped: dict[str, Any] = {}
+    for group, keys in CONFIG_GROUPS.items():
+        values = raw.get(group)
+        if isinstance(values, dict):
+            grouped[group] = dict(values)
+            continue
+        lifted = {key: raw[key] for key in keys if key in raw}
+        if lifted:
+            grouped[group] = lifted
+    result = dict(raw)
+    result.update(grouped)
+    return result
+
+
 class AutoVoiceModule(BarkModule):
     """Create, configure, and clean up temporary Discord voice channels."""
 
     name = "auto_voice"
-    version = "0.3.0"
+    version = "0.4.0"
     description = "AVC-compatible temporary voice channels with dashboard configuration"
     author = "ZENHAWX"
 
@@ -46,6 +92,20 @@ class AutoVoiceModule(BarkModule):
         self._rename_locks: dict[int, asyncio.Lock] = {}
         self._joins_in_progress: set[int] = set()
         self._channel_sequence: dict[int, int] = {}
+
+    @staticmethod
+    def _cfg(config: dict[str, Any], key: str, default=None):
+        """Read a config key from its group, falling back to a legacy flat key."""
+        group = _KEY_TO_GROUP.get(key)
+        if group:
+            section = config.get(group)
+            if isinstance(section, dict) and key in section:
+                return section[key]
+        return config.get(key, default)
+
+    async def load_dashboard_config(self, guild_id: int) -> dict[str, Any]:
+        raw = await self.ctx.get_module_config(self.name, guild_id)
+        return normalize_config(raw)
 
     @property
     def managed_channel_ids(self) -> frozenset[int]:
@@ -102,105 +162,140 @@ class AutoVoiceModule(BarkModule):
             "type": "object",
             "description": "Configure AVC-compatible temporary voice channels.",
             "properties": {
-                "primary_channel_id": {
-                    "type": "string",
-                    "format": "voice_channel_select",
-                    "title": "Join-to-Create Channel",
-                    "description": "Joining this voice channel creates a temporary channel.",
-                    "placeholder": "Select a voice channel...",
+                "channel": {
+                    "type": "object",
+                    "title": "Channel Setup",
+                    "description": "Which channel starts a temporary voice channel and how new channels are named.",
+                    "properties": {
+                        "primary_channel_id": {
+                            "type": "string",
+                            "format": "voice_channel_select",
+                            "title": "Join-to-Create Channel",
+                            "description": "Joining this voice channel creates a temporary channel.",
+                            "placeholder": "Select a voice channel...",
+                        },
+                        "channel_name_template": {
+                            "type": "string",
+                            "title": "Channel Name Template",
+                            "description": (
+                                "Template used to name every new temporary channel. "
+                                "Tokens, AVC transforms, and examples are listed in the "
+                                "Name template reference below this field. Watch the "
+                                "live preview as you type."
+                            ),
+                            "default": "## [@@game_name@@]",
+                            "maxLength": 100,
+                        },
+                        "fallback_name": {
+                            "type": "string",
+                            "title": "No-game Fallback",
+                            "description": "Used for {game}/@@game_name@@ when no activity is detected.",
+                            "default": "General",
+                            "maxLength": 100,
+                        },
+                    },
                 },
-                "channel_name_template": {
-                    "type": "string",
-                    "title": "Channel Name Template",
-                    "description": (
-                        "Template used to name every new temporary channel. "
-                        "Tokens, AVC transforms, and examples are listed in the "
-                        "Name template reference below this field. Watch the "
-                        "live preview as you type."
-                    ),
-                    "default": "## [@@game_name@@]",
-                    "maxLength": 100,
+                "naming": {
+                    "type": "object",
+                    "title": "Channel Naming",
+                    "description": "Optional casing applied to the finished channel name.",
+                    "properties": {
+                        "name_uppercase": {
+                            "type": "boolean",
+                            "title": "ALL UPPERCASE",
+                            "description": "Force the finished channel name to ALL UPPERCASE (overrides lowercase).",
+                            "default": False,
+                        },
+                        "name_lowercase": {
+                            "type": "boolean",
+                            "title": "all lowercase",
+                            "description": "Force the finished channel name to all lowercase.",
+                            "default": False,
+                        },
+                        "name_titlecase": {
+                            "type": "boolean",
+                            "title": "Title Case",
+                            "description": "Force the finished channel name to Title Case.",
+                            "default": False,
+                        },
+                    },
                 },
-                "name_uppercase": {
-                    "type": "boolean",
-                    "title": "ALL UPPERCASE",
-                    "description": "Force the finished channel name to ALL UPPERCASE (overrides lowercase).",
-                    "default": False,
+                "limits": {
+                    "type": "object",
+                    "title": "Limits & Quality",
+                    "description": "Capacity and audio quality for every new temporary channel.",
+                    "properties": {
+                        "user_limit": {
+                            "type": "integer",
+                            "title": "Default User Limit",
+                            "description": "0 means unlimited.",
+                            "minimum": 0,
+                            "maximum": 99,
+                            "default": 0,
+                        },
+                        "bitrate_kbps": {
+                            "type": "integer",
+                            "title": "Bitrate (kbps)",
+                            "minimum": 8,
+                            "maximum": 384,
+                            "default": 64,
+                        },
+                    },
                 },
-                "name_lowercase": {
-                    "type": "boolean",
-                    "title": "all lowercase",
-                    "description": "Force the finished channel name to all lowercase.",
-                    "default": False,
+                "access": {
+                    "type": "object",
+                    "title": "Permissions & Privacy",
+                    "description": "Who may create a channel, who can join it, and what the owner may do with it.",
+                    "properties": {
+                        "inherit_permissions": {
+                            "type": "boolean",
+                            "title": "Copy Primary Channel Permissions",
+                            "default": True,
+                        },
+                        "private_by_default": {
+                            "type": "boolean",
+                            "title": "Private by Default",
+                            "description": "Only the creator and Bark may connect initially.",
+                            "default": False,
+                        },
+                        "required_role_id": {
+                            "type": "string",
+                            "format": "role_select",
+                            "title": "Required Role",
+                            "description": "Optional role required to create a temporary channel.",
+                            "placeholder": "No role required",
+                        },
+                        "owner_can_rename": {
+                            "type": "boolean",
+                            "title": "Owner Can Rename",
+                            "default": True,
+                        },
+                        "owner_can_limit": {
+                            "type": "boolean",
+                            "title": "Owner Can Change User Limit",
+                            "default": True,
+                        },
+                        "owner_can_lock": {
+                            "type": "boolean",
+                            "title": "Owner Can Lock or Unlock",
+                            "default": True,
+                        },
+                    },
                 },
-                "name_titlecase": {
-                    "type": "boolean",
-                    "title": "Title Case",
-                    "description": "Force the finished channel name to Title Case.",
-                    "default": False,
-                },
-                "fallback_name": {
-                    "type": "string",
-                    "title": "No-game Fallback",
-                    "description": "Used for {game}/@@game_name@@ when no activity is detected.",
-                    "default": "General",
-                    "maxLength": 100,
-                },
-                "user_limit": {
-                    "type": "integer",
-                    "title": "Default User Limit",
-                    "description": "0 means unlimited.",
-                    "minimum": 0,
-                    "maximum": 99,
-                    "default": 0,
-                },
-                "bitrate_kbps": {
-                    "type": "integer",
-                    "title": "Bitrate (kbps)",
-                    "minimum": 8,
-                    "maximum": 384,
-                    "default": 64,
-                },
-                "inherit_permissions": {
-                    "type": "boolean",
-                    "title": "Copy Primary Channel Permissions",
-                    "default": True,
-                },
-                "private_by_default": {
-                    "type": "boolean",
-                    "title": "Private by Default",
-                    "description": "Only the creator and Bark may connect initially.",
-                    "default": False,
-                },
-                "empty_delete_delay_seconds": {
-                    "type": "integer",
-                    "title": "Empty-channel Cleanup Delay",
-                    "description": "Seconds to wait before deleting an empty temporary channel.",
-                    "minimum": 0,
-                    "maximum": 3600,
-                    "default": 0,
-                },
-                "owner_can_rename": {
-                    "type": "boolean",
-                    "title": "Owner Can Rename",
-                    "default": True,
-                },
-                "owner_can_limit": {
-                    "type": "boolean",
-                    "title": "Owner Can Change User Limit",
-                    "default": True,
-                },
-                "owner_can_lock": {
-                    "type": "boolean",
-                    "title": "Owner Can Lock or Unlock",
-                    "default": True,
-                },
-                "required_role_id": {
-                    "type": "string",
-                    "format": "role_select",
-                    "title": "Required Role",
-                    "description": "Optional role required to create a temporary channel.",
-                    "placeholder": "No role required",
+                "cleanup": {
+                    "type": "object",
+                    "title": "Cleanup",
+                    "description": "When empty temporary channels are deleted.",
+                    "properties": {
+                        "empty_delete_delay_seconds": {
+                            "type": "integer",
+                            "title": "Empty-channel Cleanup Delay",
+                            "description": "Seconds to wait before deleting an empty temporary channel.",
+                            "minimum": 0,
+                            "maximum": 3600,
+                            "default": 0,
+                        },
+                    },
                 },
             },
         }
@@ -283,7 +378,7 @@ class AutoVoiceModule(BarkModule):
                 return
             guild_id = int(interaction.guild_id) if interaction.guild_id else 0
             config = await self.load_dashboard_config(guild_id)
-            if not config.get("owner_can_rename", True):
+            if not self._cfg(config, "owner_can_rename", True):
                 await interaction.response.send_message(
                     "Renaming is disabled for channel owners.", ephemeral=True
                 )
@@ -317,7 +412,7 @@ class AutoVoiceModule(BarkModule):
                 return
             guild_id = int(interaction.guild_id) if interaction.guild_id else 0
             config = await self.load_dashboard_config(guild_id)
-            if not config.get("owner_can_limit", True):
+            if not self._cfg(config, "owner_can_limit", True):
                 await interaction.response.send_message(
                     "Changing the user limit is disabled for channel owners.",
                     ephemeral=True,
@@ -360,7 +455,7 @@ class AutoVoiceModule(BarkModule):
                 return
             guild_id = int(interaction.guild_id) if interaction.guild_id else 0
             config = await self.load_dashboard_config(guild_id)
-            if not config.get("owner_can_lock", True):
+            if not self._cfg(config, "owner_can_lock", True):
                 await interaction.response.send_message(
                     "Locking is disabled for channel owners.", ephemeral=True
                 )
@@ -417,7 +512,7 @@ class AutoVoiceModule(BarkModule):
             self._cancel_deletion(int(after_channel.id))
 
         config = await self.load_dashboard_config(int(member.guild.id))
-        primary_id = self._as_int(config.get("primary_channel_id"))
+        primary_id = self._as_int(self._cfg(config, "primary_channel_id"))
         if after_channel is not None and primary_id == int(after_channel.id):
             await self._create_for_member(member, after_channel, config)
 
@@ -457,7 +552,7 @@ class AutoVoiceModule(BarkModule):
         member_id = int(member.id)
         if member_id in self._joins_in_progress:
             return
-        if not self._has_required_role(member, config.get("required_role_id")):
+        if not self._has_required_role(member, self._cfg(config, "required_role_id")):
             return
 
         self._joins_in_progress.add(member_id)
@@ -559,7 +654,7 @@ class AutoVoiceModule(BarkModule):
         minimum: int,
         maximum: int,
     ) -> int:
-        value = config.get(key, default)
+        value = AutoVoiceModule._cfg(config, key, default)
         try:
             parsed = int(value) if value not in (None, "") else default
         except (TypeError, ValueError):
@@ -579,8 +674,8 @@ class AutoVoiceModule(BarkModule):
         game: str | None = None,
         index: int | None = None,
     ) -> str:
-        template = str(config.get("channel_name_template") or "## [@@game_name@@]")
-        fallback = str(config.get("fallback_name") or "General")
+        template = str(self._cfg(config, "channel_name_template") or "## [@@game_name@@]")
+        fallback = str(self._cfg(config, "fallback_name") or "General")
         game = game or self._member_game(member) or fallback
         guild_id = int(member.guild.id)
         index = index or self._next_sequence(guild_id)
@@ -596,11 +691,11 @@ class AutoVoiceModule(BarkModule):
             template = template.replace(token, value)
         template = self._apply_avc_transforms(template)
         name = " ".join(template.split())[:100]
-        if config.get("name_uppercase"):
+        if self._cfg(config, "name_uppercase"):
             name = name.upper()
-        elif config.get("name_lowercase"):
+        elif self._cfg(config, "name_lowercase"):
             name = name.lower()
-        elif config.get("name_titlecase"):
+        elif self._cfg(config, "name_titlecase"):
             name = name.title()
         return name or f"Voice {index:02d}"
 
@@ -624,7 +719,7 @@ class AutoVoiceModule(BarkModule):
         if callable(get_member):
             owner = get_member(int(state.owner_id))
         owner = owner or members[0]
-        game = self._majority_game(members) or str(config.get("fallback_name") or "General")
+        game = self._majority_game(members) or str(self._cfg(config, "fallback_name") or "General")
         desired_name = self._render_name(
             owner,
             config,
@@ -689,11 +784,11 @@ class AutoVoiceModule(BarkModule):
         return None
 
     def _build_overwrites(self, member, primary, config: dict[str, Any]):
-        if config.get("inherit_permissions", True):
+        if self._cfg(config, "inherit_permissions", True):
             overwrites = dict(getattr(primary, "overwrites", {}) or {})
         else:
             overwrites = {}
-        if config.get("private_by_default", False):
+        if self._cfg(config, "private_by_default", False):
             overwrites[member.guild.default_role] = discord.PermissionOverwrite(connect=False)
             overwrites[member] = discord.PermissionOverwrite(view_channel=True, connect=True)
             bot_member = getattr(member.guild, "me", None)

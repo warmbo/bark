@@ -89,22 +89,84 @@ def _voice_fixture(config=None):
     return ctx, guild, member, primary, temporary, disconnected, joined_primary
 
 
+def _schema_field(schema, key):
+    """Find a schema property by flat key across the grouped sections."""
+    for section in schema["properties"].values():
+        if isinstance(section, dict) and key in section.get("properties", {}):
+            return section["properties"][key]
+    return None
+
+
+def test_schema_groups_cover_all_flat_keys_in_sections():
+    module = AutoVoiceModule(_Context({}))
+    schema = module.get_settings_schema()
+
+    # Every previously-flat key survives, now inside a named section.
+    all_keys = [
+        "primary_channel_id", "channel_name_template", "fallback_name",
+        "name_uppercase", "name_lowercase", "name_titlecase",
+        "user_limit", "bitrate_kbps",
+        "inherit_permissions", "private_by_default", "required_role_id",
+        "owner_can_rename", "owner_can_limit", "owner_can_lock",
+        "empty_delete_delay_seconds",
+    ]
+    for key in all_keys:
+        assert _schema_field(schema, key) is not None, f"{key} missing from schema"
+
+    sections = schema["properties"]
+    assert set(sections) == {"channel", "naming", "limits", "access", "cleanup"}
+    # No flat top-level fields remain.
+    for section in sections.values():
+        assert section["type"] == "object" and section["properties"]
+
+
 def test_schema_exposes_avc_behavior_as_dashboard_configuration():
     module = AutoVoiceModule(_Context({}))
-
     schema = module.get_settings_schema()
-    fields = schema["properties"]
 
-    assert fields["primary_channel_id"]["format"] == "voice_channel_select"
-    assert fields["channel_name_template"]["default"] == "## [@@game_name@@]"
-    assert fields["user_limit"]["maximum"] == 99
-    assert fields["bitrate_kbps"]["minimum"] == 8
-    assert fields["inherit_permissions"]["type"] == "boolean"
-    assert fields["private_by_default"]["type"] == "boolean"
-    assert fields["empty_delete_delay_seconds"]["minimum"] == 0
-    assert fields["owner_can_rename"]["type"] == "boolean"
-    assert fields["owner_can_limit"]["type"] == "boolean"
-    assert fields["owner_can_lock"]["type"] == "boolean"
+    assert _schema_field(schema, "primary_channel_id")["format"] == "voice_channel_select"
+    assert _schema_field(schema, "channel_name_template")["default"] == "## [@@game_name@@]"
+    assert _schema_field(schema, "user_limit")["maximum"] == 99
+    assert _schema_field(schema, "bitrate_kbps")["minimum"] == 8
+    assert _schema_field(schema, "inherit_permissions")["type"] == "boolean"
+    assert _schema_field(schema, "private_by_default")["type"] == "boolean"
+    assert _schema_field(schema, "empty_delete_delay_seconds")["minimum"] == 0
+    assert _schema_field(schema, "owner_can_rename")["type"] == "boolean"
+    assert _schema_field(schema, "owner_can_limit")["type"] == "boolean"
+    assert _schema_field(schema, "owner_can_lock")["type"] == "boolean"
+
+
+def test_normalize_config_lifts_legacy_flat_keys():
+    from modules.auto_voice.module import normalize_config
+
+    legacy = {
+        "primary_channel_id": "111",
+        "channel_name_template": "## Game",
+        "user_limit": 5,
+        "owner_can_rename": False,
+        "custom_key": "kept-as-is",
+    }
+    normalized = normalize_config(legacy)
+    assert normalized["channel"]["primary_channel_id"] == "111"
+    assert normalized["channel"]["channel_name_template"] == "## Game"
+    assert normalized["limits"]["user_limit"] == 5
+    assert normalized["access"]["owner_can_rename"] is False
+    assert normalized["custom_key"] == "kept-as-is"
+    # Grouped configs pass through untouched.
+    grouped = {"limits": {"user_limit": 7}}
+    assert normalize_config(grouped)["limits"]["user_limit"] == 7
+
+
+@pytest.mark.asyncio
+async def test_cfg_reads_grouped_and_legacy_flat_keys():
+    module = AutoVoiceModule(_Context({}))
+    grouped = {"naming": {"name_uppercase": True}, "limits": {"user_limit": 12}}
+    assert module._cfg(grouped, "name_uppercase") is True
+    assert module._cfg(grouped, "user_limit") == 12
+    assert module._cfg(grouped, "owner_can_rename", True) is True  # default
+    legacy = {"name_uppercase": True, "user_limit": 12}
+    assert module._cfg(legacy, "name_uppercase") is True
+    assert module._cfg(legacy, "user_limit") == 12
 
 
 @pytest.mark.asyncio
