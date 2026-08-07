@@ -6,8 +6,9 @@ new dependencies, then exits the process — the systemd unit has
 ``Restart=always``, so the service comes back up on the new build.
 
 Security: updates are gated behind instance-owner auth in the API layer, and
-git only ever fetches from the configured ``origin`` remote — no arbitrary
-URLs are accepted.
+git only ever fetches from the configured remotes — no arbitrary URLs are
+accepted. The branch is resolved across remotes (e.g. GitHub's ``main`` when
+the primary remote only tracks ``master``/``dev``).
 """
 
 from __future__ import annotations
@@ -59,8 +60,45 @@ def current_branch() -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def _origin_commit(branch: str) -> str:
-    result = _run(["git", "rev-parse", f"origin/{branch}"])
+def _git_remotes() -> list[str]:
+    """Return configured git remote names (empty when not a checkout)."""
+    result = _run(["git", "remote"])
+    return result.stdout.split() if result.returncode == 0 else []
+
+
+def _remote_has_branch(remote: str, branch: str) -> bool:
+    """Return whether ``remote/<branch>`` exists locally (after a fetch)."""
+    result = _run(["git", "rev-parse", "--verify", "--quiet", f"{remote}/{branch}"])
+    return result.returncode == 0
+
+
+def _fetch_remote_branch(remote: str, branch: str) -> bool:
+    """Fetch ``<remote> <branch>``; return True on success."""
+    result = _run(["git", "fetch", remote, branch], timeout=120)
+    return result.returncode == 0
+
+
+def _resolve_remote(branch: str) -> str | None:
+    """Pick the remote that carries ``branch``.
+
+    Prefers the configured ``update_remote`` (default ``origin``), then falls
+    back to other remotes (e.g. GitHub's ``main`` when Forgejo only has
+    ``master``/``dev``). Returns the first remote where the fetch succeeded
+    and the branch ref exists, or ``None``.
+    """
+    remotes = _git_remotes()
+    if not remotes:
+        return None
+    preferred = config.instance.update_remote
+    ordered = [preferred] + [r for r in remotes if r != preferred]
+    for remote in ordered:
+        if _fetch_remote_branch(remote, branch) and _remote_has_branch(remote, branch):
+            return remote
+    return None
+
+
+def _remote_commit(remote: str, branch: str) -> str:
+    result = _run(["git", "rev-parse", f"{remote}/{branch}"])
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
@@ -71,8 +109,11 @@ def check_update(branch: str | None = None) -> dict:
     available = ""
     error = ""
     try:
-        _run(["git", "fetch", "origin", branch], timeout=120, check=True)
-        available = _origin_commit(branch)
+        remote = _resolve_remote(branch)
+        if remote is not None:
+            available = _remote_commit(remote, branch)
+        else:
+            error = f"could not find branch '{branch}' on any git remote"
     except Exception as exc:  # network down / not a checkout
         logger.warning("Update check failed: %s", exc)
         error = str(exc)
@@ -94,24 +135,26 @@ def _requirements_changed(old_commit: str) -> bool:
 
 
 def apply_update(branch: str) -> dict:
-    """Pull ``origin/<branch>`` into the checkout.
+    """Pull ``<remote>/<branch>`` into the checkout.
 
     Returns before the caller exits the process; systemd restarts the unit.
     """
     old_commit = current_commit()
     try:
-        _run(["git", "fetch", "origin", branch], timeout=120, check=True)
-        available = _origin_commit(branch)
+        remote = _resolve_remote(branch)
+        if remote is None:
+            return {"ok": False, "error": f"could not find branch '{branch}' on any git remote"}
+        available = _remote_commit(remote, branch)
     except Exception as exc:
         logger.exception("Update fetch failed")
         return {"ok": False, "error": f"fetch failed: {exc}"}
     if not available:
-        return {"ok": False, "error": f"could not resolve origin/{branch}"}
+        return {"ok": False, "error": f"could not resolve {remote}/{branch}"}
     if available == old_commit:
         return {"ok": True, "restarted": False, "message": "already up to date"}
 
     try:
-        _run(["git", "reset", "--hard", f"origin/{branch}"], timeout=120, check=True)
+        _run(["git", "reset", "--hard", f"{remote}/{branch}"], timeout=120, check=True)
     except Exception as exc:
         logger.exception("Update reset failed")
         return {"ok": False, "error": f"reset failed: {exc}"}

@@ -125,3 +125,15 @@ def test_session_ttl_invalid_env_fails_with_setting_name(monkeypatch, tmp_path):
 
     with pytest.raises(ConfigurationError, match="BARK_DASHBOARD_SESSION_TTL"):
         Config.load()
+
+
+def test_update_remote_defaults_to_origin_and_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("BARK_UPDATE_REMOTE", raising=False)
+
+    loaded = Config.load()
+    assert loaded.instance.update_remote == "origin"
+
+    monkeypatch.setenv("BARK_UPDATE_REMOTE", "github")
+    loaded = Config.load()
+    assert loaded.instance.update_remote == "github"

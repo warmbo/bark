@@ -107,7 +107,9 @@
     if (!guildId || !shouldReconnect) return;
 
     const url = `/api/v1/guilds/${guildId}/events`;
-    eventSource = new EventSource(url);
+    // withCredentials ensures the session cookie is sent even if the page is
+    // ever served under a different origin scheme; harmless same-origin.
+    eventSource = new EventSource(url, { withCredentials: true });
 
     eventSource.onopen = function () {
       reconnectAttempt = 0; // Reset backoff on successful connection
@@ -148,19 +150,47 @@
         eventSource.close();
         eventSource = null;
       }
-      // Schedule reconnect with exponential backoff
-      if (shouldReconnect) {
-        const delay = Math.min(
-          RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt),
-          RECONNECT_MAX_MS,
-        );
-        reconnectAttempt++;
-        console.warn(
-          `[Bark Realtime] Reconnecting in ${delay}ms (attempt ${reconnectAttempt})`,
-        );
-        reconnectTimer = setTimeout(doConnect, delay);
-      }
+      if (!shouldReconnect) return;
+
+      // EventSource cannot surface HTTP status codes. A 401 from the SSE
+      // endpoint means the session expired or was never established — the
+      // browser will happily retry forever. Detect auth loss via /auth/me
+      // and route to the login page instead of looping.
+      fetch("/auth/me", { headers: { Accept: "application/json" } })
+        .then(function (resp) {
+          if (resp.status === 200) {
+            return resp.json();
+          }
+          throw new Error("auth check failed: " + resp.status);
+        })
+        .then(function (body) {
+          if (!body || !body.data || !body.data.authenticated) {
+            // Session is gone — stop reconnecting and send to login.
+            shouldReconnect = false;
+            console.warn("[Bark Realtime] Session expired — redirecting to login");
+            window.location.href = "/auth/login";
+            return;
+          }
+          scheduleReconnect();
+        })
+        .catch(function () {
+          // Transient network failure — keep the backoff retry.
+          scheduleReconnect();
+        });
     };
+  }
+
+  function scheduleReconnect() {
+    if (!shouldReconnect) return;
+    const delay = Math.min(
+      RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt),
+      RECONNECT_MAX_MS,
+    );
+    reconnectAttempt++;
+    console.warn(
+      `[Bark Realtime] Reconnecting in ${delay}ms (attempt ${reconnectAttempt})`,
+    );
+    reconnectTimer = setTimeout(doConnect, delay);
   }
 
   function disconnect() {

@@ -93,3 +93,41 @@ def test_apply_update_already_up_to_date(repo):
     result = update_service.apply_update("main")
     assert result["ok"] is True
     assert result["restarted"] is False
+
+
+def test_check_update_falls_back_to_other_remote_when_branch_missing(tmp_path, monkeypatch):
+    """A stable branch like GitHub's ``main`` must resolve even when the
+    primary remote (Forgejo) only tracks ``master``/``dev``."""
+    # Two bare remotes: origin has only master; github has main.
+    origin = tmp_path / "origin.git"
+    github = tmp_path / "github.git"
+    _git(tmp_path, "init", "--bare", str(origin))
+    _git(tmp_path, "init", "--bare", str(github))
+
+    work = tmp_path / "work"
+    work.mkdir()
+    _git(work, "init")
+    _git(work, "config", "user.email", "test@bark")
+    _git(work, "config", "user.name", "Test")
+    (work / "version.txt").write_text("one")
+    _git(work, "add", ".")
+    _git(work, "commit", "-m", "v1")
+    _git(work, "remote", "add", "origin", str(origin))
+    _git(work, "remote", "add", "github", str(github))
+    _git(work, "push", "origin", "HEAD:master")
+    _git(work, "push", "github", "HEAD:main")
+
+    monkeypatch.setattr(update_service.config.instance, "repo_dir", str(work))
+
+    status = update_service.check_update("main")
+    assert status["error"] == ""
+    assert status["available_commit"] == _git(work, "rev-parse", "HEAD").stdout.strip()
+    assert status["update_available"] is False  # in sync with github/main
+
+
+def test_check_update_reports_error_when_branch_on_no_remote(repo, monkeypatch):
+    work, _ = repo
+    monkeypatch.setattr(update_service.config.instance, "repo_dir", str(work))
+    status = update_service.check_update("nonexistent-branch")
+    assert status["update_available"] is False
+    assert "could not find branch" in status["error"]

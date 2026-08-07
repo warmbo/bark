@@ -141,6 +141,19 @@ def test_realtime_connection_has_bfcache_lifecycle_cleanup():
     assert "clearInterval(pathWatchTimer)" in js
 
 
+def test_realtime_sse_uses_credentials_and_handles_auth_loss():
+    """The SSE stream must send the session cookie and must NOT retry forever
+    on a 401 — EventSource can't read status codes, so onerror must probe
+    /auth/me and redirect to login when the session is gone (observed
+    2026-08-07: repeated 401 EventSource loops on bark-dev)."""
+    js = source(JS / "realtime.js")
+    assert "new EventSource(url, { withCredentials: true })" in js
+    assert 'fetch("/auth/me"' in js
+    assert "authenticated" in js
+    assert 'window.location.href = "/auth/login"' in js
+    assert "scheduleReconnect" in js
+
+
 def test_auto_voice_workspace_registers_live_template_preview():
     """Auto Voice's name-template demo must be wired into the module page and
     mirror the backend token/transform rendering."""
