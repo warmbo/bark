@@ -39,15 +39,25 @@ Bark pairs the Discord client with a FastAPI + Jinja dashboard in one process, s
 |---|---|
 | `announcements` | Scheduled announcements |
 | `auto_voice` | Dynamic temporary voice channels |
+| `help` | `/bark help` command reference DM |
 | `logging` | Discord event logging |
 | `moderation` | Cases, warnings, rulesets, voice tracking |
 | `reputation` | Levels, thanks, reactions, voice, tiers |
 | `role_manager` | Welcome/tenure/voice/Twitch/reaction roles |
+| `speak` | `/bark speak <key>` preset phrases |
 | `welcome` | Member welcome automation |
 
 Every module subclasses `BarkModule` and declares its commands, events, settings schema, dashboard actions, and workspace tabs. See [Module workspace](docs/module-workspace.md) to build one.
 
-**Plugins.** Extra functionality can be installed at runtime as single-file plugins — upload a `.py` file from Settings → Modules → Plugins and it is registered and enabled immediately (no restart). Plugins follow the same `BarkModule` contract as built-in modules. See the [bark-plugins](https://github.com/warmbo/bark-plugins) repository for a ready-made set and the plugin format guide.
+**Plugins.** Extra functionality can be installed at runtime as single-file plugins — upload a `.py` file from the server's Modules page (Plugins box; owner-only) and it is registered and enabled immediately (no restart). Plugins follow the same `BarkModule` contract as built-in modules. See the [bark-plugins](https://github.com/warmbo/bark-plugins) repository for a ready-made set and the plugin format guide.
+
+## Related repositories
+
+- [**bark-site**](https://github.com/warmbo/bark-site) — the landing page at bark.warx.org (static HTML served on :8092; lists every core module).
+- [**bark-plugins**](https://github.com/warmbo/bark-plugins) — single-file add-on plugins installed from the dashboard.
+- `bark-dev` is not a separate repository: it is the **`dev` branch** of this repo, deployed as a second instance alongside `main`.
+
+The self-update manager (`services/update_service.py`) always pulls from the **GitHub** mirror — stable channel tracks `main`, dev tracks `dev` — and refuses any update that would move the instance backwards (stale-mirror guard). The mirror must be kept in sync by the owner; Forgejo (`origin`) remains the authoritative push target.
 
 ## Quick start
 

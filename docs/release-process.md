@@ -18,16 +18,17 @@ resolve before continuing (see Rollback).
 
 Both instances are git checkouts; the self-update feature
 (`services/update_service.py`) fetches from the configured update remote
-(`origin` — **only**; secondary remotes like the GitHub mirror are never
-consulted), resets the working tree to `<remote>/<branch>`, installs new
+(`github` — the GitHub mirror, **only**; no other remotes are consulted),
+resets the working tree to `<remote>/<branch>`, installs new
 dependencies and exits (systemd `Restart=always` brings it back). Version
 shown in the UI is derived from the git commit count — every merged
 commit bumps it automatically.
 
 Update channels are `Stable` and `Dev`. `Dev` tracks the `dev` branch;
-`Stable` tracks the repo's stable branch — `master` here, resolved from
-`config.instance.stable_branch` (`BARK_STABLE_BRANCH`), else the remote
-default branch (`origin/HEAD`), else `master`. The channel is persisted in
+`Stable` tracks the repo's stable branch — `main` here, resolved from
+`config.instance.stable_branch` (`BARK_STABLE_BRANCH`, default `main`),
+else the remote
+default branch, else `main`. The channel is persisted in
 the local git config (`bark.update.channel`) and is **one-way**: once an
 instance is on Dev, the API rejects switching back to Stable (403) and the
 settings UI disables the Stable option.
@@ -81,9 +82,19 @@ stable has diverged — go back to gate 3 and reconcile.
 
 ### 3. Update the GitHub mirror (manual, owner-only)
 
-Forgejo is the source of truth. GitHub (`main`/`dev`) is mirrored by
-the owner — the boxes have no GitHub credentials. Note in the release
-record that the mirror is pending.
+The self-updater on both instances pulls from **GitHub** (`main`/`dev`), so
+this step is what actually ships releases to the boxes — a release is not
+live until the mirror is pushed. The boxes have no GitHub credentials;
+push from a machine that does:
+
+```bash
+git push github master:main
+git push github dev:dev
+```
+
+Until the mirror catches up, the instances simply report "no update" — the
+no-downgrade guard in `services/update_service.py` refuses any update that
+would move a build backwards, so a stale mirror can never downgrade a box.
 
 ### 4. Deploy stable to the prod instance
 
