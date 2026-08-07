@@ -543,10 +543,10 @@ async def test_module_page_open_to_owner_with_stale_session_role(db, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_module_page_open_to_plain_member_read_only(db, monkeypatch):
-    """A plain member (no manage perms) may VIEW a module page; the page
-    advertises can_manage=false so controls stay hidden. Mutations remain
-    role-gated — membership opens the dashboard, not the controls."""
+async def test_module_page_redirects_view_only_member_to_status(db, monkeypatch):
+    """A plain member (no admin/moderator rights in the server) must not see
+    modules: management pages redirect to the read-only server status page,
+    which hides management surfaces entirely."""
     import config
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
@@ -565,6 +565,7 @@ async def test_module_page_open_to_plain_member_read_only(db, monkeypatch):
     bot_guild = MagicMock()
     bot_guild.id = 100
     bot_guild.name = "Connected"
+    bot_guild.member_count = 25
     bot_guild.icon = None
     bot = MagicMock()
     bot.guilds = [bot_guild]
@@ -579,16 +580,89 @@ async def test_module_page_open_to_plain_member_read_only(db, monkeypatch):
         cookies=dict(session=cookie),
         follow_redirects=False,
     ) as client:
-        response = await client.get("/guild/100/modules/announcements")
+        module_page = await client.get("/guild/100/modules/announcements")
+        members_page = await client.get("/guild/100/members")
+        status_page = await client.get("/guild/100")
+        manifest = await client.get("/api/v1/guilds/100/manifest")
         denied_write = await client.post(
             "/api/v1/guilds/100/notes",
             json={"user_id": "999", "content": "hi"},
         )
 
-    assert response.status_code == 200
-    assert 'data-user-role="viewer"' in response.text
-    assert 'data-can-manage="false"' in response.text
+    assert module_page.status_code == 303
+    assert module_page.headers["location"] == "/guild/100"
+    assert members_page.status_code == 303
+    assert members_page.headers["location"] == "/guild/100"
+    assert status_page.status_code == 200
+    assert "You have view-only access" in status_page.text
+    assert "Quick Actions" not in status_page.text
+    assert "Recent Activity" not in status_page.text
+    assert "View only" in status_page.text
+
+    manifest_data = manifest.json()["data"]
+    assert manifest_data["viewer"] is True
+    assert manifest_data["modules"] == []
+    assert [page["route"] for page in manifest_data["pages"]] == ["/guild/100"]
+
     assert denied_write.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_configured_moderator_role_opens_module_page(db, monkeypatch):
+    """A member holding a role the server owner configured as moderator is
+    not view-only: module pages open and API role is upgraded to moderator."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        session.add(Guild(discord_id="100", name="Connected", owner_id="99"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "100", "name": "Connected", "permissions": "0", "owner": False}],
+            roles_by_guild={"100": ["555"]},
+        )
+        from database.models.guild import GuildSetting
+
+        session.add(
+            GuildSetting(
+                guild_id="100",
+                key="dashboard_moderator_roles",
+                value='["555"]',
+            )
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Connected"
+    bot_guild.member_count = 25
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    bot.modules.get_module.return_value = _module_stub()
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "viewer"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+        follow_redirects=False,
+    ) as client:
+        module_page = await client.get("/guild/100/modules/announcements")
+        status_page = await client.get("/guild/100")
+        manifest = await client.get("/api/v1/guilds/100/manifest")
+
+    assert module_page.status_code == 200
+    assert 'data-user-role="moderator"' in module_page.text
+    assert "You have view-only access" not in status_page.text
+    assert manifest.json()["data"]["viewer"] is False
 
 
 @pytest.mark.asyncio

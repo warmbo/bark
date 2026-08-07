@@ -39,6 +39,9 @@ def _is_public(path: str) -> bool:
 
 
 _GUILD_PATH = re.compile(r"^/(?:api/v1/)?guilds?/(\d+)(?:/|$)")
+_MANAGEMENT_PAGE_PATH = re.compile(
+    r"^/(?:api/v1/)?guilds?/\d+/(members|modules|moderation|settings)(?:/|$)"
+)
 _MODULE_ACTION_PATH = re.compile(r"^/api/v1/guilds/(\d+)/modules/([a-z0-9_-]+)/(.+)$")
 _API_GUILD_MUTATION_PATH = re.compile(r"^/api/v1/guilds/\d+/(.+)$")
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -47,6 +50,12 @@ _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 def _guild_id_from_path(path: str) -> str | None:
     match = _GUILD_PATH.match(path)
     return match.group(1) if match else None
+
+
+def _is_management_page(path: str) -> bool:
+    """Return whether the path is a management surface (members, modules,
+    moderation, settings) that view-only members must not reach."""
+    return _MANAGEMENT_PAGE_PATH.match(path) is not None
 
 
 def _module_action_from_path(path: str) -> tuple[int, str, str] | None:
@@ -200,10 +209,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
             bot = getattr(request.app.state, "bot", None)
             bot_guild_ids = {str(g.id) for g in bot.guilds} if bot is not None else set()
             from database.engine import session_scope
-            from services.dashboard_access import get_user_guild_access_row, role_from_access
+            from services.dashboard_access import (
+                get_dashboard_moderator_roles,
+                get_user_guild_access_row,
+                role_from_access_with_staff_roles,
+                user_ready_to_manage,
+            )
 
             async with session_scope() as session:
                 access = await get_user_guild_access_row(session, user["id"], guild_id)
+                moderator_roles = await get_dashboard_moderator_roles(session, [guild_id])
             is_member = access is not None
             can_manage = access.can_manage if access is not None else False
             if not is_member or (str(guild_id) not in bot_guild_ids and not can_manage):
@@ -216,10 +231,30 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # guild from the persisted Discord snapshot every request, so
             # changes since login (the bot joining a server, an invite
             # redemption, a promotion) take effect without forcing a re-login.
-            request.session["role"] = role_from_access(
-                owner=access.owner,
-                permissions=access.permissions,
+            # The server owner's configured moderator roles also count, so API
+            # gating matches the per-server "Ready to manage" on the server
+            # list.
+            guild_moderator_roles = moderator_roles.get(str(guild_id), set())
+            request.session["role"] = role_from_access_with_staff_roles(
+                access,
+                guild_moderator_roles,
             )
+            # View-only members (no admin/moderator rights in this server) see
+            # a read-only metrics/status page: management pages and module
+            # surfaces are blocked for them.
+            request.state.guild_viewer = not user_ready_to_manage(
+                access,
+                guild_moderator_roles,
+            )
+            if request.state.guild_viewer and _is_management_page(path):
+                if path.startswith("/api/"):
+                    return _json_error(
+                        403,
+                        "View-only access: managing this server requires admin or moderator rights",
+                    )
+                from fastapi.responses import RedirectResponse
+
+                return RedirectResponse(url=f"/guild/{guild_id}", status_code=303)
 
         action = mutation_capability(request.method, path)
         if action is not None:

@@ -64,6 +64,36 @@ async def get_guild_manifest(request: Request, guild_id: int):
     if guild is None:
         return api_not_found("Guild")
 
+    guild_meta = {
+        "id": str(guild.id),
+        "name": guild.name,
+        "member_count": guild.member_count,
+        "icon_url": guild.icon.url if guild.icon else None,
+    }
+
+    # View-only members (no admin/moderator rights in this server) get a
+    # stripped manifest: the sidebar shows only the Dashboard entry and no
+    # module or management surfaces are advertised.
+    if getattr(request.state, "guild_viewer", False):
+        dashboard_page = {**CORE_PAGES[0], "route": f"/guild/{guild_id}"}
+        return api_success(
+            {
+                "guild": guild_meta,
+                "viewer": True,
+                "modules": [],
+                "pages": [dashboard_page],
+                "actions": [],
+                "categories": _build_navigation([dashboard_page]),
+                "stats": {
+                    "members": guild.member_count,
+                    "total_cases": None,
+                    "modules_enabled": 0,
+                    "modules_total": 0,
+                },
+                "capabilities": {},
+            }
+        )
+
     pages_list: list[dict[str, object]] = [
         {**page, "route": page["route"].replace("{guild_id}", str(guild_id))} for page in CORE_PAGES
     ]
@@ -100,12 +130,8 @@ async def get_guild_manifest(request: Request, guild_id: int):
 
     return api_success(
         {
-            "guild": {
-                "id": str(guild.id),
-                "name": guild.name,
-                "member_count": guild.member_count,
-                "icon_url": guild.icon.url if guild.icon else None,
-            },
+            "guild": guild_meta,
+            "viewer": False,
             "modules": modules_list,
             "pages": pages_list,
             "actions": actions_list,

@@ -22,6 +22,15 @@ async def guild_overview(request: Request, guild_id: int):
     if guild is None:
         return HTMLResponse("Guild not found", status_code=404)
 
+    # View-only members (no admin/moderator rights in this server) get a
+    # read-only metrics/status page — no modules, no management surfaces.
+    if getattr(request.state, "guild_viewer", False):
+        return templates.TemplateResponse(
+            request,
+            "pages/guild_viewer.html",
+            {"guild": guild, "bot": bot, "active_page": "overview"},
+        )
+
     return templates.TemplateResponse(
         request,
         "pages/guild.html",

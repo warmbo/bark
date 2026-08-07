@@ -21,7 +21,7 @@
             <span class="guild-state connected"><span class="status-dot online"></span>Bark connected</span>
             {% if guild.ready_to_manage %}<span class="guild-state ready">Ready to manage</span>
             {% else %}<span class="guild-state readonly">View only</span>{% endif %}
-            {% if guild.member_count is not none %}<span>{{ guild.member_count }} members</span>{% endif %}
+            {% if guild.member_count is not none %}<span class="guild-card-count">{{ guild.member_count }} members</span>{% endif %}
             {% elif guild.access_tier == 'manageable' %}<span>Bark is not installed</span>
             {% else %}<span>Manage Server permission required</span>{% endif %}
         </div>

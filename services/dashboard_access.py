@@ -90,6 +90,27 @@ def user_ready_to_manage(
     return bool(_roles_from_access(access) & moderator_role_ids)
 
 
+def role_from_access_with_staff_roles(
+    access: DashboardGuildAccess,
+    moderator_role_ids: set[str],
+) -> str:
+    """Map a persisted access snapshot to a dashboard role tier.
+
+    Like ``role_from_access`` but also honours the server owner's
+    configured moderator roles: holding one of those roles upgrades the
+    user to ``moderator`` even without Discord management permissions.
+    Used by the request middleware so API gating matches the per-server
+    "Ready to manage" shown on the server list.
+    """
+    if access.owner or (access.permissions & DISCORD_ADMINISTRATOR):
+        return "admin"
+    if (access.permissions & DISCORD_MANAGE_GUILD) or (
+        _roles_from_access(access) & moderator_role_ids
+    ):
+        return "moderator"
+    return "viewer"
+
+
 def can_manage_discord_guild(*, owner: bool, permissions: int) -> bool:
     """Return whether Discord grants server-management access."""
     return owner or bool(permissions & (DISCORD_ADMINISTRATOR | DISCORD_MANAGE_GUILD))
