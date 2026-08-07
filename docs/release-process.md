@@ -14,7 +14,7 @@ resolve before continuing (see Rollback).
 | Source of truth | Forgejo `http://10.0.0.137:3000/cody/bark.git`            |
 | GitHub mirror | `https://github.com/warmbo/bark.git` (owner-synced, read-only from these boxes) |
 | Dev instance  | `cody@10.0.0.227:~/Projects/bark-dev`, branch `dev`, port `8091`, unit `bark-dev.service` |
-| Prod instance | `cody@10.0.0.227:~/Projects/bark`,    branch `master`, port `8082`, unit `bark.service` |
+| Prod instance | `cody@10.0.0.227:~/Projects/bark`,    branch `master`, port `8090`, unit `bark.service` |
 
 Both instances are git checkouts; the self-update feature
 (`services/update_service.py`) resets the working tree to
@@ -103,8 +103,8 @@ pct exec 1109 -- systemctl restart bark-dev.service
 
 ```sh
 # Both instances up and healthy
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8082/   # 200
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8091/   # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/   # 200 (prod bark — NOT 8082, that is l3k)
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8091/   # 200 (dev bark)
 
 # Instances on the expected commits
 cd ~/Projects/bark    && git log --oneline -1   # master == dev HEAD
@@ -116,7 +116,7 @@ sqlite3 ~/Projects/bark/data/bark.db \
   "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 3;"
 
 # Version bump visible (commit-count derived)
-curl -s http://127.0.0.1:8082/ | grep -o 'v[0-9.]*' | head -1
+curl -s http://127.0.0.1:8090/ | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1
 ```
 
 Functional spot checks: Discord slash commands respond (`/bark help`),
