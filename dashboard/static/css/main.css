@@ -398,6 +398,17 @@ textarea:focus-visible,
     display: block;
 }
 
+/* Page-header server icon (viewer status page) — explicit size so it never
+   inherits .guild-icon-small's width:100% from the sidebar context. */
+.guild-header-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    margin-right: 10px;
+    vertical-align: -7px;
+    object-fit: cover;
+}
+
 .guild-icon-placeholder {
     aspect-ratio: 1;
     display: flex !important;
