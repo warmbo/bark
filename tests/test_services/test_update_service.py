@@ -37,8 +37,9 @@ def _make_repo(tmp_path):
 def repo(tmp_path, monkeypatch):
     work, origin = _make_repo(tmp_path)
     monkeypatch.setattr(update_service.config.instance, "repo_dir", str(work))
-    # The test repos use `main` as their stable branch (the real repos use
-    # `master`); pin it so channel mapping is deterministic in tests.
+    # Test repos use `origin` as the update remote with `main` as the
+    # stable branch (mirrors the production GitHub layout).
+    monkeypatch.setattr(update_service.config.instance, "update_remote", "origin")
     monkeypatch.setattr(update_service.config.instance, "stable_branch", "main")
     return work, origin
 
@@ -98,13 +99,10 @@ def test_apply_update_already_up_to_date(repo):
     assert result["restarted"] is False
 
 
-def test_check_update_falls_back_to_other_remote_when_branch_missing(tmp_path, monkeypatch):
-    """A stable branch like GitHub's ``main`` must resolve even when the
-    primary remote (Forgejo) only tracks ``master``/``dev``."""
-    # Two bare remotes: origin has only master; github has main.
-    origin = tmp_path / "origin.git"
+def test_stable_channel_resolves_github_main(tmp_path, monkeypatch):
+    """The stable channel resolves ``main`` on the GitHub remote (default
+    update remote), which is the source of truth for updates."""
     github = tmp_path / "github.git"
-    _git(tmp_path, "init", "--bare", str(origin))
     _git(tmp_path, "init", "--bare", str(github))
 
     work = tmp_path / "work"
@@ -115,17 +113,23 @@ def test_check_update_falls_back_to_other_remote_when_branch_missing(tmp_path, m
     (work / "version.txt").write_text("one")
     _git(work, "add", ".")
     _git(work, "commit", "-m", "v1")
-    _git(work, "remote", "add", "origin", str(origin))
     _git(work, "remote", "add", "github", str(github))
-    _git(work, "push", "origin", "HEAD:master")
     _git(work, "push", "github", "HEAD:main")
+    _git(work, "push", "github", "HEAD:dev")
 
     monkeypatch.setattr(update_service.config.instance, "repo_dir", str(work))
+    monkeypatch.setattr(update_service.config.instance, "update_remote", "github")
+    monkeypatch.setattr(update_service.config.instance, "stable_branch", "main")
 
     status = update_service.check_update("main")
     assert status["error"] == ""
+    assert status["branch"] == "main"
     assert status["available_commit"] == _git(work, "rev-parse", "HEAD").stdout.strip()
     assert status["update_available"] is False  # in sync with github/main
+
+    dev_status = update_service.check_update("dev")
+    assert dev_status["branch"] == "dev"
+    assert dev_status["update_available"] is False
 
 
 def test_check_update_reports_error_when_branch_on_no_remote(repo, monkeypatch):
@@ -153,11 +157,11 @@ def test_channel_to_branch_resolves_remote_default_when_unset(repo, monkeypatch)
     assert update_service.channel_to_branch("main") == "main"
 
 
-def test_channel_to_branch_falls_back_to_master_when_no_default(repo, monkeypatch):
+def test_channel_to_branch_falls_back_to_main_when_no_default(repo, monkeypatch):
     work, _ = repo
     monkeypatch.setattr(update_service.config.instance, "stable_branch", "")
     _git(work, "remote", "set-head", "origin", "--delete")
-    assert update_service.channel_to_branch("main") == "master"
+    assert update_service.channel_to_branch("main") == "main"
 
 
 def test_channel_persistence_roundtrip(repo):
@@ -215,3 +219,37 @@ def test_apply_update_persists_channel(repo):
     assert result["ok"] is True
     assert result["channel"] == "stable"
     assert update_service.get_channel() == "stable"
+
+
+def test_check_update_no_update_when_remote_behind(repo):
+    """A remote that has fallen behind the checkout (stale mirror) must not
+    be reported as an available update — no downgrades."""
+    work, _ = repo
+    # Advance the local checkout WITHOUT pushing (simulates the instance
+    # being ahead of a stale remote).
+    (work / "version.txt").write_text("newer")
+    _git(work, "add", ".")
+    _git(work, "commit", "-m", "local ahead of remote")
+    current = _git(work, "rev-parse", "HEAD").stdout.strip()
+
+    status = update_service.check_update("main")
+    assert status["current_commit"] == current
+    assert status["available_commit"] != current  # remote is stale/behind
+    assert status["update_available"] is False  # guard suppressed it
+    assert status["error"] == ""
+
+
+def test_apply_update_refuses_downgrade_when_remote_behind(repo):
+    """apply_update must refuse to reset backwards to a stale remote."""
+    work, _ = repo
+    (work / "version.txt").write_text("newer")
+    _git(work, "add", ".")
+    _git(work, "commit", "-m", "local ahead of remote")
+    current = _git(work, "rev-parse", "HEAD").stdout.strip()
+
+    result = update_service.apply_update("main")
+    assert result["ok"] is False
+    assert "behind this instance" in result["error"]
+    # Working tree untouched.
+    assert _git(work, "rev-parse", "HEAD").stdout.strip() == current
+    assert (work / "version.txt").read_text() == "newer"

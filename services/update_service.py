@@ -7,10 +7,12 @@ installs any new dependencies, then exits the process — the systemd unit has
 
 Security: updates are gated behind instance-owner auth in the API layer, and
 git only ever fetches from the configured ``update_remote`` (default
-``origin``) — no other remotes and no arbitrary URLs are consulted. The
-stable channel maps to the repo's stable branch (``config.instance.
-stable_branch``, else the remote's default branch, else ``master``) rather
-than a hard-coded ``main``.
+``github`` — GitHub's ``main`` and ``dev`` branches) — no other remotes and
+no arbitrary URLs are consulted. The stable channel maps to
+``config.instance.stable_branch`` (default ``main``); ``dev`` maps to
+``dev``. A no-downgrade guard refuses any update whose target commit is an
+ancestor of the running build, so a stale/unsynced remote can never pull an
+instance backwards.
 
 Channel rules: an instance may move from the stable channel to the dev
 channel, but not back (enforced in the API layer). The current channel is
@@ -101,8 +103,8 @@ def channel_to_branch(channel: str) -> str:
     """Map a UI channel name to the actual git branch to track.
 
     ``dev`` maps to the ``dev`` branch. The stable channel maps to
-    ``config.instance.stable_branch`` when configured, otherwise to the
-    remote's default branch (``origin/HEAD``), otherwise ``master``.
+    ``config.instance.stable_branch`` (default ``main`` — GitHub's stable
+    branch), else the remote's default branch, else ``main``.
     """
     if channel == "dev":
         return "dev"
@@ -115,7 +117,7 @@ def channel_to_branch(channel: str) -> str:
             if ref.startswith(prefix):
                 return ref[len(prefix):]
         return ref
-    return "master"
+    return "main"
 
 
 def get_channel() -> str:
@@ -143,6 +145,17 @@ def _remote_commit(remote: str, branch: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def _is_ancestor(ancestor: str, descendant: str) -> bool:
+    """Return True when ``ancestor`` is an ancestor of (or equal to) ``descendant``.
+
+    Used as a no-downgrade guard: a remote that has fallen behind the local
+    checkout (e.g. an unsynced mirror) must never pull the instance
+    backwards.
+    """
+    result = _run(["git", "merge-base", "--is-ancestor", ancestor, descendant])
+    return result.returncode == 0
+
+
 def check_update(channel: str | None = None) -> dict:
     """Fetch the channel's branch and compare with the running build.
 
@@ -163,13 +176,24 @@ def check_update(channel: str | None = None) -> dict:
     except Exception as exc:  # network down / not a checkout
         logger.warning("Update check failed: %s", exc)
         error = str(exc)
+    # No-downgrade guard: a remote that is behind this checkout (stale
+    # mirror) offers nothing — never report a backwards "update".
+    update_available = bool(available) and available != current
+    if update_available and available and _is_ancestor(available, current):
+        logger.info(
+            "Remote %s/%s is behind this checkout (%s); no update offered",
+            config.instance.update_remote,
+            branch,
+            available,
+        )
+        update_available = False
     return {
         "channel": get_channel(),
         "branch": branch,
         "current_commit": current,
         "current_branch": current_branch(),
         "available_commit": available,
-        "update_available": bool(available) and available != current,
+        "update_available": update_available,
         "repo_dir": str(repo_root()),
         "error": error,
     }
@@ -208,6 +232,22 @@ def apply_update(channel: str) -> dict:
     if available == old_commit:
         set_channel(channel_label)
         return {"ok": True, "restarted": False, "message": "already up to date"}
+    # No-downgrade guard: refuse to reset backwards to a stale remote.
+    if _is_ancestor(available, old_commit):
+        logger.warning(
+            "Refusing update: %s/%s (%s) is behind current build (%s)",
+            remote,
+            branch,
+            available,
+            old_commit,
+        )
+        return {
+            "ok": False,
+            "error": (
+                f"remote {remote}/{branch} is behind this instance "
+                f"({available[:10]} vs {old_commit[:10]}) — no downgrade applied"
+            ),
+        }
 
     try:
         _run(["git", "reset", "--hard", f"{remote}/{branch}"], timeout=120, check=True)

@@ -60,8 +60,8 @@ class InstanceConfig:
     repo_dir: str = ""  # empty = auto-detect from the package location
     service_name: str = "bark"  # systemd unit name (used for the restart hint)
     update_branch: str = "main"  # default channel: stable (main) or dev
-    update_remote: str = "origin"  # primary git remote to fetch updates from
-    stable_branch: str = ""  # stable-channel branch; empty = remote default (e.g. master)
+    update_remote: str = "github"  # primary git remote to fetch updates from
+    stable_branch: str = "main"  # stable-channel branch; empty = remote default
     dev_badge: bool = False  # show the DEV VERSION watermark everywhere
 
 
@@ -221,8 +221,8 @@ class Config:
         cfg.instance.repo_dir = os.getenv("BARK_REPO_DIR", "")
         cfg.instance.service_name = os.getenv("BARK_SERVICE_NAME", "bark")
         cfg.instance.update_branch = os.getenv("BARK_UPDATE_BRANCH", "main")
-        cfg.instance.update_remote = os.getenv("BARK_UPDATE_REMOTE", "origin")
-        cfg.instance.stable_branch = os.getenv("BARK_STABLE_BRANCH", "")
+        cfg.instance.update_remote = os.getenv("BARK_UPDATE_REMOTE", "github")
+        cfg.instance.stable_branch = os.getenv("BARK_STABLE_BRANCH", "main")
         cfg.instance.dev_badge = os.getenv("BARK_DEV_BADGE", "false").lower() == "true"
 
         return cfg
