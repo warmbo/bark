@@ -1,0 +1,24 @@
+<article class="content-card workspace-data-card" data-section="phrases">
+  <div class="card-header">
+    <div><h2 class="card-title">{{ icon("message-square", 16) }} Speak Phrases</h2>
+      <p class="card-description">Preset phrases members can trigger with <code>/bark speak &lt;key&gt;</code>. Anyone in the server can use them; only admins (or anyone granted via this module's Role Access) can edit them.</p>
+    </div>
+    <div class="card-header-actions">
+      <button type="button" class="btn btn-sm" data-speak-add aria-label="Add phrase">{{ icon("plus", 14) }} Add Phrase</button>
+      <button type="button" class="btn btn-sm" data-refresh-section="phrases" aria-label="Refresh phrases">{{ icon("refresh-cw", 14) }} Refresh</button>
+    </div>
+  </div>
+  <div class="form-group">
+    <p class="form-hint">
+      Keys are short tokens like <code>word1</code> or <code>phrase2</code> — members type
+      <code>/bark speak word1</code> to trigger the phrase. Deleting a key's text removes it.
+    </p>
+  </div>
+  <div id="speak-phrases-content" aria-live="polite">
+    <div class="skeleton skeleton-card"></div>
+  </div>
+  <div class="form-actions" id="speak-phrases-actions" hidden>
+    <button type="button" class="btn btn-primary" id="speak-phrases-save">{{ icon("save", 14) }} Save Phrases</button>
+    <span class="form-hint" id="speak-phrases-status" role="status"></span>
+  </div>
+</article>

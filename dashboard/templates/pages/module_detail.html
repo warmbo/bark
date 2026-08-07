@@ -119,6 +119,8 @@
         {% endfor %}
         <div class="form-actions"><button type="button" class="btn" id="discard-config-btn" disabled>Cancel</button><button type="submit" class="btn btn-primary" id="save-config-btn" disabled>{{ icon('save', 16) }} Save Changes</button></div>
         </form>
+      {% elif module_name == 'speak' %}
+        {% include 'components/speak_phrases.html' %}
       {% else %}{{ state_panel('empty', 'No configuration required', 'This module is ready with its built-in defaults.') }}{% endif %}
       </div>
     </article>
@@ -164,4 +166,5 @@
 {% if module_name == 'moderation' %}<script src="/static/js/moderation-workspace.js?v=8"></script>{% endif %}
 {% if module_name == 'reputation' %}<script src="/static/js/reputation-workspace.js?v=2"></script>{% endif %}
 {% if module_name == 'role_manager' %}<script src="/static/js/role-manager-workspace.js?v=6"></script>{% endif %}
+{% if module_name == 'speak' %}<script src="/static/js/speak-workspace.js?v=1"></script>{% endif %}
 {% endblock %}

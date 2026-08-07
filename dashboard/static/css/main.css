@@ -3054,3 +3054,32 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 /* Reputation thanks search input width */
 .rep-search-input { width: 200px; }
+
+/* ── Speak module phrase editor ─────────────────────── */
+.speak-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 220px) 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.speak-row .speak-key {
+    font-family: var(--font-mono, "JetBrains Mono", monospace);
+    font-size: 13px;
+}
+.speak-row .speak-remove {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+}
+.speak-row .speak-remove:hover {
+    color: var(--red, #f38ba8);
+}
+@media (max-width: 700px) {
+    .speak-row {
+        grid-template-columns: 1fr auto;
+    }
+    .speak-row .speak-text {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+}
