@@ -1014,3 +1014,58 @@ async def test_dashboard_ready_to_manage_for_owner_configured_moderator_role(db,
     assert response.status_code == 200
     assert "<p>Ready to manage</p>" in response.text
     assert "Ready to manage" in response.text
+
+
+@pytest.mark.asyncio
+async def test_roles_api_flags_administrator_roles(db, monkeypatch):
+    """The guild roles API marks roles with the ADMINISTRATOR permission so
+    the Dashboard Access card can list admin roles by name."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="moderator"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "100", "name": "Connected", "permissions": str(0x20)}],
+        )
+
+    def role(role_id, name, permissions):
+        return type(
+            "Role",
+            (),
+            {"id": role_id, "name": name, "color": None, "permissions": permissions},
+        )()
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Connected"
+    bot_guild.icon = None
+    bot_guild.roles = [
+        role(100, "@everyone", 0),
+        role(555, "Pleb", 0),
+        role(556, "Big Admin", 0x8),
+        role(557, "Admin+Manage", 0x8 | 0x20),
+    ]
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "moderator"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+    ) as client:
+        response = await client.get("/api/v1/guilds/100/roles")
+
+    assert response.status_code == 200
+    roles = response.json()["data"]["roles"]
+    flags = {entry["name"]: entry["administrator"] for entry in roles}
+    assert flags == {"Pleb": False, "Big Admin": True, "Admin+Manage": True}

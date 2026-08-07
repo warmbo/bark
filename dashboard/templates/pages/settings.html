@@ -72,14 +72,18 @@
                 </div>
                 <div class="module-info-body">
                     <div class="info-row">
-                        <span class="info-label">Moderator roles</span>
+                        <span class="info-label">Moderator role</span>
                         <span class="info-value">
-                            <select id="dashboard-mod-roles" name="dashboard_moderator_roles" multiple size="6" class="form-select" aria-label="Moderator roles" aria-describedby="dashboard-mod-roles-hint" style="width:100%">
-                                <option value="">Loading roles…</option>
+                            <select id="dashboard-mod-roles" name="dashboard_moderator_roles" class="form-select" aria-label="Moderator role" aria-describedby="dashboard-mod-roles-hint" style="width:100%">
+                                <option value="">No moderator role…</option>
                             </select>
                         </span>
                     </div>
-                    <p class="form-hint" id="dashboard-mod-roles-hint">Members holding one of these roles can manage this server in the dashboard (their card shows "Ready to manage"). The server owner and Discord Administrators always count; other members see the server as view-only. Save to apply.</p>
+                    <div class="info-row">
+                        <span class="info-label">Admin access</span>
+                        <span class="info-value" id="dashboard-admin-roles">—</span>
+                    </div>
+                    <p class="form-hint" id="dashboard-mod-roles-hint">Members holding this role can manage this server in the dashboard (their card shows "Ready to manage"). The server owner and members of the roles listed under Admin access always count; other members see the server as view-only. Save to apply.</p>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-primary" id="dashboard-mod-roles-save">{{ icon("save", 14) }} Save</button>
@@ -256,21 +260,36 @@
                 safeFetch(`/api/v1/guilds/${GUILD_ID}/settings`, { cache: 'no-cache' }),
             ]);
             const roles = (rolesResult?.data?.roles) || [];
-            const saved = (settingsResult?.data?.settings || {})['dashboard_moderator_roles'] || '[]';
-            let selected = new Set();
-            try { selected = new Set(JSON.parse(saved)); } catch { /* tolerate hand-edited lists */ }
+            const savedRaw = (settingsResult?.data?.settings || {})['dashboard_moderator_roles'] || '';
+            // Tolerate the legacy JSON-array format ("[\"555\"]") and the
+            // current plain single role ID ("555").
+            let selectedId = '';
+            try {
+                const parsed = JSON.parse(savedRaw);
+                if (Array.isArray(parsed)) selectedId = String(parsed[0] || '');
+                else selectedId = String(parsed || '');
+            } catch {
+                selectedId = String(savedRaw || '').split(',')[0] || '';
+            }
             modRolesSelect.innerHTML = roles.length
-                ? roles.map(r =>
-                    `<option value="${escHtml(r.id)}"${selected.has(String(r.id)) ? ' selected' : ''}>${escHtml(r.name)}</option>`
+                ? '<option value="">No moderator role…</option>' + roles.map(r =>
+                    `<option value="${escHtml(r.id)}"${selectedId === String(r.id) ? ' selected' : ''}>${escHtml(r.name)}</option>`
                   ).join('')
                 : '<option value="">No roles in this server</option>';
+            const adminRoles = roles.filter(r => r.administrator).map(r => escHtml(r.name));
+            const adminEl = document.getElementById('dashboard-admin-roles');
+            if (adminEl) {
+                adminEl.innerHTML = adminRoles.length
+                    ? adminRoles.map(name => `<span class="badge badge-ok">${name}</span>`).join(' ')
+                    : '<span class="text-tertiary">No roles with Administrator permission</span>';
+            }
         } catch {
             modRolesSelect.innerHTML = '<option value="">Roles unavailable</option>';
         }
     }
 
     modRolesSave?.addEventListener('click', async () => {
-        const roleIds = Array.from(modRolesSelect.selectedOptions).map(o => o.value).filter(Boolean);
+        const roleId = modRolesSelect.value || '';
         modRolesSave.disabled = true;
         if (modRolesStatus) {
             modRolesStatus.textContent = 'Saving…';
@@ -280,10 +299,10 @@
             await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/general`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dashboard_moderator_roles: JSON.stringify(roleIds) }),
+                body: JSON.stringify({ dashboard_moderator_roles: roleId }),
             });
             if (modRolesStatus) {
-                modRolesStatus.textContent = `Saved (${roleIds.length} role${roleIds.length === 1 ? '' : 's'})`;
+                modRolesStatus.textContent = roleId ? 'Saved' : 'Saved — no moderator role';
                 modRolesStatus.style.color = 'var(--green)';
             }
         } catch (error) {

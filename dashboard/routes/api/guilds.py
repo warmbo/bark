@@ -233,7 +233,15 @@ async def get_guild_roles(request: Request, guild_id: int):
     return api_success(
         {
             "roles": [
-                {"id": str(r.id), "name": r.name, "color": str(r.color) if r.color else None}
+                {
+                    "id": str(r.id),
+                    "name": r.name,
+                    "color": str(r.color) if r.color else None,
+                    # ADMINISTRATOR permission (0x8) — these roles grant
+                    # dashboard admin access regardless of the configured
+                    # moderator role.
+                    "administrator": bool(r.permissions & 0x8),
+                }
                 for r in guild.roles[1:]
             ]
         }
