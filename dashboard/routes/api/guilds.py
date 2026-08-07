@@ -239,8 +239,11 @@ async def get_guild_roles(request: Request, guild_id: int):
                     "color": str(r.color) if r.color else None,
                     # ADMINISTRATOR permission (0x8) — these roles grant
                     # dashboard admin access regardless of the configured
-                    # moderator role.
-                    "administrator": bool(r.permissions & 0x8),
+                    # moderator role. ``permissions`` is a discord.Permissions
+                    # object (``.value`` bitfield); tests mock it as an int.
+                    "administrator": bool(
+                        getattr(r.permissions, "value", r.permissions) & 0x8
+                    ),
                 }
                 for r in guild.roles[1:]
             ]
