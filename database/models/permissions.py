@@ -85,6 +85,11 @@ class DashboardGuildAccess(Base):
     permissions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     owner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     can_manage: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Comma-separated Discord role IDs the user held in this guild at login.
+    # Used to resolve owner-configured moderator roles per server ("Ready to
+    # manage" gating). Empty when the bot was not in the guild or the member
+    # was not resolvable from the bot cache.
+    roles: Mapped[str] = mapped_column(String(512), nullable=False, default="")
 
 
 class ModuleRoleAccess(Base):

@@ -805,6 +805,8 @@ textarea:focus-visible,
     gap: 5px;
 }
 .guild-state.connected { color: #86d9a4; }
+.guild-state.ready { color: var(--green, #86d9a4); font-weight: 600; }
+.guild-state.readonly { color: var(--text-tertiary); }
 
 .guild-card-action {
     display: flex;

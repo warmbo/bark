@@ -236,8 +236,23 @@ async def callback(
             await session.flush()
 
         # Keep the complete guild snapshot server-side. Cookie sessions are too
-        # small for Discord users who belong to many servers.
-        await replace_user_guild_access(session, user["id"], guilds)
+        # small for Discord users who belong to many servers. Resolve the
+        # member's role IDs per guild from the bot's cache so per-server
+        # "Ready to manage" gating (owner-configured moderator roles) works
+        # without another Discord round-trip on every page load.
+        roles_by_guild: dict[str, list[str]] = {}
+        for guild in bot_from_state.guilds if bot_from_state is not None else []:
+            member = guild.get_member(int(user["id"]))
+            if member is not None:
+                roles_by_guild[str(guild.id)] = [
+                    str(role.id) for role in member.roles if role.id != guild.id
+                ]
+        await replace_user_guild_access(
+            session,
+            user["id"],
+            guilds,
+            roles_by_guild=roles_by_guild,
+        )
 
     request.session["role"] = role
 

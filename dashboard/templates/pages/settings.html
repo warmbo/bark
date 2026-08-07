@@ -65,6 +65,28 @@
                 </div>
             </div>
 
+            <!-- Dashboard Access -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("shield", 16) }} Dashboard Access</h2><p class="card-description">Who can manage this server in the dashboard.</p></div>
+                </div>
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Moderator roles</span>
+                        <span class="info-value">
+                            <select id="dashboard-mod-roles" name="dashboard_moderator_roles" multiple size="6" class="form-select" aria-label="Moderator roles" aria-describedby="dashboard-mod-roles-hint" style="width:100%">
+                                <option value="">Loading roles…</option>
+                            </select>
+                        </span>
+                    </div>
+                    <p class="form-hint" id="dashboard-mod-roles-hint">Members holding one of these roles can manage this server in the dashboard (their card shows "Ready to manage"). The server owner and Discord Administrators always count; other members see the server as view-only. Save to apply.</p>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" id="dashboard-mod-roles-save">{{ icon("save", 14) }} Save</button>
+                    <span class="form-hint" id="dashboard-mod-roles-status" role="status"></span>
+                </div>
+            </div>
+
             <!-- Updates -->
             <div class="content-card">
                 <div class="card-header">
@@ -219,6 +241,62 @@
 
     loadSettingsHealth();
     loadUpdateStatus();
+
+    // ── Dashboard Access (moderator roles) ────────────
+
+    const modRolesSelect = document.getElementById('dashboard-mod-roles');
+    const modRolesSave = document.getElementById('dashboard-mod-roles-save');
+    const modRolesStatus = document.getElementById('dashboard-mod-roles-status');
+
+    async function loadDashboardModRoles() {
+        if (!modRolesSelect) return;
+        try {
+            const [rolesResult, settingsResult] = await Promise.all([
+                safeFetch(`/api/v1/guilds/${GUILD_ID}/roles`, { cache: 'no-cache' }),
+                safeFetch(`/api/v1/guilds/${GUILD_ID}/settings`, { cache: 'no-cache' }),
+            ]);
+            const roles = (rolesResult?.data?.roles) || [];
+            const saved = (settingsResult?.data?.settings || {})['dashboard_moderator_roles'] || '[]';
+            let selected = new Set();
+            try { selected = new Set(JSON.parse(saved)); } catch { /* tolerate hand-edited lists */ }
+            modRolesSelect.innerHTML = roles.length
+                ? roles.map(r =>
+                    `<option value="${escHtml(r.id)}"${selected.has(String(r.id)) ? ' selected' : ''}>${escHtml(r.name)}</option>`
+                  ).join('')
+                : '<option value="">No roles in this server</option>';
+        } catch {
+            modRolesSelect.innerHTML = '<option value="">Roles unavailable</option>';
+        }
+    }
+
+    modRolesSave?.addEventListener('click', async () => {
+        const roleIds = Array.from(modRolesSelect.selectedOptions).map(o => o.value).filter(Boolean);
+        modRolesSave.disabled = true;
+        if (modRolesStatus) {
+            modRolesStatus.textContent = 'Saving…';
+            modRolesStatus.style.color = '';
+        }
+        try {
+            await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/general`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dashboard_moderator_roles: JSON.stringify(roleIds) }),
+            });
+            if (modRolesStatus) {
+                modRolesStatus.textContent = `Saved (${roleIds.length} role${roleIds.length === 1 ? '' : 's'})`;
+                modRolesStatus.style.color = 'var(--green)';
+            }
+        } catch (error) {
+            if (modRolesStatus) {
+                modRolesStatus.textContent = error.message || 'Save failed';
+                modRolesStatus.style.color = 'var(--red)';
+            }
+        } finally {
+            modRolesSave.disabled = false;
+        }
+    });
+
+    loadDashboardModRoles();
 
     // ── Updates ────────────────────────────────────────
 

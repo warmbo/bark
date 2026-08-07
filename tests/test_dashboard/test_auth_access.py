@@ -694,3 +694,249 @@ async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
 
     assert response.status_code == 200
     assert 'data-user-role="admin"' in response.text
+
+
+# ── Per-server "Ready to manage" (owner-configured moderator roles) ──
+
+
+def test_parse_moderator_role_ids_accepts_json_and_csv():
+    from services.dashboard_access import parse_moderator_role_ids
+
+    assert parse_moderator_role_ids(None) == set()
+    assert parse_moderator_role_ids("") == set()
+    assert parse_moderator_role_ids('["111","222"]') == {"111", "222"}
+    assert parse_moderator_role_ids("111, 222") == {"111", "222"}
+    assert parse_moderator_role_ids("not-json") == {"not-json"}
+
+
+def test_user_ready_to_manage_owner_admin_manage_or_configured_moderator_role():
+    from services.dashboard_access import user_ready_to_manage
+
+    mod_roles = {"555"}
+
+    def access(**overrides):
+        base = {
+            "guild_id": "100",
+            "name": "Server",
+            "permissions": 0,
+            "owner": False,
+            "roles": "",
+        }
+        base.update(overrides)
+        return type("Access", (), base)()
+
+    # Admin rights: server owner or ADMINISTRATOR permission.
+    assert user_ready_to_manage(access(owner=True), mod_roles)
+    assert user_ready_to_manage(access(permissions=0x8), mod_roles)
+    # Moderator rights: MANAGE_GUILD permission…
+    assert user_ready_to_manage(access(permissions=0x20), mod_roles)
+    # …or holding a role the server owner designated as moderator.
+    assert user_ready_to_manage(access(roles="111,555,666"), mod_roles)
+    # A plain member without any staff right is not ready to manage.
+    assert not user_ready_to_manage(access(roles="111,666"), mod_roles)
+    assert not user_ready_to_manage(access(), mod_roles)
+    # Unconfigured moderator roles never gate out Discord-native rights.
+    assert user_ready_to_manage(access(permissions=0x8), set())
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_moderator_roles_loads_per_guild_setting(db):
+    from sqlalchemy import select
+
+    from database.models.guild import Guild, GuildSetting
+    from services.dashboard_access import get_dashboard_moderator_roles
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="100", name="Alpha"))
+        session.add(Guild(discord_id="200", name="Beta"))
+        session.add(
+            GuildSetting(
+                guild_id="100",
+                key="dashboard_moderator_roles",
+                value='["555","666"]',
+            )
+        )
+        await session.flush()
+
+    async with session_scope() as session:
+        roles = await get_dashboard_moderator_roles(session, ["100", "200", "300"])
+
+    assert roles == {"100": {"555", "666"}}
+    assert roles.get("200", set()) == set()
+    assert roles.get("300", set()) == set()
+
+
+@pytest.mark.asyncio
+async def test_replace_user_guild_access_persists_roles_snapshot(db):
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "100", "name": "Alpha", "permissions": "0"}],
+            roles_by_guild={"100": ["555", "666"]},
+        )
+
+    async with session_scope() as session:
+        rows = await get_user_guild_access(session, "42")
+
+    assert rows[0].roles == "555,666"
+    assert rows[0].can_manage is False
+
+
+def test_catalog_marks_ready_to_manage_per_server_from_configured_roles():
+    from services.dashboard_access import build_guild_catalog
+
+    def access(guild_id, permissions=0, roles=""):
+        return type(
+            "Access",
+            (),
+            {
+                "guild_id": guild_id,
+                "name": f"Server {guild_id}",
+                "icon_hash": None,
+                "owner": False,
+                "permissions": permissions,
+                "can_manage": False,
+                "roles": roles,
+            },
+        )()
+
+    oauth_guilds = [
+        access("100", roles="555"),   # holds configured moderator role
+        access("200"),                # plain member of a connected server
+        access("300"),                # uninstalled server, can manage
+    ]
+    bot_guilds = []
+    for guild_id in (100, 200):
+        guild = type(
+            "Guild",
+            (),
+            {"id": guild_id, "name": f"Server {guild_id}", "member_count": 5, "icon": None},
+        )()
+        bot_guilds.append(guild)
+
+    catalog = build_guild_catalog(
+        oauth_guilds,
+        bot_guilds,
+        client_id="123",
+        moderator_roles_by_guild={"100": {"555"}},
+    )
+    by_id = {entry["id"]: entry for entry in catalog}
+
+    assert by_id["100"]["access_tier"] == "connected"
+    assert by_id["100"]["ready_to_manage"] is True
+    assert by_id["200"]["access_tier"] == "connected"
+    assert by_id["200"]["ready_to_manage"] is False
+    assert by_id["300"]["access_tier"] == "other"
+    assert by_id["300"]["ready_to_manage"] is False
+
+
+@pytest.mark.asyncio
+async def test_dashboard_shows_view_only_for_connected_server_without_staff_rights(db, monkeypatch):
+    """A member of a connected server without admin/moderator rights sees the
+    card as view-only — "Ready to manage" is per-server, not blanket."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        session.add(Guild(discord_id="100", name="Connected", owner_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "100", "name": "Connected", "permissions": "0"}],
+            roles_by_guild={"100": ["111"]},
+        )
+        from database.models.guild import GuildSetting
+
+        session.add(
+            GuildSetting(
+                guild_id="100",
+                key="dashboard_moderator_roles",
+                value='["555"]',
+            )
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Connected"
+    bot_guild.member_count = 25
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "viewer"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        response = await client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Connected to Bark" in response.text
+    assert "View-only access" in response.text
+    assert "View only" in response.text
+    # The blanket "Ready to manage" subtitle must not render for this user.
+    assert "<p>Ready to manage</p>" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_dashboard_ready_to_manage_for_owner_configured_moderator_role(db, monkeypatch):
+    """A member holding the server's configured moderator role is shown as
+    ready to manage that server."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        session.add(Guild(discord_id="100", name="Connected", owner_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "100", "name": "Connected", "permissions": "0"}],
+            roles_by_guild={"100": ["555"]},
+        )
+        from database.models.guild import GuildSetting
+
+        session.add(
+            GuildSetting(
+                guild_id="100",
+                key="dashboard_moderator_roles",
+                value='["555"]',
+            )
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Connected"
+    bot_guild.member_count = 25
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda guild_id: bot_guild if guild_id == 100 else None
+    app = _dashboard_app(bot)
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "viewer"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        response = await client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "<p>Ready to manage</p>" in response.text
+    assert "Ready to manage" in response.text

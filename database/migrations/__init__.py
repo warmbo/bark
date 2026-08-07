@@ -405,6 +405,25 @@ async def _add_fk_indexes(connection: AsyncConnection) -> None:
         )
 
 
+async def _add_dashboard_guild_access_roles(connection: AsyncConnection) -> None:
+    """Add the ``roles`` snapshot column to ``dashboard_guild_access``.
+
+    ``create_all`` already includes the column on fresh databases, so the
+    ALTER is guarded by a PRAGMA column probe.
+    """
+    columns = {
+        row[1]
+        for row in (
+            await connection.exec_driver_sql('PRAGMA table_info("dashboard_guild_access")')
+        ).fetchall()
+    }
+    if "roles" not in columns:
+        await connection.exec_driver_sql(
+            "ALTER TABLE dashboard_guild_access "
+            "ADD COLUMN roles VARCHAR(512) NOT NULL DEFAULT ''"
+        )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -479,6 +498,10 @@ MIGRATIONS: tuple[Migration, ...] = (
             """,
             "CREATE INDEX IF NOT EXISTS ix_instance_access_discord_user_id ON instance_access (discord_user_id)",
         ),
+    ),
+    (
+        "0009_dashboard_guild_access_roles",
+        _add_dashboard_guild_access_roles,
     ),
 )
 

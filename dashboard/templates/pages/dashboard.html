@@ -19,6 +19,8 @@
         <div class="guild-card-meta">
             {% if guild.access_tier == 'connected' %}
             <span class="guild-state connected"><span class="status-dot online"></span>Bark connected</span>
+            {% if guild.ready_to_manage %}<span class="guild-state ready">Ready to manage</span>
+            {% else %}<span class="guild-state readonly">View only</span>{% endif %}
             {% if guild.member_count is not none %}<span>{{ guild.member_count }} members</span>{% endif %}
             {% elif guild.access_tier == 'manageable' %}<span>Bark is not installed</span>
             {% else %}<span>Manage Server permission required</span>{% endif %}
@@ -89,9 +91,14 @@
     </div>
 
         {% if connected %}
+        {% set ready_count = connected | selectattr('ready_to_manage', 'equalto', true) | list | length %}
         <section class="server-group" data-server-group>
             <header class="server-group-header">
-                <div><h2>Connected to Bark</h2><p>Ready to manage</p></div>
+                <div><h2>Connected to Bark</h2>
+                    {% if ready_count == 0 %}<p>View-only access</p>
+                    {% elif ready_count == connected | length %}<p>Ready to manage</p>
+                    {% else %}<p>{{ ready_count }} ready to manage · {{ connected | length - ready_count }} view only</p>{% endif %}
+                </div>
                 <span class="server-group-count">{{ connected | length }}</span>
             </header>
             <div class="guild-grid">{% for guild in connected %}{{ server_card(guild) }}{% endfor %}</div>

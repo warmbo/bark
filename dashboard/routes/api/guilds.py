@@ -44,16 +44,24 @@ async def list_guilds(request: Request):
     user = request.session.get("user") if config.oauth2.enabled else None
     if user:
         from database.engine import session_scope
-        from services.dashboard_access import build_guild_catalog, get_user_guild_access
+        from services.dashboard_access import (
+            build_guild_catalog,
+            get_dashboard_moderator_roles,
+            get_user_guild_access,
+        )
 
         async with session_scope() as session:
             access = await get_user_guild_access(session, user["id"])
+            moderator_roles = await get_dashboard_moderator_roles(
+                session, (row.guild_id for row in access)
+            )
         return api_success(
             {
                 "guilds": build_guild_catalog(
                     access,
                     bot.guilds,
                     client_id=config.oauth2.client_id,
+                    moderator_roles_by_guild=moderator_roles,
                 )
             }
         )
