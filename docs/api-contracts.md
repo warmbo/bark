@@ -27,10 +27,10 @@ Response shape:
 | GET | `/api/v1/guilds` | Session | List accessible guilds (with OAuth filters when enabled) | `dashboard/routes/api/guilds.py` |
 | GET | `/api/v1/guilds/{guild_id}` | Session | Detailed guild info — name, members, channels, roles, boosts, premium | `dashboard/routes/api/guilds.py` |
 | GET | `/api/v1/guilds/{guild_id}/stats` | moderation.view | Live guild stats — online members, voice count, cases 7d, growth 30d, cases by type | `dashboard/routes/api/guilds.py` |
-| GET | `/api/v1/guilds/{guild_id}/roles` | Session | All roles (id, name, color) for filtering | `dashboard/routes/api/guilds.py` |
+| GET | `/api/v1/guilds/{guild_id}/roles` | Session | All roles (`id`, `name`, `color`, plus `administrator: bool` — role has the Discord ADMINISTRATOR permission) for filtering and the Dashboard Access card | `dashboard/routes/api/guilds.py` |
 | GET | `/api/v1/guilds/{guild_id}/channels` | Session | Sorted text channels (id, name, parent_name, type) | `dashboard/routes/api/guilds.py` |
 | GET | `/api/v1/guilds/{guild_id}/activity` | moderation.view | Aggregated feed — last 10 cases, audits, voice sessions, warnings (merged, sorted, max 25) | `dashboard/routes/api/guilds.py` |
-| GET | `/api/v1/guilds/{guild_id}/manifest` | Session | Full navigation + guild-specific capabilities manifest, including module role overrides | `dashboard/routes/api/manifest.py` |
+| GET | `/api/v1/guilds/{guild_id}/manifest` | Session | Full navigation + guild-specific capabilities manifest, including module role overrides. For view-only members returns `viewer: true` with only the Dashboard nav entry and empty modules/actions | `dashboard/routes/api/manifest.py` |
 
 `GET /api/v1/guilds/{guild_id}/stats` response:
 ```json
@@ -140,13 +140,22 @@ Each action also checks:
 | GET | `/auth/logout` | Session | Clear session + redirect to login | `dashboard/routes/auth.py` |
 | GET | `/auth/me` | Public | Return current user from session (or null) | `dashboard/routes/auth.py` |
 
+## Instance self-update
+
+Owner-only when OAuth is configured (`BARK_OWNER_DISCORD_IDS`); permissive otherwise.
+
+| Method | Path | Auth | Description | Source file |
+|---|---|---|---|---|
+| GET | `/api/v1/instance/update/status?branch=main\|dev` | Owner | Check the channel's branch on the git remote. Returns `channel` (persisted `stable`/`dev`), the resolved `branch` (`master` for stable unless `BARK_STABLE_BRANCH` overrides), current/available commits, `update_available`, `repo_dir`, `error` | `dashboard/routes/api/updates.py` |
+| POST | `/api/v1/instance/update` | Owner | Pull the channel's branch (`{"branch": "main"\|"dev"}`) and restart via systemd. Rejects the stable channel with 403 once the instance is on Dev (one-way Stable → Dev). Updates fetch from `update_remote` (origin) **only** — secondary remotes are never used | `dashboard/routes/api/updates.py` |
+
 ## Web (HTML) Routes
 
 | Method | Path | Source file |
 |---|---|---|
 | GET | `/` → redirect to `/dashboard` | `dashboard/__init__.py` |
 | GET | `/dashboard` | `dashboard/__init__.py` |
-| GET | `/guild/{guild_id}` | `dashboard/routes/web/home.py` |
+| GET | `/guild/{guild_id}` | `dashboard/routes/web/home.py` (renders the read-only server-status page for view-only members) |
 | GET | `/guild/{guild_id}/modules` | `dashboard/routes/web/modules.py` |
 | GET | `/guild/{guild_id}/modules/{module_name}` | `dashboard/routes/web/modules.py` |
 | GET | `/guild/{guild_id}/members` | `dashboard/routes/web/members.py` |

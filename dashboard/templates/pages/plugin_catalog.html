@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Plugin Catalog — {{ guild.name }}{% endblock %}
+
+{% block content %}
+{% set active_page = "plugins" %}
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">{{ icon("package", 24) }} Plugin Catalog</h1>
+        <p class="page-subtitle">Browse community plugins from <a href="https://github.com/warmbo/bark-plugins" target="_blank" rel="noopener">warmbo/bark-plugins</a>. Install them in Settings → Modules → Plugins.</p>
+    </div>
+
+    <div id="plugin-catalog-loading" class="state-panel" role="status">
+        <div><strong>Loading plugins…</strong></div>
+    </div>
+
+    <div id="plugin-catalog-error" class="state-panel state-error" role="alert" hidden>
+        <div>
+            <strong>Could not load plugin catalog</strong>
+            <p id="plugin-catalog-error-message">Check your connection and try again.</p>
+        </div>
+    </div>
+
+    <div id="plugin-catalog-grid" class="modules-grid" hidden></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const grid = document.getElementById('plugin-catalog-grid');
+    const loading = document.getElementById('plugin-catalog-loading');
+    const errorPanel = document.getElementById('plugin-catalog-error');
+    const errorMessage = document.getElementById('plugin-catalog-error-message');
+    if (!grid || !loading) return;
+
+    const guildId = currentGuildId();
+    if (!guildId) {
+        loading.hidden = true;
+        errorPanel.hidden = false;
+        errorMessage.textContent = 'No guild selected.';
+        return;
+    }
+
+    let plugins = [];
+    try {
+        const res = await safeFetch(`/api/v1/guilds/plugin-catalog`, {cache: 'no-cache'});
+        plugins = Array.isArray(res?.data?.plugins) ? res.data.plugins : [];
+    } catch (err) {
+        loading.hidden = true;
+        errorPanel.hidden = false;
+        errorMessage.textContent = err?.message || 'Failed to fetch plugin catalog.';
+        return;
+    }
+
+    loading.hidden = true;
+    if (!plugins.length) {
+        grid.hidden = true;
+        errorPanel.hidden = false;
+        errorMessage.textContent = 'No plugins listed in the remote catalog right now.';
+        return;
+    }
+
+    grid.hidden = false;
+    grid.innerHTML = plugins.map(plugin => `
+        <article class="module-card" data-plugin="${escHtml(plugin.name || '')}">
+            <div class="module-card-header">
+                <div class="module-card-title">
+                    <h3>${escHtml(plugin.label || plugin.name || 'Plugin')}</h3>
+                    <span class="module-version">${escHtml(plugin.source || 'community')}</span>
+                </div>
+            </div>
+            ${plugin.description ? `<p class="module-description">${escHtml(plugin.description)}</p>` : ''}
+            <div class="module-meta">
+                <span class="module-meta-item">${escHtml(plugin.file || '')}</span>
+            </div>
+            <div class="module-card-footer">
+                <a href="${escHtml(plugin.url || '#')}" target="_blank" rel="noopener" class="card-footer-link">
+                    View source {{ icon("arrow-right", 14) }}
+                </a>
+            </div>
+        </article>
+    `).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+{% endblock %}

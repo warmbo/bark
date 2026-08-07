@@ -51,6 +51,31 @@ Roles: `viewer`, `moderator`, `admin`, `owner`.
 - Permission-denied API responses are surfaced through `safeFetch()` error messages and toast/state feedback.
 - Module access overrides are read/set/reset through `modules/{name}/role-access`.
 
+### Per-server access and the view-only experience
+
+Each server's "Ready to manage" flag (owner, ADMINISTRATOR/MANAGE_GUILD
+permission, or an owner-configured moderator role) drives what a user sees:
+
+- **Ready to manage** → full guild pages: overview, Members, Modules,
+  Moderation, Settings, and the module workspace.
+- **View only** → `/guild/{id}` renders the read-only server-status page
+  (`guild_viewer.html`); `/members`, `/modules`, `/moderation`,
+  `/settings` redirect to it; the manifest carries `viewer: true` with a
+  single Dashboard nav entry, so the sidebar and command palette expose
+  nothing else. API writes still fail closed via `check_api_permission()`.
+
+See `docs/permissions-model.md` for the full rule set (moderator role
+snapshotting, Dashboard Access card, admin-role display).
+
+## Mobile navigation drawer
+
+Below 769px the sidebar becomes an off-canvas drawer (`initMobileDrawer()`
+in `main.js`): the hamburger (top-left) opens it; the drawer X, scrim tap,
+Escape, a left-swipe, or picking a nav item close it; a right-swipe from
+the left edge opens it. The closed drawer is `inert` + `aria-hidden`, the
+toggle reflects `aria-expanded`, and opening focuses the drawer. On
+desktop the sidebar is unchanged.
+
 ## Layout and spacing
 
 Use spacing tokens (`--space-xs` through `--space-xl`) and shared surfaces:

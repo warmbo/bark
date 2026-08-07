@@ -17,10 +17,20 @@ resolve before continuing (see Rollback).
 | Prod instance | `cody@10.0.0.227:~/Projects/bark`,    branch `master`, port `8090`, unit `bark.service` |
 
 Both instances are git checkouts; the self-update feature
-(`services/update_service.py`) resets the working tree to
-`origin/<branch>`, installs new dependencies and exits (systemd
-`Restart=always` brings it back). Version shown in the UI is derived
-from the git commit count — every merged commit bumps it automatically.
+(`services/update_service.py`) fetches from the configured update remote
+(`origin` — **only**; secondary remotes like the GitHub mirror are never
+consulted), resets the working tree to `<remote>/<branch>`, installs new
+dependencies and exits (systemd `Restart=always` brings it back). Version
+shown in the UI is derived from the git commit count — every merged
+commit bumps it automatically.
+
+Update channels are `Stable` and `Dev`. `Dev` tracks the `dev` branch;
+`Stable` tracks the repo's stable branch — `master` here, resolved from
+`config.instance.stable_branch` (`BARK_STABLE_BRANCH`), else the remote
+default branch (`origin/HEAD`), else `master`. The channel is persisted in
+the local git config (`bark.update.channel`) and is **one-way**: once an
+instance is on Dev, the API rejects switching back to Stable (403) and the
+settings UI disables the Stable option.
 
 ## Release gates (all must hold before merging)
 
@@ -154,12 +164,16 @@ and mirror status.
   plugins and only core commands are required.
 - The dev instance renders a `DEV VERSION` watermark (dev overlay);
   prod does not. This is intentional.
-- Some tracked files in the checkouts are `root`-owned (left by
-  root-run update/restore operations). `git reset --hard` still works
-  for the service user (unlink needs only directory write permission),
-  but plain `scp`/editors as `cody` cannot overwrite them — move the
-  file aside first, then place the new copy.
 - The dashboard "Update & Restart" card performs the same
   fetch/reset/restart flow as step 4/5 and is the supported way for an
   owner to self-update from the UI; this process is the CLI equivalent
-  and the source of truth for what the UI does.
+  and the source of truth for what the UI does. Channel rule (one-way
+  Stable → Dev) applies to both paths.
+- The live-servers page (`https://bark.warx.org/live-servers`) is a
+  separate LAN-only service (`~/Projects/live-servers/live_servers.py`
+  on 10.0.0.227:8093, unit `live-servers.service`) — it is NOT part of
+  this repo or this release process.
+- Tracked files in the checkouts are owned by `cody`; root-owned
+  leftovers from earlier root-run operations were cleaned up on
+  2026-08-07. If `git status` ever shows a root-owned tracked file,
+  `chown cody:cody` it (as container root via `pct exec 1109`).

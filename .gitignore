@@ -44,3 +44,15 @@ Thumbs.db
 dist/
 build/
 *.egg
+
+# Runtime plugin/uploads state (installed/uploaded at runtime, not source)
+data/plugins/
+data/uploads/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Env backups left by channel-switch flows
+.env.prod-backup-*

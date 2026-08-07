@@ -77,6 +77,48 @@ Higher numeric level = more access. A user's role must be **≥** the required r
 |---|---|
 | `dashboard.users` | admin |
 
+## Per-server dashboard access ("Ready to manage")
+
+Beyond the global `viewer < moderator < admin < owner` hierarchy, each
+server has its own "who may manage Bark here" rule, computed by
+`user_ready_to_manage()` in `services/dashboard_access.py`:
+
+A user is **Ready to manage** a server when any of:
+
+1. they are the **guild owner** (`owner` flag on the access row), or
+2. their Discord permission bitmask includes `ADMINISTRATOR` or
+   `MANAGE_GUILD`, or
+3. they hold a **moderator role** the server owner configured in
+   Settings → Dashboard Access (stored per-guild in `GuildSetting`
+   key `dashboard_moderator_roles`, a JSON array of role IDs).
+
+Supporting pieces:
+
+- **Role snapshot at login** — the OAuth callback resolves each guild's
+  member role IDs from the bot's member cache and persists them in the
+  access row's `roles` column (cookie sessions are too small for full
+  guild state). Role changes therefore take effect at the next sign-in
+  (documented, by design).
+- **Settings → Dashboard Access** — the server owner picks a **single
+  moderator role** from a dropdown (stored as a plain role ID; legacy
+  JSON-array values still parse). The same card lists the **Admin
+  access** roles: every role with the Discord `ADMINISTRATOR`
+  permission, flagged by `GET /guilds/{guild_id}/roles`
+  (`administrator: true`).
+- **View-only experience** — a member who is not ready to manage sees a
+  read-only **server status page** (`/guild/{id}` renders
+  `guild_viewer.html`: members, channels, roles, boosts, emojis, created,
+  server info) with no modules and no management links. The middleware
+  blocks `/members`, `/modules`, `/moderation`, `/settings` web pages for
+  viewers (redirect to the status page) and strips the manifest down to
+  the single Dashboard nav entry (`viewer: true`, empty modules/actions).
+- **Middleware re-derivation** — `AuthMiddleware` recomputes the per-guild
+  role on every guild request via `role_from_access_with_staff_roles()`
+  (owner/ADMINISTRATOR → `admin`; MANAGE_GUILD or configured moderator
+  role → `moderator`; else `viewer`), so API gating matches what the
+  dashboard cards advertise. `request.state.guild_viewer` is set for the
+  view-only branch.
+
 ## Module Permission Registration
 
 Modules declare granular permissions via `BarkModule.get_permissions()` (`modules/base.py`). Each permission is a `PermissionDefinition(name, label, description)`.
@@ -163,10 +205,10 @@ Defined in `dashboard/routes/auth.py`:
 2. Discord redirects to `/auth/callback?code=...` → server exchanges code for token
 3. Server fetches user identity + guild list from Discord API
 4. Creates/updates `DashboardUser` record
-5. Syncs guild access to `DashboardGuildAccess` (determines `can_manage` via MANAGE_GUILD permission)
+5. Syncs guild access to `DashboardGuildAccess` (determines `can_manage` via MANAGE_GUILD permission) and snapshots each guild's member role IDs into the `roles` column
 6. Assigns dashboard role: `owner` if guild owner, `admin` otherwise
 7. Sets `session["user"]` and `session["role"]`
-8. `AuthMiddleware` reads `session["role"]` on every subsequent request
+8. `AuthMiddleware` reads `session["role"]` on every subsequent request and **re-derives** the per-guild role on guild paths from the access row + configured moderator roles (see "Per-server dashboard access" above)
 
 When OAuth2 is not configured (`config.oauth2.enabled = False`), all permission checks return `True` (permissive mode).
 

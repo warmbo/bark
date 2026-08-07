@@ -290,8 +290,9 @@ All models use SQLAlchemy 2.0 declarative mapping with async sessions. Source: `
 | `permissions` | Integer | NOT NULL, default 0 | Discord permission bitmask |
 | `owner` | Boolean | NOT NULL, default False | Is guild owner |
 | `can_manage` | Boolean | NOT NULL, default False | Has MANAGE_GUILD permission |
+| `roles` | String(512) | NOT NULL, default "" | Comma-separated Discord role IDs snapshotted at OAuth login (migration 0009; used by the per-server "Ready to manage" check) |
 
-**Constraints:** UNIQUE(user_discord_id, guild_id)
+**Constraints:** UNIQUE(user_discord_id, guild_id) — enforced by the model on fresh databases and by migration 0010 (`uq_dashboard_user_guild` unique index, added after deduping legacy rows) on existing ones
 
 ## ModuleRoleAccess
 

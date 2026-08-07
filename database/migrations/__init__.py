@@ -424,6 +424,40 @@ async def _add_dashboard_guild_access_roles(connection: AsyncConnection) -> None
         )
 
 
+async def _dedupe_dashboard_guild_access(connection: AsyncConnection) -> None:
+    """Dedupe ``dashboard_guild_access`` and enforce the UNIQUE constraint.
+
+    Legacy databases created before the model declared
+    ``UNIQUE(user_discord_id, guild_id)`` can hold duplicate rows for the
+    same (user, guild) — the earlier ``CREATE TABLE IF NOT EXISTS`` never
+    added the constraint to an existing table. Keep the strongest row per
+    pair (owner first, then highest permission bitmask, then the newest)
+    and add the unique index so the model's contract holds everywhere.
+    """
+    await connection.exec_driver_sql(
+        """
+        DELETE FROM dashboard_guild_access
+        WHERE id NOT IN (
+            SELECT id FROM (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY user_discord_id, guild_id
+                           ORDER BY owner DESC, permissions DESC, id DESC
+                       ) AS rn
+                FROM dashboard_guild_access
+            ) ranked
+            WHERE rn = 1
+        )
+        """
+    )
+    await connection.exec_driver_sql(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_dashboard_user_guild
+        ON dashboard_guild_access (user_discord_id, guild_id)
+        """
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -502,6 +536,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     (
         "0009_dashboard_guild_access_roles",
         _add_dashboard_guild_access_roles,
+    ),
+    (
+        "0010_dashboard_guild_access_unique",
+        _dedupe_dashboard_guild_access,
     ),
 )
 
