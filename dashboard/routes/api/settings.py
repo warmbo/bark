@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from database.engine import session_scope
 from database.models.automod import AutoModConfig
 from database.models.guild import GuildSetting
+from modules.base import BarkModule
 from services.response import (
     api_error,
     api_forbidden,
@@ -224,7 +225,18 @@ async def settings_health(request: Request, guild_id: int):
                     parsed = {}
             schema = module.get_settings_schema()
             if schema and parsed:
-                validation_errors = _validate_config(parsed, schema.get("properties", {}))
+                # Normalize first: modules may store a legacy flat shape that
+                # their schema declares grouped (e.g. auto_voice). Validating
+                # the raw stored config would flag every lifted key as
+                # "unknown setting" even though it is fully valid. The getattr
+                # guard skips test doubles and modules using the base identity.
+                normalized = parsed
+                normalize_fn = getattr(type(module), "normalize_config", None)
+                if normalize_fn is not None and normalize_fn is not BarkModule.normalize_config:
+                    normalized = module.normalize_config(parsed)
+                validation_errors = _validate_config(
+                    normalized, schema.get("properties", {})
+                )
                 issues.extend(validation_errors)
             enabled = cfg.enabled if cfg else False
             results.append(

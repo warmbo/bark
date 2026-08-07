@@ -60,6 +60,9 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     New saves are already grouped (``{"channel": {"primary_channel_id": …}}``);
     older configs stored the keys flat at the top level. Returns a merged
     dict so both shapes read identically, preferring the grouped values.
+    Lifted flat keys are removed from the top level so the result matches
+    the declared schema exactly (the validator would otherwise flag the
+    orphaned flat keys as "unknown setting").
     """
     if not isinstance(raw, dict):
         return {}
@@ -74,6 +77,11 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
             grouped[group] = lifted
     result = dict(raw)
     result.update(grouped)
+    # Drop the lifted flat keys now that they live in their group.
+    for group, keys in CONFIG_GROUPS.items():
+        if group in grouped:
+            for key in keys:
+                result.pop(key, None)
     return result
 
 
@@ -105,6 +113,10 @@ class AutoVoiceModule(BarkModule):
 
     async def load_dashboard_config(self, guild_id: int) -> dict[str, Any]:
         raw = await self.ctx.get_module_config(self.name, guild_id)
+        return normalize_config(raw)
+
+    def normalize_config(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Lift legacy flat keys into the grouped schema shape."""
         return normalize_config(raw)
 
     @property

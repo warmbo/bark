@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request
 from database.engine import session_scope
 from database.models.module import ModuleConfig
 from database.models.permissions import ModuleRoleAccess
+from modules.base import BarkModule
 from services.response import (
     api_deleted,
     api_error,
@@ -225,8 +226,15 @@ async def update_module_config(request: Request, guild_id: str, module_name: str
     if "config" in data:
         schema = module.get_settings_schema()
         if schema and "properties" in schema:
+            submitted = data["config"]
+            # Accept both grouped and legacy flat shapes (see normalize_config).
+            # Only call it when the module overrides the base identity —
+            # getattr-with-None keeps MagicMock test doubles from intercepting.
+            normalize_fn = getattr(type(module), "normalize_config", None)
+            if normalize_fn is not None and normalize_fn is not BarkModule.normalize_config:
+                submitted = module.normalize_config(submitted)
             errors = _validate_config(
-                data["config"],
+                submitted,
                 schema["properties"],
                 schema.get("required", []),
             )

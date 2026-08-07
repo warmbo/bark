@@ -574,6 +574,56 @@ def test_module_config_validation_rejects_array_and_enum_type_drift():
     assert "mode: expected one of safe, strict" in errors
 
 
+def test_auto_voice_flat_config_validates_against_grouped_schema():
+    """Legacy flat auto_voice configs must validate cleanly against the
+    grouped dashboard schema — no 'unknown setting' false positives.
+
+    The module normalizes flat keys into their schema groups before the
+    validator sees them; a config that only exists in the flat shape must
+    not be reported unhealthy."""
+    from modules.auto_voice.module import CONFIG_GROUPS, AutoVoiceModule, normalize_config
+
+    schema = AutoVoiceModule.__new__(AutoVoiceModule).get_settings_schema()
+    properties = schema.get("properties", {})
+
+    # Flat legacy shape as stored by older versions.
+    flat = {
+        "primary_channel_id": "111",
+        "channel_name_template": "## [@@game@@]",
+        "fallback_name": "Temp",
+        "name_uppercase": False,
+        "name_lowercase": True,
+        "name_titlecase": False,
+        "user_limit": 5,
+        "bitrate_kbps": 64,
+        "inherit_permissions": True,
+        "private_by_default": False,
+        "empty_delete_delay_seconds": 30,
+        "owner_can_rename": True,
+        "owner_can_limit": True,
+        "owner_can_lock": False,
+        "required_role_id": "",
+    }
+    normalized = normalize_config(flat)
+
+    # Every flat key lands in exactly one declared group.
+    all_group_keys = {k for keys in CONFIG_GROUPS.values() for k in keys}
+    for key in flat:
+        assert key in all_group_keys, key
+
+    from dashboard.routes.api.modules import _validate_config
+
+    errors = _validate_config(normalized, properties)
+    assert errors == [], f"flat auto_voice config must validate clean, got {errors}"
+
+    # The grouped shape itself also validates.
+    grouped_errors = _validate_config(
+        {"channel": {"primary_channel_id": "222"}, "naming": {"name_uppercase": True}},
+        properties,
+    )
+    assert grouped_errors == [], f"grouped auto_voice config must validate clean, got {grouped_errors}"
+
+
 @pytest.mark.asyncio
 async def test_module_voice_channel_field_uses_voice_only_endpoint(client, app):
     from unittest.mock import AsyncMock, MagicMock

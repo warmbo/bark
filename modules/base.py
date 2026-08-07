@@ -103,6 +103,18 @@ class BarkModule(abc.ABC):
         """
         return {}
 
+    def normalize_config(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize a stored config into the shape declared by
+        ``get_settings_schema`` before validation or display.
+
+        Modules that historically stored flat keys and now declare a grouped
+        schema override this to lift legacy keys into the current shape
+        (e.g. auto_voice). The default is the identity — most modules store
+        exactly the shape they declare.
+        """
+        return raw
+
     async def load_dashboard_config(self, guild_id: int) -> dict[str, Any]:
         """Load the authoritative configuration shown by the dashboard."""
         return await self.ctx.get_module_config(self.name, guild_id)
