@@ -185,14 +185,18 @@ async def user_shares_guild_with_bot(
 
     This is the admission criterion for the dashboard: anyone who belongs to
     a server Bark is in can sign in and view it (login always required).
+    A user may belong to several Bark servers, so the row scan is capped at
+    one match rather than assuming uniqueness.
     """
     if not bot_guild_ids:
         return False
     result = await session.execute(
-        select(DashboardGuildAccess.user_discord_id).where(
+        select(DashboardGuildAccess.user_discord_id)
+        .where(
             DashboardGuildAccess.user_discord_id == discord_user_id,
             DashboardGuildAccess.guild_id.in_(list(bot_guild_ids)),
         )
+        .limit(1)
     )
     return result.scalar_one_or_none() is not None
 

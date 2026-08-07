@@ -640,3 +640,57 @@ async def test_module_mutation_allowed_for_owner_with_stale_session_role(db, mon
         )
 
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
+    """Reported prod case: an invited user who belongs to MORE than one server
+    where Bark is installed previously crashed the admission check with
+    MultipleResultsFound (scalar_one_or_none on a multi-row scan), 500ing every
+    request. Membership in any Bark server must admit them."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="moderator"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        session.add(Guild(discord_id="100", name="First Bark Server", owner_id="42"))
+        session.add(Guild(discord_id="200", name="Second Bark Server", owner_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [
+                {"id": "100", "name": "First Bark Server", "permissions": str(0x20)},
+                {"id": "200", "name": "Second Bark Server", "permissions": str(2147483647)},
+            ],
+        )
+
+    bot_guilds = []
+    for guild_id in (100, 200):
+        guild = MagicMock()
+        guild.id = guild_id
+        guild.name = f"Bark Server {guild_id}"
+        guild.icon = None
+        bot_guilds.append(guild)
+    bot = MagicMock()
+    bot.guilds = bot_guilds
+    bot.get_guild.side_effect = lambda guild_id: next(
+        (g for g in bot_guilds if g.id == guild_id), None
+    )
+    app = _dashboard_app(bot)
+    bot.modules.get_module.return_value = _module_stub()
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "moderator"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+        follow_redirects=False,
+    ) as client:
+        response = await client.get("/guild/200/modules/announcements")
+
+    assert response.status_code == 200
+    assert 'data-user-role="admin"' in response.text
