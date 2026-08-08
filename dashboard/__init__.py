@@ -197,18 +197,30 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     # ── Root Route ────────────────────────────────────
 
-    @app.get("/invite")
+    @app.get("/invite", response_class=HTMLResponse)
     async def invite_redirect(request: Request):
-        """Short invite link — redirect to the real Discord OAuth invite URL.
+        """Branded invite landing page — redirects humans to Discord OAuth.
 
-        The help command advertises `{public_url}/invite` so the bot's invite
-        link is short and branded instead of the long discord.com/oauth2 URL.
+        Returns 200 HTML with Bark OpenGraph tags instead of a bare 302 so that
+        sharing the invite link in Discord shows a Bark-branded card. Discord's
+        link unfurl reads the HTML (it never follows client-side redirects);
+        humans get a meta-refresh + JS redirect to the real invite URL, with a
+        manual "Continue to Discord" button as fallback.
         """
-        from fastapi.responses import RedirectResponse
-
-        if config.dashboard.invite_url:
-            return RedirectResponse(config.dashboard.invite_url, status_code=302)
-        return RedirectResponse(config.dashboard.public_url, status_code=302)
+        invite_url = config.dashboard.invite_url
+        if not invite_url:
+            # No invite configured: still serve the branded page (Discord will
+            # unfurl it), but fall back to the landing page for humans.
+            invite_url = ""
+        tmpl = request.app.state.templates
+        return tmpl.TemplateResponse(
+            request,
+            "pages/invite.html",
+            {
+                "config": config,
+                "invite_url": invite_url,
+            },
+        )
 
     @app.get("/")
     async def root(request: Request):

@@ -165,27 +165,41 @@ async def test_middleware_does_not_double_inject(app, monkeypatch, client):
 
 
 @pytest.mark.asyncio
-async def test_invite_route_redirects_to_discord_oauth(app, monkeypatch, client):
-    """GET /invite redirects to the real Discord OAuth invite URL and is
-    public (no auth required, no overlay needed on a redirect)."""
+async def test_invite_route_serves_bark_branded_og_page(app, monkeypatch, client):
+    """GET /invite returns 200 HTML with Bark OG tags (so Discord's unfurl
+    shows a Bark-branded card, not the Discord oauth2 preview), and includes a
+    client-side redirect to the real Discord OAuth invite URL."""
     import config
 
     target = "https://discord.com/oauth2/authorize?client_id=123&scope=bot"
     monkeypatch.setattr(config.config.dashboard, "invite_url", target)
     async with client:
         response = await client.get("/invite", follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["location"] == target
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    # Bark-branded OpenGraph tags
+    assert 'property="og:site_name" content="Bark"' in response.text
+    assert "og:image" in response.text
+    assert "bark-og.png" in response.text
+    assert 'property="og:url"' in response.text
+    # Client-side redirect to the real invite URL (humans). Jinja autoescape
+    # turns & into &amp; inside the attribute; browsers decode it on refresh.
+    escaped = target.replace("&", "&amp;")
+    assert f'content="0; url={escaped}"' in response.text
+    assert "window.location.replace" in response.text
+    assert f'href="{escaped}"' in response.text
 
 
 @pytest.mark.asyncio
-async def test_invite_route_falls_back_to_public_url(app, monkeypatch, client):
-    """Without an invite_url configured, /invite still redirects somewhere
-    useful instead of erroring."""
+async def test_invite_route_without_config_still_serves_branded_page(app, monkeypatch, client):
+    """Without an invite_url configured, /invite still serves the branded page
+    (Discord can unfurl it) but with no client-side redirect."""
     import config
 
     monkeypatch.setattr(config.config.dashboard, "invite_url", "")
     async with client:
         response = await client.get("/invite", follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["location"].startswith("http")
+    assert response.status_code == 200
+    assert 'property="og:site_name" content="Bark"' in response.text
+    assert "bark-og.png" in response.text
+    assert "window.location.replace" not in response.text
