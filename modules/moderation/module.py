@@ -199,6 +199,7 @@ class ModerationModule(BarkModule):
         return [
             EventRegistration("voice_state_change", handler="_on_voice_state_update"),
             EventRegistration("discord_message", handler="_on_message"),
+            EventRegistration("discord_message_edit", handler="_on_message_edit"),
             EventRegistration("discord_member_join", handler="_on_member_join"),
         ]
 
@@ -1106,9 +1107,27 @@ class ModerationModule(BarkModule):
             self._ruleset_cache_ttl[guild_id] = now
             return result_data
 
-    async def _process_rulesets(self, message, rulesets_data: list[dict]) -> None:
-        """Iterate rulesets and their rules, checking conditions and triggers."""
+    async def _on_message_edit(self, event_type: str, **data):
+        """AutoMod on edited messages — honors per-ruleset check_edited_messages."""
+        after = data.get("after")
+        if not after or not after.guild or getattr(after.author, "bot", False):
+            return
+        rulesets_data = await self._get_rulesets_and_rules(after.guild.id)
+        if not rulesets_data:
+            return
+        await self._process_rulesets(after, rulesets_data, edited=True)
+
+    async def _process_rulesets(self, message, rulesets_data: list[dict], *, edited: bool = False) -> None:
+        """Iterate rulesets and their rules, checking conditions and triggers.
+
+        ``edited`` selects which message-generation the ruleset applies to:
+        new messages honor check_new_messages, edits honor check_edited_messages.
+        """
         for rs in rulesets_data:
+            if edited and not rs.get("check_edited_messages", True):
+                continue
+            if not edited and not rs.get("check_new_messages", True):
+                continue
             # Check ruleset-scoped conditions
             passed, fail_reason = check_ruleset_conditions(None, message, _dict_to_ruleset_stub(rs))
             if not passed:
@@ -2165,6 +2184,18 @@ class ModerationModule(BarkModule):
         svc = ModerationService()
         router = APIRouter(tags=["module-moderation"])
 
+        async def _configure_guard(request: Request, guild_id: str):
+            """Ruleset/rule/wordlist mutations are module-configure gated.
+
+            These routes previously relied only on the middleware's implicit
+            guild.manage fallthrough — fragile defense-in-depth. Gate them
+            explicitly like the sibling moderation actions.
+            """
+            await get_module_min_role("moderation", guild_id)
+            if not check_api_permission(request, "moderation.configure", guild_id):
+                return api_forbidden()
+            return None
+
         async def can_view(request: Request, guild_id: str) -> bool:
             await get_module_min_role("moderation", guild_id)
             return check_api_permission(request, "moderation.view", guild_id)
@@ -2447,6 +2478,9 @@ class ModerationModule(BarkModule):
         @router.post("/guilds/{guild_id}/rulesets")
         async def create_ruleset(request: Request, guild_id: str):
             """Create a new ruleset."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from database.models.ruleset import RuleSet
 
             data = await request.json()
@@ -2466,6 +2500,9 @@ class ModerationModule(BarkModule):
         @router.patch("/guilds/{guild_id}/rulesets/{ruleset_id}")
         async def update_ruleset(request: Request, guild_id: str, ruleset_id: int):
             """Update a ruleset's metadata or scoped conditions."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from sqlalchemy import select
 
             from database.models.ruleset import RuleSet
@@ -2517,6 +2554,9 @@ class ModerationModule(BarkModule):
         @router.delete("/guilds/{guild_id}/rulesets/{ruleset_id}")
         async def delete_ruleset(request: Request, guild_id: str, ruleset_id: int):
             """Delete a ruleset and all its rules."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from sqlalchemy import select
 
             from database.models.ruleset import RuleSet
@@ -2540,6 +2580,9 @@ class ModerationModule(BarkModule):
         @router.post("/guilds/{guild_id}/rulesets/{ruleset_id}/rules")
         async def create_rule(request: Request, guild_id: str, ruleset_id: int):
             """Add a rule to a ruleset."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from sqlalchemy import select
 
             from database.models.ruleset import Rule, RuleSet
@@ -2573,6 +2616,9 @@ class ModerationModule(BarkModule):
         @router.patch("/guilds/{guild_id}/rulesets/{ruleset_id}/rules/{rule_id}")
         async def update_rule(request: Request, guild_id: str, ruleset_id: int, rule_id: int):
             """Update a rule within a ruleset."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from sqlalchemy import select
 
             from database.models.ruleset import Rule, RuleSet
@@ -2604,6 +2650,9 @@ class ModerationModule(BarkModule):
         @router.delete("/guilds/{guild_id}/rulesets/{ruleset_id}/rules/{rule_id}")
         async def delete_rule(request: Request, guild_id: str, ruleset_id: int, rule_id: int):
             """Delete a rule from a ruleset."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from sqlalchemy import select
 
             from database.models.ruleset import Rule, RuleSet
@@ -2661,6 +2710,9 @@ class ModerationModule(BarkModule):
         @router.post("/guilds/{guild_id}/wordlists")
         async def create_wordlist(request: Request, guild_id: str):
             """Create a word/domain list."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from database.models.ruleset import WordList
 
             data = await request.json()
@@ -2680,6 +2732,9 @@ class ModerationModule(BarkModule):
         @router.patch("/guilds/{guild_id}/wordlists/{list_id}")
         async def update_wordlist(request: Request, guild_id: str, list_id: int):
             """Update a word/domain list."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from sqlalchemy import select
 
             from database.models.ruleset import WordList
@@ -2705,6 +2760,9 @@ class ModerationModule(BarkModule):
         @router.delete("/guilds/{guild_id}/wordlists/{list_id}")
         async def delete_wordlist(request: Request, guild_id: str, list_id: int):
             """Delete a word/domain list."""
+            denied = await _configure_guard(request, guild_id)
+            if denied:
+                return denied
             from sqlalchemy import select
 
             from database.models.ruleset import WordList

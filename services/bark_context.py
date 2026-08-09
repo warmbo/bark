@@ -7,6 +7,7 @@ All DB operations delegate to the service layer.
 
 from __future__ import annotations
 
+import copy
 import inspect
 import json
 import logging
@@ -58,6 +59,7 @@ class BarkContext:
     def __init__(self, bot: BarkBot, event_bus: EventBus) -> None:
         self._bot = bot
         self._event_bus = event_bus
+        self._module_config_cache: dict[tuple[str, int], tuple[float, dict]] = {}
 
     # ── Bot access (read-only) ──────────────────────────
 
@@ -84,11 +86,23 @@ class BarkContext:
 
     # ── Module config (service-delegated) ───────────────
 
+    # Per-event config reads (message/reaction/join/presence) used to hit the
+    # DB every time. Cache parsed configs with a short TTL; saves invalidate.
+    _CONFIG_CACHE_TTL_SECONDS = 30.0
+
     async def get_module_config(self, module_name: str, guild_id: int) -> dict:
+        from time import monotonic
+
         from sqlalchemy import select
 
         from database.engine import session_scope
         from database.models.module import ModuleConfig
+
+        key = (module_name, int(guild_id))
+        now = monotonic()
+        cached = self._module_config_cache.get(key)
+        if cached is not None and now - cached[0] < self._CONFIG_CACHE_TTL_SECONDS:
+            return cached[1]
 
         async with session_scope() as session:
             result = await session.execute(
@@ -100,10 +114,14 @@ class BarkContext:
             dbc = result.scalar_one_or_none()
             if dbc and dbc.config:
                 try:
-                    return json.loads(dbc.config)
+                    value = json.loads(dbc.config)
                 except json.JSONDecodeError:
-                    return {}
-            return {}
+                    value = {}
+            else:
+                value = {}
+        # Store a defensive deep copy; callers must not corrupt the cache.
+        self._module_config_cache[key] = (now, copy.deepcopy(value))
+        return value
 
     async def save_module_config(self, module_name: str, guild_id: int, config: dict) -> bool:
         from sqlalchemy import select
@@ -111,6 +129,7 @@ class BarkContext:
         from database.engine import session_scope
         from database.models.module import ModuleConfig
 
+        self._module_config_cache.pop((module_name, int(guild_id)), None)
         async with session_scope() as session:
             result = await session.execute(
                 select(ModuleConfig).where(

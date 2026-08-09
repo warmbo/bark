@@ -19,7 +19,7 @@ import json
 import logging
 import re
 import time
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -97,6 +97,37 @@ class ReputationModule(BarkModule):
         # Message dedup: guild -> set of recent message_ids (prevents double-counting)
         self._recent_messages: dict[int, set[int]] = defaultdict(set)
         self._message_dedup_minutes = 2
+        # Per-(guild, user) locks serialize _add_points read-modify-write so
+        # concurrent gateway events cannot lose score updates. Bounded LRU.
+        self._score_locks: OrderedDict[tuple[int, int], asyncio.Lock] = OrderedDict()
+        self._score_locks_max = 4096
+        # Recent message author cache for reactions: message_id -> author_id
+        # (avoids one Discord REST fetch_message per reaction). Bounded LRU.
+        self._reaction_author_cache: OrderedDict[int, int] = OrderedDict()
+        self._reaction_author_cache_max = 2048
+
+    def _score_lock(self, guild_id: int, user_id: int) -> asyncio.Lock:
+        key = (int(guild_id), int(user_id))
+        lock = self._score_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._score_locks[key] = lock
+            while len(self._score_locks) > self._score_locks_max:
+                self._score_locks.popitem(last=False)
+        return lock
+
+    def _cached_message_author(self, message_id: int) -> int | None:
+        """Author id for a recently-seen message, or None if uncached."""
+        author = self._reaction_author_cache.get(int(message_id))
+        if author is not None:
+            self._reaction_author_cache.move_to_end(int(message_id))
+        return author
+
+    def _cache_message_author(self, message_id: int, author_id: int) -> None:
+        self._reaction_author_cache[int(message_id)] = int(author_id)
+        self._reaction_author_cache.move_to_end(int(message_id))
+        while len(self._reaction_author_cache) > self._reaction_author_cache_max:
+            self._reaction_author_cache.popitem(last=False)
 
     # ── Registration ─────────────────────────────────────
 
@@ -1328,6 +1359,32 @@ class ReputationModule(BarkModule):
         if config is None:
             config = await self.load_dashboard_config(guild_id)
 
+        # Serialize per-user read-modify-write: concurrent message/reaction/
+        # voice events for the same user must not lose score updates.
+        async with self._score_lock(guild_id, user_id):
+            return await self._add_points_locked(
+                guild_id, user_id, points, event_type,
+                actor_id=actor_id, target_id=target_id, message_id=message_id,
+                channel_id=channel_id, emoji=emoji, metadata=metadata, config=config,
+            )
+
+    async def _add_points_locked(
+        self,
+        guild_id: int,
+        user_id: int,
+        points: float,
+        event_type: str,
+        *,
+        actor_id: int | None = None,
+        target_id: int | None = None,
+        message_id: int | None = None,
+        channel_id: int | None = None,
+        emoji: str | None = None,
+        metadata: dict | None = None,
+        config: dict[str, Any],  # guaranteed by _add_points wrapper
+    ) -> dict[str, Any] | None:
+        """Locked body of _add_points (see wrapper)."""
+
         async with session_scope() as session:
             from sqlalchemy import func, select
 
@@ -1865,16 +1922,22 @@ class ReputationModule(BarkModule):
 
         # Point the message author for receiving a reaction
         channel = self.ctx.get_guild(guild_id).get_channel(payload.channel_id)
-        if not channel:
+        if not isinstance(channel, discord.abc.Messageable) or channel is None:
             return
-        try:
-            message = await channel.fetch_message(payload.message_id)
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-            return
-        if message is None or message.author.bot:
-            return
+        # Cache-first: a popular message with 100 reactions previously issued
+        # 100 sequential Discord REST fetch_message calls on the gateway task.
+        author_id = self._cached_message_author(payload.message_id)
+        if author_id is None:
+            try:
+                message = await channel.fetch_message(payload.message_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                return
+            if message is None or message.author.bot:
+                return
+            author_id = int(message.author.id)
+            self._cache_message_author(payload.message_id, author_id)
 
-        target_id = int(message.author.id)
+        target_id = author_id
         actor_id = int(payload.user_id)
         emoji = str(payload.emoji) if getattr(payload, "emoji", None) is not None else None
 

@@ -529,6 +529,25 @@ async def _add_reputation_event_emoji(connection: AsyncConnection) -> None:
         await connection.exec_driver_sql(index_sql)
 
 
+async def _add_reputation_event_daily_cap_idx(connection: AsyncConnection) -> None:
+    """Index the daily-cap SUM (guild_id, target_id, created_at) query.
+
+    Guarded: migration test fixtures build minimal schemas that may not
+    include reputation_events.
+    """
+    table_exists = (
+        await connection.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='reputation_events'"
+        )
+    ).first()
+    if table_exists is None:
+        return
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_reputation_events_guild_target_created "
+        "ON reputation_events (guild_id, target_id, created_at)"
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -615,6 +634,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     (
         "0011_reputation_event_emoji",
         _add_reputation_event_emoji,
+    ),
+    (
+        "0012_reputation_event_daily_cap_idx",
+        _add_reputation_event_daily_cap_idx,
     ),
 )
 
