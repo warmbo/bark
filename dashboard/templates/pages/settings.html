@@ -536,13 +536,14 @@
     backupImportBtn?.addEventListener('click', async () => {
         const file = backupFileInput.files?.[0];
         if (!file) return;
+        // Disable FIRST: the async read below is the double-submit window.
+        backupImportBtn.disabled = true;
+        backupImportBtn.innerHTML = 'Importing...';
         try {
             const text = await file.text();
             const parsed = JSON.parse(text);
             const backup = parsed.backup || parsed;
             if (backup.format !== 'bark-backup') throw new Error('Not a bark backup file');
-            backupImportBtn.disabled = true;
-            backupImportBtn.innerHTML = 'Importing...';
             const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/import`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -722,13 +723,17 @@
     const inviteList = document.getElementById('instance-invite-list');
     async function loadInstanceInvites() {
         if (!inviteList) return;
-        const result = await safeFetch('/api/v1/instance/invites');
-        const invites = result.data?.invites || [];
-        const accessResult = await safeFetch('/api/v1/instance/access');
-        const grants = accessResult.data?.access || [];
-        const inviteRows = invites.map((invite) => `<div class="info-row"><span class="info-label">${escHtml(invite.note || 'Invite #' + invite.id)}</span><span class="info-value">${invite.redeemed_at ? 'Redeemed' : invite.revoked_at ? 'Revoked' : 'Pending'} · expires ${new Date(invite.expires_at).toLocaleDateString()} ${!invite.redeemed_at && !invite.revoked_at ? `<button type="button" class="btn btn-xs" data-revoke-invite="${invite.id}">Revoke</button>` : ''}</span></div>`).join('');
-        const accessRows = grants.map((grant) => `<div class="info-row"><span class="info-label">Discord user ${escHtml(grant.discord_user_id)}</span><span class="info-value">${grant.revoked_at ? 'Revoked' : 'Active'}${!grant.revoked_at ? ` <button type="button" class="btn btn-xs" data-revoke-access="${escHtml(grant.discord_user_id)}">Revoke access</button>` : ''}</span></div>`).join('');
-        inviteList.innerHTML = inviteRows || accessRows ? `${inviteRows}${accessRows}` : '<p class="text-tertiary">No access links created yet.</p>';
+        try {
+            const result = await safeFetch('/api/v1/instance/invites');
+            const invites = result.data?.invites || [];
+            const accessResult = await safeFetch('/api/v1/instance/access');
+            const grants = accessResult.data?.access || [];
+            const inviteRows = invites.map((invite) => `<div class="info-row"><span class="info-label">${escHtml(invite.note || 'Invite #' + invite.id)}</span><span class="info-value">${invite.redeemed_at ? 'Redeemed' : invite.revoked_at ? 'Revoked' : 'Pending'} · expires ${new Date(invite.expires_at).toLocaleDateString()} ${!invite.redeemed_at && !invite.revoked_at ? `<button type="button" class="btn btn-xs" data-revoke-invite="${invite.id}">Revoke</button>` : ''}</span></div>`).join('');
+            const accessRows = grants.map((grant) => `<div class="info-row"><span class="info-label">Discord user ${escHtml(grant.discord_user_id)}</span><span class="info-value">${grant.revoked_at ? 'Revoked' : 'Active'}${!grant.revoked_at ? ` <button type="button" class="btn btn-xs" data-revoke-access="${escHtml(grant.discord_user_id)}">Revoke access</button>` : ''}</span></div>`).join('');
+            inviteList.innerHTML = inviteRows || accessRows ? `${inviteRows}${accessRows}` : '<p class="text-tertiary">No access links created yet.</p>';
+        } catch (error) {
+            inviteList.innerHTML = `<p class="text-tertiary">Access list unavailable — ${escHtml(error.message || 'request failed')}</p>`;
+        }
     }
     inviteForm?.addEventListener('submit', async (event) => {
         event.preventDefault(); const button = document.getElementById('instance-invite-create'); button.disabled = true;

@@ -134,7 +134,14 @@
   function addTierRow() {
     const container = byId('rep-tiers-content');
     if (!container) return;
-    const tbody = container.querySelector('tbody');
+    let tbody = container.querySelector('tbody');
+    if (!tbody) {
+      // loadTiers() renders a bare state-panel when there are no tiers —
+      // inject the table shell so "Add Tier" is not a silent no-op.
+      container.innerHTML = '<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Symbol</th><th>Name</th><th>Min Level</th><th>Min Score</th><th>Color</th><th>Linked Role</th><th>Auto</th><th></th></tr></thead><tbody></tbody></table></div>';
+      tbody = container.querySelector('tbody');
+      refreshIcons();
+    }
     const roles = window.__repTierRoles || [];
     const roleOptions = (selectedId) => ['<option value="">— no role —</option>']
       .concat(roles.map(r => `<option value="${escHtml(r.id)}"${String(r.id) === String(selectedId) ? ' selected' : ''}>${escHtml(r.name)}</option>`))
@@ -166,6 +173,8 @@
       assign_role: row.querySelector('.tier-assign').checked,
     };
     if (!payload.name) { showToast('Tier name is required', 'error'); return; }
+    const saveBtn = row.querySelector('.tier-save');
+    if (saveBtn) busy(saveBtn, true, 'Saving…');
     try {
       const result = await safeFetch(api(`tiers${isNew ? '' : `/${encodeURIComponent(originalName)}`}`), {
         method: isNew ? 'POST' : 'PUT',
@@ -174,9 +183,11 @@
       });
       if (result.success === false) throw new Error(result.error || 'Save failed');
       showToast(`Tier ${payload.name} ${isNew ? 'created' : 'saved'}`, 'success');
-      loadTiers();
+      await loadTiers();
     } catch (error) {
       showToast(error.message || 'Unable to save tier', 'error');
+    } finally {
+      if (saveBtn) busy(saveBtn, false);
     }
   }
 
@@ -192,7 +203,7 @@
       const result = await safeFetch(api(`tiers/${encodeURIComponent(name)}`), { method: 'DELETE' });
       if (result.success === false) throw new Error(result.error || 'Delete failed');
       showToast(`Tier ${name} deleted`, 'success');
-      loadTiers();
+      await loadTiers();
     } catch (error) {
       showToast(error.message || 'Unable to delete tier', 'error');
     }
@@ -213,7 +224,7 @@
       const created = (data.created || []).length;
       const skipped = (data.skipped || []).length;
       showToast(`Created ${created} role(s)${skipped ? `, skipped ${skipped}` : ''}`, created ? 'success' : 'info');
-      loadTiers();
+      await loadTiers();
     } catch (error) {
       showToast(error.message || 'Unable to generate roles', 'error');
     }
@@ -243,7 +254,7 @@
       });
       if (result.success === false) throw new Error(result.error || 'Update failed');
       showToast(`Score set to ${Number(result.data.total_score).toLocaleString()}`, 'success');
-      loadLeaderboard();
+      await loadLeaderboard();
     } catch (error) {
       showToast(error.message || 'Could not update score', 'error');
     }
@@ -257,12 +268,13 @@
     const target = event.target.closest('button');
     if (!target || !root.contains(target)) return;
     if (target.dataset.refreshSection) loaders[target.dataset.refreshSection]?.();
-    if (target.dataset.generateTierRoles !== undefined) generateTierRoles();
+    if (target.dataset.generateTierRoles !== undefined) { busy(target, true); generateTierRoles().finally(() => busy(target, false)); }
     if (target.dataset.addTier !== undefined) addTierRow();
     if (target.classList.contains('tier-save')) saveTier(target.closest('tr'));
-    if (target.classList.contains('tier-delete')) deleteTier(target.dataset.name);
+    if (target.classList.contains('tier-delete')) { busy(target, true); deleteTier(target.dataset.name).finally(() => busy(target, false)); }
     if (target.dataset.adjustScore) {
-      adjustScore(target.dataset.adjustScore, target.dataset.name || 'member', Number(target.dataset.score || 0));
+      busy(target, true);
+      adjustScore(target.dataset.adjustScore, target.dataset.name || 'member', Number(target.dataset.score || 0)).finally(() => busy(target, false));
     }
   });
 

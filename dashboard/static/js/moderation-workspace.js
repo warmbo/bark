@@ -56,7 +56,7 @@
           <td>${escHtml(c.target_tag || c.target_id || 'Unknown')}</td><td>${escHtml(c.moderator_tag || 'Unknown')}</td>
           <td class="cell-truncate" title="${escHtml(c.reason || 'No reason')}">${escHtml(c.reason || 'No reason')}</td><td class="timestamp">${formatDate(c.created_at)}</td>
           <td class="table-actions"><button type="button" class="btn btn-sm" data-view-case="${Number(c.case_number)}" aria-expanded="false">${icon('eye')} View</button>${canAdmin ? `<button type="button" class="btn btn-sm btn-danger" data-delete-case="${Number(c.case_number)}" aria-label="Delete case ${Number(c.case_number)}">${icon('trash-2')}</button>` : ''}</td>
-        </tr><tr class="case-detail-row" id="case-detail-${Number(c.case_number)}" hidden><td colspan="7"><div class="case-detail-content"></div></td></tr>`;
+        </tr><tr class="case-detail-row" data-case-detail="${Number(c.case_number)}" hidden><td colspan="7"><div class="case-detail-content"></div></td></tr>`;
       }).join('');
       container.innerHTML = table(['Case', 'Type', 'Target', 'Moderator', 'Reason', 'Date', 'Actions'], rows);
       const total = Number(data.total || items.length);
@@ -74,7 +74,7 @@
 
   async function viewCase(button) {
     const number = button.dataset.viewCase;
-    const row = byId(`case-detail-${number}`);
+    const row = button.closest('tbody')?.querySelector(`tr[data-case-detail="${number}"]`);
     if (!row) return;
     if (!row.hidden) { row.hidden = true; button.setAttribute('aria-expanded', 'false'); return; }
     row.hidden = false;
@@ -427,6 +427,11 @@
     if (event.detail?.moduleName === 'moderation') Promise.all([loadCases(), loadWarnings(), loadNotes()]);
   });
 
-  // Initial loads keep every tab ready while tab clicks always refresh stale data.
-  Object.values(loaders).forEach(loader => loader());
+  // Initial load: only the ACTIVE tab's section fetches at boot. Tab clicks
+  // lazy-load the rest — previously all six loaders fired on page load AND
+  // again on the first tab click (doubled API traffic per module page visit).
+  const activeTab = root.querySelector('.workspace-tab.active');
+  const activeName = activeTab?.id?.replace('workspace-tab-', '');
+  if (activeName && loaders[activeName]) loaders[activeName]();
+  else Object.values(loaders)[0]?.();
 })();
