@@ -39,6 +39,7 @@ EVENT_TYPES = {
     "member_join": "Member Joins",
     "member_leave": "Member Leaves",
     "voice_state": "Voice State Changes",
+    "automod": "AutoMod Alerts",
 }
 
 
@@ -163,9 +164,47 @@ class LoggingModule(BarkModule):
 
     async def enable(self) -> None:
         self._logger.info("Enabling logging module v%s", self.version)
+        # Hear AutoMod triggers from the moderation module so alerts land in
+        # the guild's configured mod-log channel.
+        try:
+            self.ctx.events.subscribe("automod_triggered", self._on_automod_event)
+        except Exception:
+            self._logger.exception("Failed to subscribe to automod_triggered")
 
     async def disable(self) -> None:
         self._logger.info("Disabling logging module")
+        try:
+            self.ctx.events.unsubscribe("automod_triggered", self._on_automod_event)
+        except Exception:
+            self._logger.exception("Failed to unsubscribe from automod_triggered")
+
+    async def _on_automod_event(self, event_type: str, **data) -> None:
+        """Post AutoMod/raid alerts to the guild's configured mod-log channel."""
+        if event_type != "automod_triggered":
+            return
+        guild_id = int(data.get("guild_id") or 0)
+        if not guild_id:
+            return
+        ch = await self._get_channel(guild_id, "automod")
+        if not ch:
+            return
+        embed = discord.Embed(
+            title="🚨 AutoMod Triggered",
+            color=discord.Color.red(),
+            timestamp=datetime.now(timezone.utc),
+        )
+        embed.add_field(name="Rule", value=str(data.get("rule", "unknown"))[:256], inline=True)
+        embed.add_field(name="Action", value=str(data.get("action", "none")), inline=True)
+        embed.add_field(name="User", value=str(data.get("user_tag", "Unknown"))[:256], inline=True)
+        content = data.get("content", "")
+        if content:
+            embed.add_field(name="Message", value=str(content)[:1024], inline=False)
+        try:
+            await ch.send(embed=embed)
+        except discord.Forbidden:
+            logger.warning("Cannot post AutoMod alert to %s (missing permissions)", ch)
+        except Exception:
+            logger.exception("Error posting AutoMod alert")
 
     # ── Command factories ─────────────────────────────
 

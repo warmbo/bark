@@ -347,12 +347,15 @@ async def _check_regex_match(message, cfg, rule_id, module):
 
 
 async def _check_duplicate_message(message, cfg, rule_id, module):
-    """X consecutive identical messages from the same user."""
+    """X consecutive identical messages (content + attachment signature) from the
+    same user. Attachment signature makes image-only spam (empty captions)
+    detectable — the 2026-08-09 ZENHAWX raid posted identical image sets with a
+    one-word caption across 8 channels."""
     threshold = cfg.get("threshold", 4)
     window = cfg.get("window_seconds", 60)
     now = datetime.now(timezone.utc)
-    content = message.content or ""
-    if not content:
+    sig = _content_signature(message)
+    if not sig:
         return False, ""
     cutoff = now - timedelta(seconds=window)
     # Simplified: check if last N messages from this user match
@@ -365,15 +368,25 @@ async def _check_duplicate_message(message, cfg, rule_id, module):
         user_track.pop(0)
     # Count consecutive identical
     count = 1
-    for ts, prev_content in reversed(user_track):
-        if prev_content == content:
+    for ts, prev_sig in reversed(user_track):
+        if prev_sig == sig:
             count += 1
         else:
             break
-    user_track.append((now, content))
+    user_track.append((now, sig))
     if count >= threshold:
         return True, f"Duplicate message ({count}x identical)"
     return False, ""
+
+
+def _content_signature(message) -> str:
+    """Fingerprint of message content + attachments (filename:size) so identical
+    image spam with empty or minimal captions is treated as duplicate content."""
+    parts = [message.content or ""]
+    attachments = getattr(message, "attachments", None) or []
+    for att in attachments:
+        parts.append(f"{att.filename}:{att.size}")
+    return "|".join(parts)
 
 
 async def _check_attachment_rate(message, cfg, rule_id, module):
@@ -453,6 +466,7 @@ async def execute_effect(
         "timeout": _effect_timeout,
         "kick": _effect_kick,
         "ban": _effect_ban,
+        "kick_purge": _effect_kick_purge,
         "send_alert": _effect_send_alert,
         "delete_multiple": _effect_delete_multiple,
         "alert": _effect_send_alert,
@@ -532,6 +546,45 @@ async def _effect_kick(message, cfg, reason, module):
         await message.author.kick(reason=f"[AutoMod] {reason}")
     except Exception:
         pass
+
+
+async def _effect_kick_purge(message, cfg, reason, module):
+    """Kick the user and purge their recent messages across the guild.
+
+    The purge sweeps EVERY text channel (cross-channel raids post once per
+    channel, so a single-channel purge would leave the rest of the raid up).
+    Bounded per channel (limit=50) and by max_age_seconds so a legit user with
+    old messages is never touched.
+    """
+    if not isinstance(message.author, type(message.guild.me)):
+        return
+    try:
+        await message.author.kick(reason=f"[AutoMod] {reason}")
+    except Exception:
+        pass
+    max_age = cfg.get("max_age_seconds", 120)
+    await _purge_user_messages(message, max_age)
+
+
+async def _purge_user_messages(message, max_age: int) -> int:
+    """Delete the author's messages in every text channel newer than max_age."""
+    user_id = message.author.id
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age)
+    purged = 0
+    for channel in getattr(message.guild, "text_channels", []) or []:
+        if channel is None:
+            continue
+        try:
+            def _check(m):
+                return m.author.id == user_id and m.created_at > cutoff
+
+            deleted = await channel.purge(limit=50, check=_check, bulk=False)
+            purged += len(deleted)
+        except Exception:
+            continue
+    if purged:
+        logger.info("Purged %d messages from %s across %s", purged, message.author, message.guild)
+    return purged
 
 
 async def _effect_ban(message, cfg, reason, module):

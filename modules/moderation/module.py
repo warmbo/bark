@@ -159,6 +159,9 @@ class ModerationModule(BarkModule):
         self._ruleset_cache_ttl: dict[int, float] = {}
         self._dup_track: dict[int, dict[int, list[tuple[datetime, str]]]] = {}
         self._wordlist_cache: dict[str, list[str]] = {}
+        # Whether we have warned about legacy flat configs being shadowed by
+        # rulesets for a guild (checked once per guild to avoid log spam).
+        self._flat_config_warned: dict[int, bool] = {}
 
     # ── Registration ──────────────────────────────────
 
@@ -268,8 +271,19 @@ class ModerationModule(BarkModule):
                             "description": "Channel to send raid alerts (empty = system channel).",
                             "placeholder": "Select a channel...",
                         },
+                        "webhook_check": {
+                            "type": "boolean",
+                            "title": "Webhook Scam Check",
+                            "description": "Delete + alert on webhook messages containing scam patterns/domains (nitro gifts, steam gifts, etc.).",
+                            "default": True,
+                        },
                     },
-                    "default": {"enabled": True, "join_threshold": 5, "join_window_seconds": 30},
+                    "default": {
+                        "enabled": True,
+                        "join_threshold": 5,
+                        "join_window_seconds": 30,
+                        "webhook_check": True,
+                    },
                 },
                 "account_age": {
                     "type": "object",
@@ -840,6 +854,15 @@ class ModerationModule(BarkModule):
                         await ch.send(
                             f"🚨 **Raid detected!** {member.mention} joined — {join_threshold}+ joins in {join_window}s."
                         )
+                    # Full alert: owner DM + persistent dashboard entry + mod log
+                    await self._notify_automod(
+                        member.guild,
+                        rule=f"Raid detected ({join_threshold}+ joins in {join_window}s)",
+                        action="monitor",
+                        user_tag=str(member),
+                        content=f"Member {member} joined during a join raid.",
+                        target_id=member.id,
+                    )
                 except Exception:
                     pass
 
@@ -856,6 +879,14 @@ class ModerationModule(BarkModule):
                         await member.kick(reason=f"[Anti-Raid] {reason}")
                     elif action == "ban":
                         await member.ban(reason=f"[Anti-Raid] {reason}")
+                    await self._notify_automod(
+                        member.guild,
+                        rule=f"Account age gate ({reason})",
+                        action=action or "kick",
+                        user_tag=str(member),
+                        content="",
+                        target_id=member.id,
+                    )
                 except discord.Forbidden:
                     self._logger.warning("Cannot %s %s for account age", action, member)
 
@@ -864,12 +895,57 @@ class ModerationModule(BarkModule):
 
     async def _on_message(self, event_type: str, **data):
         message = data.get("message")
-        if not message or not message.guild or message.author.bot:
+        if not message or not message.guild:
+            return
+
+        # Webhook spam: webhook authors are bot-flagged below, which would skip
+        # them entirely — so handle webhook-driven raids/scams FIRST. This is
+        # the vector that normal user rules never see (they are scoped to
+        # non-bot authors by ignore_bots/author.bot guards).
+        if message.webhook_id:
+            wc_enabled = await self._get_setting(
+                message.guild.id, "anti_raid", "webhook_check", True
+            )
+            if not wc_enabled:
+                return
+            suspicious, reason = self._anti_raid.check_webhook_scam(message)
+            if suspicious:
+                self._logger.warning(
+                    "Webhook scam in %s: %s", message.guild.id, reason
+                )
+                try:
+                    await message.delete()
+                except discord.Forbidden:
+                    pass
+                await self._notify_automod(
+                    message.guild,
+                    rule=f"Webhook scam ({reason})",
+                    action="delete",
+                    user_tag=getattr(message.author, "name", "unknown"),
+                    content=(message.content or "")[:500],
+                    target_id=getattr(message.author, "id", None),
+                )
+            return
+
+        if message.author.bot:
             return
 
         # Step 1: Try ruleset-based AutoMod
         rulesets_data = await self._get_rulesets_and_rules(message.guild.id)
         if rulesets_data:
+            # Legacy flat configs are shadowed once rulesets exist. Surface
+            # that once per guild so admins know old rules are not evaluated.
+            if not self._flat_config_warned.get(message.guild.id):
+                legacy = await self._get_configs(message.guild.id)
+                if legacy:
+                    self._logger.warning(
+                        "Guild %s has %d legacy flat AutoMod rule(s) shadowed by "
+                        "rulesets — they are NOT evaluated. Move them into a "
+                        "ruleset or they will never fire.",
+                        message.guild.id,
+                        len(legacy),
+                    )
+                self._flat_config_warned[message.guild.id] = True
             await self._process_rulesets(message, rulesets_data)
             return
 
@@ -1026,14 +1102,15 @@ class ModerationModule(BarkModule):
                         trigger_reason,
                         self,
                     )
-                    # Emit event
-                    await self.ctx.events.emit(
-                        "automod_triggered",
-                        guild_id=str(message.guild.id),
+                    # Full alert: persistent dashboard audit entry, owner DM,
+                    # bus event (SSE feed + mod-log channel post).
+                    await self._notify_automod(
+                        message.guild,
                         rule=f"Ruleset:{rs['name']}/{rule['trigger_type']}",
                         action=rule["effect_type"],
                         user_tag=str(message.author),
                         content=(message.content or "")[:500],
+                        target_id=message.author.id,
                     )
 
     async def _ensure_default_ruleset(self, guild_id: int) -> bool:
@@ -1225,13 +1302,13 @@ class ModerationModule(BarkModule):
                 pass
 
         if executed:
-            await self.ctx.events.emit(
-                "automod_triggered",
-                guild_id=str(message.guild.id),
+            await self._notify_automod(
+                message.guild,
                 rule=reason,
                 action=action,
                 user_tag=str(message.author),
                 content=getattr(message, "content", "")[:500],
+                target_id=getattr(message.author, "id", None),
             )
 
         # ── Escalation: track violations for repeat offenders ──
@@ -1263,6 +1340,85 @@ class ModerationModule(BarkModule):
                         )
                 except discord.Forbidden:
                     pass
+
+    # ── AutoMod alerting ─────────────────────────────────
+    # Every trigger fans out to three surfaces so raids never happen silently:
+    #   1. Persistent dashboard audit feed (ctx.log_audit)
+    #   2. DM to the server owner
+    #   3. EventBus event -> SSE toast + mod-log channel (logging module)
+
+    async def _notify_automod(
+        self,
+        guild,
+        *,
+        rule: str,
+        action: str,
+        user_tag: str,
+        content: str = "",
+        target_id: int | str | None = None,
+    ) -> None:
+        """Alert on an AutoMod/raid trigger across all surfaces."""
+        guild_id = guild.id
+        bot_user = self.ctx.bot.user if self.ctx.bot else None
+        try:
+            await self.ctx.log_audit(
+                guild_id,
+                "automod_triggered",
+                actor_id=str(bot_user.id) if bot_user else "",
+                actor_tag=str(bot_user) if bot_user else "Bark",
+                target_id=str(target_id) if target_id is not None else None,
+                target_tag=user_tag,
+                details={
+                    "rule": rule,
+                    "action": action,
+                    "content": (content or "")[:500],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except Exception:
+            self._logger.exception("Failed to write automod audit entry")
+        await self._dm_owner(guild, rule, action, user_tag, content)
+        try:
+            await self.ctx.events.emit(
+                "automod_triggered",
+                guild_id=str(guild_id),
+                rule=rule,
+                action=action,
+                user_tag=user_tag,
+                content=(content or "")[:500],
+            )
+        except Exception:
+            self._logger.exception("Failed to emit automod_triggered event")
+
+    async def _dm_owner(
+        self, guild, rule: str, action: str, user_tag: str, content: str
+    ) -> None:
+        """DM the guild owner with an alert embed. Silently no-ops when the
+        owner has DMs closed or cannot be resolved."""
+        try:
+            owner = guild.owner
+            if owner is None and guild.owner_id:
+                owner = guild.get_member(guild.owner_id)
+            if owner is None and guild.owner_id:
+                owner = await self.ctx.bot.fetch_user(guild.owner_id)
+            if owner is None:
+                return
+            embed = discord.Embed(
+                title="🚨 Bark AutoMod Alert",
+                color=discord.Color.red(),
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.add_field(name="Server", value=guild.name, inline=True)
+            embed.add_field(name="Rule", value=rule[:256], inline=True)
+            embed.add_field(name="Action", value=action, inline=True)
+            embed.add_field(name="User", value=user_tag[:256], inline=True)
+            if content:
+                embed.add_field(name="Message", value=content[:1024], inline=False)
+            await owner.send(embed=embed)
+        except discord.Forbidden:
+            pass
+        except Exception:
+            self._logger.exception("Failed to DM owner about automod alert")
 
     async def _get_configs(self, guild_id: int) -> dict:
         """Load AutoMod rules from ModuleConfig (dashboard saves), falling back to AutoModConfig (slash commands)."""

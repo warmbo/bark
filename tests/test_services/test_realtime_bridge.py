@@ -1,6 +1,8 @@
 """Regression tests for EventBus producers and the realtime SSE bridge."""
 
 import asyncio
+import logging
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -72,12 +74,19 @@ async def test_automod_producer_emits_guild_scoped_event():
     await bridge.start()
 
     module = ModerationModule.__new__(ModerationModule)
+    module._logger = logging.getLogger("test.moderation")
     module.ctx = MagicMock()
     module.ctx.events = bus
+    module.ctx.log_audit = AsyncMock()
+    module.ctx.bot = SimpleNamespace(user=SimpleNamespace(id="1", name="bark"))
     module._anti_raid = MagicMock()
     module._anti_raid.record_violation = AsyncMock(return_value=(None, 1))
     message = MagicMock()
     message.guild.id = 42
+    message.guild.name = "Test"
+    message.guild.owner = None
+    message.guild.owner_id = 1
+    message.guild.get_member.return_value = None
     message.author.id = 8
     message.author.__str__.return_value = "Spammer"
     message.content = "duplicate content"

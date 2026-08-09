@@ -367,6 +367,7 @@ async def _load_audit_items(session, guild_id: int, guild) -> list[dict]:
         "message_edit": "Message edited",
         "message_delete": "Message deleted",
         "link_posted": "Link posted",
+        "automod_triggered": "AutoMod triggered",
     }
     icons = {
         "kick": "👢",
@@ -377,8 +378,9 @@ async def _load_audit_items(session, guild_id: int, guild) -> list[dict]:
         "message_edit": "✏️",
         "message_delete": "🗑️",
         "link_posted": "🔗",
+        "automod_triggered": "🚨",
     }
-    moderation_actions = {"warn", "timeout", "kick", "ban", "unban", "vc_kick"}
+    moderation_actions = {"warn", "timeout", "kick", "ban", "unban", "vc_kick", "automod_triggered"}
     result = await session.execute(
         select(AuditLog)
         .where(AuditLog.guild_id == str(guild_id))

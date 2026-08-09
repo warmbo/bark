@@ -68,7 +68,7 @@
   });
 
   on("automod_triggered", function (data) {
-    const msg = `AutoMod: ${data.rule} — ${data.user_tag}`;
+    const msg = `🚨 AutoMod: ${data.rule} — ${data.user_tag} (${data.action})`;
     showToast(msg, "error");
     document.dispatchEvent(
       new CustomEvent("bark:automod_triggered", { detail: data }),
