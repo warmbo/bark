@@ -71,7 +71,20 @@ class EventBus:
             try:
                 await handler(event_type, **data)
             except Exception:
-                logger.exception("Handler %s failed for event '%s'", handler.__name__, event_type)
+                # Observability: every handler failure must answer WHICH guild
+                # (and where) — not just that something failed.
+                guild_id = (
+                    data.get("guild_id")
+                    or getattr(data.get("guild"), "id", None)
+                    or getattr(getattr(data.get("message", None), "guild", None), "id", None)
+                    or getattr(getattr(data.get("member", None), "guild", None), "id", None)
+                )
+                logger.exception(
+                    "Event '%s' handler %s failed (guild=%s)",
+                    event_type,
+                    getattr(handler, "__qualname__", handler.__name__),
+                    guild_id,
+                )
 
     # ── Introspection ──────────────────────────────────
 

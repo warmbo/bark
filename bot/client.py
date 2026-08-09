@@ -55,6 +55,7 @@ class BarkBot(commands.Bot):
         self._app = None  # FastAPI app, set by dashboard at creation
         self._data_collector: GuildDataCollector | None = None
         self._initialized_once = False
+        self._install_tree_error_handler()
 
     # ── Properties ────────────────────────────────────
 
@@ -73,6 +74,45 @@ class BarkBot(commands.Bot):
     @app.setter
     def app(self, value):
         self._app = value
+
+    # ── Command error handling ─────────────────────────
+
+    def _install_tree_error_handler(self) -> None:
+        """Give every slash-command failure structured context.
+
+        Without this, discord.py logs command errors to the root logger with
+        no guild/user/command context, and users see the raw exception text in
+        Discord. Log with context; reply with a generic message (never the
+        raw exception — it can contain internals)."""
+
+        async def _on_tree_error(interaction, error):
+            guild_id = getattr(interaction.guild, "id", None) or interaction.guild_id
+            user_id = getattr(interaction.user, "id", None)
+            command = getattr(interaction.command, "name", None) or "?"
+            if isinstance(error, discord.app_commands.CommandInvokeError):
+                logger.exception(
+                    "Command '%s' failed for user %s in guild %s",
+                    command,
+                    user_id,
+                    guild_id,
+                )
+                message = "Something went wrong running that command. The error has been logged."
+            else:
+                # Expected command errors (bad args, checks) — quieter, still contextual.
+                logger.warning(
+                    "Command '%s' rejected for user %s in guild %s: %s",
+                    command,
+                    user_id,
+                    guild_id,
+                    error,
+                )
+                message = f"Couldn't run that command: {error}"
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+
+        self.tree.error(_on_tree_error)
 
     # ── Lifecycle ─────────────────────────────────────
 
