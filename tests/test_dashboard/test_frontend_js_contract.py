@@ -22,6 +22,35 @@ def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def test_settings_script_invocations_follow_declarations():
+    """Inline settings script must not call functions before their consts are
+    declared — the temporal dead zone throws ReferenceError and aborts the
+    WHOLE script block (Updates card + Database Backup + Backup & Restore all
+    died silently; P0 found by the 2026-08-09 frontend audit)."""
+    html = source(TEMPLATES / "pages" / "settings.html")
+    match = re.search(r"<script>(.*?)</script>", html, re.S)
+    assert match is not None, "settings.html must contain an inline script"
+    lines = match.group(1).split("\n")
+    # (invocation marker, declaration marker) — invocation must come after.
+    pairs = [
+        ("loadUpdateStatus();", "const updateChannel ="),
+        ("loadBackups();", "const backupCreateBtn ="),
+    ]
+    for call_marker, decl_marker in pairs:
+        call_line = next(
+            (i for i, line in enumerate(lines) if call_marker in line), None
+        )
+        decl_line = next(
+            (i for i, line in enumerate(lines) if decl_marker in line), None
+        )
+        assert call_line is not None, f"invocation {call_marker} not found in settings script"
+        assert decl_line is not None, f"declaration {decl_marker} not found in settings script"
+        assert call_line > decl_line, (
+            f"{call_marker} (line {call_line}) runs before {decl_marker} "
+            f"(line {decl_line}) — temporal-dead-zone crash"
+        )
+
+
 def test_inline_template_scripts_have_no_interpolation_in_single_quoted_strings():
     """Inline <script> bodies must not use `${...}` inside single-quoted strings.
 

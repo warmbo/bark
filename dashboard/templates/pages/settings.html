@@ -272,7 +272,6 @@
     }
 
     loadSettingsHealth();
-    loadUpdateStatus();
 
     // ── Dashboard Access (moderator roles) ────────────
 
@@ -432,13 +431,18 @@
         }
     });
 
+    // Fire the status fetch AFTER the consts above are initialized — calling
+    // loadUpdateStatus() earlier (top-level, pre-declaration) hit the
+    // temporal-dead-zone and aborted the whole settings script (P0, 2026-08-09).
+    loadUpdateStatus();
+
     // ── Database Backup ──────────────────────────────
 
     const backupCreateBtn = document.getElementById('backup-create-btn');
     const backupCount = document.getElementById('backup-count');
     const backupLatest = document.getElementById('backup-latest');
     const backupList = document.getElementById('backup-list');
-    const backupResult = document.getElementById('db-backup-result');
+    const dbBackupResult = document.getElementById('db-backup-result');
 
     function formatBytes(bytes) {
         if (!bytes && bytes !== 0) return '—';
@@ -467,22 +471,22 @@
             }
         } catch (error) {
             if (backupCount) backupCount.textContent = '—';
-            if (backupResult) backupResult.innerHTML = `<div class="state-panel state-error"><div><strong>Backup list unavailable</strong><p>${escHtml(error.message || 'Could not reach the backup API')}</p></div></div>`;
+            if (dbBackupResult) dbBackupResult.innerHTML = `<div class="state-panel state-error"><div><strong>Backup list unavailable</strong><p>${escHtml(error.message || 'Could not reach the backup API')}</p></div></div>`;
         }
     }
 
     backupCreateBtn?.addEventListener('click', async () => {
         backupCreateBtn.disabled = true;
-        if (backupResult) backupResult.innerHTML = '<div class="state-panel"><div><strong>Creating backup…</strong><p>Snapshotting the database. This can take a moment.</p></div></div>';
+        if (dbBackupResult) dbBackupResult.innerHTML = '<div class="state-panel"><div><strong>Creating backup…</strong><p>Snapshotting the database. This can take a moment.</p></div></div>';
         try {
             const result = await safeFetch('/api/v1/instance/backup', {method: 'POST'});
             if (result.success === false) throw new Error(result.error || 'Backup failed');
             const entry = result.data || {};
-            if (backupResult) backupResult.innerHTML = `<div class="state-panel"><div><strong>Backup created</strong><p>${escHtml(entry.filename)} (${formatBytes(entry.size)}) — <a href="/api/v1/instance/backup/${encodeURIComponent(entry.filename)}" download>download</a></p></div></div>`;
+            if (dbBackupResult) dbBackupResult.innerHTML = `<div class="state-panel"><div><strong>Backup created</strong><p>${escHtml(entry.filename)} (${formatBytes(entry.size)}) — <a href="/api/v1/instance/backup/${encodeURIComponent(entry.filename)}" download>download</a></p></div></div>`;
             await loadBackups();
             showToast('Database backup created', 'success');
         } catch (error) {
-            if (backupResult) backupResult.innerHTML = `<div class="state-panel state-error"><div><strong>Backup failed</strong><p>${escHtml(error.message || 'Could not create the backup')}</p></div></div>`;
+            if (dbBackupResult) dbBackupResult.innerHTML = `<div class="state-panel state-error"><div><strong>Backup failed</strong><p>${escHtml(error.message || 'Could not create the backup')}</p></div></div>`;
         } finally {
             backupCreateBtn.disabled = false;
         }
