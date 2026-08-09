@@ -383,9 +383,11 @@ async function loadSection(url, container, renderFn, opts = {}) {
     showSkeleton(container, opts.skeletonCount || 3, skeletonType);
 
     try {
-        const res = await fetch(url, { cache: 'no-cache' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const raw = await res.json();
+        // safeFetch: 401s route to login, 403s give a readable message, and
+        // every other failure surfaces the server's error text (raw fetch
+        // only produced 'HTTP nnn' and let expired sessions fail silently).
+        const res = await safeFetch(url, { cache: 'no-cache' });
+        const raw = res;
         const data = raw.data || raw;
 
         // If renderFn returns false/undefined and items are empty, show empty state
@@ -481,6 +483,10 @@ function initMobileDrawer() {
     // Scrim tap + drawer close buttons (delegated)
     document.addEventListener('click', (event) => {
         if (!closeTriggers.length) return;
+        // A dialog on top owns the overlay click — don't yank the drawer
+        // closed underneath it at the same time.
+        const dialog = document.getElementById('app-dialog-overlay');
+        if (dialog && !dialog.hidden) return;
         for (const trigger of closeTriggers) {
             if (trigger.contains(event.target) && sidebar.classList.contains('open')) {
                 closeDrawer();
@@ -489,9 +495,14 @@ function initMobileDrawer() {
         }
     });
 
-    // Escape closes the drawer
+    // Escape closes the drawer — but ONLY when no dialog is open on top of
+    // it (a dialog over the drawer owns Escape; closing both at once was the
+    // double-listener bug flagged by the frontend audit).
     document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && sidebar.classList.contains('open')) closeDrawer();
+        if (event.key !== 'Escape' || !sidebar.classList.contains('open')) return;
+        const dialog = document.getElementById('app-dialog-overlay');
+        if (dialog && !dialog.hidden) return;
+        closeDrawer();
     });
 
     // Picking a nav item closes the drawer on mobile
@@ -675,7 +686,15 @@ function renderSidebar(container, data, activePage) {
     let html = '';
     orderedKeys.forEach((catKey) => {
         const cat = categories[catKey];
-        const visiblePages = (cat.pages || []).filter((page) => !page.module || page.enabled);
+        const visiblePages = (cat.pages || []).filter((page) => {
+            if (!page.module || page.enabled) return true;
+            return false;
+        }).filter((page) => {
+            if (page.label === 'Plugin Catalog' && !location.hostname.includes('bark-dev')) {
+                return false;
+            }
+            return true;
+        });
         if (!visiblePages.length) return;
 
         if (catKey !== '_core') {

@@ -1741,9 +1741,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     font-size: 13px;
     min-height: 28px;
     width: auto;
+    height: 28px;  /* consolidated from two identical per-selector rules */
 }
-.form-input-sm { height: 28px; }
-.form-select-sm { height: 28px; }
 
 .discord-toolbar { display: flex; gap: 2px; padding: 5px 6px; background: var(--bg-elevated); border: 1px solid var(--border-input); border-bottom: 0; flex-wrap: wrap; }
 .discord-toolbar button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 7px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background var(--transition-fast), color var(--transition-fast); }
