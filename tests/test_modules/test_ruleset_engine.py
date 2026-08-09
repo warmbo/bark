@@ -211,12 +211,40 @@ async def test_kick_purge_effect_kicks_and_purges_all_channels():
     author.kick.assert_awaited_once()
     purge_chan1.purge.assert_awaited_once()
     purge_chan2.purge.assert_awaited_once()
+    # Bulk delete (not one REST DELETE per message) — raid messages are <14 days old.
+    assert purge_chan1.purge.call_args.kwargs["bulk"] is True
     # check filter excludes other authors
     check_fn = purge_chan1.purge.call_args.kwargs["check"]
     mine = SimpleNamespace(author=author, created_at=datetime.now(timezone.utc))
     other = SimpleNamespace(author=SimpleNamespace(id=999), created_at=datetime.now(timezone.utc))
     assert check_fn(mine) is True
     assert check_fn(other) is False
+
+
+@pytest.mark.asyncio
+async def test_kick_purge_caps_total_purged():
+    """A huge guild cannot trigger an unbounded purge on the message path."""
+    channels = []
+    for _ in range(20):
+        chan = AsyncMock()
+        chan.purge.return_value = [object()] * 50  # 50 deleted per channel
+        channels.append(chan)
+    author = SimpleNamespace(id=100)
+    author.kick = AsyncMock()
+    guild = SimpleNamespace(id=1, name="test", me=SimpleNamespace(id=1), text_channels=channels)
+    msg = SimpleNamespace(
+        content="x",
+        attachments=[],
+        author=author,
+        guild=guild,
+        channel=channels[0],
+        created_at=datetime.now(timezone.utc),
+    )
+    purged = await _purge_user_messages(msg, max_age=120)
+    assert purged <= 200
+    # Not every channel was swept once the cap was hit.
+    swept = sum(1 for c in channels if c.purge.await_count)
+    assert swept < len(channels)
 
 
 @pytest.mark.asyncio
