@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -161,6 +163,14 @@ class LoggingModule(BarkModule):
                 "template": "module_tabs/logging_logs.html",
             },
         ]
+
+    def __init__(self, ctx) -> None:
+        super().__init__(ctx)
+        # link_posted audit dedupe: (guild, author, link) -> last-write ts so a
+        # link-spam burst (or a user re-posting) does not become a write storm
+        # on audit_logs. Bounded LRU.
+        self._link_log: OrderedDict[tuple[int, int, str], float] = OrderedDict()
+        self._link_log_max = 2048
 
     async def enable(self) -> None:
         self._logger.info("Enabling logging module v%s", self.version)
@@ -351,22 +361,31 @@ class LoggingModule(BarkModule):
             return
 
         # Record posted links as notable activity (abnormal-feed signal).
+        # Deduped per (guild, author, link) for 10 minutes — a link-spam burst
+        # must not become an audit_logs write storm.
         if msg.content:
             links = re.findall(r"https?://[^\s<>]+", msg.content)
             if links:
-                await self.ctx.log_audit(
-                    msg.guild.id,
-                    "link_posted",
-                    str(msg.author.id),
-                    actor_tag=str(msg.author),
-                    target_id=str(msg.id),
-                    details={
-                        "channel_id": str(msg.channel.id),
-                        "channel": str(msg.channel),
-                        "link": links[0][:300],
-                        "links": links[:5],
-                    },
-                )
+                key = (msg.guild.id, msg.author.id, links[0])
+                now_ts = time.time()
+                if self._link_log.get(key, 0.0) < now_ts - 600:
+                    self._link_log[key] = now_ts
+                    self._link_log.move_to_end(key)
+                    while len(self._link_log) > self._link_log_max:
+                        self._link_log.popitem(last=False)
+                    await self.ctx.log_audit(
+                        msg.guild.id,
+                        "link_posted",
+                        str(msg.author.id),
+                        actor_tag=str(msg.author),
+                        target_id=str(msg.id),
+                        details={
+                            "channel_id": str(msg.channel.id),
+                            "channel": str(msg.channel),
+                            "link": links[0][:300],
+                            "links": links[:5],
+                        },
+                    )
 
         if not msg.attachments:
             return

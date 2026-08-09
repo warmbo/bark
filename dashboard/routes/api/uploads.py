@@ -126,12 +126,19 @@ async def upload_image(request: Request, guild_id: str, file: UploadFile = File(
     if len(payload) > MAX_UPLOAD_BYTES:
         return api_error("Image exceeds the 8 MB limit", status_code=413)
 
+    # Content-Type is client-controlled — trust the payload's magic bytes.
+    from services.image_validate import sniff_image
+
+    sniffed = sniff_image(payload)
+    if sniffed is None:
+        return api_error("File contents are not a valid PNG, JPEG, GIF, or WebP image", status_code=400)
+
     directory = _guild_uploads_dir(guild_id)
     try:
         directory.mkdir(parents=True, exist_ok=True)
     except OSError:
         return api_error("Could not create upload directory", status_code=500)
-    name = f"{uuid.uuid4().hex}{extension}"
+    name = f"{uuid.uuid4().hex}{sniffed}"
     try:
         (directory / name).write_bytes(payload)
     except OSError:

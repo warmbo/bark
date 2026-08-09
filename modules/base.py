@@ -74,6 +74,9 @@ class BarkModule(abc.ABC):
         self.ctx = ctx
         self.enabled: bool = False
         self._logger = logging.getLogger(f"bark.modules.{self.name}")
+        # (guild_id, section) pairs whose config load failed — warn once per
+        # pair so a DB outage doesn't spam logs while defaults are applied.
+        self._setting_warned: set[tuple[int, str]] = set()
 
     # ── Lifecycle ─────────────────────────────────────
 
@@ -196,15 +199,27 @@ class BarkModule(abc.ABC):
     # ── Helpers ───────────────────────────────────────
 
     async def _get_setting(self, guild_id: int, section: str, key: str, default=None):
-        """Read a value from this module's stored config, with dot-path traversal."""
+        """Read a value from this module's stored config, with dot-path traversal.
+
+        A config-load FAILURE must not silently flip moderation defaults (e.g.
+        auto-kick based on a broken read) — surface it once per (guild, section).
+        Defaults are only legitimate when the key is genuinely absent.
+        """
         try:
             settings = await self.ctx.get_module_config(self.name, guild_id)
-            section_data = settings.get(section, {})
-            if not isinstance(section_data, dict):
-                return default
-            return section_data.get(key, default)
         except Exception:
+            if (guild_id, section) not in self._setting_warned:
+                self._setting_warned.add((guild_id, section))
+                self._logger.warning(
+                    "Failed to load config for guild %s section '%s' — using defaults",
+                    guild_id,
+                    section,
+                )
             return default
+        section_data = settings.get(section, {})
+        if not isinstance(section_data, dict):
+            return default
+        return section_data.get(key, default)
 
     def log(self, level: str, msg: str, **kwargs) -> None:
         getattr(self._logger, level, self._logger.info)(msg, **kwargs)

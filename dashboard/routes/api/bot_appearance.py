@@ -131,6 +131,12 @@ async def update_avatar(request: Request, guild_id: str, file: UploadFile = File
         if len(image_data) > MAX_APPEARANCE_UPLOAD_BYTES:
             return api_error("Image must be under 10MB")
 
+        # Content-Type is client-controlled — validate the actual bytes.
+        from services.image_validate import is_image
+
+        if not is_image(image_data):
+            return api_error("File contents are not a valid image (JPEG, PNG, GIF, or WebP)")
+
         # Discord's REST call can hang (large uploads, API latency); cap it so
         # the reverse proxy never sees a silent upstream and returns 502.
         await asyncio.wait_for(bot.user.edit(avatar=image_data), timeout=30)
@@ -168,6 +174,12 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
         image_data = await read_upload_limited(file, MAX_APPEARANCE_UPLOAD_BYTES)
         if len(image_data) > MAX_APPEARANCE_UPLOAD_BYTES:
             return api_error("Image must be under 10MB")
+
+        # Content-Type is client-controlled — validate the actual bytes.
+        from services.image_validate import is_image
+
+        if not is_image(image_data):
+            return api_error("File contents are not a valid image (JPEG, PNG, GIF, or WebP)")
 
         # Cap the Discord REST call so a slow API never turns into a 502
         # from the reverse proxy.

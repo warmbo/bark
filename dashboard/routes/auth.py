@@ -6,6 +6,7 @@ Only enabled when BARK_OAUTH2_CLIENT_ID is set.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import secrets
 import urllib.parse
@@ -109,9 +110,9 @@ async def callback(
         logger.warning("Discord OAuth error: %s", error)
         return _auth_error_redirect("denied")
 
-    # Validate state
+    # Validate state (constant-time — avoids timing oracles on the token)
     saved_state = request.session.pop("oauth_state", None)
-    if not state or not saved_state or state != saved_state:
+    if not state or not saved_state or not hmac.compare_digest(state, saved_state):
         logger.warning("OAuth state mismatch")
         return _auth_error_redirect("invalid_state")
 
@@ -254,6 +255,18 @@ async def callback(
             roles_by_guild=roles_by_guild,
         )
 
+    # Rotate the session on privilege change: the pre-auth cookie carried the
+    # oauth_state (and possibly an invite token) — mint a fresh one with only
+    # identity. Client-side signed cookies make fixation impractical, but
+    # rotation is the standard hardening.
+    request.session.clear()
+    request.session["user"] = {
+        "id": user["id"],
+        "username": user.get("global_name") or user["username"],
+        "display_name": user["username"],
+        "avatar": _avatar_url(user),
+        "discriminator": user.get("discriminator", "0"),
+    }
     request.session["role"] = role
 
     logger.info("User %s authenticated via Discord OAuth2 — role=%s", user["id"], role)

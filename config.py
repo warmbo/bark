@@ -23,8 +23,6 @@ class BotConfig:
     command_prefix: str = "!"
     sync_commands: bool = True
     sync_guild_id: int | None = None  # if set, sync slash commands to this guild only (instant, no global cache)
-    intents: int = 0  # Default: 0 (all intents via defaults)
-    activity_type: str = "playing"
     activity_text: str = "with the dashboard"
 
 
