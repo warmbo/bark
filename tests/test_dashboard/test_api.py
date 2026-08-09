@@ -107,7 +107,10 @@ async def test_health_check(client):
     assert data["success"] is True
     assert "status" in data["data"]
     assert data["data"]["status"] in ("healthy", "degraded")
-    assert "version" in data["data"]
+    # Public health endpoint must NOT fingerprint the deployment: no version,
+    # no started_at timestamp.
+    assert "version" not in data["data"]
+    assert "started_at" not in data["data"]["uptime"]
 
 
 @pytest.mark.asyncio

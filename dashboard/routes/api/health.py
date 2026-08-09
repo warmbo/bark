@@ -56,11 +56,12 @@ async def health_check(request: Request):
     return api_success(
         {
             "status": "healthy" if (bot_ready and db_healthy) else "degraded",
-            "version": getattr(request.app.state, "version", "unknown"),
+            # NOTE: no version/branch/started_at here — this endpoint is
+            # public (uptime monitors) and version info fingerprints the
+            # instance for targeted exploit attempts.
             "uptime": {
                 "seconds": uptime_seconds,
                 "display": f"{hours}h {minutes}m {seconds}s",
-                "started_at": _start_time.isoformat(),
             },
             "bot": {
                 "connected": bot_connected,
