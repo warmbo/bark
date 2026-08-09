@@ -29,14 +29,22 @@ def _backup_dir() -> Path:
 
 
 def _source_db_path() -> Path:
-    """Resolve the sqlite database file from the configured URL."""
+    """Resolve the sqlite database file from the configured URL.
+
+    Mirrors database/engine.py: relative sqlite paths are resolved against
+    ``config.data_dir`` (that is where the engine actually opens the file).
+    """
     url = config.database.url
     prefix = "sqlite+aiosqlite:///"
     if not url.startswith(prefix):
         raise ValueError(
             f"Database backups require a sqlite database (got: {url.split('://')[0]})"
         )
-    return Path(url[len(prefix) :])
+    rel = url[len(prefix) :]
+    path = Path(rel)
+    if path.is_absolute():
+        return path
+    return Path(config.data_dir) / path
 
 
 def _snapshot_sync(src: Path, dst: Path) -> None:
