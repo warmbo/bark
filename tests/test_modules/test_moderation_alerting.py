@@ -222,6 +222,43 @@ async def test_automod_kick_creates_moderation_case(db):
 
 
 @pytest.mark.asyncio
+async def test_join_raid_alerts_owner_once_per_cooldown(db):
+    """A 100-join raid must produce ONE alert (cooldown), not 100 owner DMs."""
+    guild_id = 221627370375872512
+    guild = _Guild(guild_id)
+    manager = ModuleManager(_Bot(guild))  # type: ignore[arg-type]
+    manager.discover()
+    manager.load_guild_states([(guild_id, "moderation", True)])
+    assert await manager.enable_module("moderation")
+
+    try:
+        async with session_scope() as session:
+            session.add(
+                Guild(
+                    discord_id=str(guild_id),
+                    name="[ ZENHAWX ]",
+                    owner_id=str(guild.owner_id),
+                )
+            )
+            await session.commit()
+
+        for i in range(10):
+            member = SimpleNamespace(
+                id=2000 + i,
+                bot=False,
+                guild=guild,
+                mention=f"<@{2000 + i}>",
+                name=f"raider{i}",
+            )
+            await manager.event_bus.emit("discord_member_join", member=member)
+
+        # Raid triggered on join #5; joins #6-10 hit the cooldown window.
+        assert guild.owner.send.await_count == 1
+    finally:
+        await manager.disable_all()
+
+
+@pytest.mark.asyncio
 async def test_join_raid_alerts_owner(db):
     """A join raid (>= threshold joins in window) must DM the owner."""
     guild_id = 221627370375872512

@@ -75,9 +75,10 @@ class ModerationService:
             except IntegrityError:
                 if attempt == 9:
                     raise
-                # Another worker claimed the same per-guild number. Yield so
-                # its transaction can finish, then recompute from committed data.
-                await asyncio.sleep(0)
+                # Another worker claimed the same per-guild number. Back off a
+                # moment so its transaction commits, then recompute from
+                # committed data (sleep(0) only burns event-loop turns).
+                await asyncio.sleep(0.1)
         raise RuntimeError("Unable to allocate a moderation case number")
 
     @staticmethod

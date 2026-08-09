@@ -10,11 +10,11 @@ from typing import Any
 
 from fastapi import APIRouter, File, Request, UploadFile
 
+from services.instance_auth import can_manage_instance
 from services.response import (
     api_error,
     api_forbidden,
     api_success,
-    check_api_permission,
 )
 from services.security import read_upload_limited
 
@@ -23,6 +23,15 @@ MAX_APPEARANCE_UPLOAD_BYTES = 10 * 1024 * 1024
 logger = logging.getLogger("bark.api.bot_appearance")
 
 router = APIRouter(tags=["api-bot-appearance"])
+
+
+def _owner_or_forbidden(request: Request):
+    """Bot identity/presence is INSTANCE-GLOBAL — only instance owners may
+    change it, not any per-guild admin (a guild admin renaming the shared bot
+    would affect every server Bark is in)."""
+    if not can_manage_instance(request):
+        return api_forbidden("Owner access required")
+    return None
 
 # Activity type mapping for Discord
 ACTIVITY_TYPES = {
@@ -37,8 +46,9 @@ ACTIVITY_TYPES = {
 @router.get("/guilds/{guild_id}/bot/appearance")
 async def get_bot_appearance(request: Request, guild_id: str):
     """Return the current bot appearance settings from persisted store."""
-    if not check_api_permission(request, "guild.manage", guild_id):
-        return api_forbidden("Insufficient permissions")
+    denied = _owner_or_forbidden(request)
+    if denied:
+        return denied
 
     from config import config
     from services.presence_store import load_presence
@@ -68,8 +78,9 @@ async def get_bot_appearance(request: Request, guild_id: str):
 @router.put("/guilds/{guild_id}/bot/appearance/presence")
 async def update_presence(request: Request, guild_id: str):
     """Update the bot's rich presence (activity type + name)."""
-    if not check_api_permission(request, "guild.manage", guild_id):
-        return api_forbidden("Insufficient permissions")
+    denied = _owner_or_forbidden(request)
+    if denied:
+        return denied
 
     import discord
 
@@ -97,16 +108,17 @@ async def update_presence(request: Request, guild_id: str):
         save_presence(config.data_dir, activity_type, activity_name)
         logger.info("Presence updated: %s %s", activity_type, activity_name)
         return api_success({"message": f"Presence set to {activity_type} {activity_name}"})
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to update presence")
-        return api_error(f"Failed to update presence: {exc}")
+        return api_error("Failed to update presence")
 
 
 @router.post("/guilds/{guild_id}/bot/appearance/avatar")
 async def update_avatar(request: Request, guild_id: str, file: UploadFile = File(...)):
     """Upload a new bot avatar image."""
-    if not check_api_permission(request, "guild.manage", guild_id):
-        return api_forbidden("Insufficient permissions")
+    denied = _owner_or_forbidden(request)
+    if denied:
+        return denied
 
     if not file.content_type or not file.content_type.startswith("image/"):
         return api_error("File must be an image (JPEG, PNG, or GIF)")
@@ -132,16 +144,17 @@ async def update_avatar(request: Request, guild_id: str, file: UploadFile = File
     except asyncio.TimeoutError:
         logger.error("Avatar update timed out")
         return api_error("Avatar update timed out — Discord API did not respond in time")
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to update avatar")
-        return api_error(f"Failed to update avatar: {exc}")
+        return api_error("Failed to update avatar")
 
 
 @router.post("/guilds/{guild_id}/bot/appearance/banner")
 async def update_banner(request: Request, guild_id: str, file: UploadFile = File(...)):
     """Upload a new bot banner image (Discord premium feature)."""
-    if not check_api_permission(request, "guild.manage", guild_id):
-        return api_forbidden("Insufficient permissions")
+    denied = _owner_or_forbidden(request)
+    if denied:
+        return denied
 
     if not file.content_type or not file.content_type.startswith("image/"):
         return api_error("File must be an image (JPEG, PNG, or GIF)")
@@ -171,16 +184,17 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
         return api_error("Banner update timed out — Discord API did not respond in time")
     except discord.Forbidden:
         return api_error("Banner requires a Discord Nitro subscription on the bot owner's account")
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to update banner")
-        return api_error(f"Failed to update banner: {exc}")
+        return api_error("Failed to update banner")
 
 
 @router.put("/guilds/{guild_id}/bot/appearance/name")
 async def update_bot_name(request: Request, guild_id: str):
     """Change the bot's display name (username)."""
-    if not check_api_permission(request, "guild.manage", guild_id):
-        return api_forbidden("Insufficient permissions")
+    denied = _owner_or_forbidden(request)
+    if denied:
+        return denied
 
     body = await request.json()
     new_name = str(body.get("name", "")).strip()
@@ -203,6 +217,6 @@ async def update_bot_name(request: Request, guild_id: str):
         return api_error(
             "Cannot change name: insufficient permissions. Rate-limited by Discord (max 2 changes per hour)."
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to update name")
-        return api_error(f"Failed to update name: {exc}")
+        return api_error("Failed to update name")

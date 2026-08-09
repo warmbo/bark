@@ -60,6 +60,22 @@ async def test_create_backup_requires_owner(app):
 
 
 @pytest.mark.asyncio
+async def test_owner_gate_fails_closed_when_no_owner_ids_configured(app, monkeypatch):
+    """With OAuth enabled but owner_discord_ids empty, NOBODY may manage the
+    instance (backups are full DB downloads — fail closed)."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "owner_discord_ids", set())
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        response = await client.get("/api/v1/instance/backups")
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_backup_lifecycle_create_list_download(app):
     async with AsyncClient(
         transport=ASGITransport(app=app.app),

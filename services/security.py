@@ -46,6 +46,10 @@ def _is_public(path: str) -> bool:
 
 
 _GUILD_PATH = re.compile(r"^/(?:api/v1/)?guilds?/(\d+)(?:/|$)")
+# A path shaped like a guild route but with a non-numeric id (e.g.
+# /api/v1/guilds/abc/...) bypasses the _GUILD_PATH gate above and would make
+# handlers crash on int(guild_id) -> 500. Reject it at the boundary.
+_GUILD_PATH_NONDIGIT = re.compile(r"^/(?:api/v1/)?guilds?/[^\d/][^/]*(?:/|$)")
 _MANAGEMENT_PAGE_PATH = re.compile(
     r"^/(?:api/v1/)?guilds?/\d+/(members|modules|moderation|settings)(?:/|$)"
 )
@@ -221,6 +225,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 )
 
         guild_id = _guild_id_from_path(path)
+        if not guild_id and _GUILD_PATH_NONDIGIT.match(path):
+            # Non-numeric guild ids can't exist — 404 instead of letting
+            # handlers crash on int(guild_id) with a 500.
+            return _json_error(404, "Guild not found")
         if guild_id:
             # Guild pages are open to: any member of a server where Bark is
             # installed (connected), and any manager of a server who may still

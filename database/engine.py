@@ -61,6 +61,11 @@ def get_engine():
                 del connection_record
                 cursor = dbapi_connection.cursor()
                 cursor.execute("PRAGMA foreign_keys=ON")
+                # WAL + busy_timeout: the bot writes per event (audit logs,
+                # reputation, voice sessions) and bursts (raids) would
+                # otherwise hit "database is locked" on concurrent txns.
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA busy_timeout=5000")
                 cursor.close()
 
     return _engine

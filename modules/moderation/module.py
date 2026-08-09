@@ -50,6 +50,10 @@ INVITE_REGEX = re.compile(
 )
 RULE_TYPES: list[str] = ["spam", "invite", "mention", "content_spam"]
 
+# How long between raid alerts for the same guild (prevents DM floods during
+# a join raid — a 100-user raid previously produced 100 owner DMs).
+RAID_ALERT_COOLDOWN_SECONDS = 60
+
 _ANTI_RAID: "AntiRaidService | None" = None
 
 
@@ -88,9 +92,8 @@ def _json_list(value: str | list) -> list:
 def _voice_duration_seconds(joined_at: datetime, left_at: datetime) -> int:
     """Return a safe duration for timestamps loaded from any SQL backend.
 
-    SQLite drops timezone information from ``DateTime`` values, while Discord
-    event timestamps are UTC-aware. Normalize both values before subtracting
-    so voice leave and move events do not fail with a naive/aware ``TypeError``.
+    Kept for tests/backfill; live voice close/move now computes duration in
+    SQL (julianday) so the claim is atomic.
     """
     if joined_at.tzinfo is None:
         joined_at = joined_at.replace(tzinfo=timezone.utc)
@@ -162,6 +165,9 @@ class ModerationModule(BarkModule):
         # Whether we have warned about legacy flat configs being shadowed by
         # rulesets for a guild (checked once per guild to avoid log spam).
         self._flat_config_warned: dict[int, bool] = {}
+        # Per-guild cooldown for raid alerts (a 100-join raid must not produce
+        # 100 owner DMs / audit writes / SSE emits).
+        self._raid_alert_cooldown: dict[int, float] = {}
 
     # ── Registration ──────────────────────────────────
 
@@ -732,8 +738,6 @@ class ModerationModule(BarkModule):
 
         from datetime import datetime, timezone
 
-        from sqlalchemy import desc, select
-
         from database.engine import session_scope
         from database.models.voice import VoiceSession
 
@@ -761,27 +765,42 @@ class ModerationModule(BarkModule):
                 await session.commit()
 
         elif before_channel is not None and after_channel is None:
+            # Atomic claim: only the first event that flips left_at wins; a
+            # concurrent duplicate leave/move sees rowcount 0 and skips.
+            from sqlalchemy import func, update
+
+            channel_name = getattr(before_channel, "name", None)
+            values: dict = {
+                "left_at": now,
+                "duration_seconds": func.max(
+                    0,
+                    func.round(
+                        (func.julianday(now) - func.julianday(VoiceSession.joined_at))
+                        * 86400
+                    ),
+                ),
+            }
+            if channel_name:
+                values["channel_name"] = channel_name
             async with session_scope() as session:
                 result = await session.execute(
-                    select(VoiceSession)
+                    update(VoiceSession)
                     .where(
                         VoiceSession.guild_id == str(guild_id),
                         VoiceSession.user_id == user_id,
                         VoiceSession.channel_id == str(before_channel.id),
                         VoiceSession.left_at.is_(None),
                     )
-                    .order_by(desc(VoiceSession.joined_at))
-                    .limit(1)
+                    .values(**values)
                 )
-                rec = result.scalar_one_or_none()
-                if rec:
-                    rec.left_at = now
-                    rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
-                    # Record the channel name as it was when the member left.
-                    # Auto Voice temporary channels are deleted right after the
-                    # last member leaves, so the cached name is the only copy.
-                    rec.channel_name = getattr(before_channel, "name", None) or rec.channel_name
-                    await session.commit()
+                await session.commit()
+                affected = getattr(result, "rowcount", 0) or 0
+                if affected == 0:
+                    self._logger.debug(
+                        "No open voice session to close for %s in %s",
+                        member,
+                        before_channel,
+                    )
 
         elif (
             before_channel is not None
@@ -789,23 +808,32 @@ class ModerationModule(BarkModule):
             and before_channel.id != after_channel.id
         ):
             # Member moved between voice channels — close old session, open new one
+            from sqlalchemy import func, update
+
+            channel_name = getattr(before_channel, "name", None)
+            values = {
+                "left_at": now,
+                "duration_seconds": func.max(
+                    0,
+                    func.round(
+                        (func.julianday(now) - func.julianday(VoiceSession.joined_at))
+                        * 86400
+                    ),
+                ),
+            }
+            if channel_name:
+                values["channel_name"] = channel_name
             async with session_scope() as session:
-                result = await session.execute(
-                    select(VoiceSession)
+                await session.execute(
+                    update(VoiceSession)
                     .where(
                         VoiceSession.guild_id == str(guild_id),
                         VoiceSession.user_id == user_id,
                         VoiceSession.channel_id == str(before_channel.id),
                         VoiceSession.left_at.is_(None),
                     )
-                    .order_by(desc(VoiceSession.joined_at))
-                    .limit(1)
+                    .values(**values)
                 )
-                rec = result.scalar_one_or_none()
-                if rec:
-                    rec.left_at = now
-                    rec.duration_seconds = _voice_duration_seconds(rec.joined_at, now)
-                    rec.channel_name = getattr(before_channel, "name", None) or rec.channel_name
                 session.add(
                     VoiceSession(
                         guild_id=str(guild_id),
@@ -842,6 +870,12 @@ class ModerationModule(BarkModule):
                     member.guild.name,
                     guild_id,
                 )
+                # Alert once per cooldown window — not once per join.
+                now_ts = datetime.now(timezone.utc).timestamp()
+                last_alert = self._raid_alert_cooldown.get(guild_id, 0.0)
+                if now_ts - last_alert < RAID_ALERT_COOLDOWN_SECONDS:
+                    return
+                self._raid_alert_cooldown[guild_id] = now_ts
                 try:
                     channel_id = await self._get_setting(
                         guild_id, "anti_raid", "notify_channel_id", ""

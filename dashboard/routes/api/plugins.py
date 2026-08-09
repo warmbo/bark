@@ -13,7 +13,7 @@ import logging
 
 from fastapi import APIRouter, File, Request, UploadFile
 
-from config import config
+from services.instance_auth import can_manage_instance
 from services.plugin_manager import MAX_PLUGIN_BYTES, PluginValidationError
 from services.response import api_deleted, api_error, api_success
 from services.security import read_upload_limited
@@ -25,10 +25,7 @@ router = APIRouter(tags=["plugins"])
 
 def _can_manage_plugins(request: Request) -> bool:
     """Owner-only when OAuth is configured; permissive otherwise."""
-    if config.oauth2.enabled and config.oauth2.owner_discord_ids:
-        user = request.session.get("user") or {}
-        return user.get("id") in config.oauth2.owner_discord_ids
-    return True
+    return can_manage_instance(request)
 
 
 @router.get("/instance/plugins")

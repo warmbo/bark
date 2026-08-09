@@ -14,6 +14,7 @@ import logging
 from fastapi import APIRouter, Request
 
 from config import config
+from services.instance_auth import can_manage_instance
 from services.response import api_error, api_success
 from services.update_service import (
     apply_update_async,
@@ -28,14 +29,6 @@ router = APIRouter(tags=["updates"])
 VALID_CHANNELS = {"main", "dev"}
 
 
-def _can_manage_instance(request: Request) -> bool:
-    """Owner-only when OAuth is configured; permissive otherwise."""
-    if config.oauth2.enabled and config.oauth2.owner_discord_ids:
-        user = request.session.get("user") or {}
-        return user.get("id") in config.oauth2.owner_discord_ids
-    return True
-
-
 def _channel_label(channel: str) -> str:
     """Normalize a UI channel value to its state label."""
     return "stable" if channel == "main" else "dev"
@@ -44,7 +37,7 @@ def _channel_label(channel: str) -> str:
 @router.get("/instance/update/status")
 async def update_status(request: Request, branch: str | None = None):
     """Check the remote for a newer build (owner-only)."""
-    if not _can_manage_instance(request):
+    if not can_manage_instance(request):
         return api_error("Owner access required", status_code=403)
     # check_update runs blocking `git fetch` subprocesses (up to 120s per
     # remote) — never run that on the event loop.
@@ -59,7 +52,7 @@ async def perform_update(request: Request, payload: dict):
     Once the instance's channel is ``dev``, stable-channel updates are
     rejected.
     """
-    if not _can_manage_instance(request):
+    if not can_manage_instance(request):
         return api_error("Owner access required", status_code=403)
     channel = (payload.get("branch") or config.instance.update_branch).strip()
     if channel not in VALID_CHANNELS:

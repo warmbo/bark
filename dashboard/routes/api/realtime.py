@@ -81,11 +81,22 @@ async def guild_events_sse(request: Request, guild_id: str):
     """
     # Validate guild exists
     bot = request.state.bot
-    guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+    if not guild_id.isdigit():
+        from services.response import api_not_found
+
+        return api_not_found("Guild")
+    guild = bot.get_guild(int(guild_id))
     if guild is None:
         from services.response import api_not_found
 
         return api_not_found("Guild")
+
+    # The SSE stream carries moderation reasons and flagged message content —
+    # gate it like the activity feed (moderation.view), not just membership.
+    from services.response import api_forbidden, check_api_permission
+
+    if not check_api_permission(request, "moderation.view", guild_id):
+        return api_forbidden("Insufficient permissions")
 
     return StreamingResponse(
         _event_stream(guild_id, request),

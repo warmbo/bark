@@ -567,18 +567,26 @@ async def _effect_kick_purge(message, cfg, reason, module):
 
 
 async def _purge_user_messages(message, max_age: int) -> int:
-    """Delete the author's messages in every text channel newer than max_age."""
+    """Delete the author's messages in every text channel newer than max_age.
+
+    Uses bulk deletion (messages are <14 days old inside the window) to avoid
+    one REST DELETE per message during a raid, and caps the total so a huge
+    guild cannot produce an unbounded purge on the message path.
+    """
     user_id = message.author.id
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age)
     purged = 0
+    max_purged = 200
     for channel in getattr(message.guild, "text_channels", []) or []:
-        if channel is None:
+        if channel is None or purged >= max_purged:
             continue
         try:
             def _check(m):
                 return m.author.id == user_id and m.created_at > cutoff
 
-            deleted = await channel.purge(limit=50, check=_check, bulk=False)
+            deleted = await channel.purge(
+                limit=min(50, max_purged - purged + 10), check=_check, bulk=True
+            )
             purged += len(deleted)
         except Exception:
             continue
