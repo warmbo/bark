@@ -1100,15 +1100,49 @@ class ReputationModule(BarkModule):
             )
             profiles = list(profiles_result.scalars().all())
 
-        assigned = 0
+        # Batch: tiers + config are loaded ONCE (the old path opened a
+        # session + re-queried tiers + config per profile — N+1 on boot for
+        # guilds with thousands of scored profiles). Only members that
+        # actually need a role assignment touch Discord/the DB below.
+        config = await self.load_dashboard_config(guild_id)
+        level_const = float(config.get("level_constant", 50.0))
+        tier_dicts = [
+            {
+                "name": t.name,
+                "symbol": t.symbol,
+                "min_score": t.min_score,
+                "min_level": t.min_level,
+                "color_hex": t.color_hex,
+                "sort_order": t.sort_order,
+                "role_id": t.role_id,
+                "assign_role": t.assign_role,
+            }
+            for t in tier_rows
+        ]
+
+        pending: list[tuple[int, str]] = []
         for profile in profiles:
+            member = guild.get_member(int(profile.user_id))
+            if member is None:
+                continue
+            level = level_from_score(profile.total_score, level_const)
+            resolved = resolve_tier(tier_dicts, level, profile.total_score)
+            if not (resolved.get("assign_role") and resolved.get("role_id")):
+                continue
+            role = guild.get_role(int(resolved["role_id"]))
+            if role is None or role in member.roles:
+                continue
+            pending.append((int(profile.user_id), resolved["role_id"]))
+
+        assigned = 0
+        for user_id, role_id in pending:
             try:
-                if await self._sync_member_tier_role(guild_id, int(profile.user_id)):
-                    assigned += 1
+                await self._assign_tier_role(guild_id, user_id, role_id, tier_rows)
+                assigned += 1
             except Exception:
                 self._logger.exception(
                     "Failed to sync tier role for user %s in guild %s",
-                    profile.user_id,
+                    user_id,
                     guild_id,
                 )
         if assigned:

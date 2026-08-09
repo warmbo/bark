@@ -379,6 +379,16 @@ class GuildDataCollector:
                                     "total_channels", 0
                                 )
                             else:
+                                # Fresh-day baseline. While the member cache is
+                                # still warming after a restart (guild.chunked
+                                # False), member_count can be temporarily LOW;
+                                # a baseline written from it makes the next
+                                # full-cache tick count the warm-up difference
+                                # as new members (growth inflation). Wait for a
+                                # complete cache before creating the row.
+                                if not guild.chunked:
+                                    await session.rollback()
+                                    continue
                                 session.add(
                                     ActivitySnapshot(
                                         guild_id=str(guild.id),

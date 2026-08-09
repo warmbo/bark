@@ -69,53 +69,58 @@ async def list_members(
 
     now = datetime.now(timezone.utc)
     query = search.lower()
-    members = []
 
+    # Filter cheaply first; build the (expensive) member dicts ONLY for the
+    # page that is actually returned. For a 10k-member guild this turns
+    # 10k dict/roles-list allocations per request into ~page-size.
+    candidates: list[tuple] = []
     for member in guild.members:
         if search:
             if query not in member.display_name.lower() and query not in str(member).lower():
                 continue
-        if role_id:
-            if role_id not in {str(r.id) for r in member.roles}:
-                continue
+        if role_id and not any(str(r.id) == role_id for r in member.roles):
+            continue
         account_age_days = (now - member.created_at).days if member.created_at else 0
         if min_age_days > 0 and account_age_days < min_age_days:
             continue
         if max_age_days > 0 and account_age_days >= max_age_days:
             continue
-
-        members.append(
-            {
-                "id": str(member.id),
-                "name": member.display_name,
-                "tag": str(member),
-                "avatar_url": member.display_avatar.url if member.display_avatar else None,
-                "joined_at": member.joined_at.isoformat() if member.joined_at else None,
-                "created_at": member.created_at.isoformat() if member.created_at else None,
-                "account_age_days": account_age_days,
-                "roles": [{"id": str(r.id), "name": r.name} for r in member.roles[1:]],
-                "top_role": member.top_role.name if member.top_role else "None",
-                "is_bot": member.bot,
-                "voice_channel": member.voice.channel.name
-                if member.voice and member.voice.channel
-                else None,
-                "is_timed_out": member.is_timed_out(),
-            }
-        )
+        candidates.append((member, account_age_days))
 
     rev = order.lower() == "desc"
     if sort == "name":
-        members.sort(key=lambda m: m["name"].lower(), reverse=rev)
+        candidates.sort(key=lambda m: m[0].display_name.lower(), reverse=rev)
     elif sort == "joined_at":
-        members.sort(key=lambda m: m["joined_at"] or "", reverse=rev)
+        candidates.sort(key=lambda m: m[0].joined_at or "", reverse=rev)
     elif sort == "account_age":
-        members.sort(key=lambda m: m["account_age_days"], reverse=rev)
+        candidates.sort(key=lambda m: m[1], reverse=rev)
     elif sort == "role":
-        members.sort(key=lambda m: m["top_role"].lower(), reverse=rev)
+        candidates.sort(key=lambda m: (m[0].top_role.name.lower() if m[0].top_role else "None"), reverse=rev)
 
-    total = len(members)
+    total = len(candidates)
     start = page * limit
-    return api_success({"members": members[start : start + limit], "total": total, "page": page})
+    page_items = candidates[start : start + limit]
+
+    members = [
+        {
+            "id": str(member.id),
+            "name": member.display_name,
+            "tag": str(member),
+            "avatar_url": member.display_avatar.url if member.display_avatar else None,
+            "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "created_at": member.created_at.isoformat() if member.created_at else None,
+            "account_age_days": account_age_days,
+            "roles": [{"id": str(r.id), "name": r.name} for r in member.roles[1:]],
+            "top_role": member.top_role.name if member.top_role else "None",
+            "is_bot": member.bot,
+            "voice_channel": member.voice.channel.name
+            if member.voice and member.voice.channel
+            else None,
+            "is_timed_out": member.is_timed_out(),
+        }
+        for member, account_age_days in page_items
+    ]
+    return api_success({"members": members, "total": total, "page": page})
 
 
 # ── Member detail ────────────────────────────────────
