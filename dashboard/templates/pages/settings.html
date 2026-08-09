@@ -127,6 +127,33 @@
                 <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
             </div>
 
+            <!-- Database Backup -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("database", 16) }} Database Backup</h2><p class="card-description">Snapshot the full database to a downloadable file. Backups are stored on the server and can be downloaded any time.</p></div>
+                </div>
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Backups Stored</span>
+                        <span class="info-value" id="backup-count">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Latest Backup</span>
+                        <span class="info-value"><code class="code-sm" id="backup-latest">—</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Recent Backups</span>
+                        <span class="info-value">
+                            <ul class="backup-list" id="backup-list" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;"></ul>
+                        </span>
+                    </div>
+                </div>
+                <div class="form-actions form-actions-static">
+                    <button type="button" class="btn btn-primary" id="backup-create-btn">{{ icon("download", 14) }} Backup Now</button>
+                </div>
+                <div class="workspace-data-card" id="db-backup-result" aria-live="polite"></div>
+            </div>
+
             <!-- Bot Customization -->
             {% include "components/bot_customization.html" %}
         </div>
@@ -404,6 +431,64 @@
             updateResult.innerHTML = `<div class="state-panel state-error"><div><strong>Update failed</strong><p>${escHtml(error.message || 'Could not start the update')}</p></div></div>`;
         }
     });
+
+    // ── Database Backup ──────────────────────────────
+
+    const backupCreateBtn = document.getElementById('backup-create-btn');
+    const backupCount = document.getElementById('backup-count');
+    const backupLatest = document.getElementById('backup-latest');
+    const backupList = document.getElementById('backup-list');
+    const backupResult = document.getElementById('db-backup-result');
+
+    function formatBytes(bytes) {
+        if (!bytes && bytes !== 0) return '—';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    async function loadBackups() {
+        if (!backupCount) return;
+        try {
+            const result = await safeFetch('/api/v1/instance/backups', {cache: 'no-cache'});
+            if (result.success === false) throw new Error(result.error || 'Could not list backups');
+            const backups = result.data?.backups || [];
+            backupCount.textContent = backups.length;
+            backupLatest.textContent = backups.length
+                ? `${escHtml(backups[0].filename)} (${formatBytes(backups[0].size)})`
+                : '—';
+            if (backupList) {
+                backupList.innerHTML = backups.slice(0, 8).map((b) =>
+                    `<li style="display:flex;align-items:center;gap:8px;justify-content:space-between;">
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(b.filename)} <span class="text-muted">(${formatBytes(b.size)})</span></span>
+                        <a class="btn btn-sm" href="/api/v1/instance/backup/${encodeURIComponent(b.filename)}" download>Download</a>
+                    </li>`
+                ).join('') || '<li class="text-muted">No backups yet.</li>';
+            }
+        } catch (error) {
+            if (backupCount) backupCount.textContent = '—';
+            if (backupResult) backupResult.innerHTML = `<div class="state-panel state-error"><div><strong>Backup list unavailable</strong><p>${escHtml(error.message || 'Could not reach the backup API')}</p></div></div>`;
+        }
+    }
+
+    backupCreateBtn?.addEventListener('click', async () => {
+        backupCreateBtn.disabled = true;
+        if (backupResult) backupResult.innerHTML = '<div class="state-panel"><div><strong>Creating backup…</strong><p>Snapshotting the database. This can take a moment.</p></div></div>';
+        try {
+            const result = await safeFetch('/api/v1/instance/backup', {method: 'POST'});
+            if (result.success === false) throw new Error(result.error || 'Backup failed');
+            const entry = result.data || {};
+            if (backupResult) backupResult.innerHTML = `<div class="state-panel"><div><strong>Backup created</strong><p>${escHtml(entry.filename)} (${formatBytes(entry.size)}) — <a href="/api/v1/instance/backup/${encodeURIComponent(entry.filename)}" download>download</a></p></div></div>`;
+            await loadBackups();
+            showToast('Database backup created', 'success');
+        } catch (error) {
+            if (backupResult) backupResult.innerHTML = `<div class="state-panel state-error"><div><strong>Backup failed</strong><p>${escHtml(error.message || 'Could not create the backup')}</p></div></div>`;
+        } finally {
+            backupCreateBtn.disabled = false;
+        }
+    });
+
+    loadBackups();
 
     // ── Backup & Restore ──────────────────────────────
 

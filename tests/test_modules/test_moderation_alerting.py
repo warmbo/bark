@@ -167,6 +167,61 @@ async def test_notify_automod_fans_out_to_all_surfaces():
 
 
 @pytest.mark.asyncio
+async def test_automod_kick_creates_moderation_case(db):
+    """An automod kick/kick_purge must surface as a real moderation case so it
+    shows in Recent Activity and the moderation Cases feed."""
+    from sqlalchemy import select
+
+    from database.models.moderation import ModerationCase
+
+    guild_id = 221627370375872512
+    async with session_scope() as session:
+        session.add(
+            Guild(
+                discord_id=str(guild_id),
+                name="[ ZENHAWX ]",
+                owner_id="164480121477136385",
+            )
+        )
+        await session.commit()
+
+    events = EventBus()
+    ctx = SimpleNamespace(
+        events=events,
+        bot=SimpleNamespace(user=SimpleNamespace(id="1401694499142500414")),
+        log_audit=AsyncMock(),
+    )
+    module = ModerationModule(ctx)  # type: ignore[arg-type]
+    guild = _Guild(guild_id)
+
+    await module._notify_automod(
+        guild,
+        rule="Ruleset:Scam Protection/duplicate_message",
+        action="kick_purge",
+        user_tag="2y1v",
+        content="bro",
+        target_id=1493539060801736886,
+    )
+
+    async with session_scope() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(ModerationCase).where(
+                        ModerationCase.guild_id == str(guild_id)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert rows, "automod kick must create a moderation case"
+    assert rows[0].action_type == "kick"
+    assert rows[0].target_tag == "2y1v"
+    assert "[AutoMod]" in rows[0].reason
+
+
+@pytest.mark.asyncio
 async def test_join_raid_alerts_owner(db):
     """A join raid (>= threshold joins in window) must DM the owner."""
     guild_id = 221627370375872512

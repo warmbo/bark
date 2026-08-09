@@ -1377,6 +1377,23 @@ class ModerationModule(BarkModule):
             )
         except Exception:
             self._logger.exception("Failed to write automod audit entry")
+        # Kicks/bans from rules must surface as real moderation cases (Recent
+        # Activity + Cases feed), not just as a generic automod audit row.
+        if action in ("kick", "kick_purge", "ban") and target_id is not None:
+            try:
+                from services.moderation_service import ModerationService
+
+                await ModerationService.create_case(
+                    guild_id=guild_id,
+                    action_type="kick" if action == "kick_purge" else action,
+                    target_id=str(target_id),
+                    target_tag=user_tag,
+                    moderator_id=str(bot_user.id) if bot_user else "",
+                    moderator_tag=str(bot_user) if bot_user else "Bark",
+                    reason=f"[AutoMod] {rule}",
+                )
+            except Exception:
+                self._logger.exception("Failed to create moderation case for automod action")
         await self._dm_owner(guild, rule, action, user_tag, content)
         try:
             await self.ctx.events.emit(
