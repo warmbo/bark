@@ -1,0 +1,17 @@
+[Unit]
+Description=Bark Media Engine (render service for a bark instance)
+After=network.target
+
+[Service]
+Type=simple
+User=cody
+# Point at the instance this engine serves. Each instance (prod/dev) gets its
+# own engine on its own port (prod 8094, dev 8095) — see docs/media-engine.md.
+WorkingDirectory=/home/cody/Projects/bark
+EnvironmentFile=/home/cody/Projects/bark/.env
+ExecStart=/home/cody/Projects/bark/.venv/bin/uvicorn services.media_engine.main:app --host 127.0.0.1 --port 8094
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+{
+  "name": "bark",
+  "label": "Bark",
+  "palette": {
+    "bg": "#14141a",
+    "bg2": "#1b1b23",
+    "fg": "#ffffff",
+    "muted": "#a8a8b3",
+    "muted2": "#d6d6dd",
+    "accent": "#3b82f6",
+    "accent2": "#60a5fa",
+    "glass": "rgba(255,255,255,0.04)",
+    "glass_border": "rgba(255,255,255,0.09)"
+  },
+  "background": {"style": "gradient", "noise": 0.03, "shapes": true, "scanlines": true},
+  "avatar": {"frame": "round", "border_color": "accent"},
+  "fonts": {
+    "display": "JetBrainsMono-Bold.ttf",
+    "display_regular": "JetBrainsMono-Regular.ttf",
+    "mono": "JetBrainsMono-Bold.ttf",
+    "mono_regular": "JetBrainsMono-Regular.ttf"
+  },
+  "motion": {"style": "none", "duration_frames": 1}
+}
