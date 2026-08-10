@@ -20,6 +20,15 @@ async def guild_overview(request: Request, guild_id: int):
     guild = bot.get_guild(guild_id)
 
     if guild is None:
+        # Distinguish "bot offline" from "not a member of this server": while
+        # the bot hasn't reached Discord ready every guild lookup misses, so
+        # show an explanatory offline page instead of a bare 404 loop.
+        if not bot.is_ready():
+            return templates.TemplateResponse(
+                request,
+                "pages/guild_offline.html",
+                {"guild_id": guild_id, "bot": bot, "active_page": "overview"},
+            )
         return HTMLResponse("Guild not found", status_code=404)
 
     # View-only members (no admin/moderator rights in this server) get a

@@ -6,6 +6,7 @@ Runs both the Discord bot and web dashboard in a single process.
 
 import asyncio
 import logging
+import os
 import sys
 
 from bark_version import __version__
@@ -13,6 +14,12 @@ from bot.client import BarkBot
 from config import config
 from dashboard import create_app
 from database.engine import close_db, init_db
+
+# Seconds the bot may take to reach Discord "ready" before the process exits
+# for a systemd restart. A hung gateway handshake (no error, no timeout)
+# previously left the dashboard alive with a dead bot and every server
+# looking disconnected; the watchdog self-heals by restarting.
+BOT_CONNECT_TIMEOUT = 90
 
 logger = logging.getLogger("bark")
 
@@ -59,6 +66,15 @@ async def main() -> None:
 
     dashboard_app = create_app(bot)
 
+    # Hang-proof startup: the dashboard keeps serving while the bot connects,
+    # but if Discord never becomes ready (hung gateway handshake, no error),
+    # exit so systemd (Restart=always) brings us back up. A retry connects
+    # where a hang would not — without this the instance would sit alive with
+    # a dead bot and every server would look empty/disconnected.
+    asyncio.get_event_loop().create_task(
+        bot_ready_watchdog(bot, timeout=BOT_CONNECT_TIMEOUT)
+    )
+
     try:
         # Keep the dashboard available for diagnostics if Discord authentication
         # fails, but report each service failure explicitly.
@@ -75,6 +91,24 @@ async def main() -> None:
             await bot.close()
         finally:
             await close_db()
+
+
+async def bot_ready_watchdog(bot, timeout: float = BOT_CONNECT_TIMEOUT) -> None:
+    """Exit the process if the bot never reaches Discord ``ready``.
+
+    A hung gateway handshake previously left the dashboard alive with a dead
+    bot (0 connected servers, every guild page failing) and no log line. With
+    the watchdog, the process exits after ``timeout`` seconds and systemd
+    restarts it — the retry connects in the normal few seconds.
+    """
+    try:
+        await asyncio.wait_for(bot.wait_until_ready(), timeout)
+    except asyncio.TimeoutError:
+        logger.critical(
+            "Bot did not connect to Discord within %ss — exiting for systemd restart",
+            timeout,
+        )
+        os._exit(1)
 
 
 def run() -> None:
