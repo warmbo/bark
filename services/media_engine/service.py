@@ -16,7 +16,9 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 
 from . import collect
-from .cache import cache_dir, cache_key, get as cache_get, put as cache_put
+from .cache import cache_key
+from .cache import get as cache_get
+from .cache import put as cache_put
 from .config import get_config
 from .db import connect_readonly
 from .renderers import render

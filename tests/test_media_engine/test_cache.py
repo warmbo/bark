@@ -3,7 +3,7 @@
 import os
 import time
 
-from services.media_engine.cache import cache_key, cache_dir, cleanup, get, put
+from services.media_engine.cache import cache_key, cleanup, get, put
 
 
 def test_key_deterministic_and_sensitive():

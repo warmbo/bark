@@ -1,10 +1,9 @@
 """T1 profile card renderer — vertical smoke + layout tests."""
 
 import io
-
 from datetime import date
 
-from PIL import Image, ImageStat
+from PIL import ImageStat
 
 from services.media_engine.renderers import available_kinds, render
 from services.media_engine.renderers.profile import _fmt_member_for

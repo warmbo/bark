@@ -29,7 +29,7 @@ class MediaEngineError(RuntimeError):
     """The engine rejected or failed the job."""
 
 
-class MediaEngineUnavailable(MediaEngineError):
+class MediaEngineUnavailableError(MediaEngineError):
     """The engine could not be reached at all."""
 
 
@@ -72,7 +72,7 @@ class MediaEngineClient:
                 resp.raise_for_status()
                 return resp.json()
         except httpx.HTTPError as exc:
-            raise MediaEngineUnavailable(f"media engine unreachable: {exc}") from exc
+            raise MediaEngineUnavailableError(f"media engine unreachable: {exc}") from exc
 
     async def render(self, kind: str, guild_id, user_id, payload: dict | None = None, *,
                      theme: str = "bark", art_mode: str = "procedural",
@@ -107,4 +107,4 @@ class MediaEngineClient:
                         raise MediaEngineError(job.get("error") or "render failed")
                 raise MediaEngineError("render job did not finish in time")
         except httpx.HTTPError as exc:
-            raise MediaEngineUnavailable(f"media engine unreachable: {exc}") from exc
+            raise MediaEngineUnavailableError(f"media engine unreachable: {exc}") from exc

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import ImageFont
+from PIL import Image, ImageFont
 
 ASSETS_FONTS = Path(__file__).resolve().parent / "assets" / "fonts"
 

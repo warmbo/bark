@@ -6,7 +6,7 @@ import pytest
 from services.media_engine.client import (
     MediaEngineClient,
     MediaEngineError,
-    MediaEngineUnavailable,
+    MediaEngineUnavailableError,
 )
 
 
@@ -64,7 +64,7 @@ async def test_engine_down_raises_unavailable():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")
 
-    with pytest.raises(MediaEngineUnavailable):
+    with pytest.raises(MediaEngineUnavailableError):
         await _mock(handler).collect_payload("profile", "g1", "u1")
 
 
