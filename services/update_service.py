@@ -145,16 +145,11 @@ def _remote_commit(remote: str, branch: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def _version_file() -> Path:
-    return repo_root() / "VERSION"
-
-
 def local_version() -> str:
-    """The running instance's release version (VERSION file + build suffix).
+    """The running instance's version (X.Y.Z, patch = commit count).
 
     Delegates to ``bark_version.__version__`` so the update card shows the
-    same version string as the dashboard footer. Comparison ignores the
-    ``+build`` suffix (see :func:`_version_key`).
+    same version string as the dashboard footer.
     """
     import bark_version
 
@@ -162,11 +157,22 @@ def local_version() -> str:
 
 
 def remote_version(remote: str, branch: str) -> str:
-    """The remote branch's release version, read without a checkout."""
-    result = _run(["git", "show", f"{remote}/{branch}:VERSION"])
+    """The remote branch's derived version, without a checkout.
+
+    Mirrors the local derivation: base major.minor from the installed
+    package version, patch = the remote branch's commit count
+    (``git rev-list --count <remote>/<branch>``).
+    """
+    result = _run(["git", "rev-list", "--count", f"{remote}/{branch}"])
     if result.returncode != 0:
         return ""
-    return result.stdout.strip() or ""
+    count = result.stdout.strip()
+    if not count:
+        return ""
+    local = local_version()
+    parts = local.split(".")
+    major_minor = ".".join(parts[:2]) if len(parts) >= 2 else local
+    return f"{major_minor}.{count}"
 
 
 def _version_key(value: str) -> tuple[int, ...]:
@@ -211,10 +217,11 @@ def check_update(channel: str | None = None) -> dict:
     ``channel`` is a UI channel name (``main``/``stable`` or ``dev``); it is
     mapped to the actual git branch via :func:`channel_to_branch`.
 
-    Availability is decided by RELEASE VERSION (the ``VERSION`` file on the
-    remote branch) rather than commit identity — an update is offered when
-    the remote's version is newer than the running instance's, regardless of
-    how many commits sit between them.
+    Availability is decided by VERSION NUMBER (patch = commit count, mirroring
+    the running instance's own derivation) rather than commit identity — an
+    update is offered when the remote's version is newer than the running
+    instance's. Both sides derive the same way, so a remote that is ahead of
+    this checkout always reports a higher version.
     """
     channel = channel or config.instance.update_branch
     branch = channel_to_branch(channel)
@@ -241,8 +248,8 @@ def check_update(channel: str | None = None) -> dict:
     elif available and available != current and not (
         available and _is_ancestor(available, current)
     ):
-        # Remote has no VERSION file yet (older build) — fall back to commit
-        # comparison so pre-version releases still offer updates.
+        # Remote branch has no reachable commits yet (empty/stale mirror) —
+        # fall back to commit comparison so it still offers nothing wrong.
         update_available = True
     if available and available == current and available_version == current_version:
         update_available = False

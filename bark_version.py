@@ -1,12 +1,11 @@
 """Runtime access to Bark's version.
 
-The version is read from the ``VERSION`` file at the repository root — a
-release version number (e.g. ``0.2.158``) that the update system compares
-and displays. When the repository is a git checkout, the displayed version
-carries a PEP 440 local suffix with the commit count (e.g.
-``0.2.158+162``) so the version visibly changes with every commit, even
-between releases. When git is unavailable (e.g. an sdist without VCS
-metadata), it falls back to the installed package version.
+The displayed version is X.X.X style, derived from the base version in
+pyproject.toml plus the git commit count as the patch component — so every
+change to the repo produces a distinct, monotonic version on the web UI
+(e.g. ``0.2.0`` -> ``0.2.1`` -> ``0.2.2`` ... ``0.2.166``). When git is
+unavailable (e.g. an sdist without VCS metadata), it falls back to the
+installed package version from importlib.metadata.
 """
 
 from __future__ import annotations
@@ -16,14 +15,6 @@ from importlib.metadata import version as _installed_version
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent
-
-
-def _read_version_file() -> str | None:
-    try:
-        value = (_REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
-        return value or None
-    except (OSError, UnicodeDecodeError):
-        return None
 
 
 def _git_commit_count() -> int | None:
@@ -44,12 +35,14 @@ def _git_commit_count() -> int | None:
 
 
 def _derive_version() -> str:
-    """Release version (VERSION file), plus a per-commit build suffix."""
-    base = _read_version_file() or _installed_version("bark")
+    """X.X.X version: base from installed metadata, patch = commit count."""
+    base = _installed_version("bark")
     commit_count = _git_commit_count()
     if commit_count is None:
         return base
-    return f"{base}+{commit_count}"
+    parts = base.split(".")
+    major_minor = ".".join(parts[:2]) if len(parts) >= 2 else base
+    return f"{major_minor}.{commit_count}"
 
 
 __version__ = _derive_version()
