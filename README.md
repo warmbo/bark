@@ -61,12 +61,30 @@ The self-update manager (`services/update_service.py`) always pulls from the **G
 
 ## Quick start
 
-Requires Python 3.13+. Bark is developed with `uv`; a plain venv + pip also works.
+One command installs everything (git, curl, Python 3.13+ if missing), clones the repo, builds the virtualenv, and starts Bark:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install.sh | bash
+```
+
+When it finishes, open the printed URL (default `http://127.0.0.1:8090/setup`) — Bark boots a **first-time setup wizard** and writes its own `.env` from the browser, so no hand-editing is required. On a remote server, SSH-tunnel to that URL or reinstall with `BARK_INSTALL_HOST=0.0.0.0` for LAN access.
+
+Useful overrides (export before running):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BARK_INSTALL_DIR` | `~/bark` | Install location |
+| `BARK_SYSTEMD` | `auto` | `yes`/`no` to force a systemd user service or foreground run |
+| `BARK_INSTALL_HOST` / `BARK_INSTALL_PORT` | `127.0.0.1` / `8090` | Dashboard bind address / port |
+| `BARK_BRANCH` | `main` | Branch to check out (`dev` for pre-release) |
+| `BARK_NO_START` | unset | `1` to install but not launch |
+
+Manual install (requires Python 3.13+):
 
 ```bash
 git clone https://github.com/warmbo/bark.git
 cd bark
-uv sync --extra dev
+uv sync --extra dev        # or: python3 -m venv .venv && .venv/bin/pip install .
 ```
 
 **No `.env` needed to start** — Bark detects that it's unconfigured and boots a first-time setup wizard:
