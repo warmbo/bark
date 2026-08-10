@@ -70,7 +70,7 @@
 
     <section class="modules-section" aria-labelledby="modules-addon-title">
         <h2 id="modules-addon-title" class="modules-section-title">{{ icon("package-plus", 16) }} Add-on Modules</h2>
-        <p class="modules-section-subtitle">Single-file plugins — install and remove them in the Plugin Manager below.</p>
+        <p class="modules-section-subtitle">Single-file plugins — install and remove them in the Plugin Manager below. Add-ons are off by default for each server; turn them on here for {{ guild.name }}.</p>
         {% if addon_names %}
         <div class="modules-grid">
             {% for name in addon_names %}

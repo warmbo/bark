@@ -117,7 +117,7 @@ async def test_list_plugins_after_install(client):
     data = resp.json()["data"]["plugins"]
     assert len(data) == 1
     assert data[0]["name"] == "ping_plugin"
-    assert data[0]["enabled"] is True
+    assert data[0]["loaded"] is True
     assert data[0]["file"] == "ping_plugin.py"
 
 
@@ -168,10 +168,35 @@ async def test_remove_plugin_unloads_and_guards_routes(client):
     )
     assert resp.status_code == 200
 
-    # Its route is live while installed.
+    # ModuleConfig rows FK to guilds.discord_id — seed the guild first.
+    from database.engine import session_scope
+    from database.models.guild import Guild
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        await session.commit()
+
+    # Its route is live while installed AND enabled for the guild (add-ons
+    # default off per server — the guild must opt in first).
+    enabled = await client.post(
+        "/api/v1/guilds/1/modules/routed_plugin/toggle",
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200
     live = await client.get("/api/v1/guilds/1/modules/routed_plugin/ping")
     assert live.status_code == 200
     assert live.json()["data"]["pong"] == "ok"
+
+    # While installed but disabled for the guild, the route is refused.
+    off = await client.post(
+        "/api/v1/guilds/1/modules/routed_plugin/toggle",
+        json={"enabled": False},
+    )
+    assert off.status_code == 200
+    refused = await client.get("/api/v1/guilds/1/modules/routed_plugin/ping")
+    assert refused.status_code == 409
+    # And an API-route call never auto-enables the module.
+    assert refused.json()["error"] == "Module 'routed_plugin' is disabled for this server"
 
     # Removing it works and the route becomes inert (404 via the guard).
     removed = await client.delete("/api/v1/instance/plugins/routed_plugin")

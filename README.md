@@ -49,7 +49,7 @@ Bark pairs the Discord client with a FastAPI + Jinja dashboard in one process, s
 
 Every module subclasses `BarkModule` and declares its commands, events, settings schema, dashboard actions, and workspace tabs. See [Module workspace](docs/module-workspace.md) to build one.
 
-**Plugins.** Extra functionality can be installed at runtime as single-file plugins — upload a `.py` file from the server's Modules page (Plugins box; owner-only) and it is registered and enabled immediately (no restart). Plugins follow the same `BarkModule` contract as built-in modules. See the [bark-plugins](https://github.com/warmbo/bark-plugins) repository for a ready-made set and the plugin format guide.
+**Plugins.** Extra functionality can be installed at runtime as single-file plugins — upload a `.py` file from the server's Modules page (Plugins box; owner-only) and it becomes *available* on the instance (no restart). Availability is an instance decision; whether a plugin runs is decided per Discord server — add-ons are off by default on every server and their owners/admins turn them on from that server's Modules page. Plugins follow the same `BarkModule` contract as built-in modules. See the [bark-plugins](https://github.com/warmbo/bark-plugins) repository for a ready-made set and the plugin format guide.
 
 ## Related repositories
 

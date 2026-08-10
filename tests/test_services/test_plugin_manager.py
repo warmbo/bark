@@ -149,7 +149,7 @@ def test_load_plugin_class_rejects_broken_syntax(tmp_path):
 async def test_install_plugin_registers_and_enables(manager):
     metadata = await manager.install_plugin(VALID_PLUGIN.encode(), "whatever.py")
     assert metadata["name"] == "ping_plugin"
-    assert metadata["enabled"] is True
+    assert metadata["loaded"] is True
     assert metadata["file"] == "ping_plugin.py"
 
     assert manager.is_plugin("ping_plugin")
@@ -161,6 +161,30 @@ async def test_install_plugin_registers_and_enables(manager):
     # The file is written under the module name, not the upload filename.
     assert (plugins_directory() / "ping_plugin.py").is_file()
     assert not (plugins_directory() / "whatever.py").exists()
+
+
+@pytest.mark.asyncio
+async def test_plugin_defaults_off_per_guild(manager):
+    """Installing a plugin makes it AVAILABLE, not enabled — fresh guilds
+    opt in explicitly (core modules stay default-on)."""
+    # Core modules (not in _plugin_files) default to enabled.
+    assert manager.is_enabled_for_guild(999, "logging") is True
+
+    await manager.install_plugin(VALID_PLUGIN.encode(), "whatever.py")
+    # No persisted state: the add-on is OFF for a fresh guild...
+    assert manager.is_enabled_for_guild(999, "ping_plugin") is False
+    # ...while the instance still reports it as available.
+    assert manager.is_plugin("ping_plugin")
+
+    # Explicit opt-in flips it on for exactly that guild.
+    assert await manager.set_guild_enabled(999, "ping_plugin", True) is True
+    assert manager.is_enabled_for_guild(999, "ping_plugin") is True
+    # A different guild that never opted in stays off.
+    assert manager.is_enabled_for_guild(888, "ping_plugin") is False
+    # Turning it off again for the only enabled guild unloads it.
+    assert await manager.set_guild_enabled(999, "ping_plugin", False) is True
+    assert manager.is_enabled_for_guild(999, "ping_plugin") is False
+    assert manager.get_module("ping_plugin").enabled is False
 
 
 @pytest.mark.asyncio

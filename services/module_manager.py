@@ -245,7 +245,10 @@ class ModuleManager:
             "version": module.version if module else "",
             "description": module.description if module else "",
             "author": module.author if module else "",
-            "enabled": bool(module and module.enabled),
+            # Instance-level availability only: whether the plugin is loaded
+            # on this instance. Enablement is decided per Discord server via
+            # the modules page toggle, never here.
+            "loaded": bool(module is not None),
             "file": self._plugin_files[name].name if name in self._plugin_files else None,
         }
 
@@ -575,8 +578,15 @@ class ModuleManager:
         }
 
     def is_enabled_for_guild(self, guild_id: int, module_name: str) -> bool:
-        """Return persisted guild policy; modules default enabled."""
-        return self._guild_states.get((int(guild_id), module_name), True)
+        """Return persisted guild policy.
+
+        Core modules default enabled; ADD-ON (plugin) modules default
+        disabled — installing a plugin only makes it AVAILABLE to server
+        owners/admins, each server opts in explicitly.
+        """
+        if (int(guild_id), module_name) in self._guild_states:
+            return self._guild_states[(int(guild_id), module_name)]
+        return module_name not in self._plugin_files
 
     def should_run_globally(self, module_name: str) -> bool:
         """Keep shared resources alive while at least one connected guild uses them."""
