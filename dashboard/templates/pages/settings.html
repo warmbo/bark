@@ -253,6 +253,13 @@
     <div class="update-terminal-dialog" role="dialog" aria-modal="true" aria-labelledby="update-terminal-title">
         <h2 class="update-terminal-title" id="update-terminal-title">{{ icon("terminal", 18) }} Updating Bark</h2>
         <p class="update-terminal-subtitle" id="update-terminal-subtitle">Running update commands — this window shows exactly what is happening.</p>
+        <div class="update-progress" id="update-progress" hidden>
+            <div class="update-progress-track" aria-hidden="true"><div class="update-progress-fill" id="update-progress-fill"></div></div>
+            <div class="update-progress-meta">
+                <span id="update-progress-label">Starting…</span>
+                <span id="update-progress-eta"></span>
+            </div>
+        </div>
         <div class="update-terminal" id="update-terminal-log" aria-live="polite" tabindex="0"></div>
         <div class="dialog-actions">
             <button type="button" class="btn" id="update-terminal-close" disabled>{{ icon("x", 14) }} Close</button>
@@ -477,8 +484,54 @@
     const termLog = document.getElementById('update-terminal-log');
     const termClose = document.getElementById('update-terminal-close');
     const termSubtitle = document.getElementById('update-terminal-subtitle');
+    const termProgress = document.getElementById('update-progress');
+    const termProgressFill = document.getElementById('update-progress-fill');
+    const termProgressLabel = document.getElementById('update-progress-label');
+    const termProgressEta = document.getElementById('update-progress-eta');
     let termTimer = null;
     let termAfter = 0;
+    let termWaitingForRestart = false;
+
+    const PHASE_LABELS = {
+        fetch: 'Fetching the new build from GitHub…',
+        backup: 'Backing up the database…',
+        reset: 'Applying the new build…',
+        deps: 'Installing dependencies…',
+        restart: 'Restarting the instance…',
+    };
+    const PHASE_ETA = {fetch: 10, backup: 5, reset: 5, deps: 45, restart: 15};
+    const TERMINAL_RESTART_TIMEOUT = 75; // seconds before giving up on the restart
+
+    function setProgress(phase, phases, done) {
+        if (!termProgress) return;
+        const idx = (phases || []).indexOf(phase);
+        if (done) {
+            termProgress.hidden = false;
+            termProgressFill.style.width = '100%';
+            termProgressLabel.textContent = 'Finished';
+            termProgressEta.textContent = '';
+            return;
+        }
+        if (idx < 0) { termProgress.hidden = true; return; }
+        termProgress.hidden = false;
+        termProgressFill.style.width = `${Math.round(((idx + 1) / (phases.length || 5)) * 100)}%`;
+        termProgressLabel.textContent = PHASE_LABELS[phase] || phase;
+        const eta = PHASE_ETA[phase];
+        termProgressEta.textContent = eta ? `~${eta}s remaining` : '';
+    }
+
+    function finishTerminal(message, level) {
+        if (termTimer) { clearInterval(termTimer); termTimer = null; }
+        termClose.disabled = false;
+        appendTermLine({level: level || 'ok', line: message});
+        if (termSubtitle) termSubtitle.textContent = 'Update finished.';
+        if (termProgress) {
+            termProgress.hidden = false;
+            termProgressFill.style.width = '100%';
+            termProgressLabel.textContent = level === 'error' ? 'Update failed' : 'Finished';
+            termProgressEta.textContent = '';
+        }
+    }
 
     function appendTermLine(entry) {
         if (!termLog) return;
@@ -492,6 +545,7 @@
     function openUpdateTerminal() {
         if (!termOverlay) return;
         termAfter = 0;
+        termWaitingForRestart = false;
         termLog.innerHTML = '';
         if (termSubtitle) termSubtitle.textContent = 'Running update commands — this window shows exactly what is happening.';
         termClose.disabled = true;
@@ -507,17 +561,57 @@
             const data = result?.data || {};
             (data.entries || []).forEach(appendTermLine);
             termAfter = data.last || termAfter;
-            if (data.active === false && termAfter > 0) {
-                clearInterval(termTimer);
-                termTimer = null;
-                termClose.disabled = false;
-                appendTermLine({level: 'ok', line: '— Finished.'});
-                if (termSubtitle) termSubtitle.textContent = 'Update finished. The page reloads once the instance is back online.';
+            setProgress(data.phase, data.phases, data.done);
+            if (data.done === true && data.active === false && termAfter > 0) {
+                finishTerminal('— Finished.');
+            } else if (data.phase === 'restart') {
+                // The process exits right after this phase — switch to
+                // restart-watching instead of waiting for the poll to fail.
+                waitForRestart();
             }
         } catch (error) {
-            // The instance restarts mid-update (os._exit) — polls briefly
-            // fail; that is expected. Keep polling until the reload timer.
+            // The instance restarted mid-update (os._exit) — polls briefly
+            // fail. Watch for the instance to come back, then reload.
+            waitForRestart();
         }
+    }
+
+    function waitForRestart() {
+        if (termWaitingForRestart) return;
+        termWaitingForRestart = true;
+        if (termTimer) { clearInterval(termTimer); termTimer = null; }
+        if (termSubtitle) termSubtitle.textContent = 'Restarting — waiting for the instance to come back online…';
+        if (termProgress) {
+            termProgress.hidden = false;
+            termProgressFill.style.width = '100%';
+            termProgressLabel.textContent = 'Restarting…';
+            termProgressEta.textContent = 'usually a few seconds';
+        }
+        appendTermLine({level: 'dim', line: '…waiting for the instance to come back online'});
+        const started = Date.now();
+        const healthTimer = setInterval(async () => {
+            try {
+                const health = await safeFetch('/api/v1/health', {cache: 'no-cache'});
+                const bot = health?.data?.bot;
+                if (health?.data?.status === 'healthy') {
+                    clearInterval(healthTimer);
+                    appendTermLine({level: 'ok', line: bot?.connected === false
+                        ? '⚠ Instance is back, but the bot is not connected to Discord yet — check the service logs if servers stay empty.'
+                        : '✓ Instance is back online — reloading…'});
+                    if (bot?.connected === false) {
+                        finishTerminal('⚠ Instance restarted, but the bot has not connected to Discord. If servers still look empty, restart the bark service.', 'error');
+                    } else {
+                        setTimeout(() => window.location.reload(), 1200);
+                    }
+                }
+            } catch (error) {
+                // still restarting — keep waiting
+            }
+            if (Date.now() - started > TERMINAL_RESTART_TIMEOUT * 1000) {
+                clearInterval(healthTimer);
+                finishTerminal('⚠ The instance did not come back within the expected time. It may need a service restart (systemctl restart bark).', 'error');
+            }
+        }, 2000);
     }
 
     termClose?.addEventListener('click', () => {
@@ -555,7 +649,6 @@
                 : '';
             updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>The page will reload once the instance is back online.${backupNote}</p></div></div>`;
             openUpdateTerminal();
-            setTimeout(() => window.location.reload(), 12000);
         } catch (error) {
             updateApplyBtn.disabled = false;
             updateResult.innerHTML = `<div class="state-panel state-error"><div><strong>Update failed</strong><p>${escHtml(error.message || 'Could not start the update')}</p></div></div>`;

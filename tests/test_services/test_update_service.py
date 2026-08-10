@@ -247,6 +247,9 @@ def test_apply_update_streams_terminal_log(repo):
     assert any(line.startswith("$ git fetch") for line in lines)
     assert any("Already up to date" in line for line in lines)
     assert log["last"] == len(log["entries"])
+    # Progress phases exposed for the modal
+    assert log["phases"] == ["fetch", "backup", "reset", "deps", "restart"]
+    assert log["phase"] == "fetch"  # fetch ran before the already-up-to-date exit
 
     # after=<last> returns nothing new; clearing empties the log.
     assert update_service.get_update_log(log["last"])["entries"] == []

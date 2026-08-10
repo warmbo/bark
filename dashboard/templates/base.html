@@ -44,6 +44,14 @@
     <!-- Skip to content link for keyboard users -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
+    <!-- Bot-disconnected banner: shown while the bot process is up but not
+         connected to Discord (e.g. after a failed gateway handshake) so the
+         dashboard never silently shows zero servers. -->
+    <div class="bot-offline-banner" id="bot-offline-banner" role="status" hidden>
+        {{ icon("alert-triangle", 16) }}
+        <span><strong>Bark is running, but not connected to Discord.</strong> Servers may look empty and commands won't respond. Check the service logs, or restart the service (<code>systemctl restart bark</code>).</span>
+    </div>
+
     <div class="app-shell">
         <!-- Mobile nav drawer controls (hidden on desktop) -->
         <button type="button" class="menu-toggle" id="sidebar-toggle" data-toggle-sidebar aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation menu">{{ icon("menu", 18) }}</button>

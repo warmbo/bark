@@ -209,6 +209,7 @@ async def test_update_log_streams_entries_and_after_cursor(app, monkeypatch):
     from services import update_service
 
     update_service.clear_update_log()
+    update_service.set_update_phase("", done=False)
     update_service.log_line("$ git fetch github main", "cmd")
     update_service.log_line("✓ Already up to date", "ok")
     update_service.set_update_active(True)
@@ -231,10 +232,19 @@ async def test_update_log_streams_entries_and_after_cursor(app, monkeypatch):
         second = await client.get(f"/api/v1/instance/update/log?after={last}")
         assert second.json()["data"]["entries"] == []
 
+        # progress state is exposed for the modal's progress bar
+        update_service.set_update_phase("backup")
+        third = await client.get("/api/v1/instance/update/log")
+        assert third.json()["data"]["phase"] == "backup"
+        assert third.json()["data"]["phases"] == ["fetch", "backup", "reset", "deps", "restart"]
+
         # active flag flips when the flow finishes
         update_service.set_update_active(False)
-        third = await client.get("/api/v1/instance/update/log")
-        assert third.json()["data"]["active"] is False
+        update_service.set_update_phase("", done=True)
+        fourth = await client.get("/api/v1/instance/update/log")
+        assert fourth.json()["data"]["active"] is False
+        assert fourth.json()["data"]["done"] is True
 
     update_service.clear_update_log()
     update_service.set_update_active(False)
+    update_service.set_update_phase("", done=False)

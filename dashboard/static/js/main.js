@@ -404,6 +404,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Mobile navigation drawer (slide/gesture menu) ──
     initMobileDrawer();
 
+    // ── Bot connection watchdog ───────────────────────
+    // Poll health; show the offline banner while the bot process is up but
+    // not connected to Discord (the "0 connected servers" trap).
+    const offlineBanner = document.getElementById('bot-offline-banner');
+    if (offlineBanner) {
+        const checkBotHealth = async () => {
+            try {
+                const health = await safeFetch('/api/v1/health', {cache: 'no-cache'});
+                const bot = health?.data?.bot;
+                offlineBanner.hidden = bot?.connected !== false;
+            } catch (error) {
+                // Instance itself is unreachable — leave the banner alone.
+            }
+        };
+        checkBotHealth();
+        setInterval(checkBotHealth, 30000);
+    }
+
     // ── Load Manifest & Build Sidebar ─────────────────
     const navItems = document.getElementById('sidebar-nav-items');
     if (navItems) loadSidebarManifest(navItems);

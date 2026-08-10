@@ -43,6 +43,12 @@ CHANNEL_CONFIG_KEY = "bark.update.channel"
 _update_log: list[dict] = []
 _update_log_lock = threading.Lock()
 _update_log_active = False
+_update_phase = ""
+_update_phase_done = False
+
+# UI progress phases (order matters — the modal derives a progress bar from
+# the current index and shows the per-phase estimated time).
+UPDATE_PHASES = ["fetch", "backup", "reset", "deps", "restart"]
 
 _MAX_LOG_ENTRIES = 500
 
@@ -67,17 +73,33 @@ def clear_update_log() -> None:
         _update_log.clear()
 
 
+def set_update_phase(phase: str, done: bool = False) -> None:
+    """Record the current UI progress phase ('' = no active phase)."""
+    global _update_phase, _update_phase_done
+    with _update_log_lock:
+        _update_phase = phase
+        if done:
+            _update_phase_done = True
+
+
 def set_update_active(active: bool) -> None:
     global _update_log_active
     _update_log_active = active
 
 
 def get_update_log(after: int = 0) -> dict:
-    """Return log entries newer than ``after`` plus the last seq + active flag."""
+    """Return log entries newer than ``after`` plus progress state."""
     with _update_log_lock:
         entries = [e for e in _update_log if e["seq"] > after]
         last = _update_log[-1]["seq"] if _update_log else 0
-        return {"entries": entries, "last": last, "active": _update_log_active}
+        return {
+            "entries": entries,
+            "last": last,
+            "active": _update_log_active,
+            "phase": _update_phase,
+            "phases": list(UPDATE_PHASES),
+            "done": _update_phase_done,
+        }
 
 
 def repo_root() -> Path:
@@ -382,6 +404,7 @@ def apply_update(channel: str) -> dict:
     channel_label = "stable" if channel != "dev" else "dev"
     log_line(f"Updating Bark from the '{channel_label}' channel ({branch})", "header")
     log_line(f"Current build: {old_commit[:10]}", "dim")
+    set_update_phase("fetch")
     persisted = get_channel()
     if persisted == "dev" and channel_label != "dev":
         logger.warning(
@@ -450,6 +473,7 @@ def apply_update(channel: str) -> dict:
     # Pre-update backup: every update is revertible via the snapshot taken
     # right before the checkout moves. A failed backup aborts the update.
     backup = None
+    set_update_phase("backup")
     log_line("Backing up the database before the update…", "dim")
     try:
         backup = _pre_update_backup()
@@ -460,6 +484,7 @@ def apply_update(channel: str) -> dict:
         return {"ok": False, "error": f"pre-update backup failed: {exc}"}
 
     try:
+        set_update_phase("reset")
         _run_u(["git", "reset", "--hard", f"{remote}/{branch}"], timeout=120, check=True)
     except Exception as exc:
         logger.exception("Update reset failed")
@@ -473,6 +498,7 @@ def apply_update(channel: str) -> dict:
     if _requirements_changed(old_commit):
         pip = str(repo_root() / ".venv" / "bin" / "pip")
         if Path(pip).exists():
+            set_update_phase("deps")
             log_line("Dependency changes detected — installing requirements…", "dim")
             try:
                 _run_u([pip, "install", "-r", "requirements.txt"], timeout=600, check=True)
@@ -483,6 +509,7 @@ def apply_update(channel: str) -> dict:
 
     logger.info("Update applied: %s -> %s (%s/%s)", old_commit, new_commit, channel, branch)
     log_line(f"✓ Update applied: {old_commit[:10]} → {new_commit[:10]} ({channel}/{branch})", "ok")
+    set_update_phase("restart")
     log_line("Restarting the process — the dashboard will reconnect in a few seconds…", "dim")
     return {
         "ok": True,
@@ -498,6 +525,7 @@ def apply_update(channel: str) -> dict:
 async def apply_update_async(branch: str) -> dict:
     """Run the update in a worker thread, then exit so systemd restarts us."""
     clear_update_log()
+    set_update_phase("", done=False)
     set_update_active(True)
     try:
         await asyncio.sleep(1.5)  # let the HTTP response flush first
@@ -507,6 +535,7 @@ async def apply_update_async(branch: str) -> dict:
             os._exit(0)
         if not result.get("ok"):
             logger.error("Update did not apply; staying on current build: %s", result)
+        set_update_phase("", done=True)
         return result
     finally:
         set_update_active(False)
