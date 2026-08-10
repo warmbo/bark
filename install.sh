@@ -16,6 +16,9 @@
 #   BARK_INSTALL_PORT  dashboard port (default: 8090)
 #   BARK_NO_START      set to 1 to install without launching anything
 set -euo pipefail
+# Quiet non-interactive apt + avoid perl locale warnings in containers.
+export DEBIAN_FRONTEND=noninteractive
+export LANG="${LANG:-C.UTF-8}" LC_ALL="${LC_ALL:-C.UTF-8}"
 
 BARK_REPO_URL="${BARK_REPO_URL:-https://github.com/warmbo/bark.git}"
 BARK_BRANCH="${BARK_BRANCH:-main}"
@@ -99,6 +102,25 @@ if [ -z "${PY:-}" ]; then
 fi
 log "Using Python: $PY ($("$PY" -c 'import sys; print(sys.version.split()[0])'))"
 
+# Debian/Ubuntu don't ship ensurepip in the base python3 — the venv module
+# exists but `python3 -m venv` fails without the python3-venv package.
+ensure_venv_support() {
+    if "$PY" -c 'import ensurepip' 2>/dev/null; then
+        return 0
+    fi
+    log "Python venv support missing — installing ${PY}-venv"
+    if have apt-get; then
+        local apt="apt-get"
+        [ "$(id -u)" -ne 0 ] && apt="sudo apt-get"
+        if ! $apt install -y -qq "${PY}-venv" >/dev/null 2>&1; then
+            $apt install -y -qq python3-venv >/dev/null 2>&1
+        fi
+    fi
+    "$PY" -c 'import ensurepip' 2>/dev/null \
+        || die "Python venv support is unavailable. Install the python3-venv package for this Python and rerun."
+}
+ensure_venv_support
+
 # ── 2. Clone / update the repository ───────────────────────
 if [ -d "$BARK_INSTALL_DIR/.git" ]; then
     log "Updating existing install in $BARK_INSTALL_DIR"
@@ -114,7 +136,13 @@ cd "$BARK_INSTALL_DIR"
 
 # ── 3. Virtualenv + dependencies ───────────────────────────
 log "Creating virtualenv"
-if [ ! -x .venv/bin/python ]; then
+# A previous failed run can leave a .venv dir with a python but no pip
+# (Debian without python3-venv) — check for pip, not just the interpreter.
+if [ ! -x .venv/bin/pip ]; then
+    if [ -d .venv ]; then
+        log "Recreating broken virtualenv"
+        rm -rf .venv
+    fi
     "$PY" -m venv .venv
 fi
 log "Installing dependencies (this can take a minute)"
