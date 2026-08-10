@@ -122,6 +122,17 @@ log "Installing dependencies (this can take a minute)"
 ./.venv/bin/pip install --quiet .
 
 # ── 4. Service or foreground ───────────────────────────────
+port_busy() {
+    (exec 3<>"/dev/tcp/127.0.0.1/$BARK_INSTALL_PORT") 2>/dev/null && { exec 3>&-; return 0; } || return 1
+}
+if port_busy; then
+    warn "Port $BARK_INSTALL_PORT is already in use — Bark would fail to bind."
+    warn "Pick a free port and rerun:  BARK_INSTALL_PORT=8091 curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install.sh | bash"
+    if [ "$BARK_SYSTEMD" != "no" ] && [ "$BARK_NO_START" != "1" ]; then
+        die "Aborting before installing the service — the repo is installed at $BARK_INSTALL_DIR; set BARK_INSTALL_PORT to a free port and rerun."
+    fi
+fi
+
 if [ "$BARK_NO_START" = "1" ]; then
     log "Install complete (not started — BARK_NO_START=1)"
     log "Run it yourself:  cd $BARK_INSTALL_DIR && ./run.sh"
