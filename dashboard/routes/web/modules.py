@@ -30,19 +30,15 @@ async def modules_page(request: Request, guild_id: int):
 
     all_modules = bot.modules.get_all_modules()
     plugin_names = bot.modules.plugin_names()
-    from sqlalchemy import select
-
-    async with session_scope() as session:
-        configs = (
-            (
-                await session.execute(
-                    select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
-                )
-            )
-            .scalars()
-            .all()
-        )
-    module_states = {config.module_name: config.enabled for config in configs}
+    # Authoritative per-guild state straight from the runtime: persisted rows
+    # win, and modules with no row fall back to the per-module default (core
+    # modules default enabled; add-on plugins default disabled). Building the
+    # dict here (not in the template) keeps the card exactly in sync with
+    # what the bot actually dispatches.
+    module_states = {
+        name: bot.modules.is_enabled_for_guild(guild_id, name)
+        for name in all_modules
+    }
 
     return templates.TemplateResponse(
         request,
@@ -146,7 +142,9 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
         "version": module.version,
         "description": module.description,
         "author": module.author,
-        "enabled": db_config.enabled if db_config else True,
+        # Authoritative per-guild state (persisted row or the per-module
+        # default: core enabled, add-on plugins disabled).
+        "enabled": bot.modules.is_enabled_for_guild(guild_id, module_name),
         "priority": db_config.priority if db_config else 100,
         "config": safe_config,
         "settings_schema": schema,

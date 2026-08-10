@@ -687,6 +687,56 @@ async def test_modules_grid_renders_human_module_names(client, app):
 
 
 @pytest.mark.asyncio
+async def test_modules_grid_addons_default_off(client, app):
+    """Add-on plugins with no persisted per-guild row render OFF (not ON).
+
+    Regression for 2026-08-10: the card template defaulted missing rows to
+    enabled, so freshly installed plugins showed as on while the runtime
+    treated them as off.
+    """
+    from unittest.mock import MagicMock
+
+    def make_module(name):
+        m = MagicMock()
+        m.version = "1.0.0"
+        m.description = f"{name} plugin"
+        m.get_commands.return_value = []
+        m.get_events.return_value = []
+        m.get_dashboard_pages.return_value = []
+        return m
+
+    app.state.bot.modules.get_all_modules.return_value = {
+        "logging": make_module("logging"),
+        "dice_roller": make_module("dice_roller"),
+        "fun_facts": make_module("fun_facts"),
+    }
+    app.state.bot.modules.plugin_names.return_value = {"dice_roller", "fun_facts"}
+    # No persisted rows: core modules default enabled, plugins default disabled.
+    app.state.bot.modules.is_enabled_for_guild.side_effect = (
+        lambda gid, name: name not in {"dice_roller", "fun_facts"}
+    )
+
+    response = await client.get("/guild/1/modules")
+    assert response.status_code == 200
+
+    # Core module card renders enabled (is-enabled + On)
+    assert 'data-module="logging"' in response.text
+    assert "module-card is-enabled" in response.text
+    assert ">On<" in response.text
+
+    # Add-on cards render disabled (is-disabled + Off + unchecked)
+    for name in ("dice_roller", "fun_facts"):
+        assert f'data-module="{name}"' in response.text
+    assert "module-card is-disabled" in response.text
+    assert ">Off<" in response.text
+    # No add-on checkbox may carry the checked attribute
+    import re
+
+    addon_block = response.text[response.text.index("Add-on Modules") :]
+    assert re.search(r'module-toggle-(dice_roller|fun_facts)".*?checked', addon_block) is None
+
+
+@pytest.mark.asyncio
 async def test_voice_history_prefers_recorded_channel_name(client, app):
     """Voice history shows the name recorded at leave time even when the live
     channel is gone (Auto Voice deletes temporary channels after a leave)."""
