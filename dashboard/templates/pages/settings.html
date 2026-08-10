@@ -74,10 +74,16 @@
                     <div class="info-row">
                         <span class="info-label">Moderator roles</span>
                         <span class="info-value">
-                            <select id="dashboard-mod-roles" name="dashboard_moderator_roles" class="form-select" aria-label="Moderator roles" aria-describedby="dashboard-mod-roles-hint" style="width:100%" multiple size="6">
-                                <option value="">No moderator roles…</option>
-                            </select>
-                            <p class="form-hint" id="dashboard-mod-roles-hint">Ctrl/Cmd-click to select multiple. Members holding any of these roles can moderate this server in the dashboard.</p>
+                            <details class="role-access-menu checkbox-role-dropdown" id="mod-roles-dropdown">
+                                <summary class="form-select checkbox-role-toggle" id="mod-roles-toggle" aria-haspopup="true" aria-expanded="false">
+                                    <span id="mod-roles-summary">No moderator roles…</span>
+                                    <span class="checkbox-role-caret" aria-hidden="true">{{ icon("chevron-down", 14) }}</span>
+                                </summary>
+                                <div class="role-access-popover checkbox-role-panel" id="mod-roles-panel">
+                                    <div class="checkbox-role-list" id="mod-roles-list"></div>
+                                    <p class="form-hint" id="dashboard-mod-roles-hint">Check the roles that can moderate this server in the dashboard.</p>
+                                </div>
+                            </details>
                         </span>
                     </div>
                     <div class="info-row">
@@ -264,12 +270,25 @@
 
     // ── Dashboard Access (moderator roles) ────────────
 
-    const modRolesSelect = document.getElementById('dashboard-mod-roles');
+    const modRolesList = document.getElementById('mod-roles-list');
+    const modRolesSummary = document.getElementById('mod-roles-summary');
     const modRolesSave = document.getElementById('dashboard-mod-roles-save');
     const modRolesStatus = document.getElementById('dashboard-mod-roles-status');
 
+    function refreshModRolesSummary() {
+        if (!modRolesSummary) return;
+        const checked = document.querySelectorAll('#mod-roles-list input[type="checkbox"]:checked');
+        if (!checked.length) {
+            modRolesSummary.textContent = 'No moderator roles…';
+            return;
+        }
+        modRolesSummary.textContent = checked.length === 1
+            ? '1 moderator role selected'
+            : `${checked.length} moderator roles selected`;
+    }
+
     async function loadDashboardModRoles() {
-        if (!modRolesSelect) return;
+        if (!modRolesList) return;
         try {
             const [rolesResult, settingsResult] = await Promise.all([
                 safeFetch(`/api/v1/guilds/${GUILD_ID}/roles`, { cache: 'no-cache' }),
@@ -289,12 +308,18 @@
             } else {
                 savedRaw.split(',').map(s => s.trim()).filter(Boolean).forEach(id => selected.add(String(id)));
             }
-            const modOptions = roles.length
-                ? '<option value="">No moderator roles…</option>' + roles.map(r =>
-                    `<option value="${escHtml(r.id)}"${selected.has(String(r.id)) ? ' selected' : ''}>${escHtml(r.name)}</option>`
+            modRolesList.innerHTML = roles.length
+                ? roles.map(r =>
+                    `<label class="checkbox-role-row">
+                        <input type="checkbox" name="dashboard_moderator_roles" value="${escHtml(r.id)}"${selected.has(String(r.id)) ? ' checked' : ''}>
+                        <span>${escHtml(r.name)}</span>
+                    </label>`
                   ).join('')
-                : '<option value="">No roles in this server</option>';
-            modRolesSelect.innerHTML = modOptions;
+                : '<p class="text-tertiary" style="padding:6px 8px;">No roles in this server</p>';
+            modRolesList.querySelectorAll('input[type="checkbox"]').forEach(cb =>
+                cb.addEventListener('change', refreshModRolesSummary)
+            );
+            refreshModRolesSummary();
 
             // Saved admin role: single id (or empty).
             const adminRaw = String(settings['dashboard_admin_role'] || '').trim();
@@ -313,12 +338,21 @@
                     : '<option value="">No roles in this server</option>';
             }
         } catch {
-            modRolesSelect.innerHTML = '<option value="">Roles unavailable</option>';
+            modRolesList.innerHTML = '<p class="text-tertiary" style="padding:6px 8px;">Roles unavailable</p>';
+            refreshModRolesSummary();
         }
     }
 
+    // Reflect aria-expanded on the summary as the dropdown opens/closes.
+    document.getElementById('mod-roles-dropdown')?.addEventListener('toggle', (event) => {
+        const toggle = document.getElementById('mod-roles-toggle');
+        if (toggle) toggle.setAttribute('aria-expanded', event.target.open ? 'true' : 'false');
+    });
+
     modRolesSave?.addEventListener('click', async () => {
-        const roleIds = Array.from(modRolesSelect.selectedOptions).map(o => o.value).filter(Boolean);
+        const roleIds = Array.from(
+            document.querySelectorAll('#mod-roles-list input[type="checkbox"]:checked')
+        ).map(cb => cb.value);
         const adminSelect = document.getElementById('dashboard-admin-role');
         const adminRoleId = (adminSelect && adminSelect.value) || '';
         modRolesSave.disabled = true;

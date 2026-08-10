@@ -3038,6 +3038,49 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .role-access-menu { position: relative; }
 .role-access-menu > summary { list-style: none; }
 .role-access-menu > summary::-webkit-details-marker { display: none; }
+
+/* Checkbox role picker (Settings → Dashboard Access moderator roles). */
+.checkbox-role-dropdown > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+.checkbox-role-dropdown > summary .checkbox-role-caret {
+    display: inline-flex;
+    color: var(--text-tertiary);
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+.checkbox-role-dropdown[open] > summary .checkbox-role-caret {
+    transform: rotate(180deg);
+}
+.checkbox-role-panel {
+    left: 0;
+    right: auto;
+    width: min(360px, calc(100vw - 2 * var(--space-md)));
+}
+.checkbox-role-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 220px;
+    overflow-y: auto;
+    margin-bottom: var(--space-xs);
+}
+.checkbox-role-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+.checkbox-role-row:hover { background: var(--bg-card-hover); }
+.checkbox-role-row input[type="checkbox"] { accent-color: var(--accent); flex-shrink: 0; }
 .role-access-popover {
     position: absolute;
     top: calc(100% + var(--space-xs));

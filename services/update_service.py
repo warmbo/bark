@@ -150,12 +150,15 @@ def _version_file() -> Path:
 
 
 def local_version() -> str:
-    """The running instance's release version (VERSION file)."""
-    try:
-        value = _version_file().read_text(encoding="utf-8").strip()
-        return value or "0.0.0"
-    except (OSError, UnicodeDecodeError):
-        return "0.0.0"
+    """The running instance's release version (VERSION file + build suffix).
+
+    Delegates to ``bark_version.__version__`` so the update card shows the
+    same version string as the dashboard footer. Comparison ignores the
+    ``+build`` suffix (see :func:`_version_key`).
+    """
+    import bark_version
+
+    return bark_version.__version__ or "0.0.0"
 
 
 def remote_version(remote: str, branch: str) -> str:
