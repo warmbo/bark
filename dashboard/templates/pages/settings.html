@@ -406,7 +406,7 @@
 
     let lastStatus = null;
 
-    async function loadUpdateStatus() {
+    async function loadUpdateStatus(showAvailable = false) {
         if (!updateCurrent) return;
         try {
             const branch = updateChannel?.value || 'main';
@@ -426,7 +426,6 @@
                 }
             }
             updateCurrent.textContent = status.current_version ? `v${status.current_version}` : '—';
-            updateAvailable.textContent = status.available_version ? `v${status.available_version}` : '—';
             if (updateRepo) {
                 const repo = status.repo_url || 'https://github.com';
                 updateRepo.href = repo;
@@ -436,7 +435,16 @@
             if (releasesEl && status.repo_url) {
                 releasesEl.href = `${status.repo_url.replace(/\/$/, '')}/releases`;
             }
-            updateApplyBtn.disabled = !status.update_available;
+            // The available version only appears after an explicit Check —
+            // boot should never leak the remote's version (or enable the
+            // Update button) on its own.
+            if (showAvailable) {
+                updateAvailable.textContent = status.available_version ? `v${status.available_version}` : '—';
+                updateApplyBtn.disabled = !status.update_available;
+            } else {
+                updateAvailable.textContent = '—';
+                updateApplyBtn.disabled = true;
+            }
             if (updateResult) {
                 updateResult.innerHTML = status.update_available
                     ? `<div class="state-panel"><div><strong>Update available</strong><p>v${escHtml(status.available_version || '?')} is ready — pull it from GitHub and restart the instance. A database backup is created automatically before updating.</p></div></div>`
@@ -449,8 +457,8 @@
         }
     }
 
-    updateCheckBtn?.addEventListener('click', loadUpdateStatus);
-    updateChannel?.addEventListener('change', loadUpdateStatus);
+    updateCheckBtn?.addEventListener('click', () => loadUpdateStatus(true));
+    updateChannel?.addEventListener('change', () => loadUpdateStatus(false));
     updateApplyBtn?.addEventListener('click', async () => {
         if (!lastStatus?.update_available) return;
         const channel = updateChannel?.value || 'main';

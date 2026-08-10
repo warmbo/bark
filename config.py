@@ -114,6 +114,15 @@ class Config:
     def __post_init__(self):
         self.data_dir = Path(self.data_dir).resolve()
 
+    @property
+    def needs_setup(self) -> bool:
+        """True when Bark has no Discord credentials yet — first-run setup.
+
+        The app boots a minimal setup server (no bot) that writes ``.env``
+        from the dashboard instead of requiring hand-edited configuration.
+        """
+        return not self.bot.token
+
     def validate_startup(self) -> None:
         """Validate settings required to start the complete Bark process."""
         if not self.bot.token:

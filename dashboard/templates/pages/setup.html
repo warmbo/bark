@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+{% from "components/icons.html" import icon %}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bark — First Time Setup</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        body { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+        .setup-shell { width: min(560px, 100%); }
+        .setup-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+        .setup-logo h1 { font-size: 22px; }
+        .setup-shell p.lede { color: var(--text-secondary); margin-bottom: 20px; }
+        .setup-card { padding: 24px; }
+        .setup-card .form-group { margin-bottom: 14px; }
+        .setup-card .form-hint { display: block; margin-top: 4px; }
+        .setup-result { margin-top: 14px; }
+        .setup-footer { margin-top: 18px; color: var(--text-tertiary); font-size: 12px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="setup-shell">
+        <div class="setup-logo">
+            <span class="module-nav-icon">{{ icon("zap", 22) }}</span>
+            <h1>Welcome to Bark</h1>
+        </div>
+        <p class="lede">Bark isn't configured yet. Enter your Discord application credentials and Bark will write its own <code>.env</code> — no hand-editing required.</p>
+
+        <div class="content-card setup-card">
+            <form id="setup-form">
+                <div class="form-group">
+                    <label class="form-label" for="setup-token">Discord bot token</label>
+                    <input class="form-input" id="setup-token" name="token" type="password" required autocomplete="off"
+                           placeholder="MTEz...xxxx.yyyy-zzzz">
+                    <span class="form-hint">From the Discord Developer Portal → your application → Bot → Reset Token.</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="setup-public-url">Public dashboard URL</label>
+                    <input class="form-input" id="setup-public-url" name="public_url" type="url" required
+                           value="{{ public_url }}" placeholder="https://bark.example.com">
+                    <span class="form-hint">The address users will open to reach this dashboard.</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="setup-command-prefix">Command prefix <span class="text-tertiary">(optional)</span></label>
+                    <input class="form-input" id="setup-command-prefix" name="command_prefix" type="text" value="!"
+                           placeholder="!" maxlength="8">
+                </div>
+
+                <hr class="setup-divider" style="border:none;border-top:1px solid var(--border-subtle);margin:18px 0;">
+
+                <div class="form-group">
+                    <label class="form-label" for="setup-client-id">OAuth2 client ID <span class="text-tertiary">(optional)</span></label>
+                    <input class="form-input" id="setup-client-id" name="client_id" type="text" autocomplete="off"
+                           placeholder="Discord app client ID">
+                    <span class="form-hint">Needed for Discord-login on the dashboard. Leave all OAuth fields empty to skip login for now.</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="setup-client-secret">OAuth2 client secret</label>
+                    <input class="form-input" id="setup-client-secret" name="client_secret" type="password" autocomplete="off"
+                           placeholder="Discord app client secret">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="setup-redirect-uri">Redirect URI</label>
+                    <input class="form-input" id="setup-redirect-uri" name="redirect_uri" type="url"
+                           value="{{ redirect_uri }}" placeholder="https://bark.example.com/auth/callback">
+                    <span class="form-hint">Must match exactly in the Discord Developer Portal → OAuth2 → Redirects.</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="setup-owner-ids">Owner Discord IDs</label>
+                    <input class="form-input" id="setup-owner-ids" name="owner_ids" type="text" autocomplete="off"
+                           placeholder="123456789012345678, 234567890123456789">
+                    <span class="form-hint">Comma-separated Discord user IDs that administer this instance.</span>
+                </div>
+
+                <div class="form-actions" style="padding-left:0;padding-right:0;">
+                    <button type="submit" class="btn btn-primary" id="setup-submit">Save configuration</button>
+                    <span class="form-hint" id="setup-status" role="status"></span>
+                </div>
+            </form>
+            <div class="workspace-data-card setup-result" id="setup-result" aria-live="polite" hidden></div>
+        </div>
+        <div class="setup-footer">Bark v{{ version }} — you can change everything later in <code>.env</code>.</div>
+    </div>
+
+    <script>
+        (() => {
+            const form = document.getElementById('setup-form');
+            const status = document.getElementById('setup-status');
+            const result = document.getElementById('setup-result');
+            const submit = document.getElementById('setup-submit');
+
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                submit.disabled = true;
+                status.textContent = 'Saving…';
+                status.style.color = '';
+                result.hidden = true;
+                try {
+                    const payload = Object.fromEntries(new FormData(form).entries());
+                    const res = await fetch('/api/setup', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success !== false) {
+                        result.hidden = false;
+                        result.innerHTML = `<div class="state-panel"><div><strong>${data.data?.message || 'Configuration saved'}</strong><p>${data.data?.restarting ? 'This page will disconnect as Bark restarts — just reload in a moment.' : 'Run: systemctl restart bark'}</p></div></div>`;
+                        status.textContent = '';
+                    } else {
+                        throw new Error(data.error || 'Setup failed');
+                    }
+                } catch (error) {
+                    status.textContent = error.message || 'Setup failed';
+                    status.style.color = 'var(--red)';
+                    submit.disabled = false;
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

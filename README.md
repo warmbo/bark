@@ -67,20 +67,19 @@ Requires Python 3.13+. Bark is developed with `uv`; a plain venv + pip also work
 git clone https://github.com/warmbo/bark.git
 cd bark
 uv sync --extra dev
-cp .env.example .env
 ```
 
-Set the bot token (and the OAuth2 pair if you want Discord-login on the dashboard) in `.env` — every supported setting is documented there:
+**No `.env` needed to start** — Bark detects that it's unconfigured and boots a first-time setup wizard:
+
+```bash
+uv run python app.py
+```
+
+Open `http://localhost:8090/setup` and enter your Discord bot token, public dashboard URL, and (optionally) the OAuth2 pair. Bark writes its own `.env` (restrictive permissions) and restarts — no hand-editing required. For a manual install you can still `cp .env.example .env` and set values yourself:
 
 ```dotenv
 BARK_BOT_TOKEN=replace-with-your-discord-bot-token
 BARK_PUBLIC_URL=https://bark.example.com
-```
-
-Run it:
-
-```bash
-uv run python app.py
 ```
 
 The dashboard serves on `BARK_DASHBOARD_HOST:BARK_DASHBOARD_PORT` (default `127.0.0.1:8090`); health is at `/api/v1/health`. Add the `deploy/bark.service.example` systemd user unit for a persistent install, and terminate TLS at a reverse proxy in production.

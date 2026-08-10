@@ -33,9 +33,22 @@ def setup_logging() -> None:
 
 async def main() -> None:
     setup_logging()
-    config.validate_startup()
 
     logger.info("Bark v%s starting up...", __version__)
+
+    # First-time setup: no BARK_BOT_TOKEN yet — boot the setup wizard
+    # (dashboard-only, no bot) so the user can write .env from the browser.
+    if config.needs_setup:
+        from dashboard.setup_app import run_setup
+
+        logger.warning(
+            "No BARK_BOT_TOKEN configured — starting in first-time setup mode "
+            "(open the dashboard URL to complete setup)"
+        )
+        await run_setup()
+        return
+
+    config.validate_startup()
 
     # Initialize database
     await init_db()
