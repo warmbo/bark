@@ -59,7 +59,10 @@ async def list_modules(request: Request, guild_id: str):
                     "name": name,
                     "version": module.version,
                     "description": module.description,
-                    "enabled": db_config.enabled if db_config else True,
+                    # Authoritative per-guild state: persisted row wins; with no
+                    # row, core modules default enabled and add-on plugins
+                    # default disabled — never a blanket True.
+                    "enabled": bot.modules.is_enabled_for_guild(guild_id, name),
                     "priority": db_config.priority if db_config else 100,
                     "config": json.loads(db_config.config)
                     if db_config and db_config.config
@@ -190,9 +193,7 @@ async def get_module(request: Request, guild_id: str, module_name: str):
                 "version": module.version,
                 "description": module.description,
                 "author": module.author,
-                "enabled": db_config.enabled
-                if db_config
-                else True,  # default: enabled on fresh install
+                "enabled": bot.modules.is_enabled_for_guild(guild_id, module_name),
                 "priority": db_config.priority if db_config else 100,
                 "config": json.loads(db_config.config) if db_config and db_config.config else {},
                 "settings_schema": module.get_settings_schema(),

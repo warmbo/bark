@@ -1122,6 +1122,64 @@ async def test_list_modules(client):
         assert "modules" in data["data"]
 
 
+@pytest.mark.asyncio
+async def test_list_modules_reports_true_guild_state(client, app):
+    """The modules API must report the authoritative per-guild state.
+
+    Regression for 2026-08-10: missing ModuleConfig rows defaulted to
+    enabled, so add-on plugins with no row reported enabled while the
+    runtime defaulted them to disabled.
+    """
+    from unittest.mock import MagicMock
+
+    def make_module(name):
+        m = MagicMock()
+        m.version = "1.0.0"
+        m.description = f"{name} plugin"
+        m.get_commands.return_value = []
+        m.get_events.return_value = []
+        m.get_settings_schema.return_value = {}
+        return m
+
+    app.state.bot.modules.get_all_modules.return_value = {
+        "logging": make_module("logging"),
+        "fun_facts": make_module("fun_facts"),
+    }
+    app.state.bot.modules.plugin_names.return_value = {"fun_facts"}
+    # No persisted rows: core defaults enabled, plugin defaults disabled.
+    app.state.bot.modules.is_enabled_for_guild.side_effect = (
+        lambda gid, name: name not in {"fun_facts"}
+    )
+
+    resp = await client.get("/api/v1/guilds/1/modules")
+    assert resp.status_code == 200
+    by_name = {m["name"]: m["enabled"] for m in resp.json()["data"]["modules"]}
+    assert by_name["logging"] is True
+    assert by_name["fun_facts"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_module_reports_true_guild_state(client, app):
+    """Single-module API must agree with the runtime per-guild state."""
+    from unittest.mock import MagicMock
+
+    module = MagicMock()
+    module.name = "fun_facts"
+    module.version = "1.0.0"
+    module.description = "fun facts plugin"
+    module.author = "test"
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    module.get_settings_schema.return_value = {}
+    app.state.bot.modules.get_module.return_value = module
+    app.state.bot.modules.is_enabled_for_guild.return_value = False
+
+    resp = await client.get("/api/v1/guilds/1/modules/fun_facts")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["enabled"] is False
+
+
 # ── Manifest ──────────────────────────────────────────
 
 
