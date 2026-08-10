@@ -133,7 +133,7 @@
             {% include "components/bot_customization.html" %}
         </div>
 
-        <!-- Side column: Module Configuration, then Updates -->
+        <!-- Side column: Module Configuration, Config Health, then Updates -->
         <div class="settings-side">
             <div class="content-card">
                 <div class="card-header">
@@ -157,7 +157,14 @@
                         {% endfor %}
                     {% endif %}
                 {% endif %}
+                </div>
+            </div>
 
+            <!-- Config Health -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("activity", 16) }} Config Health</h2><p class="card-description">Configuration issues across every module in this server.</p></div>
+                </div>
                 <div class="config-health" id="settings-health">
                     <span class="config-health-label">{{ icon("activity", 14) }} Config health</span>
                     <span class="config-health-status" id="settings-health-status">Loading...</span>

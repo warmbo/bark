@@ -1494,6 +1494,12 @@ textarea:focus-visible,
     padding: var(--space-sm) var(--space-lg);
     border-top: 1px solid var(--border-subtle);
 }
+/* As its own card (Settings → Config Health) there is no list above to
+   divide from, so drop the top divider + margin. */
+.content-card > .config-health {
+    margin-top: 0;
+    border-top: 0;
+}
 .config-health-label { font-size: 12px; font-weight: 600; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
 .config-health-status { font-size: 13px; font-weight: 500; }
 .config-health-status.status-good { color: var(--green); }
