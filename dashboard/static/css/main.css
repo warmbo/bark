@@ -3040,6 +3040,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .role-access-menu > summary::-webkit-details-marker { display: none; }
 
 /* Checkbox role picker (Settings → Dashboard Access moderator roles). */
+.checkbox-role-dropdown { width: 100%; }
 .checkbox-role-dropdown > summary {
     display: flex;
     align-items: center;
@@ -3057,10 +3058,18 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .checkbox-role-dropdown[open] > summary .checkbox-role-caret {
     transform: rotate(180deg);
 }
-.checkbox-role-panel {
-    left: 0;
-    right: auto;
-    width: min(360px, calc(100vw - 2 * var(--space-md)));
+.checkbox-role-dropdown .checkbox-role-panel {
+    /* In-flow panel (not an overlay popover): the card and .info-value both
+       clip overflow, so an absolutely-positioned panel would be cut off and
+       the dropdown would look dead. Expanding the row in place is immune. */
+    margin-top: var(--space-xs);
+    padding: var(--space-xs);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-elevated);
+    position: static;
+    width: auto;
+    box-shadow: none;
 }
 .checkbox-role-list {
     display: flex;
@@ -3081,6 +3090,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 }
 .checkbox-role-row:hover { background: var(--bg-card-hover); }
 .checkbox-role-row input[type="checkbox"] { accent-color: var(--accent); flex-shrink: 0; }
+/* The moderator-roles row's value cell must not clip/squeeze the dropdown. */
+.info-row:has(.checkbox-role-dropdown) .info-value {
+    flex: 1;
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+}
 .role-access-popover {
     position: absolute;
     top: calc(100% + var(--space-xs));
