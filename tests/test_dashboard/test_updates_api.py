@@ -188,3 +188,53 @@ async def test_perform_update_allows_dev_when_on_dev_channel(app, monkeypatch):
         )
     assert response.status_code == 200
     assert started == ["dev"]
+
+
+# ── Live terminal log ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_update_log_requires_owner(app):
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("43")),  # not the owner
+    ) as client:
+        response = await client.get("/api/v1/instance/update/log")
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_log_streams_entries_and_after_cursor(app, monkeypatch):
+    from services import update_service
+
+    update_service.clear_update_log()
+    update_service.log_line("$ git fetch github main", "cmd")
+    update_service.log_line("✓ Already up to date", "ok")
+    update_service.set_update_active(True)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        first = await client.get("/api/v1/instance/update/log")
+        body = first.json()["data"]
+        assert body["active"] is True
+        assert len(body["entries"]) == 2
+        assert body["entries"][0]["line"] == "$ git fetch github main"
+        assert body["entries"][0]["level"] == "cmd"
+        last = body["last"]
+        assert last == 2
+
+        # after=<last> returns only newer entries
+        second = await client.get(f"/api/v1/instance/update/log?after={last}")
+        assert second.json()["data"]["entries"] == []
+
+        # active flag flips when the flow finishes
+        update_service.set_update_active(False)
+        third = await client.get("/api/v1/instance/update/log")
+        assert third.json()["data"]["active"] is False
+
+    update_service.clear_update_log()
+    update_service.set_update_active(False)

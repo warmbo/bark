@@ -26,6 +26,8 @@ import asyncio
 import logging
 import os
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 from config import config
@@ -33,6 +35,49 @@ from config import config
 logger = logging.getLogger("bark.update")
 
 CHANNEL_CONFIG_KEY = "bark.update.channel"
+
+# ── Live terminal log ─────────────────────────────────────
+# The update flow runs in a worker thread while the dashboard streams its
+# progress to the browser (GET /instance/update/log). Entries are appended
+# with an incrementing seq so the UI can poll with ?after=<seq>.
+_update_log: list[dict] = []
+_update_log_lock = threading.Lock()
+_update_log_active = False
+
+_MAX_LOG_ENTRIES = 500
+
+
+def log_line(line: str, level: str = "info") -> None:
+    """Append one terminal line to the update log (thread-safe)."""
+    with _update_log_lock:
+        _update_log.append(
+            {
+                "seq": len(_update_log) + 1,
+                "ts": time.strftime("%H:%M:%S"),
+                "level": level,
+                "line": line,
+            }
+        )
+        if len(_update_log) > _MAX_LOG_ENTRIES:
+            del _update_log[: len(_update_log) - _MAX_LOG_ENTRIES]
+
+
+def clear_update_log() -> None:
+    with _update_log_lock:
+        _update_log.clear()
+
+
+def set_update_active(active: bool) -> None:
+    global _update_log_active
+    _update_log_active = active
+
+
+def get_update_log(after: int = 0) -> dict:
+    """Return log entries newer than ``after`` plus the last seq + active flag."""
+    with _update_log_lock:
+        entries = [e for e in _update_log if e["seq"] > after]
+        last = _update_log[-1]["seq"] if _update_log else 0
+        return {"entries": entries, "last": last, "active": _update_log_active}
 
 
 def repo_root() -> Path:
@@ -58,6 +103,23 @@ def _run(
         raise RuntimeError(
             f"command failed ({result.returncode}): {' '.join(cmd)}\n{result.stderr[-500:]}"
         )
+    return result
+
+
+def _run_u(
+    cmd: list[str], *, timeout: int = 60, check: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """Run a command and mirror it + its output into the live terminal log."""
+    log_line("$ " + " ".join(cmd), "cmd")
+    try:
+        result = _run(cmd, timeout=timeout, check=check)
+    except Exception as exc:
+        log_line(f"error: {exc}", "error")
+        raise
+    for line in (result.stdout or "").splitlines():
+        log_line(line)
+    for line in (result.stderr or "").splitlines():
+        log_line(line, "error" if result.returncode else "warn")
     return result
 
 
@@ -318,12 +380,19 @@ def apply_update(channel: str) -> dict:
     old_commit = current_commit()
     branch = channel_to_branch(channel)
     channel_label = "stable" if channel != "dev" else "dev"
+    log_line(f"Updating Bark from the '{channel_label}' channel ({branch})", "header")
+    log_line(f"Current build: {old_commit[:10]}", "dim")
     persisted = get_channel()
     if persisted == "dev" and channel_label != "dev":
         logger.warning(
             "Refusing update: instance is on the Dev channel, requested %s (%s)",
             channel_label,
             branch,
+        )
+        log_line(
+            "This instance is on the Dev channel and can only update from the "
+            "dev branch — moving a Dev instance to Stable is not allowed.",
+            "error",
         )
         return {
             "ok": False,
@@ -334,8 +403,13 @@ def apply_update(channel: str) -> dict:
             ),
         }
     try:
+        log_line(f"$ git fetch {config.instance.update_remote} {branch}", "cmd")
         remote = _resolve_remote(branch)
         if remote is None:
+            log_line(
+                f"could not find branch '{branch}' on remote '{config.instance.update_remote}'",
+                "error",
+            )
             return {
                 "ok": False,
                 "error": f"could not find branch '{branch}' on remote '{config.instance.update_remote}'",
@@ -343,11 +417,14 @@ def apply_update(channel: str) -> dict:
         available = _remote_commit(remote, branch)
     except Exception as exc:
         logger.exception("Update fetch failed")
+        log_line(f"fetch failed: {exc}", "error")
         return {"ok": False, "error": f"fetch failed: {exc}"}
     if not available:
+        log_line(f"could not resolve {remote}/{branch}", "error")
         return {"ok": False, "error": f"could not resolve {remote}/{branch}"}
     if available == old_commit:
         set_channel(channel_label)
+        log_line(f"✓ Already up to date at {old_commit[:10]} ({branch})", "ok")
         return {"ok": True, "restarted": False, "message": "already up to date"}
     # No-downgrade guard: refuse to reset backwards to a stale remote.
     if _is_ancestor(available, old_commit):
@@ -357,6 +434,10 @@ def apply_update(channel: str) -> dict:
             branch,
             available,
             old_commit,
+        )
+        log_line(
+            f"remote {remote}/{branch} is behind this instance ({available[:10]} vs {old_commit[:10]}) — no downgrade applied",
+            "error",
         )
         return {
             "ok": False,
@@ -369,16 +450,20 @@ def apply_update(channel: str) -> dict:
     # Pre-update backup: every update is revertible via the snapshot taken
     # right before the checkout moves. A failed backup aborts the update.
     backup = None
+    log_line("Backing up the database before the update…", "dim")
     try:
         backup = _pre_update_backup()
+        log_line(f"✓ Backup saved: {backup['filename']}", "ok")
     except Exception as exc:
         logger.exception("Pre-update backup failed; update aborted")
+        log_line(f"pre-update backup failed: {exc} — update aborted", "error")
         return {"ok": False, "error": f"pre-update backup failed: {exc}"}
 
     try:
-        _run(["git", "reset", "--hard", f"{remote}/{branch}"], timeout=120, check=True)
+        _run_u(["git", "reset", "--hard", f"{remote}/{branch}"], timeout=120, check=True)
     except Exception as exc:
         logger.exception("Update reset failed")
+        log_line(f"reset failed: {exc}", "error")
         return {"ok": False, "error": f"reset failed: {exc}"}
 
     new_commit = current_commit()
@@ -388,12 +473,17 @@ def apply_update(channel: str) -> dict:
     if _requirements_changed(old_commit):
         pip = str(repo_root() / ".venv" / "bin" / "pip")
         if Path(pip).exists():
+            log_line("Dependency changes detected — installing requirements…", "dim")
             try:
-                _run([pip, "install", "-r", "requirements.txt"], timeout=600, check=True)
+                _run_u([pip, "install", "-r", "requirements.txt"], timeout=600, check=True)
+                log_line("✓ Dependencies up to date", "ok")
             except Exception as exc:
                 logger.warning("pip install failed after update: %s", exc)
+                log_line(f"pip install failed (continuing): {exc}", "warn")
 
     logger.info("Update applied: %s -> %s (%s/%s)", old_commit, new_commit, channel, branch)
+    log_line(f"✓ Update applied: {old_commit[:10]} → {new_commit[:10]} ({channel}/{branch})", "ok")
+    log_line("Restarting the process — the dashboard will reconnect in a few seconds…", "dim")
     return {
         "ok": True,
         "restarted": True,
@@ -407,11 +497,16 @@ def apply_update(channel: str) -> dict:
 
 async def apply_update_async(branch: str) -> dict:
     """Run the update in a worker thread, then exit so systemd restarts us."""
-    await asyncio.sleep(1.5)  # let the HTTP response flush first
-    result = await asyncio.to_thread(apply_update, branch)
-    if result.get("restarted"):
-        logger.info("Exiting process for restart (pid %s)", os.getpid())
-        os._exit(0)
-    if not result.get("ok"):
-        logger.error("Update did not apply; staying on current build: %s", result)
-    return result
+    clear_update_log()
+    set_update_active(True)
+    try:
+        await asyncio.sleep(1.5)  # let the HTTP response flush first
+        result = await asyncio.to_thread(apply_update, branch)
+        if result.get("restarted"):
+            logger.info("Exiting process for restart (pid %s)", os.getpid())
+            os._exit(0)
+        if not result.get("ok"):
+            logger.error("Update did not apply; staying on current build: %s", result)
+        return result
+    finally:
+        set_update_active(False)

@@ -73,3 +73,13 @@ async def perform_update(request: Request, payload: dict):
             "branch": channel,
         }
     )
+
+
+@router.get("/instance/update/log")
+async def update_log(request: Request, after: int = 0):
+    """Stream the live update terminal log (owner-only, polled by the UI)."""
+    if not can_manage_instance(request):
+        return api_error("Owner access required", status_code=403)
+    from services.update_service import get_update_log
+
+    return api_success(get_update_log(max(after, 0)))

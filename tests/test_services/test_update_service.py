@@ -235,6 +235,25 @@ def test_check_update_defaults_to_persisted_channel(repo, monkeypatch):
     assert status["channel"] == "dev"
 
 
+def test_apply_update_streams_terminal_log(repo):
+    """apply_update mirrors its commands + outcome into the live log."""
+    update_service.clear_update_log()
+    result = update_service.apply_update("main")  # in-sync fixture
+    assert result["ok"] is True
+
+    log = update_service.get_update_log(0)
+    lines = [e["line"] for e in log["entries"]]
+    assert any(line.startswith("Updating Bark from the 'stable' channel") for line in lines)
+    assert any(line.startswith("$ git fetch") for line in lines)
+    assert any("Already up to date" in line for line in lines)
+    assert log["last"] == len(log["entries"])
+
+    # after=<last> returns nothing new; clearing empties the log.
+    assert update_service.get_update_log(log["last"])["entries"] == []
+    update_service.clear_update_log()
+    assert update_service.get_update_log(0)["entries"] == []
+
+
 def test_check_update_reports_error_when_branch_on_no_remote(repo, monkeypatch):
     work, _ = repo
     monkeypatch.setattr(update_service.config.instance, "repo_dir", str(work))

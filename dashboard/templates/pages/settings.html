@@ -247,6 +247,18 @@
     {% endif %}
 
 </div>
+
+<!-- Live update terminal (opened by Update & Restart) -->
+<div class="dialog-overlay" id="update-terminal-overlay" hidden>
+    <div class="update-terminal-dialog" role="dialog" aria-modal="true" aria-labelledby="update-terminal-title">
+        <h2 class="update-terminal-title" id="update-terminal-title">{{ icon("terminal", 18) }} Updating Bark</h2>
+        <p class="update-terminal-subtitle" id="update-terminal-subtitle">Running update commands — this window shows exactly what is happening.</p>
+        <div class="update-terminal" id="update-terminal-log" aria-live="polite" tabindex="0"></div>
+        <div class="dialog-actions">
+            <button type="button" class="btn" id="update-terminal-close" disabled>{{ icon("x", 14) }} Close</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -459,6 +471,66 @@
 
     updateCheckBtn?.addEventListener('click', () => loadUpdateStatus(true));
     updateChannel?.addEventListener('change', () => loadUpdateStatus(false));
+    // ── Live update terminal ──────────────────────────
+
+    const termOverlay = document.getElementById('update-terminal-overlay');
+    const termLog = document.getElementById('update-terminal-log');
+    const termClose = document.getElementById('update-terminal-close');
+    const termSubtitle = document.getElementById('update-terminal-subtitle');
+    let termTimer = null;
+    let termAfter = 0;
+
+    function appendTermLine(entry) {
+        if (!termLog) return;
+        const line = document.createElement('div');
+        line.className = `t-${entry.level || 'info'}`;
+        line.textContent = `${entry.ts || ''}  ${entry.line || ''}`;
+        termLog.appendChild(line);
+        termLog.scrollTop = termLog.scrollHeight;
+    }
+
+    function openUpdateTerminal() {
+        if (!termOverlay) return;
+        termAfter = 0;
+        termLog.innerHTML = '';
+        if (termSubtitle) termSubtitle.textContent = 'Running update commands — this window shows exactly what is happening.';
+        termClose.disabled = true;
+        termOverlay.hidden = false;
+        termTimer = setInterval(pollUpdateLog, 900);
+        pollUpdateLog();
+    }
+
+    async function pollUpdateLog() {
+        if (!termOverlay || termOverlay.hidden) return;
+        try {
+            const result = await safeFetch(`/api/v1/instance/update/log?after=${termAfter}`, {cache: 'no-cache'});
+            const data = result?.data || {};
+            (data.entries || []).forEach(appendTermLine);
+            termAfter = data.last || termAfter;
+            if (data.active === false && termAfter > 0) {
+                clearInterval(termTimer);
+                termTimer = null;
+                termClose.disabled = false;
+                appendTermLine({level: 'ok', line: '— Finished.'});
+                if (termSubtitle) termSubtitle.textContent = 'Update finished. The page reloads once the instance is back online.';
+            }
+        } catch (error) {
+            // The instance restarts mid-update (os._exit) — polls briefly
+            // fail; that is expected. Keep polling until the reload timer.
+        }
+    }
+
+    termClose?.addEventListener('click', () => {
+        if (termTimer) { clearInterval(termTimer); termTimer = null; }
+        termOverlay.hidden = true;
+    });
+
+    termOverlay?.addEventListener('click', (event) => {
+        if (event.target === termOverlay && !termClose.disabled) {
+            termOverlay.hidden = true;
+        }
+    });
+
     updateApplyBtn?.addEventListener('click', async () => {
         if (!lastStatus?.update_available) return;
         const channel = updateChannel?.value || 'main';
@@ -482,6 +554,7 @@
                 ? ` Database backed up as ${escHtml(result.data.backup.filename)}.`
                 : '';
             updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>The page will reload once the instance is back online.${backupNote}</p></div></div>`;
+            openUpdateTerminal();
             setTimeout(() => window.location.reload(), 12000);
         } catch (error) {
             updateApplyBtn.disabled = false;
