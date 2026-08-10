@@ -57,7 +57,7 @@ Every module subclasses `BarkModule` and declares its commands, events, settings
 - [**bark-plugins**](https://github.com/warmbo/bark-plugins) — single-file add-on plugins installed from the dashboard.
 - `bark-dev` is not a separate repository: it is the **`dev` branch** of this repo, deployed as a second instance alongside `main`.
 
-The self-update manager (`services/update_service.py`) always pulls from the **GitHub** mirror — stable channel tracks `main`, dev tracks `dev` — and refuses any update that would move the instance backwards (stale-mirror guard). The mirror must be kept in sync by the owner; Forgejo (`origin`) remains the authoritative push target.
+The self-update manager (`services/update_service.py`) always pulls from the **GitHub** mirror — stable channel tracks `main`, dev tracks `dev` — and refuses any update that would move the instance backwards (stale-mirror guard). Channels are enforced server-side: a Dev-channel instance can only update from `dev`, never jump to `main` on version number alone. Every update snapshots the database first; a failed backup aborts the update. The mirror must be kept in sync by the owner; Forgejo (`origin`) remains the authoritative push target.
 
 ## Quick start
 
@@ -66,6 +66,8 @@ One command installs everything (git, curl, Python 3.13+ if missing), clones the
 ```bash
 curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install.sh | bash
 ```
+
+> **Fresh Debian/Ubuntu?** The minimal image ships no `curl` — install it first: `apt-get install -y curl` (or use `wget -qO- … | bash`).
 
 When it finishes, open the printed URL (default `http://127.0.0.1:8090/setup`) — Bark boots a **first-time setup wizard** and writes its own `.env` from the browser, so no hand-editing is required. On a remote server, SSH-tunnel to that URL or reinstall with `BARK_INSTALL_HOST=0.0.0.0` for LAN access.
 
@@ -119,6 +121,7 @@ Dashboard authorization has four ordered roles: `viewer < moderator < admin < ow
 | [Module workspace](docs/module-workspace.md) | Standard module tab layout and behavior |
 | [Moderation workflows](docs/moderation-workflows.md) | Case, warning, and voice flows |
 | [Testing](docs/testing.md) | Test suite layout and conventions |
+| [Install test (Debian 13)](docs/install-test-debian13.md) | Verbatim quick-start run on a fresh container + installer issues found |
 
 ## Development
 
