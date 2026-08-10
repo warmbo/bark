@@ -15,10 +15,14 @@ from database.models.permissions import DashboardGuildAccess
 DISCORD_ADMINISTRATOR = 0x8
 DISCORD_MANAGE_GUILD = 0x20
 
-# GuildSetting key holding the JSON array of role IDs a server owner has
-# designated as "moderator" for dashboard access. When set, members holding
-# one of these roles are shown as ready to manage that server.
+# GuildSetting keys holding the dashboard staff roles a server owner has
+# designated. Moderator roles are a JSON array of role IDs; the admin role is
+# a single role ID (or empty). Nothing else grants dashboard privileges —
+# Discord's ADMINISTRATOR/MANAGE_GUILD permissions are deliberately NOT
+# treated as dashboard admin/moderator (requirement: no role is implied admin
+# beyond what is configured, plus the server/instance owners).
 MODERATOR_ROLES_SETTING = "dashboard_moderator_roles"
+ADMIN_ROLE_SETTING = "dashboard_admin_role"
 
 
 def parse_moderator_role_ids(value: str | None) -> set[str]:
@@ -36,6 +40,19 @@ def parse_moderator_role_ids(value: str | None) -> set[str]:
     except (TypeError, ValueError):
         pass
     return {part.strip() for part in str(value).split(",") if part.strip()}
+
+
+def parse_admin_role_id(value: str | None) -> str | None:
+    """Parse the persisted single admin-role setting (JSON string or plain)."""
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, str) and parsed:
+            return parsed
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip() or None
 
 
 def _roles_from_access(access: DashboardGuildAccess) -> set[str]:
@@ -71,42 +88,73 @@ async def get_dashboard_moderator_roles(
     }
 
 
+async def get_dashboard_admin_role(
+    session: AsyncSession,
+    guild_ids: Iterable[str],
+) -> dict[str, str | None]:
+    """Load each guild's owner-configured dashboard admin role.
+
+    Returns a mapping of guild_id to the single role ID that counts as
+    "admin" for that server (None when unconfigured).
+    """
+    from sqlalchemy import select
+
+    from database.models.guild import GuildSetting
+
+    ids = [str(guild_id) for guild_id in guild_ids]
+    if not ids:
+        return {}
+    result = await session.execute(
+        select(GuildSetting).where(
+            GuildSetting.guild_id.in_(ids),
+            GuildSetting.key == ADMIN_ROLE_SETTING,
+        )
+    )
+    return {
+        row.guild_id: parse_admin_role_id(row.value)
+        for row in result.scalars().all()
+    }
+
+
 def user_ready_to_manage(
     access: DashboardGuildAccess,
     moderator_role_ids: set[str],
+    admin_role_id: str | None = None,
 ) -> bool:
-    """Return whether the user has admin or moderator rights in this server.
+    """Return whether the user can manage this server in the dashboard.
 
-    Admin rights come from Discord itself (server owner or the
-    ADMINISTRATOR permission). Moderator rights come from the MANAGE_GUILD
-    permission or from holding one of the roles the server owner designated
-    as moderator for dashboard access (per-server via the
-    ``dashboard_moderator_roles`` setting).
+    Grants come ONLY from: being the server owner, holding the owner-
+    configured admin role, or holding one of the owner-configured moderator
+    roles. Discord's ADMINISTRATOR/MANAGE_GUILD permissions are intentionally
+    not treated as dashboard privileges (explicit staff roles only).
     """
     if access.owner:
         return True
-    if access.permissions & (DISCORD_ADMINISTRATOR | DISCORD_MANAGE_GUILD):
+    member_roles = _roles_from_access(access)
+    if admin_role_id and admin_role_id in member_roles:
         return True
-    return bool(_roles_from_access(access) & moderator_role_ids)
+    return bool(member_roles & moderator_role_ids)
 
 
 def role_from_access_with_staff_roles(
     access: DashboardGuildAccess,
     moderator_role_ids: set[str],
+    admin_role_id: str | None = None,
 ) -> str:
     """Map a persisted access snapshot to a dashboard role tier.
 
-    Like ``role_from_access`` but also honours the server owner's
-    configured moderator roles: holding one of those roles upgrades the
-    user to ``moderator`` even without Discord management permissions.
-    Used by the request middleware so API gating matches the per-server
-    "Ready to manage" shown on the server list.
+    Honors the server owner's configured admin + moderator roles: admin role
+    → ``admin``, moderator roles → ``moderator``, server owner → ``admin``.
+    Discord permissions alone never imply a dashboard role (explicit staff
+    roles only). Used by the request middleware so API gating matches the
+    per-server "Ready to manage" shown on the server list.
     """
-    if access.owner or (access.permissions & DISCORD_ADMINISTRATOR):
+    if access.owner:
         return "admin"
-    if (access.permissions & DISCORD_MANAGE_GUILD) or (
-        _roles_from_access(access) & moderator_role_ids
-    ):
+    member_roles = _roles_from_access(access)
+    if admin_role_id and admin_role_id in member_roles:
+        return "admin"
+    if member_roles & moderator_role_ids:
         return "moderator"
     return "viewer"
 
@@ -119,14 +167,12 @@ def can_manage_discord_guild(*, owner: bool, permissions: int) -> bool:
 def role_from_access(*, owner: bool, permissions: int) -> str:
     """Map Discord guild permissions to the dashboard role tier for that guild.
 
-    Mirrors ``derive_dashboard_role`` at guild granularity: an owner or
-    ADMINISTRATOR is admin, a MANAGE_GUILD holder is moderator, and every
-    other member is a read-only viewer.
+    Server owners are admins; no Discord permission implies a dashboard role
+    (staff roles are the only other grant). Mirrors the per-guild
+    ``role_from_access_with_staff_roles`` at login time.
     """
-    if owner or (_permission_value(permissions) & DISCORD_ADMINISTRATOR):
+    if owner:
         return "admin"
-    if _permission_value(permissions) & DISCORD_MANAGE_GUILD:
-        return "moderator"
     return "viewer"
 
 
@@ -330,15 +376,19 @@ def build_guild_catalog(
     *,
     client_id: str,
     moderator_roles_by_guild: dict[str, set[str]] | None = None,
+    admin_roles_by_guild: dict[str, str | None] | None = None,
 ) -> list[dict[str, Any]]:
     """Merge a user's complete Discord server list with live bot state.
 
     ``moderator_roles_by_guild`` carries each guild's owner-configured
-    moderator role IDs (see ``get_dashboard_moderator_roles``); it drives the
-    per-server ``ready_to_manage`` flag shown as "Ready to manage".
+    moderator role IDs and ``admin_roles_by_guild`` the owner-configured
+    admin role (see ``get_dashboard_moderator_roles`` /
+    ``get_dashboard_admin_role``); they drive the per-server
+    ``ready_to_manage`` flag shown as "Ready to manage".
     """
     installed = {str(guild.id): guild for guild in bot_guilds}
     moderator_roles_by_guild = moderator_roles_by_guild or {}
+    admin_roles_by_guild = admin_roles_by_guild or {}
     catalog: list[dict[str, Any]] = []
     for access in oauth_guilds:
         guild = installed.get(access.guild_id)
@@ -363,6 +413,7 @@ def build_guild_catalog(
                 "ready_to_manage": user_ready_to_manage(
                     access,
                     moderator_roles_by_guild.get(access.guild_id, set()),
+                    admin_roles_by_guild.get(access.guild_id),
                 ),
                 "access_tier": access_tier,
                 "invite_url": build_bot_invite_url(client_id, access.guild_id),

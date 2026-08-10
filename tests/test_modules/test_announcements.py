@@ -152,7 +152,7 @@ async def test_post_announcement_maps_media_picker_payload(db, monkeypatch):
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
+            [{"id": "1", "name": "Test Guild", "permissions": "0", "owner": True}],
         )
 
     bot = MagicMock()
@@ -291,7 +291,7 @@ async def test_post_announcement_applies_embed_color(db, monkeypatch):
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
+            [{"id": "1", "name": "Test Guild", "permissions": "0", "owner": True}],
         )
 
     bot = MagicMock()
@@ -370,7 +370,7 @@ async def test_post_announcement_invalid_color_falls_back_to_blurple(db, monkeyp
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
+            [{"id": "1", "name": "Test Guild", "permissions": "0", "owner": True}],
         )
 
     bot = MagicMock()

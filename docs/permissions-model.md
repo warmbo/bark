@@ -86,11 +86,15 @@ server has its own "who may manage Bark here" rule, computed by
 A user is **Ready to manage** a server when any of:
 
 1. they are the **guild owner** (`owner` flag on the access row), or
-2. their Discord permission bitmask includes `ADMINISTRATOR` or
-   `MANAGE_GUILD`, or
-3. they hold a **moderator role** the server owner configured in
+2. they hold the **admin role** the server owner configured in
    Settings → Dashboard Access (stored per-guild in `GuildSetting`
-   key `dashboard_moderator_roles`, a JSON array of role IDs).
+   key `dashboard_admin_role`, a single role ID), or
+3. they hold a **moderator role** the server owner configured
+   (`dashboard_moderator_roles`, a JSON array of role IDs).
+
+Discord's `ADMINISTRATOR` / `MANAGE_GUILD` permissions are deliberately
+**not** treated as dashboard privileges — only the configured staff roles
+and the server/instance owners count (explicit-roles model).
 
 Supporting pieces:
 
@@ -99,12 +103,10 @@ Supporting pieces:
   access row's `roles` column (cookie sessions are too small for full
   guild state). Role changes therefore take effect at the next sign-in
   (documented, by design).
-- **Settings → Dashboard Access** — the server owner picks a **single
-  moderator role** from a dropdown (stored as a plain role ID; legacy
-  JSON-array values still parse). The same card lists the **Admin
-  access** roles: every role with the Discord `ADMINISTRATOR`
-  permission, flagged by `GET /guilds/{guild_id}/roles`
-  (`administrator: true`).
+- **Settings → Dashboard Access** — the server owner picks **multiple
+  moderator roles** (multi-select) and a **single admin role** from
+  dropdowns (moderators stored as a JSON array; admin as a single role
+  ID; legacy plain values still parse).
 - **View-only experience** — a member who is not ready to manage sees a
   read-only **server status page** (`/guild/{id}` renders
   `guild_viewer.html`: members, channels, roles, boosts, emojis, created,

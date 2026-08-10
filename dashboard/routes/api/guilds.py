@@ -46,13 +46,16 @@ async def list_guilds(request: Request):
         from database.engine import session_scope
         from services.dashboard_access import (
             build_guild_catalog,
+            get_dashboard_admin_role,
             get_dashboard_moderator_roles,
             get_user_guild_access,
         )
 
         async with session_scope() as session:
             access = await get_user_guild_access(session, user["id"])
-            moderator_roles = await get_dashboard_moderator_roles(
+            guild_ids = (row.guild_id for row in access)
+            moderator_roles = await get_dashboard_moderator_roles(session, guild_ids)
+            admin_roles = await get_dashboard_admin_role(
                 session, (row.guild_id for row in access)
             )
         return api_success(
@@ -62,6 +65,7 @@ async def list_guilds(request: Request):
                     bot.guilds,
                     client_id=config.oauth2.client_id,
                     moderator_roles_by_guild=moderator_roles,
+                    admin_roles_by_guild=admin_roles,
                 )
             }
         )

@@ -68,22 +68,27 @@
             <!-- Dashboard Access -->
             <div class="content-card">
                 <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("shield", 16) }} Dashboard Access</h2><p class="card-description">Who can manage this server in the dashboard.</p></div>
+                    <div><h2 class="card-title">{{ icon("shield", 16) }} Dashboard Access</h2><p class="card-description">Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.</p></div>
                 </div>
                 <div class="module-info-body">
                     <div class="info-row">
-                        <span class="info-label">Moderator role</span>
+                        <span class="info-label">Moderator roles</span>
                         <span class="info-value">
-                            <select id="dashboard-mod-roles" name="dashboard_moderator_roles" class="form-select" aria-label="Moderator role" aria-describedby="dashboard-mod-roles-hint" style="width:100%">
-                                <option value="">No moderator role…</option>
+                            <select id="dashboard-mod-roles" name="dashboard_moderator_roles" class="form-select" aria-label="Moderator roles" aria-describedby="dashboard-mod-roles-hint" style="width:100%" multiple size="6">
+                                <option value="">No moderator roles…</option>
                             </select>
+                            <p class="form-hint" id="dashboard-mod-roles-hint">Ctrl/Cmd-click to select multiple. Members holding any of these roles can moderate this server in the dashboard.</p>
                         </span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">Admin access</span>
-                        <span class="info-value" id="dashboard-admin-roles">—</span>
+                        <span class="info-label">Admin role</span>
+                        <span class="info-value">
+                            <select id="dashboard-admin-role" name="dashboard_admin_role" class="form-select" aria-label="Admin role" aria-describedby="dashboard-admin-role-hint" style="width:100%">
+                                <option value="">No admin role…</option>
+                            </select>
+                            <p class="form-hint" id="dashboard-admin-role-hint">Members holding this role get full dashboard access, equal to the server owner. This is the only role that grants admin.</p>
+                        </span>
                     </div>
-                    <p class="form-hint" id="dashboard-mod-roles-hint">Members holding this role can manage this server in the dashboard (their card shows "Ready to manage"). The server owner and members of the roles listed under Admin access always count; other members see the server as view-only. Save to apply.</p>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-primary" id="dashboard-mod-roles-save">{{ icon("save", 14) }} Save</button>
@@ -91,74 +96,38 @@
                 </div>
             </div>
 
-            <!-- Updates -->
+            <!-- Backups (database snapshot + module settings export/import) -->
             <div class="content-card">
                 <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("refresh-cw", 16) }} Updates</h2><p class="card-description">Pull the latest build from the git remote and restart the instance.</p></div>
+                    <div><h2 class="card-title">{{ icon("database", 16) }} Backups</h2><p class="card-description">Snapshot the full database, or export and restore every module's settings as one JSON file.</p></div>
                 </div>
                 <div class="module-info-body">
                     <div class="info-row">
-                        <span class="info-label">Channel</span>
+                        <span class="info-label">Database snapshots</span>
                         <span class="info-value">
-                            <select id="update-channel" name="update_channel" class="form-select form-select-sm" aria-label="Update channel">
-                                <option value="main">Stable (master)</option>
-                                <option value="dev">Dev (dev)</option>
-                            </select>
-                            <p class="form-hint" id="update-channel-hint">The Stable channel tracks the master branch. The Dev channel is one-way: once an instance moves to Dev it cannot switch back to Stable.</p>
-                        </span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Current Build</span>
-                        <span class="info-value"><code class="code-sm" id="update-current">—</code></span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Available Build</span>
-                        <span class="info-value"><code class="code-sm" id="update-available">—</code></span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Repository</span>
-                        <span class="info-value"><code class="code-sm" id="update-repo">—</code></span>
-                    </div>
-                </div>
-                <div class="form-actions form-actions-static">
-                    <button type="button" class="btn" id="update-check-btn">{{ icon("search", 14) }} Check</button>
-                    <button type="button" class="btn btn-primary" id="update-apply-btn" disabled>{{ icon("download", 14) }} Update &amp; Restart</button>
-                </div>
-                <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
-            </div>
-
-            <!-- Database Backup -->
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("database", 16) }} Database Backup</h2><p class="card-description">Snapshot the full database to a downloadable file. Backups are stored on the server and can be downloaded any time.</p></div>
-                </div>
-                <div class="module-info-body">
-                    <div class="info-row">
-                        <span class="info-label">Backups Stored</span>
-                        <span class="info-value" id="backup-count">—</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Latest Backup</span>
-                        <span class="info-value"><code class="code-sm" id="backup-latest">—</code></span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Recent Backups</span>
-                        <span class="info-value">
-                            <ul class="backup-list" id="backup-list" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;"></ul>
+                            <ul class="backup-list" id="backup-list" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;">
+                                <li class="text-tertiary">Loading…</li>
+                            </ul>
                         </span>
                     </div>
                 </div>
-                <div class="form-actions form-actions-static">
+                <div class="form-actions form-actions-static" style="display:flex;gap:8px;flex-wrap:wrap;">
                     <button type="button" class="btn btn-primary" id="backup-create-btn">{{ icon("download", 14) }} Backup Now</button>
+                    <button type="button" class="btn" id="backup-export-btn">{{ icon("download", 14) }} Export settings (.json)</button>
+                    <input type="file" id="backup-file-input" name="backup_file" accept=".json,application/json" hidden>
+                    <label class="btn" for="backup-file-input">{{ icon("upload", 14) }} Choose file</label>
+                    <button type="button" class="btn btn-primary" id="backup-import-btn" disabled>{{ icon("package-plus", 14) }} Import</button>
+                    <span class="form-hint" id="backup-file-name" style="align-self:center;">No file selected</span>
                 </div>
                 <div class="workspace-data-card" id="db-backup-result" aria-live="polite"></div>
+                <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
             </div>
 
             <!-- Bot Customization -->
             {% include "components/bot_customization.html" %}
         </div>
 
-        <!-- Side column: Module Configuration + Plugins, then Backup & Restore -->
+        <!-- Side column: Module Configuration, then Updates -->
         <div class="settings-side">
             <div class="content-card">
                 <div class="card-header">
@@ -190,24 +159,44 @@
                 </div>
             </div>
 
-            <!-- Backup & Restore -->
+            <!-- Updates (from GitHub, by release version) -->
             <div class="content-card">
                 <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("archive", 16) }} Backup & Restore</h2><p class="card-description">Export every module's settings and stats as one editable JSON file, or restore from one.</p></div>
+                    <div><h2 class="card-title">{{ icon("refresh-cw", 16) }} Updates</h2><p class="card-description">Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.</p></div>
                 </div>
-                <div class="config-body">
-                    <div class="plugins-upload-row">
-                        <button type="button" class="btn btn-sm" id="backup-export-btn">{{ icon("download", 14) }} Export backup (.json)</button>
-                        <span class="form-hint">Edit values in the file with any text editor, then re-import to fix settings or restore data.</span>
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Channel</span>
+                        <span class="info-value">
+                            <select id="update-channel" name="update_channel" class="form-select form-select-sm" aria-label="Update channel">
+                                <option value="main">Stable (main)</option>
+                                <option value="dev">Dev (dev)</option>
+                            </select>
+                            <p class="form-hint" id="update-channel-hint">The Stable channel tracks GitHub's main branch. The Dev channel is one-way: once an instance moves to Dev it cannot switch back to Stable.</p>
+                        </span>
                     </div>
-                    <div class="plugins-upload-row">
-                        <input type="file" id="backup-file-input" name="backup_file" accept=".json,application/json" hidden>
-                        <label class="btn btn-sm" for="backup-file-input">{{ icon("upload", 14) }} Choose backup file</label>
-                        <span class="form-hint" id="backup-file-name">No file selected</span>
-                        <button type="button" class="btn btn-primary btn-sm" id="backup-import-btn" disabled>{{ icon("package-plus", 14) }} Import</button>
+                    <div class="info-row">
+                        <span class="info-label">Current version</span>
+                        <span class="info-value"><code class="code-sm" id="update-current">—</code></span>
                     </div>
-                    <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
+                    <div class="info-row">
+                        <span class="info-label">Available version</span>
+                        <span class="info-value"><code class="code-sm" id="update-available">—</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Source</span>
+                        <span class="info-value"><a href="#" id="update-repo" rel="noopener" target="_blank" class="text-secondary">—</a></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Releases</span>
+                        <span class="info-value"><a href="#" id="update-releases" rel="noopener" target="_blank" class="text-secondary">View on GitHub</a></span>
+                    </div>
                 </div>
+                <div class="form-actions form-actions-static">
+                    <button type="button" class="btn" id="update-check-btn">{{ icon("search", 14) }} Check</button>
+                    <button type="button" class="btn btn-primary" id="update-apply-btn" disabled>{{ icon("download", 14) }} Update &amp; Restart</button>
+                </div>
+                <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
             </div>
         </div>
     </div>
@@ -287,39 +276,41 @@
                 safeFetch(`/api/v1/guilds/${GUILD_ID}/settings`, { cache: 'no-cache' }),
             ]);
             const roles = (rolesResult?.data?.roles) || [];
-            const savedRaw = (settingsResult?.data?.settings || {})['dashboard_moderator_roles'] || '';
-            // Tolerate the legacy JSON-array format ("[\"555\"]") and the
-            // current plain single role ID ("555"). Only JSON.parse when the
-            // value actually looks like JSON: parsing a bare numeric snowflake
-            // succeeds but loses precision (snowflakes exceed Number.MAX_SAFE_INTEGER),
-            // so the stringified result would never match the role id and the
-            // saved choice would appear lost.
-            let selectedId = '';
-            const trimmed = String(savedRaw || '').trim();
-            if (trimmed.startsWith('[')) {
+            const settings = (settingsResult?.data?.settings) || {};
+            // Saved moderator roles: JSON array (["111","222"]) or legacy
+            // plain single id / comma list.
+            const savedRaw = String(settings['dashboard_moderator_roles'] || '').trim();
+            let selected = new Set();
+            if (savedRaw.startsWith('[')) {
                 try {
-                    const parsed = JSON.parse(trimmed);
-                    if (Array.isArray(parsed)) selectedId = String(parsed[0] || '');
-                } catch { selectedId = ''; }
-            } else if (trimmed.startsWith('{')) {
-                try {
-                    const parsed = JSON.parse(trimmed);
-                    selectedId = String(parsed?.role_id || parsed?.id || '');
-                } catch { selectedId = ''; }
+                    const parsed = JSON.parse(savedRaw);
+                    if (Array.isArray(parsed)) parsed.forEach(id => selected.add(String(id)));
+                } catch { selected = new Set(); }
             } else {
-                selectedId = trimmed.split(',')[0] || '';
+                savedRaw.split(',').map(s => s.trim()).filter(Boolean).forEach(id => selected.add(String(id)));
             }
-            modRolesSelect.innerHTML = roles.length
-                ? '<option value="">No moderator role…</option>' + roles.map(r =>
-                    `<option value="${escHtml(r.id)}"${selectedId === String(r.id) ? ' selected' : ''}>${escHtml(r.name)}</option>`
+            const modOptions = roles.length
+                ? '<option value="">No moderator roles…</option>' + roles.map(r =>
+                    `<option value="${escHtml(r.id)}"${selected.has(String(r.id)) ? ' selected' : ''}>${escHtml(r.name)}</option>`
                   ).join('')
                 : '<option value="">No roles in this server</option>';
-            const adminRoles = roles.filter(r => r.administrator).map(r => escHtml(r.name));
-            const adminEl = document.getElementById('dashboard-admin-roles');
-            if (adminEl) {
-                adminEl.innerHTML = adminRoles.length
-                    ? adminRoles.map(name => `<span class="badge badge-ok">${name}</span>`).join(' ')
-                    : '<span class="text-tertiary">No roles with Administrator permission</span>';
+            modRolesSelect.innerHTML = modOptions;
+
+            // Saved admin role: single id (or empty).
+            const adminRaw = String(settings['dashboard_admin_role'] || '').trim();
+            let adminId = '';
+            if (adminRaw.startsWith('"')) {
+                try { adminId = JSON.parse(adminRaw) || ''; } catch { adminId = ''; }
+            } else {
+                adminId = adminRaw;
+            }
+            const adminSelect = document.getElementById('dashboard-admin-role');
+            if (adminSelect) {
+                adminSelect.innerHTML = roles.length
+                    ? '<option value="">No admin role…</option>' + roles.map(r =>
+                        `<option value="${escHtml(r.id)}"${adminId === String(r.id) ? ' selected' : ''}>${escHtml(r.name)}</option>`
+                      ).join('')
+                    : '<option value="">No roles in this server</option>';
             }
         } catch {
             modRolesSelect.innerHTML = '<option value="">Roles unavailable</option>';
@@ -327,7 +318,9 @@
     }
 
     modRolesSave?.addEventListener('click', async () => {
-        const roleId = modRolesSelect.value || '';
+        const roleIds = Array.from(modRolesSelect.selectedOptions).map(o => o.value).filter(Boolean);
+        const adminSelect = document.getElementById('dashboard-admin-role');
+        const adminRoleId = (adminSelect && adminSelect.value) || '';
         modRolesSave.disabled = true;
         if (modRolesStatus) {
             modRolesStatus.textContent = 'Saving…';
@@ -337,10 +330,15 @@
             await safeFetch(`/api/v1/guilds/${GUILD_ID}/settings/general`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dashboard_moderator_roles: roleId }),
+                body: JSON.stringify({
+                    dashboard_moderator_roles: JSON.stringify(roleIds),
+                    dashboard_admin_role: adminRoleId,
+                }),
             });
             if (modRolesStatus) {
-                modRolesStatus.textContent = roleId ? 'Saved' : 'Saved — no moderator role';
+                modRolesStatus.textContent = roleIds.length
+                    ? `Saved — ${roleIds.length} moderator role(s)${adminRoleId ? ' + admin role' : ''}`
+                    : (adminRoleId ? 'Saved — admin role only' : 'Saved — no staff roles');
                 modRolesStatus.style.color = 'var(--green)';
             }
         } catch (error) {
@@ -386,13 +384,21 @@
                     hint.textContent = 'This instance is on the Dev channel. Switching back to Stable is not allowed.';
                 }
             }
-            updateCurrent.textContent = status.current_commit ? `${status.current_commit.slice(0, 7)}${status.current_branch ? ` (${status.current_branch})` : ''}` : '—';
-            updateAvailable.textContent = status.available_commit ? `${status.available_commit.slice(0, 7)}${status.branch ? ` (${status.branch})` : ''}` : '—';
-            updateRepo.textContent = status.repo_dir || '—';
+            updateCurrent.textContent = status.current_version ? `v${status.current_version}` : '—';
+            updateAvailable.textContent = status.available_version ? `v${status.available_version}` : '—';
+            if (updateRepo) {
+                const repo = status.repo_url || 'https://github.com';
+                updateRepo.href = repo;
+                updateRepo.textContent = repo.replace(/^https?:\/\//, '');
+            }
+            const releasesEl = document.getElementById('update-releases');
+            if (releasesEl && status.repo_url) {
+                releasesEl.href = `${status.repo_url.replace(/\/$/, '')}/releases`;
+            }
             updateApplyBtn.disabled = !status.update_available;
             if (updateResult) {
                 updateResult.innerHTML = status.update_available
-                    ? '<div class="state-panel"><div><strong>Update available</strong><p>Pull the new build and restart the instance.</p></div></div>'
+                    ? `<div class="state-panel"><div><strong>Update available</strong><p>v${escHtml(status.available_version || '?')} is ready — pull it from GitHub and restart the instance.</p></div></div>`
                     : (status.error ? `<div class="state-panel state-error"><div><strong>Check failed</strong><p>${escHtml(status.error)}</p></div></div>` : '');
             }
         } catch (error) {
@@ -409,8 +415,8 @@
         const channel = updateChannel?.value || 'main';
         const branchLabel = lastStatus.branch || channel;
         const ok = await BarkDialog.confirm({
-            title: `Update to ${channel === 'dev' ? 'Dev' : 'Stable'}?`,
-            message: `Pull ${lastStatus.available_commit.slice(0, 7)} from origin/${branchLabel} and restart the instance? The dashboard will briefly go offline.`,
+            title: `Update to v${lastStatus.available_version || 'latest'}?`,
+            message: `Pull ${lastStatus.available_version ? `version ${lastStatus.available_version} ` : 'the latest build '}from GitHub (${branchLabel}) and restart the instance? The dashboard will briefly go offline.`,
             confirmLabel: 'Update & restart',
             danger: false,
         });
@@ -439,8 +445,6 @@
     // ── Database Backup ──────────────────────────────
 
     const backupCreateBtn = document.getElementById('backup-create-btn');
-    const backupCount = document.getElementById('backup-count');
-    const backupLatest = document.getElementById('backup-latest');
     const backupList = document.getElementById('backup-list');
     const dbBackupResult = document.getElementById('db-backup-result');
 
@@ -452,26 +456,21 @@
     }
 
     async function loadBackups() {
-        if (!backupCount) return;
+        if (!backupList) return;
         try {
             const result = await safeFetch('/api/v1/instance/backups', {cache: 'no-cache'});
             if (result.success === false) throw new Error(result.error || 'Could not list backups');
             const backups = result.data?.backups || [];
-            backupCount.textContent = backups.length;
-            backupLatest.textContent = backups.length
-                ? `${escHtml(backups[0].filename)} (${formatBytes(backups[0].size)})`
-                : '—';
-            if (backupList) {
-                backupList.innerHTML = backups.slice(0, 8).map((b) =>
+            backupList.innerHTML = backups.length
+                ? backups.slice(0, 8).map((b) =>
                     `<li style="display:flex;align-items:center;gap:8px;justify-content:space-between;">
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(b.filename)} <span class="text-muted">(${formatBytes(b.size)})</span></span>
                         <a class="btn btn-sm" href="/api/v1/instance/backup/${encodeURIComponent(b.filename)}" download>Download</a>
                     </li>`
-                ).join('') || '<li class="text-muted">No backups yet.</li>';
-            }
+                ).join('')
+                : '<li class="text-muted">No backups yet. Create one with Backup Now.</li>';
         } catch (error) {
-            if (backupCount) backupCount.textContent = '—';
-            if (dbBackupResult) dbBackupResult.innerHTML = `<div class="state-panel state-error"><div><strong>Backup list unavailable</strong><p>${escHtml(error.message || 'Could not reach the backup API')}</p></div></div>`;
+            backupList.innerHTML = `<li class="text-muted">Backups unavailable — ${escHtml(error.message || 'request failed')}</li>`;
         }
     }
 

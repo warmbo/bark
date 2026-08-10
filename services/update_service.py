@@ -145,6 +145,52 @@ def _remote_commit(remote: str, branch: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def _version_file() -> Path:
+    return repo_root() / "VERSION"
+
+
+def local_version() -> str:
+    """The running instance's release version (VERSION file)."""
+    try:
+        value = _version_file().read_text(encoding="utf-8").strip()
+        return value or "0.0.0"
+    except (OSError, UnicodeDecodeError):
+        return "0.0.0"
+
+
+def remote_version(remote: str, branch: str) -> str:
+    """The remote branch's release version, read without a checkout."""
+    result = _run(["git", "show", f"{remote}/{branch}:VERSION"])
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip() or ""
+
+
+def _version_key(value: str) -> tuple[int, ...]:
+    """Parse X.Y.Z (with optional -suffix) into a comparable tuple."""
+    core = value.strip().lstrip("vV").split("-")[0].split("+")[0]
+    parts = []
+    for chunk in core.split("."):
+        try:
+            parts.append(int(chunk))
+        except ValueError:
+            parts.append(0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def remote_repo_url() -> str:
+    """Human-facing GitHub URL for the update source."""
+    result = _run(["git", "remote", "get-url", config.instance.update_remote])
+    if result.returncode == 0:
+        url = result.stdout.strip()
+        if url.startswith("git@"):
+            url = "https://" + url.replace(":", "/").lstrip("https://")[4:]
+        return url.rstrip(".git")
+    return "https://github.com"
+
+
 def _is_ancestor(ancestor: str, descendant: str) -> bool:
     """Return True when ``ancestor`` is an ancestor of (or equal to) ``descendant``.
 
@@ -161,24 +207,42 @@ def check_update(channel: str | None = None) -> dict:
 
     ``channel`` is a UI channel name (``main``/``stable`` or ``dev``); it is
     mapped to the actual git branch via :func:`channel_to_branch`.
+
+    Availability is decided by RELEASE VERSION (the ``VERSION`` file on the
+    remote branch) rather than commit identity — an update is offered when
+    the remote's version is newer than the running instance's, regardless of
+    how many commits sit between them.
     """
     channel = channel or config.instance.update_branch
     branch = channel_to_branch(channel)
     current = current_commit()
     available = ""
+    current_version = local_version()
+    available_version = ""
     error = ""
     try:
         remote = _resolve_remote(branch)
         if remote is not None:
             available = _remote_commit(remote, branch)
+            available_version = remote_version(remote, branch)
         else:
             error = f"could not find branch '{branch}' on remote '{config.instance.update_remote}'"
     except Exception as exc:  # network down / not a checkout
         logger.warning("Update check failed: %s", exc)
         error = str(exc)
-    # No-downgrade guard: a remote that is behind this checkout (stale
-    # mirror) offers nothing — never report a backwards "update".
-    update_available = bool(available) and available != current
+    # Version comparison (the authoritative signal) with the commit-ancestor
+    # check as a belt-and-braces no-downgrade guard.
+    update_available = False
+    if available_version and _version_key(available_version) > _version_key(current_version):
+        update_available = True
+    elif available and available != current and not (
+        available and _is_ancestor(available, current)
+    ):
+        # Remote has no VERSION file yet (older build) — fall back to commit
+        # comparison so pre-version releases still offer updates.
+        update_available = True
+    if available and available == current and available_version == current_version:
+        update_available = False
     if update_available and available and _is_ancestor(available, current):
         logger.info(
             "Remote %s/%s is behind this checkout (%s); no update offered",
@@ -190,10 +254,13 @@ def check_update(channel: str | None = None) -> dict:
     return {
         "channel": get_channel(),
         "branch": branch,
+        "current_version": current_version,
+        "available_version": available_version,
         "current_commit": current,
         "current_branch": current_branch(),
         "available_commit": available,
         "update_available": update_available,
+        "repo_url": remote_repo_url(),
         "repo_dir": str(repo_root()),
         "error": error,
     }

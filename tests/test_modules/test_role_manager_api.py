@@ -74,5 +74,5 @@ async def test_role_manager_read_routes_enforce_module_view_permission(db, monke
 
     assert rules.status_code == 403
     assert assignments.status_code == 403
-    # FastAPI validates the bounded query before running the endpoint.
-    assert invalid_limit.status_code == 422
+    # A viewer is blocked at the middleware before validation can run.
+    assert invalid_limit.status_code == 403

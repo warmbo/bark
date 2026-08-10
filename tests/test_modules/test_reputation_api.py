@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from itsdangerous import TimestampSigner
 
 from database.engine import session_scope
-from database.models.guild import Guild
+from database.models.guild import Guild, GuildSetting
 from database.models.permissions import DashboardUser
 from modules.reputation.module import ReputationModule
 from services.bark_context import BarkContext
@@ -68,7 +68,9 @@ async def test_reputation_read_routes_enforce_module_view_permission(db, monkeyp
         response = await client.get("/api/v1/guilds/1/modules/reputation/leaderboard")
 
     assert response.status_code == 403
-    assert response.json()["error"] == "Insufficient permissions"
+    # A viewer with no configured staff role is blocked at the middleware
+    # before the module's permission check can run.
+    assert response.json()["error"] == "View-only access: managing this server requires admin or moderator rights"
 
 
 def _manager_bot():
@@ -116,7 +118,7 @@ async def _seeded_tiers(db):
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x8)}],
+            [{"id": "1", "name": "Test Guild", "permissions": "0", "owner": True}],
         )
         session.add(
             ReputationTier(
@@ -605,11 +607,17 @@ async def test_leaderboard_set_score_requires_manage_permission(db, monkeypatch)
     async with session_scope() as session:
         session.add(Guild(discord_id="1", name="Test Guild"))
         session.add(DashboardUser(discord_id="42", username="Auditor", role="viewer"))
+        # Configured moderator role so the user passes the guild gate and the
+        # module's own permission check is what blocks them.
+        session.add(
+            GuildSetting(guild_id="1", key="dashboard_moderator_roles", value='["555"]')
+        )
         await session.flush()
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x20)}],
+            [{"id": "1", "name": "Test Guild", "permissions": "0"}],
+            roles_by_guild={"1": ["555"]},
         )
 
     bot = _manager_bot()

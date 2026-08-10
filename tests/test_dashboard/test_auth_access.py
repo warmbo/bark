@@ -79,14 +79,18 @@ def test_discord_guild_management_requires_owner_admin_or_manage_guild():
 
 
 def test_dashboard_role_is_recomputed_from_current_shared_guilds():
-    admin = [{"id": "100", "owner": False, "permissions": str(0x8)}]
-    manager = [{"id": "100", "owner": False, "permissions": str(0x20)}]
+    owner = [{"id": "100", "owner": True, "permissions": "0"}]
+    admin_perm = [{"id": "100", "owner": False, "permissions": str(0x8)}]
+    manage_perm = [{"id": "100", "owner": False, "permissions": str(0x20)}]
     member_only = [{"id": "100", "owner": False, "permissions": "0"}]
 
-    assert derive_dashboard_role(admin, {"100"}) == "admin"
-    assert derive_dashboard_role(manager, {"100"}) == "moderator"
+    # Only the server owner implies admin at login; Discord permissions never
+    # imply a dashboard role (staff roles are configured per server).
+    assert derive_dashboard_role(owner, {"100"}) == "admin"
+    assert derive_dashboard_role(admin_perm, {"100"}) == "viewer"
+    assert derive_dashboard_role(manage_perm, {"100"}) == "viewer"
     assert derive_dashboard_role(member_only, {"100"}) == "viewer"
-    assert derive_dashboard_role(manager, set()) == "viewer"
+    assert derive_dashboard_role(manage_perm, set()) == "viewer"
 
 
 def test_dashboard_owner_requires_configured_discord_id():
@@ -479,16 +483,6 @@ def _module_stub():
     return module
 
 
-def test_role_from_access_tiers_discord_permissions():
-    from services.dashboard_access import role_from_access
-
-    assert role_from_access(owner=True, permissions=0) == "admin"
-    assert role_from_access(owner=False, permissions=0x8) == "admin"
-    assert role_from_access(owner=False, permissions=0x20) == "moderator"
-    assert role_from_access(owner=False, permissions=0x400) == "viewer"
-    assert role_from_access(owner=False, permissions=0) == "viewer"
-
-
 @pytest.mark.asyncio
 async def test_module_page_open_to_owner_with_stale_session_role(db, monkeypatch):
     """Reported prod case: a user invited before Bark joined their own server
@@ -723,6 +717,7 @@ async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
     MultipleResultsFound (scalar_one_or_none on a multi-row scan), 500ing every
     request. Membership in any Bark server must admit them."""
     import config
+    from database.models.guild import GuildSetting
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
     monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
@@ -732,6 +727,15 @@ async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
         session.add(InstanceAccess(discord_user_id="42"))
         session.add(Guild(discord_id="100", name="First Bark Server", owner_id="42"))
         session.add(Guild(discord_id="200", name="Second Bark Server", owner_id="42"))
+        # Configured moderator role in BOTH servers — under the explicit-roles
+        # model this is what grants dashboard moderation (permissions alone
+        # never do).
+        session.add(
+            GuildSetting(guild_id="100", key="dashboard_moderator_roles", value='["555"]')
+        )
+        session.add(
+            GuildSetting(guild_id="200", key="dashboard_moderator_roles", value='["555"]')
+        )
         await session.flush()
         await replace_user_guild_access(
             session,
@@ -740,6 +744,7 @@ async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
                 {"id": "100", "name": "First Bark Server", "permissions": str(0x20)},
                 {"id": "200", "name": "Second Bark Server", "permissions": str(2147483647)},
             ],
+            roles_by_guild={"100": ["555"], "200": ["555"]},
         )
 
     bot_guilds = []
@@ -767,7 +772,7 @@ async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
         response = await client.get("/guild/200/modules/announcements")
 
     assert response.status_code == 200
-    assert 'data-user-role="admin"' in response.text
+    assert 'data-user-role="moderator"' in response.text
 
 
 # ── Per-server "Ready to manage" (owner-configured moderator roles) ──
@@ -783,10 +788,11 @@ def test_parse_moderator_role_ids_accepts_json_and_csv():
     assert parse_moderator_role_ids("not-json") == {"not-json"}
 
 
-def test_user_ready_to_manage_owner_admin_manage_or_configured_moderator_role():
+def test_user_ready_to_manage_owner_or_configured_staff_roles_only():
     from services.dashboard_access import user_ready_to_manage
 
     mod_roles = {"555"}
+    admin_role = "777"
 
     def access(**overrides):
         base = {
@@ -799,18 +805,75 @@ def test_user_ready_to_manage_owner_admin_manage_or_configured_moderator_role():
         base.update(overrides)
         return type("Access", (), base)()
 
-    # Admin rights: server owner or ADMINISTRATOR permission.
-    assert user_ready_to_manage(access(owner=True), mod_roles)
-    assert user_ready_to_manage(access(permissions=0x8), mod_roles)
-    # Moderator rights: MANAGE_GUILD permission…
-    assert user_ready_to_manage(access(permissions=0x20), mod_roles)
-    # …or holding a role the server owner designated as moderator.
-    assert user_ready_to_manage(access(roles="111,555,666"), mod_roles)
-    # A plain member without any staff right is not ready to manage.
-    assert not user_ready_to_manage(access(roles="111,666"), mod_roles)
-    assert not user_ready_to_manage(access(), mod_roles)
-    # Unconfigured moderator roles never gate out Discord-native rights.
-    assert user_ready_to_manage(access(permissions=0x8), set())
+    # Server owner is always ready to manage.
+    assert user_ready_to_manage(access(owner=True), mod_roles, admin_role)
+    # Holding the owner-configured admin role grants access…
+    assert user_ready_to_manage(access(roles="111,777"), mod_roles, admin_role)
+    # …or a configured moderator role.
+    assert user_ready_to_manage(access(roles="111,555,666"), mod_roles, admin_role)
+    # A plain member without any staff role is not ready to manage.
+    assert not user_ready_to_manage(access(roles="111,666"), mod_roles, admin_role)
+    assert not user_ready_to_manage(access(), mod_roles, admin_role)
+    # Discord permissions NEVER imply dashboard access (explicit roles only).
+    assert not user_ready_to_manage(access(permissions=0x8), mod_roles, admin_role)
+    assert not user_ready_to_manage(access(permissions=0x20), mod_roles, admin_role)
+    assert not user_ready_to_manage(access(permissions=0x8), set(), None)
+    assert not user_ready_to_manage(access(permissions=0x20), set(), None)
+
+
+def test_parse_admin_role_id_accepts_json_and_plain():
+    from services.dashboard_access import parse_admin_role_id
+
+    assert parse_admin_role_id(None) is None
+    assert parse_admin_role_id("") is None
+    assert parse_admin_role_id('"555"') == "555"
+    assert parse_admin_role_id("555") == "555"
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_admin_role_loads_per_guild_setting(db):
+    from database.models.guild import Guild, GuildSetting
+    from services.dashboard_access import get_dashboard_admin_role
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="100", name="Alpha"))
+        session.add(Guild(discord_id="200", name="Beta"))
+        session.add(
+            GuildSetting(guild_id="100", key="dashboard_admin_role", value='"777"')
+        )
+        await session.flush()
+
+    async with session_scope() as session:
+        roles = await get_dashboard_admin_role(session, ["100", "200", "300"])
+
+    assert roles == {"100": "777"}
+    assert roles.get("200") is None
+    assert roles.get("300") is None
+
+
+def test_role_from_access_tiers_only_owner_and_configured_roles():
+    from services.dashboard_access import role_from_access, role_from_access_with_staff_roles
+
+    # Login-time derivation: only the server owner implies admin.
+    assert role_from_access(owner=True, permissions=0) == "admin"
+    assert role_from_access(owner=False, permissions=0x8) == "viewer"
+    assert role_from_access(owner=False, permissions=0x20) == "viewer"
+    assert role_from_access(owner=False, permissions=0) == "viewer"
+
+    # Per-guild middleware derivation: owner + configured admin/mod roles only.
+    def access(**overrides):
+        base = {"guild_id": "100", "permissions": 0, "owner": False, "roles": ""}
+        base.update(overrides)
+        return type("Access", (), base)()
+
+    assert role_from_access_with_staff_roles(access(owner=True), {"555"}, "777") == "admin"
+    assert role_from_access_with_staff_roles(access(roles="111,777"), {"555"}, "777") == "admin"
+    assert role_from_access_with_staff_roles(access(roles="111,555"), {"555"}, "777") == "moderator"
+    assert role_from_access_with_staff_roles(access(roles="111,666"), {"555"}, "777") == "viewer"
+    # Discord permissions alone no longer imply admin/moderator.
+    assert role_from_access_with_staff_roles(access(permissions=0x8), {"555"}, "777") == "viewer"
+    assert role_from_access_with_staff_roles(access(permissions=0x20), {"555"}, "777") == "viewer"
+    assert role_from_access_with_staff_roles(access(permissions=0x8), set(), None) == "viewer"
 
 
 @pytest.mark.asyncio

@@ -1,48 +1,30 @@
 """Runtime access to Bark's version.
 
-The displayed version is X.X.X style, derived from the base version in
-pyproject.toml plus the git commit count as the patch component — so every
-change to the repo produces a distinct, monotonic version on the web UI
-(e.g. ``0.2.0`` -> ``0.2.1`` -> ``0.2.2`` ...). When git is unavailable
-(e.g. an sdist without VCS metadata), it falls back to the installed
-package version from importlib.metadata.
+The version is read from the ``VERSION`` file at the repository root — a
+release version number (e.g. ``0.2.158``) that updates compare and display
+instead of raw git build identifiers. When the file is missing (e.g. an sdist
+without VCS metadata), fall back to the installed package version.
 """
 
 from __future__ import annotations
 
-import subprocess
 from importlib.metadata import version as _installed_version
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent
 
 
-def _git_commit_count() -> int | None:
-    """Return the number of commits on the current branch, or None."""
+def _read_version_file() -> str | None:
     try:
-        count = subprocess.run(
-            ["git", "rev-list", "--count", "HEAD"],
-            cwd=_REPO_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        if count.returncode == 0 and count.stdout.strip():
-            return int(count.stdout.strip())
-    except (OSError, subprocess.SubprocessError, ValueError):
-        pass
-    return None
+        value = (_REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        return value or None
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def _derive_version() -> str:
-    """X.X.X version: base from installed metadata, patch = commit count."""
-    base = _installed_version("bark")
-    commit_count = _git_commit_count()
-    if commit_count is None:
-        return base
-    parts = base.split(".")
-    major_minor = ".".join(parts[:2]) if len(parts) >= 2 else base
-    return f"{major_minor}.{commit_count}"
+    """VERSION file first; installed package metadata as the fallback."""
+    return _read_version_file() or _installed_version("bark")
 
 
 __version__ = _derive_version()

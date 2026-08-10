@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from itsdangerous import TimestampSigner
 
 from database.engine import session_scope
+from database.models.guild import Guild, GuildSetting
 from database.models.permissions import DashboardUser
 from modules.speak.module import SpeakModule, validate_phrases
 from services.bark_context import BarkContext
@@ -164,11 +165,16 @@ async def test_speak_api_enforces_manage_permission(db, monkeypatch):
 
     async with session_scope() as session:
         session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
+        session.add(Guild(discord_id="100", name="Guild"))
+        session.add(
+            GuildSetting(guild_id="100", key="dashboard_moderator_roles", value='["555"]')
+        )
         await session.flush()
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "100", "name": "Guild", "permissions": str(0)}],
+            [{"id": "100", "name": "Guild", "permissions": "0"}],
+            roles_by_guild={"100": ["555"]},
         )
 
     bot = MagicMock()
@@ -218,7 +224,7 @@ async def test_speak_api_validation_rejects_bad_payload(db, monkeypatch):
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "100", "name": "Guild", "permissions": str(2147483647)}],
+            [{"id": "100", "name": "Guild", "permissions": "0", "owner": True}],
         )
 
     bot = MagicMock()
