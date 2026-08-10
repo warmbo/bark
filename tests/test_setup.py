@@ -110,6 +110,9 @@ async def test_setup_page_renders_when_unconfigured(setup_app):
     assert response.status_code == 200
     assert "Welcome to Bark" in response.text
     assert "Discord bot token" in response.text
+    # Branding: the Bark logo image sits in the header (not just the title).
+    assert 'class="setup-logo-img"' in response.text
+    assert "/static/img/bark-avatar.png" in response.text
 
 
 @pytest.mark.asyncio
