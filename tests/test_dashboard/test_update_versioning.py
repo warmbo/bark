@@ -42,6 +42,29 @@ def test_remote_version_unreachable_branch_returns_empty(monkeypatch):
     assert update_service.remote_version("github", "main") == ""
 
 
+def test_remote_repo_url_falls_back_to_origin(monkeypatch):
+    """Instances without the configured update remote still resolve the
+    canonical repo URL from origin instead of a bare domain."""
+    from types import SimpleNamespace
+
+    import config as config_module
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd[-1])
+        if cmd[-1] == "github":
+            return type("R", (), {"returncode": 128, "stdout": ""})()
+        return type("R", (), {"returncode": 0, "stdout": "git@github.com:warmbo/bark.git\n"})()
+
+    monkeypatch.setattr(
+        config_module, "config", SimpleNamespace(instance=SimpleNamespace(update_remote="github"))
+    )
+    monkeypatch.setattr(update_service, "_run", fake_run)
+    assert update_service.remote_repo_url() == "https://github.com/warmbo/bark"
+    assert calls == ["github", "origin"]
+
+
 def test_check_update_offers_by_version_not_commit(monkeypatch):
     """A remote with a HIGHER commit count (newer derived version) offers an
     update — availability is decided by version number, not commit identity."""

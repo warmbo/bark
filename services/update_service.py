@@ -190,12 +190,22 @@ def _version_key(value: str) -> tuple[int, ...]:
 
 
 def remote_repo_url() -> str:
-    """Human-facing GitHub URL for the update source."""
-    result = _run(["git", "remote", "get-url", config.instance.update_remote])
-    if result.returncode == 0:
+    """Human-facing GitHub URL for the update source.
+
+    Prefers the configured update remote; falls back to ``origin`` so
+    instances that were cloned from a mirror still point at the canonical
+    repo instead of a bare domain.
+    """
+    for remote in (config.instance.update_remote, "origin"):
+        result = _run(["git", "remote", "get-url", remote])
+        if result.returncode != 0:
+            continue
         url = result.stdout.strip()
+        if not url:
+            continue
         if url.startswith("git@"):
-            url = "https://" + url.replace(":", "/").lstrip("https://")[4:]
+            # git@github.com:warmbo/bark.git -> https://github.com/warmbo/bark
+            url = "https://" + url[4:].replace(":", "/")
         return url.rstrip(".git")
     return "https://github.com"
 
