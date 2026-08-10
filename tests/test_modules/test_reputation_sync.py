@@ -235,7 +235,7 @@ async def test_import_recomputes_level_and_tier(db):
 
 @pytest.mark.asyncio
 async def test_showoff_mentions_unlocked_role_on_tier_up(db):
-    """Promotion announcements name the linked role + channel hint."""
+    """Promotion announcements tag the user + name the linked role."""
     from types import SimpleNamespace
 
     sent = []
@@ -244,7 +244,11 @@ async def test_showoff_mentions_unlocked_role_on_tier_up(db):
         async def send(self, **kwargs):
             sent.append(kwargs)
 
-    member = SimpleNamespace(display_name="Cody", display_avatar=SimpleNamespace(url="http://x/avatar.png"))
+    member = SimpleNamespace(
+        display_name="Cody",
+        mention="<@99>",
+        display_avatar=SimpleNamespace(url="http://x/avatar.png"),
+    )
     guild = SimpleNamespace(
         get_channel=lambda cid: FakeChannel(),
         get_member=lambda uid: member,
@@ -291,5 +295,67 @@ async def test_showoff_mentions_unlocked_role_on_tier_up(db):
     assert sent, "expected a showoff message"
     fields = sent[0]["embed"].fields
     tier_field = next(f for f in fields if "New Tier" in f.name)
+    # The user in question is tagged (mention), not just named in the author line.
+    assert "<@99>" in tier_field.value
     assert "<@&777>" in tier_field.value
     assert "more channels" in tier_field.value
+
+
+@pytest.mark.asyncio
+async def test_showoff_tags_user_on_level_up(db):
+    """Level-up announcements tag the user too (not only tier promotions)."""
+    from types import SimpleNamespace
+
+    sent = []
+
+    class FakeChannel:
+        async def send(self, **kwargs):
+            sent.append(kwargs)
+
+    member = SimpleNamespace(
+        display_name="Cody",
+        mention="<@99>",
+        display_avatar=SimpleNamespace(url="http://x/avatar.png"),
+    )
+    guild = SimpleNamespace(
+        get_channel=lambda cid: FakeChannel(),
+        get_member=lambda uid: member,
+    )
+    bot = MagicMock()
+    bot.guilds = [guild]
+    bot.get_guild.return_value = guild
+    bot.modules = MagicMock()
+    bot.modules.event_bus = MagicMock()
+
+    module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
+    import modules.reputation.module as rep_module
+
+    real_discord = rep_module.discord
+    rep_module.discord = SimpleNamespace(
+        Embed=real_discord.Embed,
+        Color=real_discord.Color,
+        Forbidden=real_discord.Forbidden,
+        HTTPException=real_discord.HTTPException,
+        TextChannel=FakeChannel,
+    )
+    try:
+        profile = _profile(total_score=1200.0)
+        tier_data = {"name": "Member", "symbol": "⭐", "color_hex": "#99aab5"}
+        await module._send_showoff(
+            guild_id=1,
+            user_id=99,
+            profile=profile,
+            tier_data=tier_data,
+            leveled_up=True,
+            tier_changed=False,
+            new_rewards=[],
+            config={"showoff_channel_id": 5},
+        )
+    finally:
+        rep_module.discord = real_discord
+
+    assert sent, "expected a showoff message"
+    fields = sent[0]["embed"].fields
+    level_field = next(f for f in fields if "Level Up" in f.name)
+    assert "<@99>" in level_field.value
+    assert "Level" in level_field.value

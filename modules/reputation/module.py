@@ -1826,14 +1826,14 @@ class ReputationModule(BarkModule):
         if leveled_up:
             embed.add_field(
                 name=f"{tier_data['symbol']} Level Up!",
-                value=f"Reached **Level {profile.level}**!",
+                value=f"{member.mention} reached **Level {profile.level}**!",
                 inline=False,
             )
         if tier_changed:
-            value = f"Promoted to **{tier_data['name']}**!"
+            value = f"{member.mention} promoted to **{tier_data['name']}**!"
             if tier_data.get("assign_role") and tier_data.get("role_id"):
                 value += (
-                    f"\nYou unlocked the role <@&{tier_data['role_id']}> — "
+                    f"\nThey unlocked the role <@&{tier_data['role_id']}> — "
                     "it may grant access to more channels!"
                 )
             embed.add_field(
