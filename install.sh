@@ -102,24 +102,32 @@ if [ -z "${PY:-}" ]; then
 fi
 log "Using Python: $PY ($("$PY" -c 'import sys; print(sys.version.split()[0])'))"
 
-# Debian/Ubuntu don't ship ensurepip in the base python3 — the venv module
-# exists but `python3 -m venv` fails without the python3-venv package.
-ensure_venv_support() {
-    if "$PY" -c 'import ensurepip' 2>/dev/null; then
-        return 0
-    fi
-    log "Python venv support missing — installing ${PY}-venv"
-    if have apt-get; then
-        local apt="apt-get"
-        [ "$(id -u)" -ne 0 ] && apt="sudo apt-get"
-        if ! $apt install -y -qq "${PY}-venv" >/dev/null 2>&1; then
-            $apt install -y -qq python3-venv >/dev/null 2>&1
+# Debian/Ubuntu don't ship the bundled pip wheels in the base python3 —
+# `import ensurepip` succeeds but `python3 -m venv` fails without the
+# python3-venv package. Probe actual venv creation instead of trusting
+# module presence.
+ensure_venv_works() {
+    local probe
+    probe=$(mktemp -d)
+    if ! "$PY" -m venv "$probe" >/dev/null 2>&1 || [ ! -x "$probe/bin/pip" ]; then
+        rm -rf "$probe"
+        log "Python venv support missing — installing ${PY}-venv"
+        if have apt-get; then
+            local apt="apt-get"
+            [ "$(id -u)" -ne 0 ] && apt="sudo apt-get"
+            $apt install -y -qq "${PY}-venv" >/dev/null 2>&1 \
+                || $apt install -y -qq python3-venv >/dev/null 2>&1 \
+                || true
+        fi
+        probe=$(mktemp -d)
+        if ! "$PY" -m venv "$probe" >/dev/null 2>&1 || [ ! -x "$probe/bin/pip" ]; then
+            rm -rf "$probe"
+            die "Could not create a Python virtualenv. Install the python3-venv package for this Python and rerun."
         fi
     fi
-    "$PY" -c 'import ensurepip' 2>/dev/null \
-        || die "Python venv support is unavailable. Install the python3-venv package for this Python and rerun."
+    rm -rf "$probe"
 }
-ensure_venv_support
+ensure_venv_works
 
 # ── 2. Clone / update the repository ───────────────────────
 if [ -d "$BARK_INSTALL_DIR/.git" ]; then
