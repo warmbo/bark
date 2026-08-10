@@ -59,14 +59,18 @@ def _snapshot_sync(src: Path, dst: Path) -> None:
         src_conn.close()
 
 
-async def create_backup() -> dict:
-    """Create a timestamped DB snapshot and return its metadata."""
+def create_backup_sync() -> dict:
+    """Create a timestamped DB snapshot and return its metadata.
+
+    Synchronous twin of :func:`create_backup` for worker-thread contexts
+    (e.g. the pre-update backup inside ``apply_update``).
+    """
     src = _source_db_path()
     if not src.is_file():
         raise FileNotFoundError(f"Database file not found: {src}")
     name = f"bark-backup-{datetime.now(timezone.utc):%Y%m%d-%H%M%S-%f}.db"
     dst = _backup_dir() / name
-    await asyncio.to_thread(_snapshot_sync, src, dst)
+    _snapshot_sync(src, dst)
     size = dst.stat().st_size
     logger.info("Created database backup %s (%d bytes)", name, size)
     return {
@@ -74,6 +78,11 @@ async def create_backup() -> dict:
         "size": size,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+async def create_backup() -> dict:
+    """Create a timestamped DB snapshot and return its metadata."""
+    return await asyncio.to_thread(create_backup_sync)
 
 
 def list_backups() -> list[dict]:

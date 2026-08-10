@@ -233,7 +233,7 @@ def check_update(channel: str | None = None) -> dict:
     instance's. Both sides derive the same way, so a remote that is ahead of
     this checkout always reports a higher version.
     """
-    channel = channel or config.instance.update_branch
+    channel = channel or get_channel()
     branch = channel_to_branch(channel)
     current = current_commit()
     available = ""
@@ -292,6 +292,16 @@ def _requirements_changed(old_commit: str) -> bool:
     return bool(changed & {"requirements.txt", "pyproject.toml"})
 
 
+def _pre_update_backup() -> dict:
+    """Snapshot the database before touching the checkout.
+
+    A failed backup BLOCKS the update: an update must always be revertible.
+    """
+    from services.backup_service import create_backup_sync
+
+    return create_backup_sync()
+
+
 def apply_update(channel: str) -> dict:
     """Pull the channel's branch into the checkout.
 
@@ -299,10 +309,30 @@ def apply_update(channel: str) -> dict:
     channel is persisted after a successful pull so the one-way
     stable → dev rule survives restarts. Returns before the caller exits
     the process; systemd restarts the unit.
+
+    Channel enforcement: a Dev-channel instance may ONLY update from the
+    dev branch — it can never jump to main/stable just because that branch
+    carries a higher version number. Stable → Dev remains an explicit,
+    one-way switch.
     """
     old_commit = current_commit()
     branch = channel_to_branch(channel)
     channel_label = "stable" if channel != "dev" else "dev"
+    persisted = get_channel()
+    if persisted == "dev" and channel_label != "dev":
+        logger.warning(
+            "Refusing update: instance is on the Dev channel, requested %s (%s)",
+            channel_label,
+            branch,
+        )
+        return {
+            "ok": False,
+            "error": (
+                "This instance is on the Dev channel and can only update "
+                "from the dev branch. Moving a Dev instance to Stable is "
+                "not allowed."
+            ),
+        }
     try:
         remote = _resolve_remote(branch)
         if remote is None:
@@ -336,6 +366,15 @@ def apply_update(channel: str) -> dict:
             ),
         }
 
+    # Pre-update backup: every update is revertible via the snapshot taken
+    # right before the checkout moves. A failed backup aborts the update.
+    backup = None
+    try:
+        backup = _pre_update_backup()
+    except Exception as exc:
+        logger.exception("Pre-update backup failed; update aborted")
+        return {"ok": False, "error": f"pre-update backup failed: {exc}"}
+
     try:
         _run(["git", "reset", "--hard", f"{remote}/{branch}"], timeout=120, check=True)
     except Exception as exc:
@@ -362,6 +401,7 @@ def apply_update(channel: str) -> dict:
         "new_commit": new_commit,
         "branch": branch,
         "channel": channel_label,
+        "backup": backup,
     }
 
 

@@ -41,6 +41,14 @@ def repo(tmp_path, monkeypatch):
     # stable branch (mirrors the production GitHub layout).
     monkeypatch.setattr(update_service.config.instance, "update_remote", "origin")
     monkeypatch.setattr(update_service.config.instance, "stable_branch", "main")
+    # These are git-only fixtures — no database. Neutralize the pre-update
+    # backup so apply tests exercise the git mechanics; dedicated tests
+    # override it to assert backup behavior.
+    monkeypatch.setattr(
+        update_service,
+        "_pre_update_backup",
+        lambda: {"filename": "bark-backup-test.db", "size": 0, "created_at": "now"},
+    )
     return work, origin
 
 
@@ -130,6 +138,101 @@ def test_stable_channel_resolves_github_main(tmp_path, monkeypatch):
     dev_status = update_service.check_update("dev")
     assert dev_status["branch"] == "dev"
     assert dev_status["update_available"] is False
+
+
+def test_apply_update_refuses_dev_channel_crossing_to_stable(repo):
+    """A Dev-channel instance must NOT update from main/stable — even when
+    that branch carries a higher version number (the reported bug)."""
+    work, _ = repo
+    _git(work, "config", "bark.update.channel", "dev")
+    head_before = _git(work, "rev-parse", "HEAD").stdout.strip()
+
+    result = update_service.apply_update("main")
+
+    assert result["ok"] is False
+    assert "not allowed" in result["error"]
+    # The checkout must be untouched.
+    assert _git(work, "rev-parse", "HEAD").stdout.strip() == head_before
+    # The persisted channel is still dev.
+    assert update_service.get_channel() == "dev"
+
+
+def test_apply_update_same_channel_dev_allowed(repo):
+    """A Dev-channel instance can still update from the dev branch."""
+    work, _ = repo
+    _git(work, "config", "bark.update.channel", "dev")
+    # create a dev branch on origin that is ahead of the checkout
+    _git(work, "checkout", "-b", "dev")
+    (work / "version.txt").write_text("dev-two")
+    _git(work, "add", ".")
+    _git(work, "commit", "-m", "dev v2")
+    _git(work, "push", "-u", "origin", "dev")
+    _git(work, "reset", "--hard", "HEAD~1")
+
+    result = update_service.apply_update("dev")
+    assert result["ok"] is True
+    assert (work / "version.txt").read_text() == "dev-two"
+
+
+def test_apply_update_stable_can_switch_to_dev(repo):
+    """Stable → Dev remains an explicit one-way switch (not blocked)."""
+    work, _ = repo
+    _git(work, "config", "bark.update.channel", "stable")
+    result = update_service.apply_update("dev")
+    # There is no origin/dev in this fixture, so the failure must be a
+    # fetch/branch error — NOT the channel-enforcement error.
+    assert result["ok"] is False
+    assert "not allowed" not in result["error"]
+
+
+def test_apply_update_creates_pre_update_backup(repo, monkeypatch):
+    """Every real update snapshots the database first and reports it."""
+    work, _ = repo
+    calls = []
+    monkeypatch.setattr(
+        update_service,
+        "_pre_update_backup",
+        lambda: calls.append(1) or {"filename": "bark-backup-20260810-000000-000000.db", "size": 42, "created_at": "now"},
+    )
+
+    (work / "version.txt").write_text("two")
+    _git(work, "add", ".")
+    _git(work, "commit", "-m", "v2")
+    _git(work, "push", "origin", "main")
+    _git(work, "reset", "--hard", "HEAD~1")
+
+    result = update_service.apply_update("main")
+    assert result["ok"] is True
+    assert len(calls) == 1
+    assert result["backup"]["filename"] == "bark-backup-20260810-000000-000000.db"
+
+
+def test_apply_update_blocks_when_pre_update_backup_fails(repo, monkeypatch):
+    """A failed pre-update backup aborts the update — no partial state."""
+    work, _ = repo
+    monkeypatch.setattr(
+        update_service, "_pre_update_backup", lambda: (_ for _ in ()).throw(RuntimeError("disk full"))
+    )
+    head_before = _git(work, "rev-parse", "HEAD").stdout.strip()
+
+    (work / "version.txt").write_text("two")
+    _git(work, "add", ".")
+    _git(work, "commit", "-m", "v2")
+    _git(work, "push", "origin", "main")
+    _git(work, "reset", "--hard", "HEAD~1")
+
+    result = update_service.apply_update("main")
+    assert result["ok"] is False
+    assert "backup failed" in result["error"]
+    assert _git(work, "rev-parse", "HEAD").stdout.strip() == head_before
+
+
+def test_check_update_defaults_to_persisted_channel(repo, monkeypatch):
+    """With no branch argument the check tracks the instance's own channel."""
+    monkeypatch.setattr(update_service, "get_channel", lambda: "dev")
+    status = update_service.check_update()
+    assert status["branch"] == "dev"
+    assert status["channel"] == "dev"
 
 
 def test_check_update_reports_error_when_branch_on_no_remote(repo, monkeypatch):

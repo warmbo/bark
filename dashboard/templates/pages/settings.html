@@ -439,7 +439,7 @@
             updateApplyBtn.disabled = !status.update_available;
             if (updateResult) {
                 updateResult.innerHTML = status.update_available
-                    ? `<div class="state-panel"><div><strong>Update available</strong><p>v${escHtml(status.available_version || '?')} is ready — pull it from GitHub and restart the instance.</p></div></div>`
+                    ? `<div class="state-panel"><div><strong>Update available</strong><p>v${escHtml(status.available_version || '?')} is ready — pull it from GitHub and restart the instance. A database backup is created automatically before updating.</p></div></div>`
                     : (status.error ? `<div class="state-panel state-error"><div><strong>Check failed</strong><p>${escHtml(status.error)}</p></div></div>` : '');
             }
         } catch (error) {
@@ -470,7 +470,10 @@
                 body: JSON.stringify({branch: channel}),
             });
             if (result.success === false) throw new Error(result.error || 'Update failed');
-            updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>The page will reload once the instance is back online.</p></div></div>`;
+            const backupNote = result.data?.backup?.filename
+                ? ` Database backed up as ${escHtml(result.data.backup.filename)}.`
+                : '';
+            updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>The page will reload once the instance is back online.${backupNote}</p></div></div>`;
             setTimeout(() => window.location.reload(), 12000);
         } catch (error) {
             updateApplyBtn.disabled = false;
