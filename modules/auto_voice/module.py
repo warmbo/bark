@@ -90,7 +90,7 @@ class AutoVoiceModule(BarkModule):
 
     name = "auto_voice"
     version = "0.4.0"
-    description = "AVC-compatible temporary voice channels with dashboard configuration"
+    description = "Temporary voice channels created on demand, with dashboard configuration"
     author = "ZENHAWX"
 
     # Five config groups read more cleanly dispersed into columns than as a
@@ -205,7 +205,7 @@ class AutoVoiceModule(BarkModule):
                         "fallback_name": {
                             "type": "string",
                             "title": "No-game Fallback",
-                            "description": "Used for {game}/@@game_name@@ when no activity is detected.",
+                            "description": "Replaces @@game_name@@ in channel names with the detected game, or {game} when no activity is detected.",
                             "default": "General",
                             "maxLength": 100,
                         },

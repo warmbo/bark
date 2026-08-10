@@ -111,7 +111,7 @@ class LoggingModule(BarkModule):
             },
             {
                 "title": "Configuration",
-                "description": "Use /logsetup command or the dashboard Configuration section to set per-event-type logging channels. Each event type (message_edit, message_delete, file_upload, member_join, member_leave, voice_state) can have its own channel.",
+                "description": "Use /bark logsetup or the dashboard Configuration section to set per-event-type logging channels. Each event type (message_edit, message_delete, file_upload, member_join, member_leave, voice_state) can have its own channel.",
             },
         ]
 
