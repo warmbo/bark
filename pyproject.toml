@@ -23,6 +23,8 @@ dependencies = [
     "aiosqlite>=0.20,<1.0",
     "itsdangerous>=2.0,<3.0",
     "httpx>=0.28,<1.0",
+    "pillow>=10.0,<13.0",
+    "openai>=1.40,<3.0",
 ]
 
 [project.optional-dependencies]
