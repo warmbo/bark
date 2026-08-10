@@ -44,9 +44,8 @@ def test_ready_watchdog_returns_when_ready(monkeypatch):
 
 @pytest.fixture
 def offline_app(db, monkeypatch):
-    from dashboard import create_app
-
     import config as cfg
+    from dashboard import create_app
 
     monkeypatch.setattr(cfg.config.oauth2, "owner_discord_ids", {"42"})
     bot = MagicMock()
