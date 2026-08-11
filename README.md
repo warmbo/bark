@@ -67,6 +67,11 @@ One command installs everything (git, curl, Python 3.13+ if missing), clones the
 curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install.sh | bash
 ```
 
+> **Shell-agnostic.** The installer works piped to `bash`, `sh`, `zsh`, `fish`, or any POSIX shell — the one-liner hands off to `bash` internally, so use your normal shell:
+> ```fish
+> curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install.sh | fish
+> ```
+
 > **Fresh Debian/Ubuntu?** The minimal image ships no `curl` — install it first: `apt-get install -y curl` (or use `wget -qO- … | bash`).
 
 When it finishes, open the printed URL (default `http://127.0.0.1:8090/setup`) — Bark boots a **first-time setup wizard** and writes its own `.env` from the browser, so no hand-editing is required. On a remote server, SSH-tunnel to that URL or reinstall with `BARK_INSTALL_HOST=0.0.0.0` for LAN access.
