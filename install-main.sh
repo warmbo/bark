@@ -197,7 +197,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$BARK_INSTALL_DIR
-EnvironmentFile=$BARK_INSTALL_DIR/.env
+# Leading '-' ignores a missing .env: on a fresh install the file doesn't exist
+# yet (Bark boots into the browser setup wizard). Without the dash, systemd
+# fails the whole service start with "unavailable resources or another error".
+EnvironmentFile=-$BARK_INSTALL_DIR/.env
 Environment=BARK_DASHBOARD_HOST=$BARK_INSTALL_HOST
 Environment=BARK_DASHBOARD_PORT=$BARK_INSTALL_PORT
 ExecStart=$BARK_INSTALL_DIR/.venv/bin/python $BARK_INSTALL_DIR/app.py
