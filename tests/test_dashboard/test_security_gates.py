@@ -70,6 +70,70 @@ async def test_bot_appearance_allows_owner(app, monkeypatch):
     assert resp.status_code == 200
 
 
+@pytest.mark.asyncio
+async def test_bot_appearance_clean_username_and_banner(app, monkeypatch):
+    """The appearance payload must return the plain bot name (no #1234) and a
+    real banner URL even when discord.py's cached ClientUser.banner is None.
+
+    Regression for 2026-08-10: username came from str(user) (appending the
+    discriminator) and banner_url was always None for the cached self-user,
+    so the UI showed 'No banner set' while a banner existed.
+    """
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+
+    from dashboard.routes.api.bot_appearance import get_bot_appearance
+
+    user = MagicMock()
+    user.name = "Bark"
+    user.id = 1
+    # Simulate a legacy bot where str(user) == "Bark#7343"
+    type(user).__str__ = lambda self: f"{self.name}#7343"
+    user.discriminator = "7343"
+    user.banner = None  # cached self-user: banner not loaded
+    user.display_avatar.url = "https://cdn.discordapp.com/avatars/1/a.png"
+
+    http = MagicMock()
+    http.get_user = AsyncMock(return_value={"id": "1", "banner": "abc123"})
+
+    bot = MagicMock()
+    bot.user = user
+    bot.http = http
+
+    request = MagicMock()
+    request.session = {"user": {"id": "42"}, "role": "admin"}
+    request.state.bot = bot
+
+    resp = await get_bot_appearance(request, "1")
+    assert resp.status_code == 200
+    data = json.loads(bytes(resp.body).decode("utf-8"))["data"]
+
+    # Plain name — no #7343 discriminator
+    assert data["username"] == "Bark"
+    assert "#" not in data["username"]
+    # Banner resolved via the http fallback into a CDN URL (png ext)
+    assert data["banner_url"] == "https://cdn.discordapp.com/banners/1/abc123.png"
+    http.get_user.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_bot_banner_url_uses_cached_asset_when_present(app, monkeypatch):
+    """When ClientUser.banner IS populated, use it and skip the http fetch."""
+    from dashboard.routes.api.bot_appearance import _bot_banner_url
+
+    asset = MagicMock()
+    asset.url = "https://cdn.discordapp.com/banners/1/cached.png"
+    user = MagicMock()
+    user.banner = asset
+    bot = MagicMock()
+    bot.user = user
+    bot.http = MagicMock()
+
+    url = await _bot_banner_url(bot)
+    assert url == "https://cdn.discordapp.com/banners/1/cached.png"
+    bot.http.get_user.assert_not_called()
+
+
 # ── SSE stream: moderation.view gate ────────────────────
 
 

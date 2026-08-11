@@ -43,6 +43,30 @@ ACTIVITY_TYPES = {
 }
 
 
+async def _bot_banner_url(bot) -> str | None:
+    """Resolve the bot user's banner CDN URL, reliably.
+
+    ``ClientUser.banner`` (discord.py 2.x) is only populated when the user
+    was fetched via ``Client.fetch_user`` — the cached self-user from login /
+    gateway has it as None even when a banner IS set. Fall back to fetching
+    the full user payload (which includes the ``banner`` hash) and build the
+    CDN URL directly.
+    """
+    user = getattr(bot, "user", None)
+    try:
+        if user and getattr(user, "banner", None):
+            return user.banner.url
+        if user and getattr(bot, "http", None):
+            raw = await bot.http.get_user(user.id)
+            banner_hash = (raw or {}).get("banner")
+            if banner_hash:
+                ext = "gif" if banner_hash.startswith("a_") else "png"
+                return f"https://cdn.discordapp.com/banners/{user.id}/{banner_hash}.{ext}"
+    except Exception:
+        logger.exception("Could not resolve bot banner URL")
+    return None
+
+
 @router.get("/guilds/{guild_id}/bot/appearance")
 async def get_bot_appearance(request: Request, guild_id: str):
     """Return the current bot appearance settings from persisted store."""
@@ -59,18 +83,15 @@ async def get_bot_appearance(request: Request, guild_id: str):
 
     data: dict[str, Any] = {
         "avatar_url": user.display_avatar.url if user else None,
-        "username": str(user) if user else None,
+        # user.name (not str(user)) — the plain name, no trailing #1234
+        # discriminator that Discord appends to bot accounts anyway.
+        "username": user.name if user else None,
         "discriminator": user.discriminator if user and hasattr(user, "discriminator") else None,
         "activity_type": presence.get("activity_type", "playing"),
         "activity_name": presence.get("activity_name", ""),
     }
 
-    # Try banner — discord.py 2.x supports user.banner
-    try:
-        if user and user.banner:
-            data["banner_url"] = user.banner.url
-    except Exception:
-        data["banner_url"] = None
+    data["banner_url"] = await _bot_banner_url(bot)
 
     return api_success(data)
 
@@ -188,7 +209,7 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
         return api_success(
             {
                 "message": "Banner updated",
-                "banner_url": bot.user.banner.url if bot.user.banner else None,
+                "banner_url": await _bot_banner_url(bot),
             }
         )
     except asyncio.TimeoutError:
