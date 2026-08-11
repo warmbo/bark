@@ -229,6 +229,13 @@ def _remote_commit(remote: str, branch: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def _remote_commit_date(remote: str, branch: str) -> str:
+    """ISO-8601 committer date of the remote branch HEAD (the version's
+    release time), or ``''`` when the ref can't be resolved."""
+    result = _run(["git", "log", "-1", "--format=%cI", f"{remote}/{branch}"])
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 def local_version() -> str:
     """The running instance's version (X.Y.Z, patch = commit count).
 
@@ -323,12 +330,15 @@ def check_update(channel: str | None = None) -> dict:
     available = ""
     current_version = local_version()
     available_version = ""
+    available_date = ""
     error = ""
     try:
         remote = _resolve_remote(branch)
         if remote is not None:
             available = _remote_commit(remote, branch)
             available_version = remote_version(remote, branch)
+            if available:
+                available_date = _remote_commit_date(remote, branch)
         else:
             error = f"could not find branch '{branch}' on remote '{config.instance.update_remote}'"
     except Exception as exc:  # network down / not a checkout
@@ -360,6 +370,7 @@ def check_update(channel: str | None = None) -> dict:
         "branch": branch,
         "current_version": current_version,
         "available_version": available_version,
+        "available_date": available_date,
         "current_commit": current,
         "current_branch": current_branch(),
         "available_commit": available,

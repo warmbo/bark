@@ -73,6 +73,10 @@ def test_check_update_reports_available_when_remote_ahead(repo):
     assert status["available_commit"] == _git(work, "rev-parse", "origin/main").stdout.strip()
     assert status["update_available"] is True
     assert status["error"] == ""
+    # Release date = the remote HEAD's committer date (ISO-8601), non-empty.
+    assert status["available_date"] != ""
+    expected_date = _git(work, "log", "-1", "--format=%cI", "origin/main").stdout.strip()
+    assert status["available_date"] == expected_date
 
 
 def test_check_update_no_update_when_in_sync(repo):

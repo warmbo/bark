@@ -67,6 +67,8 @@ async def test_update_status_returns_build_info(app, monkeypatch):
             "current_branch": "main",
             "available_commit": "bbbbbbb",
             "update_available": True,
+            "available_version": "0.2.190",
+            "available_date": "2026-08-11T13:00:00+00:00",
             "repo_dir": "/tmp/repo",
             "error": "",
         },
@@ -83,6 +85,8 @@ async def test_update_status_returns_build_info(app, monkeypatch):
     assert data["update_available"] is True
     assert data["channel"] == "stable"
     assert data["branch"] == "master"
+    # The release date of the available version is surfaced to the UI.
+    assert data["available_date"] == "2026-08-11T13:00:00+00:00"
 
 
 @pytest.mark.asyncio

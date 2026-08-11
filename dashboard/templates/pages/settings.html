@@ -194,7 +194,7 @@
                     </div>
                     <div class="info-row">
                         <span class="info-label">Available version</span>
-                        <span class="info-value"><code class="code-sm" id="update-available">—</code></span>
+                        <span class="info-value"><code class="code-sm" id="update-available">—</code> <span class="text-tertiary" id="update-available-date"></span></span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">Source</span>
@@ -206,7 +206,6 @@
                     </div>
                 </div>
                 <div class="form-actions form-actions-static">
-                    <button type="button" class="btn" id="update-check-btn">{{ icon("search", 14) }} Check</button>
                     <button type="button" class="btn btn-primary" id="update-apply-btn" disabled>{{ icon("download", 14) }} Update &amp; Restart</button>
                 </div>
                 <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
@@ -418,32 +417,46 @@
     const updateChannel = document.getElementById('update-channel');
     const updateCurrent = document.getElementById('update-current');
     const updateAvailable = document.getElementById('update-available');
+    const updateAvailableDate = document.getElementById('update-available-date');
     const updateRepo = document.getElementById('update-repo');
-    const updateCheckBtn = document.getElementById('update-check-btn');
     const updateApplyBtn = document.getElementById('update-apply-btn');
     const updateResult = document.getElementById('update-result');
 
     let lastStatus = null;
+    let channelInitialized = false;
 
-    async function loadUpdateStatus(showAvailable = false) {
+    // The check runs automatically: on first load and whenever the channel
+    // changes. The dropdown keeps whatever the user selected so they can
+    // preview that channel's version before deciding to update.
+    async function loadUpdateStatus() {
         if (!updateCurrent) return;
         try {
-            const branch = updateChannel?.value || 'main';
-            const result = await safeFetch(`/api/v1/instance/update/status?branch=${encodeURIComponent(branch)}`, {cache: 'no-cache'});
+            // First call: let the backend report the persisted channel (no
+            // branch param) so we can seed the dropdown. After that, use the
+            // user's selection.
+            const branch = channelInitialized ? (updateChannel?.value || 'main') : '';
+            const result = await safeFetch(`/api/v1/instance/update/status${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {cache: 'no-cache'});
             const status = result?.data || {};
             lastStatus = status;
-            // Reflect the instance's persisted channel; once on Dev the
-            // Stable option is disabled (one-way switch).
-            if (status.channel) {
-                const value = status.channel === 'dev' ? 'dev' : 'main';
-                if (updateChannel.value !== value) updateChannel.value = value;
+
+            // Seed the dropdown from the persisted channel once. On a Dev
+            // instance the Stable option stays disabled (one-way switch).
+            if (!channelInitialized && status.channel) {
+                channelInitialized = true;
+                updateChannel.value = status.channel === 'dev' ? 'dev' : 'main';
                 const stableOption = updateChannel.querySelector('option[value="main"]');
                 if (stableOption) stableOption.disabled = status.channel === 'dev';
                 const hint = document.getElementById('update-channel-hint');
                 if (hint && status.channel === 'dev') {
                     hint.textContent = 'This instance is on the Dev channel. Switching back to Stable is not allowed.';
                 }
+            } else if (status.channel) {
+                const hint = document.getElementById('update-channel-hint');
+                if (hint && status.channel === 'dev') {
+                    hint.textContent = 'This instance is on the Dev channel. Switching back to Stable is not allowed.';
+                }
             }
+
             updateCurrent.textContent = status.current_version ? `v${status.current_version}` : '—';
             if (updateRepo) {
                 const repo = status.repo_url || 'https://github.com';
@@ -454,16 +467,13 @@
             if (releasesEl && status.repo_url) {
                 releasesEl.href = `${status.repo_url.replace(/\/$/, '')}/releases`;
             }
-            // The available version only appears after an explicit Check —
-            // boot should never leak the remote's version (or enable the
-            // Update button) on its own.
-            if (showAvailable) {
-                updateAvailable.textContent = status.available_version ? `v${status.available_version}` : '—';
-                updateApplyBtn.disabled = !status.update_available;
-            } else {
-                updateAvailable.textContent = '—';
-                updateApplyBtn.disabled = true;
+            updateAvailable.textContent = status.available_version ? `v${status.available_version}` : '—';
+            if (updateAvailableDate) {
+                updateAvailableDate.textContent = status.available_date
+                    ? `· released ${new Date(status.available_date).toLocaleString()}`
+                    : '';
             }
+            updateApplyBtn.disabled = !status.update_available;
             if (updateResult) {
                 updateResult.innerHTML = status.update_available
                     ? `<div class="state-panel"><div><strong>Update available</strong><p>v${escHtml(status.available_version || '?')} is ready — pull it from GitHub and restart the instance. A database backup is created automatically before updating.</p></div></div>`
@@ -476,8 +486,9 @@
         }
     }
 
-    updateCheckBtn?.addEventListener('click', () => loadUpdateStatus(true));
-    updateChannel?.addEventListener('change', () => loadUpdateStatus(false));
+    // Auto-check on load and whenever the channel changes — no Check button.
+    updateChannel?.addEventListener('change', loadUpdateStatus);
+    loadUpdateStatus();
     // ── Live update terminal ──────────────────────────
 
     const termOverlay = document.getElementById('update-terminal-overlay');
