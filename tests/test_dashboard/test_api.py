@@ -1347,6 +1347,56 @@ async def test_manifest_hides_disabled_addons_from_sidebar(client, app):
     assert data["stats"]["modules_enabled"] == 1
 
 
+def test_repo_plugin_catalog_only_lists_installable_plugins(monkeypatch):
+    """The plugin catalog parses the bark-plugins README and must surface
+    ONLY rows whose File cell links to a real plugins/*.py file — planned
+    (not-yet-built) entries and header rows are skipped, and the file path is
+    extracted from the markdown link so download/install works.
+    """
+    from dashboard.routes.api import manifest
+
+    readme = """\
+## Available plugins
+
+| Plugin | File | What it adds |
+|---|---|---|
+| Fun | [`plugins/fun.py`](plugins/fun.py) | rolls dice |
+| Trivia | [`plugins/trivia.py`](plugins/trivia.py) | multiplayer trivia |
+| Minimal Example | [`plugins/minimal_example.py`](plugins/minimal_example.py) | hello |
+
+## Plugin ideas (not yet built)
+
+| Idea | File (planned) | What it would add | Deps |
+|---|---|---|---|
+| Slots | `plugins/slots.py` | slot machine | none |
+| Wordle | `plugins/wordle.py` | daily word | none |
+"""
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return readme.encode()
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: FakeResp())
+
+    rows = manifest._repo_plugin_entries()
+    names = [r["name"] for r in rows]
+    # Real plugins only, in order; no planned/idea rows.
+    assert names == ["Fun", "Trivia", "Minimal Example"]
+    for r in rows:
+        # file is a clean plugins/*.py path (not the markdown cell), and the
+        # URL points at that same file.
+        file = str(r["file"])
+        assert file.startswith("plugins/") and file.endswith(".py")
+        assert "[" not in file and "]" not in file
+        assert str(r["url"]).endswith(file)
+
+
 # ── Stats ─────────────────────────────────────────────
 
 

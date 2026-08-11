@@ -14,10 +14,21 @@ router = APIRouter(tags=["api-manifest"])
 
 
 def _repo_plugin_entries() -> list[dict[str, object]]:
-    """Best-effort remote catalog from the public bark-plugins README."""
+    """Best-effort remote catalog from the public bark-plugins README.
+
+    Only rows whose File cell is a markdown link to a real ``plugins/*.py``
+    file are surfaced as installable. The README also carries a "Plugin ideas
+    (not yet built)" table (backtick file names, no link) — those are skipped
+    so the catalog never lists plugins that can't actually be installed. The
+    file path is extracted from the link so download/install works.
+    """
     try:
+        import re
         import urllib.request
 
+        file_link = re.compile(
+            r"\[`?plugins/([a-z0-9_]+)\.py`?\]\(plugins/\1\.py\)"
+        )
         with urllib.request.urlopen(
             "https://raw.githubusercontent.com/warmbo/bark-plugins/main/README.md",
             timeout=2,
@@ -33,15 +44,16 @@ def _repo_plugin_entries() -> list[dict[str, object]]:
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         if len(cells) < 3 or cells[0].lower() == "plugin":
             continue
-        plugin_name, file_name, description = cells[0], cells[1], cells[2]
-        if not plugin_name or not file_name or file_name.endswith(".md"):
-            continue
+        match = file_link.fullmatch(cells[1])
+        if not match:
+            continue  # planned/header rows (no markdown link to a .py)
+        file_name = f"plugins/{match.group(1)}.py"
         rows.append(
             {
-                "name": plugin_name,
+                "name": cells[0],
                 "file": file_name,
-                "label": plugin_name,
-                "description": description,
+                "label": cells[0],
+                "description": cells[2],
                 "source": "warmbo/bark-plugins",
                 "url": f"https://github.com/warmbo/bark-plugins/blob/main/{file_name}",
             }
