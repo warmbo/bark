@@ -15,19 +15,23 @@ authors = [
 dependencies = [
     "discord.py>=2.5,<3.0",
     "fastapi>=0.115,<1.0",
-    "uvicorn[standard]>=0.34,<1.0",
+    "uvicorn>=0.34,<1.0",
     "jinja2>=3.1,<4.0",
     "sqlalchemy>=2.0,<3.0",
-    "aiofiles>=24.0,<25.0",
     "python-multipart>=0.0.18",
     "aiosqlite>=0.20,<1.0",
     "itsdangerous>=2.0,<3.0",
     "httpx>=0.28,<1.0",
-    "pillow>=10.0,<13.0",
-    "openai>=1.40,<3.0",
 ]
 
 [project.optional-dependencies]
+# The media-engine runs as a separate local service (port 8094) and is the
+# only consumer of pillow. Keeping it optional keeps the core install lean
+# (pillow is a large compiled C extension that is painful to build on
+# constrained hosts like Termux).
+media-engine = ["pillow>=10.0,<13.0"]
+
+# Keep pillow in the dev environment so the media-engine test suite runs.
 dev = [
     "pytest>=9.0.3,<10.0",
     "pytest-asyncio>=1.0,<2.0",
@@ -37,6 +41,7 @@ dev = [
     "bandit>=1.8,<2.0",
     "pip-audit>=2.9,<3.0",
     "pre-commit>=4.0,<5.0",
+    "pillow>=10.0,<13.0",
 ]
 
 [tool.setuptools]
