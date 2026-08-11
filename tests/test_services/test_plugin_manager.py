@@ -318,6 +318,26 @@ async def test_uninstall_refuses_unknown_and_core(manager):
     assert await manager.uninstall_plugin("nope") is False
 
 
+@pytest.mark.asyncio
+async def test_uninstall_syncs_command_tree(db, manager, monkeypatch):
+    """Uninstalling a plugin re-syncs the command tree so its /bark commands
+    stop appearing in Discord (mirrors the install-side sync)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    tree = MagicMock()
+    tree.sync = AsyncMock()
+    fake_bot = MagicMock()
+    fake_bot.tree = tree
+    fake_bot.is_ready.return_value = True
+    monkeypatch.setattr(manager, "bot", fake_bot)
+
+    await manager.install_plugin(VALID_PLUGIN.encode(), "p.py")
+    tree.sync.reset_mock()
+
+    assert await manager.uninstall_plugin("ping_plugin") is True
+    tree.sync.assert_awaited_once()
+
+
 # ── Discovery ────────────────────────────────────────
 
 

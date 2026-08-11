@@ -390,6 +390,20 @@ class ModuleManager:
         except OSError:
             logger.exception("Plugin '%s' file could not be deleted", name)
 
+        # Re-sync the command tree so the removed plugin's /bark commands stop
+        # appearing in Discord (install syncs; uninstall must mirror it, or
+        # ghost commands linger in the global tree until a restart).
+        if (
+            getattr(self.bot, "tree", None) is not None
+            and getattr(self.bot, "is_ready", lambda: False)()
+        ):
+            try:
+                await self.bot.tree.sync()
+            except Exception:
+                logger.exception(
+                    "Plugin '%s' uninstalled but slash command sync failed", name
+                )
+
         logger.info("Plugin '%s' uninstalled", name)
         return True
 
