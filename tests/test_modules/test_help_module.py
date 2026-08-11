@@ -83,15 +83,29 @@ async def test_help_dms_every_command_and_dashboard_info():
 
     await module._make_help_command().callback(interaction)
 
-    assert len(captured.sent) == 1
-    embed = captured.sent[0]["embed"]
-    assert "`/bark roll` — Roll dice" in embed.description
-    assert "`/bark trivia start` — Start a trivia game" in embed.description
+    # Two DMs: a "How to use Bark" guide, then the command reference.
+    assert len(captured.sent) == 2
+    guide = captured.sent[0]["embed"]
+    reference = captured.sent[1]["embed"]
+
+    # Guide message carries the how-to instructions
+    assert guide.title == "🐺 How to use Bark"
+    guide_text = guide.title + " " + " ".join(
+        f"{f.name} {f.value}" for f in guide.fields
+    )
+    assert "Enable the modules you want" in guide_text
+    assert "add-on plugins are off until you turn them on" in guide_text
+    assert "/bark help" in guide_text
+
+    # Reference message lists every command with the /bark group prefix
+    assert reference.title == "🐺 Bark — Command Reference"
+    assert "`/bark roll` — Roll dice" in reference.description
+    assert "`/bark trivia start` — Start a trivia game" in reference.description
     # dashboard access info is included
     import config as cfg
 
     public_url = cfg.config.dashboard.public_url
-    field_values = " ".join(field.value for field in embed.fields)
+    field_values = " ".join(field.value for field in reference.fields)
     assert public_url in field_values
     # the invite link is advertised as the SHORT branded URL, never the long
     # discord.com/oauth2 link

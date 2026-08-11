@@ -33,7 +33,6 @@ def test_write_env_creates_dotenv(fresh_env):
         "client_secret": "s3cret",
         "redirect_uri": "https://bark.example.com/auth/callback",
         "owner_ids": "111, 222",
-        "command_prefix": "!",
     }
     path = setup_service.write_env(payload)
     content = path.read_text()
@@ -43,6 +42,8 @@ def test_write_env_creates_dotenv(fresh_env):
     assert 'BARK_OAUTH2_REDIRECT_URI=https://bark.example.com/auth/callback' in content
     assert 'BARK_OWNER_DISCORD_IDS="111, 222"' in content  # quoted (has space)
     assert "BARK_PUBLIC_URL=https://bark.example.com" in content
+    # No prefix setting: commands are global slash commands under /bark.
+    assert "BARK_COMMAND_PREFIX" not in content
     assert oct(path.stat().st_mode & 0o777) == "0o600"
 
 

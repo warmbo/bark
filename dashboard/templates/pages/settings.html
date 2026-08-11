@@ -262,7 +262,7 @@
         </div>
         <div class="update-terminal" id="update-terminal-log" aria-live="polite" tabindex="0"></div>
         <div class="dialog-actions">
-            <button type="button" class="btn" id="update-terminal-close" disabled>{{ icon("x", 14) }} Close</button>
+            <button type="button" class="btn btn-primary" id="update-terminal-close" disabled>{{ icon("refresh-cw", 14) }} Finish &amp; Reload</button>
         </div>
     </div>
 </div>
@@ -595,13 +595,12 @@
                 const bot = health?.data?.bot;
                 if (health?.data?.status === 'healthy') {
                     clearInterval(healthTimer);
-                    appendTermLine({level: 'ok', line: bot?.connected === false
-                        ? '⚠ Instance is back, but the bot is not connected to Discord yet — check the service logs if servers stay empty.'
-                        : '✓ Instance is back online — reloading…'});
                     if (bot?.connected === false) {
+                        appendTermLine({level: 'warn', line: '⚠ Instance is back, but the bot is not connected to Discord yet — check the service logs if servers stay empty.'});
                         finishTerminal('⚠ Instance restarted, but the bot has not connected to Discord. If servers still look empty, restart the bark service.', 'error');
                     } else {
-                        setTimeout(() => window.location.reload(), 1200);
+                        appendTermLine({level: 'ok', line: '✓ Instance is back online — the update is complete.'});
+                        finishTerminal('Update complete — click Finish & Reload to see the new version.', 'ok');
                     }
                 }
             } catch (error) {
@@ -614,15 +613,10 @@
         }, 2000);
     }
 
+    // The terminal never just closes: the only action is Finish & Reload,
+    // which refreshes the page onto the new build.
     termClose?.addEventListener('click', () => {
-        if (termTimer) { clearInterval(termTimer); termTimer = null; }
-        termOverlay.hidden = true;
-    });
-
-    termOverlay?.addEventListener('click', (event) => {
-        if (event.target === termOverlay && !termClose.disabled) {
-            termOverlay.hidden = true;
-        }
+        window.location.reload();
     });
 
     updateApplyBtn?.addEventListener('click', async () => {
@@ -647,7 +641,7 @@
             const backupNote = result.data?.backup?.filename
                 ? ` Database backed up as ${escHtml(result.data.backup.filename)}.`
                 : '';
-            updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>The page will reload once the instance is back online.${backupNote}</p></div></div>`;
+            updateResult.innerHTML = `<div class="state-panel"><div><strong>${escHtml(result.data?.message || 'Update started')}</strong><p>Watch the terminal — then click Finish &amp; Reload once the update is done.${backupNote}</p></div></div>`;
             openUpdateTerminal();
         } catch (error) {
             updateApplyBtn.disabled = false;

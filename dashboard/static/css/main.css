@@ -2931,6 +2931,17 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .bot-offline-banner code { background: rgba(0,0,0,.35); padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono, monospace); }
 .bot-offline-banner[hidden] { display: none; }
 
+/* ── Dashboard getting-started guide ─────────────────── */
+.getting-started { margin: 0 0 18px; border: 1px solid var(--border-hover); border-radius: 12px; background: var(--bg-card-solid); overflow: hidden; }
+.getting-started summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 14px 18px; font-weight: 600; list-style: none; color: var(--text-primary); }
+.getting-started summary::-webkit-details-marker { display: none; }
+.getting-started summary:hover { background: rgba(255,255,255,.03); }
+.getting-started-toggle { margin-left: auto; display: inline-flex; transition: transform .2s ease; }
+.getting-started[open] .getting-started-toggle { transform: rotate(180deg); }
+.getting-started-list { margin: 0; padding: 2px 18px 16px 36px; display: grid; gap: 8px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.55; }
+.getting-started-list code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono, monospace); font-size: 12px; }
+.getting-started-list a { color: var(--accent); }
+
 /* ── Accessible dialog ─────────────────────────────── */
 .dialog-overlay { position: fixed; inset: 0; z-index: var(--z-dialog); display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.74); backdrop-filter: var(--glass-blur-light); }
 .app-dialog { width: min(460px, 100%); display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 22px; border: 1px solid var(--border-hover); background: var(--bg-card-solid); box-shadow: var(--shadow-lg); }

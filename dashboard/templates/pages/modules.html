@@ -38,7 +38,7 @@
     </div>
     <div class="module-commands">
         {% for cmd in module.get_commands()[:4] %}
-        <code class="cmd-badge">/{{ cmd.name }}</code>
+        <code class="cmd-badge">/bark {{ cmd.name }}</code>
         {% endfor %}
         {% if module.get_commands() | length > 4 %}<span class="cmd-more">+{{ (module.get_commands() | length) - 4 }} more</span>{% endif %}
     </div>

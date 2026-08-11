@@ -53,41 +53,98 @@ class HelpModule(BarkModule):
                     if cmd.name == "bark":
                         _walk_commands(cmd, ["bark"], commands)
 
-            embed = discord.Embed(
+            public_url = getattr(config.dashboard, "public_url", "")
+            instructions = discord.Embed(
+                title="🐺 How to use Bark",
+                description=(
+                    "Bark is a dashboard-first server manager: you run it from "
+                    "this dashboard, and command it from Discord with slash "
+                    "commands. Here's the quick tour:"
+                ),
+                color=discord.Color.blurple(),
+            )
+            instructions.add_field(
+                name="1. Add Bark to a server",
+                value=(
+                    "Use the invite link below to install Bark in any server "
+                    "you manage. It needs **Manage Server** permissions."
+                ),
+                inline=False,
+            )
+            instructions.add_field(
+                name="2. Enable the modules you want",
+                value=(
+                    "Each server has its own **Modules** page in the dashboard. "
+                    "Core modules (moderation, reputation, roles, logging…) are "
+                    "on by default; **add-on plugins are off until you turn "
+                    "them on for that server**."
+                ),
+                inline=False,
+            )
+            instructions.add_field(
+                name="3. Configure per server",
+                value=(
+                    "Open a server, then its module pages to set channels, "
+                    "roles, and rules. Instance-wide things — updates, backups, "
+                    "dashboard access, bot appearance — live in **Settings**."
+                ),
+                inline=False,
+            )
+            instructions.add_field(
+                name="4. Use /bark commands in Discord",
+                value=(
+                    "Everything lives under the global **`/bark`** group — no "
+                    "prefix to remember. Try `/bark help` (this DM), `/bark "
+                    "warn`, `/bark announce`, `/bark serverinfo`…"
+                ),
+                inline=False,
+            )
+            instructions.add_field(
+                name="5. Add features & keep it fresh",
+                value=(
+                    "Install single-file add-ons from **Modules → Plugin "
+                    "Manager**, and update Bark from **Settings → Updates** "
+                    "(with an automatic database backup first)."
+                ),
+                inline=False,
+            )
+            if public_url:
+                instructions.add_field(
+                    name="Links",
+                    value=(
+                        f"**Dashboard:** {public_url}\n"
+                        f"**Invite:** {public_url}/invite"
+                    ),
+                    inline=False,
+                )
+            instructions.set_footer(text=f"Bark {self.name} v{self.version}")
+
+            reference = discord.Embed(
                 title="🐺 Bark — Command Reference",
                 color=discord.Color.blurple(),
             )
             if commands:
-                embed.description = "\n".join(
+                reference.description = "\n".join(
                     f"`{path}`{' — ' + desc if desc else ''}" for path, desc in commands
                 )
             else:
-                embed.description = "No commands registered yet."
-
-            access_lines = []
-            if getattr(config.dashboard, "public_url", ""):
-                access_lines.append(f"**Dashboard:** {config.dashboard.public_url}")
-            # Advertise the SHORT branded invite link ({public_url}/invite),
-            # which the dashboard's /invite route redirects to the real
-            # Discord OAuth URL — keep the long discord.com/oauth2 link out
-            # of user-facing output.
-            if getattr(config.dashboard, "public_url", ""):
-                access_lines.append(f"**Invite:** {config.dashboard.public_url}/invite")
-            if access_lines:
-                embed.add_field(
+                reference.description = "No commands registered yet."
+            if public_url:
+                reference.add_field(
                     name="Manage Bark",
-                    value="\n".join(access_lines),
+                    value=f"**Dashboard:** {public_url}\n**Invite:** {public_url}/invite",
                     inline=False,
                 )
-            embed.add_field(
+            reference.add_field(
                 name="Tip",
                 value="Run `/bark help` anytime — the bot DMs you this list.",
                 inline=False,
             )
-            embed.set_footer(text=f"Bark {self.name} v{self.version}")
+            reference.set_footer(text=f"Bark {self.name} v{self.version}")
 
             try:
-                await interaction.user.send(embed=embed)
+                await interaction.user.send(embed=instructions)
+                await interaction.user.send(embed=reference)
             except discord.Forbidden:
                 await interaction.response.send_message(
                     "I couldn't DM you (DMs from server members may be off). "
@@ -95,7 +152,8 @@ class HelpModule(BarkModule):
                     ephemeral=True,
                 )
                 try:
-                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    await interaction.followup.send(embed=instructions, ephemeral=True)
+                    await interaction.followup.send(embed=reference, ephemeral=True)
                 except Exception:
                     logger.exception("help fallback DM failed")
                 return
@@ -108,7 +166,8 @@ class HelpModule(BarkModule):
                 return
 
             await interaction.response.send_message(
-                "📬 Sent you a DM with every command!", ephemeral=True
+                "📬 Sent you a DM with a quick guide and every command!",
+                ephemeral=True,
             )
 
         return help_cmd

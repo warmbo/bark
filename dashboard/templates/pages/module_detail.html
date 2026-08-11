@@ -152,7 +152,7 @@
         <div class="card-header"><h2 class="card-title">{{ icon('info', 16) }} Module details</h2></div>
         <dl class="definition-list"><div><dt>Version</dt><dd>v{{ module_data.version }}</dd></div><div><dt>Author</dt><dd>{{ module_data.author }}</dd></div><div><dt>Priority</dt><dd>{{ module_data.priority }}</dd></div><div><dt>Events</dt><dd>{{ module_data.events | join(', ') if module_data.events else 'None' }}</dd></div></dl>
       </article>
-      {% if module_data.commands %}<article class="content-card"><div class="card-header"><h2 class="card-title">{{ icon('terminal', 16) }} Commands</h2></div><div class="commands-list">{% for cmd in module_data.commands %}<div class="command-item"><div class="command-header"><code class="command-name">/{{ cmd.name }}</code>{% if cmd.slash %}<span class="badge-sm slash">slash</span>{% endif %}</div><span class="command-desc">{{ cmd.description }}</span></div>{% endfor %}</div></article>{% endif %}
+      {% if module_data.commands %}<article class="content-card"><div class="card-header"><h2 class="card-title">{{ icon('terminal', 16) }} Commands</h2></div><div class="commands-list">{% for cmd in module_data.commands %}<div class="command-item"><div class="command-header"><code class="command-name">/bark {{ cmd.name }}</code>{% if cmd.slash %}<span class="badge-sm slash">slash</span>{% endif %}</div><span class="command-desc">{{ cmd.description }}</span></div>{% endfor %}</div></article>{% endif %}
     </div>
   </section>
 </div>

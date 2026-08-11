@@ -21,10 +21,10 @@ logger = logging.getLogger("bark.setup")
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Keys the setup wizard is allowed to write. Everything else is left alone —
-# the wizard is a bootstrap, not a full config editor.
+# the wizard is a bootstrap, not a full config editor. Commands are global
+# slash commands under /bark — there is intentionally no prefix setting.
 SETUP_KEYS = (
     "BARK_BOT_TOKEN",
-    "BARK_COMMAND_PREFIX",
     "BARK_PUBLIC_URL",
     "BARK_OAUTH2_CLIENT_ID",
     "BARK_OAUTH2_CLIENT_SECRET",
@@ -103,9 +103,6 @@ def _validate(payload: dict) -> dict:
         values["BARK_OAUTH2_CLIENT_SECRET"] = client_secret
         values["BARK_OAUTH2_REDIRECT_URI"] = redirect_uri
         values["BARK_OWNER_DISCORD_IDS"] = owner_ids
-    prefix = str(payload.get("command_prefix") or "").strip()
-    if prefix:
-        values["BARK_COMMAND_PREFIX"] = prefix
     return values
 
 
