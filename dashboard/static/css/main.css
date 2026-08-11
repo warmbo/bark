@@ -2410,6 +2410,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 .banner-preview-wrap {
     width: 100%;
+    max-width: 250px;
+    margin-inline: auto;
     aspect-ratio: 3 / 1;
     border-radius: 6px;
     overflow: hidden;
