@@ -1288,6 +1288,65 @@ async def test_manifest_lists_pageless_plugins_in_addon_nav(client, app):
     assert dice_entry["enabled"] is True
 
 
+@pytest.mark.asyncio
+async def test_manifest_hides_disabled_addons_from_sidebar(client, app):
+    """An add-on that's uploaded but not enabled for the guild stays out of
+    the left-pane nav, but is still listed (disabled) in the Modules surface.
+    """
+    from types import SimpleNamespace
+
+    def make_module(name: str, has_pages: bool) -> SimpleNamespace:
+        return SimpleNamespace(
+            version="1.0.0",
+            description=f"{name} module",
+            get_dashboard_pages=lambda: (
+                [
+                    SimpleNamespace(
+                        route=f"/guild/{{guild_id}}/modules/{name}",
+                        label=name.title(),
+                        icon="zap",
+                        category="",
+                    )
+                ]
+                if has_pages
+                else []
+            ),
+            get_actions=lambda: [],
+            get_commands=lambda: [],
+            get_settings_schema=lambda: {},
+        )
+
+    bot = app.state.bot
+    bot.modules.get_all_modules.return_value = {
+        "alpha": make_module("alpha", has_pages=True),
+        "beta": make_module("beta", has_pages=False),
+    }
+    bot.modules.is_plugin.side_effect = lambda name: name == "beta"
+    # alpha is enabled for the guild; the beta add-on is disabled.
+    bot.modules.is_enabled_for_guild.side_effect = (
+        lambda guild_id, name: name != "beta"
+    )
+
+    resp = await client.get("/api/v1/guilds/1/manifest")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    categories = data["categories"]
+
+    # Enabled core module appears in the left-pane Modules nav.
+    assert categories["_modules"]["pages"][0]["module"] == "alpha"
+
+    # Disabled add-on is NOT in the sidebar (no "Add-on Modules" category).
+    assert "_plugins" not in categories
+
+    # But it is still listed in the Modules management surface, marked off.
+    beta = next(m for m in data["modules"] if m["name"] == "beta")
+    assert beta["enabled"] is False
+
+    # Stats reflect the authoritative count.
+    assert data["stats"]["modules_total"] == 2
+    assert data["stats"]["modules_enabled"] == 1
+
+
 # ── Stats ─────────────────────────────────────────────
 
 

@@ -12,6 +12,48 @@ from services.response import api_not_found, api_success, get_guild_capabilities
 
 router = APIRouter(tags=["api-manifest"])
 
+
+def _repo_plugin_entries() -> list[dict[str, object]]:
+    """Best-effort remote catalog from the public bark-plugins README."""
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen(
+            "https://raw.githubusercontent.com/warmbo/bark-plugins/main/README.md",
+            timeout=2,
+        ) as resp:
+            text = resp.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return []
+
+    rows: list[dict[str, object]] = []
+    for line in text.splitlines():
+        if not line.startswith("| "):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 3 or cells[0].lower() == "plugin":
+            continue
+        plugin_name, file_name, description = cells[0], cells[1], cells[2]
+        if not plugin_name or not file_name or file_name.endswith(".md"):
+            continue
+        rows.append(
+            {
+                "name": plugin_name,
+                "file": file_name,
+                "label": plugin_name,
+                "description": description,
+                "source": "warmbo/bark-plugins",
+                "url": f"https://github.com/warmbo/bark-plugins/blob/main/{file_name}",
+            }
+        )
+    return rows
+
+
+@router.get("/guilds/plugin-catalog")
+async def get_plugin_catalog(request: Request):
+    return api_success({"plugins": _repo_plugin_entries()})
+
+
 CORE_PAGES = [
     {
         "route": "/guild/{guild_id}",
@@ -97,10 +139,25 @@ async def get_guild_manifest(request: Request, guild_id: int):
     pages_list: list[dict[str, object]] = [
         {**page, "route": page["route"].replace("{guild_id}", str(guild_id))} for page in CORE_PAGES
     ]
+    if getattr(request.app.state, "is_bark_dev", False):
+        pages_list.append(
+            {
+                "route": f"/guild/{guild_id}/plugins",
+                "label": "Plugin Catalog",
+                "icon": "package",
+                "category": "settings",
+            }
+        )
     modules_list: list[dict[str, object]] = []
     actions_list: list[dict[str, object]] = []
 
-    enabled_by_module = await _load_enabled_modules(guild_id)
+    # Authoritative per-guild enablement (from the module manager's runtime
+    # state, which defaults add-on/plugin modules to OFF and core to ON).
+    # Coerced to a JSON-safe bool.
+    enabled_by_module = {
+        name: bool(bot.modules.is_enabled_for_guild(guild_id, name))
+        for name in bot.modules.get_all_modules()
+    }
     for name, module in bot.modules.get_all_modules().items():
         pages = module.get_dashboard_pages()
         actions = module.get_actions()
@@ -153,25 +210,6 @@ async def get_guild_manifest(request: Request, guild_id: int):
     )
 
 
-async def _load_enabled_modules(guild_id: int) -> dict[str, bool]:
-    """Return module name -> enabled flag from persisted module configs."""
-    from sqlalchemy import select
-
-    from database.models.module import ModuleConfig
-
-    async with session_scope() as session:
-        configs = (
-            (
-                await session.execute(
-                    select(ModuleConfig).where(ModuleConfig.guild_id == str(guild_id))
-                )
-            )
-            .scalars()
-            .all()
-        )
-    return {config.module_name: config.enabled for config in configs}
-
-
 def _module_entry(
     name: str,
     module,
@@ -203,7 +241,15 @@ def _module_pages(
     pages,
     is_plugin: bool = False,
 ) -> list[dict[str, object]]:
-    """Render a module's dashboard pages into manifest entries."""
+    """Render a module's dashboard pages into manifest entries.
+
+    Only modules that are ENABLED for this guild appear in the left-pane
+    navigation. An add-on that is uploaded but not enabled (or a core module
+    switched off for this server) is managed from the Modules page and stays
+    out of the sidebar until it's active.
+    """
+    if not enabled_by_module.get(name, True):
+        return []
     rendered = []
     for page in pages:
         rendered.append(
