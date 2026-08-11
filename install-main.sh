@@ -210,7 +210,12 @@ UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=$BARK_INSTALL_DIR/data $BARK_INSTALL_DIR/bark.log
+# The install dir must be writable: the first-time setup wizard writes .env to
+# the repo root, and Python writes .pyc/__pycache__ under .venv at runtime.
+# ProtectSystem=strict makes everything read-only except ReadWritePaths; adding
+# only the .env FILE still fails (file creation needs the parent dir writable),
+# so expose the whole $BARK_INSTALL_DIR. Verified live under systemd.
+ReadWritePaths=$BARK_INSTALL_DIR
 StandardOutput=append:$BARK_INSTALL_DIR/bark.log
 StandardError=append:$BARK_INSTALL_DIR/bark.log
 
