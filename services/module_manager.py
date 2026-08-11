@@ -49,6 +49,11 @@ class ModuleManager:
         self._registered_events: dict[
             str, list[tuple[str, Callable]]
         ] = {}  # module -> [(event_type, handler)]
+        # Modules whose commands were registered but not yet pushed to Discord
+        # (installed or enabled after the startup sync). Cleared by
+        # mark_commands_synced() after a full sync; drained on the next
+        # per-guild enable so a newly-registered /bark <cmd> reaches Discord.
+        self._unsynced_commands: set[str] = set()
         self._registered_api_modules: set[str] = set()
         self._guild_states: dict[tuple[int, str], bool] = {}
         # Runtime-installed single-file plugins: module name -> file path.
@@ -472,6 +477,10 @@ class ModuleManager:
                 self._registered_events[name].append((evt.event_name, guarded_handler))
 
             module.enabled = True
+            # Commands for this module are live in the in-memory tree but may
+            # not have been synced to Discord yet (startup modules get synced
+            # once by on_ready; runtime installs/enables need a re-sync).
+            self._unsynced_commands.add(name)
             logger.info(
                 "Module '%s' enabled (%d commands, %d events)",
                 name,
@@ -608,6 +617,13 @@ class ModuleManager:
         self._guild_states[(int(guild_id), module_name)] = bool(enabled)
         if enabled:
             if await self.enable_module(module_name):
+                # A plugin's commands may have been registered (installed this
+                # session, or enabled for the first time) without ever being
+                # pushed to Discord. Re-sync once so ``/bark <cmd>`` appears;
+                # an already-synced module is skipped (nothing in the tree).
+                if module_name in self._unsynced_commands:
+                    self._unsynced_commands.discard(module_name)
+                    await self._sync_commands()
                 return True
         elif not self.should_run_globally(module_name):
             if await self.disable_module(module_name):
@@ -617,6 +633,41 @@ class ModuleManager:
         # Lifecycle transition failed — restore the previous policy.
         self._guild_states[(int(guild_id), module_name)] = previous
         return False
+
+    def mark_commands_synced(self) -> None:
+        """Clear the runtime-sync queue after a full tree sync (startup)."""
+        self._unsynced_commands.clear()
+
+    async def _sync_commands(self) -> None:
+        """Push the in-memory command tree to Discord (global + sync guild).
+
+        Startup syncs once in :meth:`~bot.client.BarkBot.on_ready`; runtime
+        changes (a plugin enabled per-server) need a re-sync or Discord never
+        learns about the new ``/bark`` command. Mirrors the startup sync so
+        guild-scoped dev instances update instantly and global instances use
+        Discord's global-command push.
+        """
+        try:
+            import discord
+
+            from config import config
+
+            if not config.bot.sync_commands:
+                return
+            tree = getattr(self.bot, "tree", None)
+            if tree is None:
+                return
+            if config.bot.sync_guild_id:
+                await tree.sync()
+                await tree.sync(guild=discord.Object(id=config.bot.sync_guild_id))
+                logger.info(
+                    "Slash commands re-synced to guild %s", config.bot.sync_guild_id
+                )
+            else:
+                await tree.sync()
+                logger.info("Slash commands re-synced")
+        except Exception:
+            logger.exception("Failed to re-sync slash commands after module enable")
 
     def _guard_event_handler(self, module_name: str, handler: Callable) -> Callable:
         @wraps(handler)

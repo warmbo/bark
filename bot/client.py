@@ -172,6 +172,10 @@ class BarkBot(commands.Bot):
                 else:
                     await self.tree.sync()
                     logger.info("Slash commands synced")
+                # The in-memory tree is now pushed to Discord; clear the
+                # runtime-sync queue so only commands registered after this
+                # (runtime plugin installs/enables) trigger a re-sync.
+                self.modules.mark_commands_synced()
             except Exception:
                 logger.exception("Failed to sync slash commands")
 

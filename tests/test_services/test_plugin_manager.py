@@ -188,6 +188,35 @@ async def test_plugin_defaults_off_per_guild(manager):
 
 
 @pytest.mark.asyncio
+async def test_set_guild_enabled_syncs_on_first_enable(manager, monkeypatch):
+    """Enabling a plugin for the first time re-syncs the command tree so
+    Discord learns about ``/bark <cmd>`` (a runtime-only register is never
+    pushed to Discord otherwise). Re-enabling an already-synced module must
+    not re-sync.
+    """
+    from unittest.mock import AsyncMock
+
+    sync = AsyncMock()
+    monkeypatch.setattr(manager, "_sync_commands", sync)
+
+    # Install registers the plugin's commands but does NOT sync (install
+    # happens after the startup sync), so the module is queued as unsynced.
+    await manager.install_plugin(VALID_PLUGIN.encode(), "whatever.py")
+    assert "ping_plugin" in manager._unsynced_commands
+    sync.reset_mock()
+
+    # First per-guild enable drains the queue -> sync exactly once.
+    assert await manager.set_guild_enabled(999, "ping_plugin", True) is True
+    assert sync.await_count == 1
+    assert "ping_plugin" not in manager._unsynced_commands
+
+    # A second guild opts in while the module is already registered+synced ->
+    # no re-sync (nothing changed in the command tree).
+    assert await manager.set_guild_enabled(888, "ping_plugin", True) is True
+    assert sync.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_install_rejects_non_py(manager):
     with pytest.raises(PluginValidationError, match=r"\.py file"):
         await manager.install_plugin(b"x", "plugin.txt")
