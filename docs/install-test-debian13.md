@@ -55,7 +55,10 @@ pct exec 1114 -- curl -fsSL https://raw.githubusercontent.com/warmbo/bark/dev/in
 #   → run 1 FAILS at venv: ensurepip not available (python3-venv missing)
 #   → run 2 FAILS at pip:  No module named pip (stale cached installer + broken .venv)
 #   → run 3 (fixed installer, from the cloned repo):
-pct exec 1114 -- bash -c 'cd /root/bark && BARK_BRANCH=dev bash install.sh'
+#   install.sh is now a thin shell-agnostic launcher that fetches
+#   install-main.sh from main; to test the LOCAL installer code run
+#   install-main.sh directly:
+pct exec 1114 -- bash -c 'cd /root/bark && BARK_BRANCH=dev bash install-main.sh'
 #   → ✅ installs; falls back to the foreground setup wizard (no user systemd in a CT)
 
 # Verify
