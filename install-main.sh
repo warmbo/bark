@@ -130,8 +130,34 @@ ensure_venv_works() {
 ensure_venv_works
 
 # ── 2. Clone / update the repository ───────────────────────
+# Stop a previously installed Bark before mutating its checkout, so git
+# reset/pip can't race a live process and the dashboard port is freed for
+# rebind. Only ever touches Bark's own unit / processes — never anything else.
+stop_old_instance() {
+    if have systemctl; then
+        if systemctl --user is-active bark.service >/dev/null 2>&1; then
+            log "Stopping running Bark service (bark.service)"
+            systemctl --user stop bark.service || true
+        fi
+    fi
+    # Stray foreground process (BARK_SYSTEMD=no / manual run.sh): kill any
+    # process whose working directory is the install dir and whose command
+    # matches the bark launcher/app — never ourselves or unrelated processes.
+    if have pgrep && have readlink; then
+        for pid in $(pgrep -f "app\.py|run\.sh" 2>/dev/null || true); do
+            [ "$pid" = "$$" ] && continue
+            cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || true)
+            if [ "$cwd" = "$BARK_INSTALL_DIR" ]; then
+                log "Stopping stray Bark process (pid $pid)"
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+}
+
 if [ -d "$BARK_INSTALL_DIR/.git" ]; then
     log "Updating existing install in $BARK_INSTALL_DIR"
+    stop_old_instance
     git -C "$BARK_INSTALL_DIR" fetch --quiet origin
     git -C "$BARK_INSTALL_DIR" checkout --quiet "$BARK_BRANCH" || true
     git -C "$BARK_INSTALL_DIR" reset --hard --quiet "origin/$BARK_BRANCH"

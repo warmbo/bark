@@ -68,3 +68,34 @@ def test_install_main_is_bash_valid():
     assert INSTALL_MAIN.exists(), "install-main.sh missing"
     assert shutil.which("bash"), "bash is required to run the installer"
     subprocess.run(["bash", "-n", str(INSTALL_MAIN)], check=True)
+
+
+def test_install_stops_old_instance_before_update():
+    """The update path (existing .git) must stop the running instance BEFORE
+    mutating the checkout — git reset/pip must not race a live process, and the
+    dashboard port must be freed for rebind."""
+    src = INSTALL_MAIN.read_text()
+
+    # The stop helper exists and is referenced from the update branch.
+    assert "stop_old_instance()" in src, "stop_old_instance helper missing"
+
+    # It must be invoked inside the "existing install" (update) branch, before
+    # any git fetch/reset that mutates the tree.
+    update_branch = src.split("Updating existing install", 1)[1]
+    upd_head = update_branch.split("# ──", 1)[0]  # up to the next section marker
+    stop_idx = upd_head.find("stop_old_instance")
+    fetch_idx = upd_head.find("git -C")
+    assert stop_idx != -1, "stop_old_instance not called in the update path"
+    assert (
+        stop_idx < fetch_idx
+    ), "stop_old_instance must run before git mutates the checkout"
+
+    # The helper stops the systemd unit if active...
+    assert "systemctl --user is-active bark.service" in src
+    assert "systemctl --user stop bark.service" in src
+
+    # ...and kills only stray bark processes whose cwd is the install dir
+    # (never unrelated processes), self-exclusion included.
+    assert "pgrep -f" in src and "readlink" in src
+    assert '"$cwd" = "$BARK_INSTALL_DIR"' in src, "must scope the kill by cwd"
+    assert '= "$$"' in src, "must never kill itself"
