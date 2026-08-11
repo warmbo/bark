@@ -181,39 +181,41 @@ async def test_plugin_defaults_off_per_guild(manager):
     assert manager.is_enabled_for_guild(999, "ping_plugin") is True
     # A different guild that never opted in stays off.
     assert manager.is_enabled_for_guild(888, "ping_plugin") is False
-    # Turning it off again for the only enabled guild unloads it.
+    # Turning it off again for the only enabled guild gates it — the module
+    # stays registered (commands remain globally available) so a re-enable is
+    # instant, with no command re-registration or Discord re-sync.
     assert await manager.set_guild_enabled(999, "ping_plugin", False) is True
     assert manager.is_enabled_for_guild(999, "ping_plugin") is False
-    assert manager.get_module("ping_plugin").enabled is False
+    assert manager.get_module("ping_plugin").enabled is True
 
 
 @pytest.mark.asyncio
-async def test_set_guild_enabled_syncs_on_first_enable(manager, monkeypatch):
-    """Enabling a plugin for the first time re-syncs the command tree so
-    Discord learns about ``/bark <cmd>`` (a runtime-only register is never
-    pushed to Discord otherwise). Re-enabling an already-synced module must
-    not re-sync.
+async def test_set_guild_enabled_flips_gate_instantly(manager, monkeypatch):
+    """Toggling a module per-server must be instant: it only flips the
+    execution gate. Commands are registered globally at install/startup, so
+    the toggle must NOT call enable_module/disable_module or re-sync the
+    command tree.
     """
     from unittest.mock import AsyncMock
 
-    sync = AsyncMock()
-    monkeypatch.setattr(manager, "_sync_commands", sync)
-
-    # Install registers the plugin's commands but does NOT sync (install
-    # happens after the startup sync), so the module is queued as unsynced.
     await manager.install_plugin(VALID_PLUGIN.encode(), "whatever.py")
-    assert "ping_plugin" in manager._unsynced_commands
-    sync.reset_mock()
 
-    # First per-guild enable drains the queue -> sync exactly once.
+    enable = AsyncMock()
+    disable = AsyncMock()
+    monkeypatch.setattr(manager, "enable_module", enable)
+    monkeypatch.setattr(manager, "disable_module", disable)
+
+    # Enabling just flips the gate for that guild — no lifecycle churn.
     assert await manager.set_guild_enabled(999, "ping_plugin", True) is True
-    assert sync.await_count == 1
-    assert "ping_plugin" not in manager._unsynced_commands
+    assert manager.is_enabled_for_guild(999, "ping_plugin") is True
+    enable.assert_not_called()
+    disable.assert_not_called()
 
-    # A second guild opts in while the module is already registered+synced ->
-    # no re-sync (nothing changed in the command tree).
-    assert await manager.set_guild_enabled(888, "ping_plugin", True) is True
-    assert sync.await_count == 1
+    # Disabling just flips the gate; the module stays registered.
+    assert await manager.set_guild_enabled(999, "ping_plugin", False) is True
+    assert manager.is_enabled_for_guild(999, "ping_plugin") is False
+    enable.assert_not_called()
+    disable.assert_not_called()
 
 
 @pytest.mark.asyncio

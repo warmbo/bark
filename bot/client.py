@@ -151,9 +151,12 @@ class BarkBot(commands.Bot):
         self.modules.load_guild_states(
             ((row.guild_id, row.module_name, row.enabled) for row in module_configs)
         )
+        # Register EVERY module's commands (core + installed plugins) so they
+        # are all present in the global /bark tree after this sync. Per-guild
+        # enablement then only flips an execution gate (instant) instead of
+        # requiring a command re-sync with Discord's ~1h global-command lag.
         for name in list(self.modules.get_all_modules().keys()):
-            if self.modules.should_run_globally(name):
-                await self.modules.enable_module(name)
+            await self.modules.enable_module(name)
 
         if config.bot.sync_commands:
             try:
@@ -172,10 +175,6 @@ class BarkBot(commands.Bot):
                 else:
                     await self.tree.sync()
                     logger.info("Slash commands synced")
-                # The in-memory tree is now pushed to Discord; clear the
-                # runtime-sync queue so only commands registered after this
-                # (runtime plugin installs/enables) trigger a re-sync.
-                self.modules.mark_commands_synced()
             except Exception:
                 logger.exception("Failed to sync slash commands")
 
