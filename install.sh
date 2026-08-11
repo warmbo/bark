@@ -22,6 +22,14 @@
 #   BARK_INSTALL_HOST  dashboard bind address (default: 127.0.0.1)
 #   BARK_INSTALL_PORT  dashboard port (default: 8090)
 #   BARK_NO_START      set to 1 to install without launching anything
+#   BARK_TMPDIR        writable temp dir (default: $HOME/.bark-tmp) — for hosts
+#                      whose /tmp is not writable. Bark never relies on /tmp.
 #
 # Example:  BARK_BRANCH=dev curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install-main.sh -o /tmp/bark-install-main.sh && bash /tmp/bark-install-main.sh
+#
+# We stage install-main.sh in $HOME, not /tmp: /tmp is often a tiny or
+# read-only tmpfs, and when it fills up curl dies with a cryptic
+# "curl: (23) client returned ERROR on write" before the installer ever runs.
+# $HOME is always writable for the installing user, so the bootstrap cannot
+# fail that way. install-main.sh cleans this file up once it is running.
+curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install-main.sh -o "$HOME/bark-install-main.sh" && bash "$HOME/bark-install-main.sh"

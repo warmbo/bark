@@ -44,6 +44,11 @@ def test_install_launcher_handoff_to_bash():
     assert "install-main.sh" in line, "launcher must reference the real installer"
     assert "&& bash " in line, "launcher must hand off to bash with &&"
 
+    # Stage the bootstrap in $HOME, not /tmp — a full/read-only tmpfs used to
+    # kill the download with a cryptic "curl: (23)" before the installer ran.
+    assert '"$HOME/bark-install-main.sh"' in line, "launcher must stage in $HOME"
+    assert "/tmp/bark-install-main.sh" not in line, "launcher must not stage in /tmp"
+
     # No fish-hostile POSIX-isms on the executable line.
     for bad in FISH_HOSTILE:
         assert bad not in line, f"launcher uses fish-hostile construct {bad!r}"
@@ -99,3 +104,51 @@ def test_install_stops_old_instance_before_update():
     assert "pgrep -f" in src and "readlink" in src
     assert '"$cwd" = "$BARK_INSTALL_DIR"' in src, "must scope the kill by cwd"
     assert '= "$$"' in src, "must never kill itself"
+
+
+def test_install_main_cleans_launcher_staging_file():
+    """install-main.sh must remove its own launcher bootstrap file (the new
+    $HOME path and the legacy /tmp path) so a successful install leaves no
+    droppings behind. Unlink of the file we run from is safe on Linux."""
+    src = INSTALL_MAIN.read_text()
+    assert 'rm -f "$HOME/bark-install-main.sh" /tmp/bark-install-main.sh' in src
+
+
+def test_install_main_disk_preflight():
+    """Before cloning, install-main.sh must check the target is writable and
+    has room, and die with a clear message (not a cryptic curl/git/pip write
+    failure) when it does not."""
+    src = INSTALL_MAIN.read_text()
+    assert "nearest_existing_dir()" in src
+    assert "check_writable_with_space()" in src
+    # Invoked for the install dir with a ~512 MB requirement.
+    assert (
+        'check_writable_with_space "install directory" "$BARK_INSTALL_DIR" 524288'
+        in src
+    )
+    # Clear, human-readable failure messages.
+    assert "Not enough free space" in src
+    assert "is not writable" in src
+
+
+def test_install_main_never_relies_on_tmp():
+    """A host with an unwritable /tmp (managed images, corporate lockdown,
+    full/read-only tmpfs) must not break the install. The installer must point
+    TMPDIR/TEMP/TMP at a writable dir under $HOME before any temp-using step
+    (mktemp venv probe, pip, venv, git)."""
+    src = INSTALL_MAIN.read_text()
+
+    # Default temp dir is under $HOME, overridable.
+    assert 'BARK_TMPDIR="${BARK_TMPDIR:-$HOME/.bark-tmp}"' in src
+    # Export the writable dir so every temp consumer honors it.
+    assert 'export TMPDIR="$BARK_TMPDIR" TEMP="$BARK_TMPDIR" TMP="$BARK_TMPDIR"' in src
+    # Clear failure when neither the override nor /tmp is writable.
+    assert "Set BARK_TMPDIR to a writable path" in src
+    # The temp dir is also space/writability pre-flighted.
+    assert 'check_writable_with_space "temp directory" "$BARK_TMPDIR" 8192' in src
+
+    # The TMPDIR export must come BEFORE the first mktemp (venv probe) so the
+    # probe — and pip/venv/git that follow — use the writable dir, not /tmp.
+    tmdir_export = src.index('export TMPDIR="$BARK_TMPDIR"')
+    first_mktemp = src.index("mktemp -d")
+    assert tmdir_export < first_mktemp, "TMPDIR must be set before any mktemp"

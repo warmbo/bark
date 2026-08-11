@@ -15,6 +15,9 @@
 #   BARK_INSTALL_HOST  dashboard bind address (default: 127.0.0.1 — set 0.0.0.0 for LAN)
 #   BARK_INSTALL_PORT  dashboard port (default: 8090)
 #   BARK_NO_START      set to 1 to install without launching anything
+#   BARK_TMPDIR        writable temp dir (default: $HOME/.bark-tmp). Set this
+#                      when the host's /tmp is unwritable — the installer
+#                      never relies on /tmp.
 set -euo pipefail
 # Quiet non-interactive apt + avoid perl locale warnings in containers.
 export DEBIAN_FRONTEND=noninteractive
@@ -31,6 +34,26 @@ BARK_NO_START="${BARK_NO_START:-0}"
 log()  { printf '\033[1;34m[bark]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[bark]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[bark]\033[0m ERROR: %s\n' "$*" >&2; exit 1; }
+
+# Remove our own launcher staging file (downloaded by install.sh into $HOME,
+# plus any leftover from the old /tmp path). We run from it, but unlink is
+# safe on Linux — bash keeps the inode via its open fd — and it stops a
+# successful install from leaving a droppings file behind.
+rm -f "$HOME/bark-install-main.sh" /tmp/bark-install-main.sh
+
+# ── 0. Writable temp dir ──────────────────────────────────
+# Some hosts have an unwritable /tmp (managed/immutable images, corporate
+# lockdowns, a full or read-only tmpfs) that the user cannot fix. Everything
+# that touches temp files — mktemp (venv probe below), pip, `python -m venv`,
+# git — honors TMPDIR, so point it at a writable dir under the user's home
+# BEFORE any of those run. Override with BARK_TMPDIR.
+BARK_TMPDIR="${BARK_TMPDIR:-$HOME/.bark-tmp}"
+if ! mkdir -p "$BARK_TMPDIR" 2>/dev/null || [ ! -w "$BARK_TMPDIR" ]; then
+    die "Cannot use temp dir '$BARK_TMPDIR' and /tmp is not writable on this host. Set BARK_TMPDIR to a writable path (e.g. BARK_TMPDIR=\$HOME/tmp) and rerun."
+fi
+chmod 700 "$BARK_TMPDIR" 2>/dev/null || true
+export TMPDIR="$BARK_TMPDIR" TEMP="$BARK_TMPDIR" TMP="$BARK_TMPDIR"
+log "Using temp dir: $BARK_TMPDIR"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -128,6 +151,43 @@ ensure_venv_works() {
     rm -rf "$probe"
 }
 ensure_venv_works
+
+# ── 1b. Disk pre-flight ───────────────────────────────────
+# Give a clear error instead of a cryptic curl/git/pip write failure when the
+# target disk is full or not writable (e.g. a full/read-only /tmp used to kill
+# the bootstrap with "curl: (23)" before we moved the staging file to $HOME).
+nearest_existing_dir() {
+    local d="${1%/}"
+    while [ -n "$d" ] && [ ! -d "$d" ]; do
+        d="${d%/*}"
+    done
+    [ -n "$d" ] && printf '%s' "$d" || printf '%s' "/"
+}
+
+check_writable_with_space() {
+    local label="$1" path="$2" need_kb="$3"
+    local target avail_kb probe
+    target="$(nearest_existing_dir "$path")"
+    avail_kb="$(df -Pk "$target" 2>/dev/null | awk 'NR==2{print $4}')"
+    if [ -z "$avail_kb" ]; then
+        die "Cannot determine free space on '$target' (parent of $label '$path'). Check the mount and rerun."
+    fi
+    if [ "$avail_kb" -lt "$need_kb" ]; then
+        die "Not enough free space for $label at '$path' — '$target' has only ${avail_kb} KB free (need ~${need_kb} KB). Free up disk and rerun."
+    fi
+    probe="$target/.bark-write-probe-$$"
+    if ! touch "$probe" 2>/dev/null; then
+        die "$label directory '$target' is not writable. Fix permissions (or set BARK_INSTALL_DIR to a writable path) and rerun."
+    fi
+    rm -f "$probe"
+}
+
+# ~512 MB covers the repo clone plus a full .venv + pip deps (discord.py,
+# fastapi, uvicorn, sqlalchemy, ...) with room to spare.
+check_writable_with_space "install directory" "$BARK_INSTALL_DIR" 524288
+# Temp dir needs only a little room, but must be writable (already ensured by
+# the section-0 bootstrap) and not on a full filesystem.
+check_writable_with_space "temp directory" "$BARK_TMPDIR" 8192
 
 # ── 2. Clone / update the repository ───────────────────────
 # Stop a previously installed Bark before mutating its checkout, so git
