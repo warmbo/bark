@@ -34,8 +34,12 @@ class HelpModule(BarkModule):
     version = "1.0.0"
     description = "DMs every available text command plus dashboard info."
 
-    def _prefix(self) -> str:
-        """The instance's configured command prefix (e.g. 'bark!')."""
+    async def _prefix(self, guild_id=None) -> str:
+        """The command prefix for a guild (falls back to the instance default)."""
+        if guild_id is not None:
+            from services.command_prefix import resolve_guild_prefix
+
+            return await resolve_guild_prefix(guild_id)
         return config.bot.command_prefix or "bark!"
 
     def get_commands(self) -> list[CommandRegistration]:
@@ -52,7 +56,9 @@ class HelpModule(BarkModule):
             description="Send a DM with every text command and dashboard info",
         )
         async def help_cmd(interaction: discord.Interaction):
-            prefix = self._prefix()
+            prefix = await self._prefix(
+                interaction.guild.id if interaction.guild is not None else None
+            )
             commands: list[tuple[str, str]] = []
             bot = self.ctx.bot
             for name, cmd in getattr(bot, "commands", {}).items():

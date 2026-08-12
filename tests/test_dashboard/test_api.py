@@ -113,6 +113,54 @@ async def test_health_check(client):
     assert "started_at" not in data["data"]["uptime"]
 
 
+# ── Command Settings ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_command_settings_default(client):
+    """Unset guild falls back to the default prefix + mention off."""
+    resp = await client.get("/api/v1/guilds/1/commands/settings")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["prefix"] == "bark!"
+    assert data["mention"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_command_settings_persists(client):
+    """PUT saves the prefix + mention, and a subsequent GET reflects it."""
+    resp = await client.put(
+        "/api/v1/guilds/1/commands/settings",
+        json={"prefix": "!", "mention": True},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["prefix"] == "!"
+    assert data["mention"] is True
+
+    again = await client.get("/api/v1/guilds/1/commands/settings")
+    assert again.json()["data"] == {"prefix": "!", "mention": True}
+
+
+@pytest.mark.asyncio
+async def test_update_command_settings_rejects_empty_prefix(client):
+    resp = await client.put(
+        "/api/v1/guilds/1/commands/settings",
+        json={"prefix": "   "},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_update_command_settings_rejects_long_prefix(client):
+    resp = await client.put(
+        "/api/v1/guilds/1/commands/settings",
+        json={"prefix": "x" * 12},
+    )
+    assert resp.status_code == 400
+
+
 @pytest.mark.asyncio
 async def test_health_ping(client):
     """GET /api/v1/health should return healthy status."""

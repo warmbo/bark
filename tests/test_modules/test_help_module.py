@@ -66,6 +66,20 @@ def _make_module(bot):
     return HelpModule(BarkContext(bot, SimpleNamespace()))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_prefix_resolver(monkeypatch):
+    """Help formatting is tested here; per-guild resolution is covered by
+    test_command_prefix. Stub the DB-backed resolver so the help tests are
+    deterministic (the module-level cache + shared test DB would otherwise
+    leak guild-1 state from other test files)."""
+    import services.command_prefix as cps
+
+    async def _default(guild_id):
+        return cps.config.bot.command_prefix or "bark!"
+
+    monkeypatch.setattr(cps, "resolve_guild_prefix", _default)
+
+
 @pytest.mark.asyncio
 async def test_help_dms_every_command_and_dashboard_info(monkeypatch):
     import config as cfg

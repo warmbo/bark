@@ -218,7 +218,7 @@ def _redacted_config() -> dict[str, str]:
         "systemd_unit": _running_unit(),
         "update_remote": inst.update_remote,
         "stable_branch": inst.stable_branch,
-        "command_prefix": bot.command_prefix,
+        "command_prefix": config.bot.command_prefix or "bark!",  # instance default
         "sync_commands": str(bot.sync_commands),
         "sync_guild_id": str(bot.sync_guild_id or ""),
         "activity_text": bot.activity_text,
