@@ -72,6 +72,13 @@ class DashboardApp:
             # correct behind a TLS-terminating reverse proxy / Cloudflare.
             proxy_headers=True,
             forwarded_allow_ips=config.dashboard.forwarded_allow_ips,
+            # Finite graceful-shutdown window. Without this, uvicorn waits
+            # indefinitely for in-flight tasks to complete during shutdown —
+            # and an open SSE stream (realtime events) loops forever, so a
+            # SIGINT would stop the bot but leave the process hanging in
+            # epoll_wait until force-killed by PID. With a bounded window the
+            # lingering stream is cancelled and the process actually exits.
+            timeout_graceful_shutdown=10,
         )
         server = _SignalNeutralServer(config_obj)
         self._server = server
