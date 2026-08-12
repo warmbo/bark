@@ -18,20 +18,12 @@ class FakeCommand:
         self.commands = commands
 
 
-class FakeTree:
-    def __init__(self, group):
-        self._group = group
-
-    def get_commands(self):
-        return [self._group]
-
-
-def _build_tree():
-    """/bark with a direct child (roll) and a subgroup (trivia start)."""
+def _build_prefix_table():
+    """bot.commands dict: a direct child (roll) and a group (trivia start)."""
     roll = FakeCommand("roll", "Roll dice")
     start = FakeCommand("start", "Start a trivia game")
     trivia = FakeCommand("trivia", "Trivia commands", commands=[start])
-    return FakeTree(FakeCommand("bark", "Bark commands", commands=[roll, trivia]))
+    return {"roll": roll, "trivia": trivia}
 
 
 class _CaptureSend:
@@ -75,9 +67,12 @@ def _make_module(bot):
 
 
 @pytest.mark.asyncio
-async def test_help_dms_every_command_and_dashboard_info():
+async def test_help_dms_every_command_and_dashboard_info(monkeypatch):
+    import config as cfg
+
+    monkeypatch.setattr(cfg.config.bot, "command_prefix", "bark!")
     captured = _CaptureSend()
-    bot = SimpleNamespace(tree=_build_tree())
+    bot = SimpleNamespace(commands=_build_prefix_table())
     module = _make_module(bot)
     interaction = _Interaction(captured.send)
 
@@ -95,15 +90,13 @@ async def test_help_dms_every_command_and_dashboard_info():
     )
     assert "Enable the modules you want" in guide_text
     assert "add-on plugins are off until you turn them on" in guide_text
-    assert "/bark help" in guide_text
+    assert "bark!help" in guide_text
 
-    # Reference message lists every command with the /bark group prefix
+    # Reference message lists every command with the prefix
     assert reference.title == "🐺 Bark — Command Reference"
-    assert "`/bark roll` — Roll dice" in reference.description
-    assert "`/bark trivia start` — Start a trivia game" in reference.description
+    assert "`bark!roll` — Roll dice" in reference.description
+    assert "`bark!trivia start` — Start a trivia game" in reference.description
     # dashboard access info is included
-    import config as cfg
-
     public_url = cfg.config.dashboard.public_url
     field_values = " ".join(field.value for field in reference.fields)
     assert public_url in field_values
@@ -116,13 +109,16 @@ async def test_help_dms_every_command_and_dashboard_info():
 
 
 @pytest.mark.asyncio
-async def test_help_falls_back_when_dms_disabled():
+async def test_help_falls_back_when_dms_disabled(monkeypatch):
     from unittest.mock import MagicMock
 
+    import config as cfg
+
+    monkeypatch.setattr(cfg.config.bot, "command_prefix", "bark!")
     captured = _CaptureSend(
         exc=discord.Forbidden(response=MagicMock(status=403), message="no")
     )
-    bot = SimpleNamespace(tree=_build_tree())
+    bot = SimpleNamespace(commands=_build_prefix_table())
     module = _make_module(bot)
     interaction = _Interaction(captured.send)
 

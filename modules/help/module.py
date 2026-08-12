@@ -1,9 +1,9 @@
-"""Help module — `/bark help` DMs every available slash command.
+"""Help module — `bark!help` DMs every available text command.
 
-Walks the live command tree (the exact commands Discord sees), builds a
-command reference embed, and DMs it to the invoker along with dashboard /
-invite access info. Falls back to an ephemeral in-channel copy when the
-user has DMs disabled.
+Walks the live prefix-command table (the exact commands the bot accepts after
+its configured prefix), builds a command reference embed, and DMs it to the
+invoker along with dashboard / invite access info. Falls back to an ephemeral
+in-channel copy when the user has DMs disabled.
 """
 
 from __future__ import annotations
@@ -18,55 +18,52 @@ from modules.base import BarkModule, CommandRegistration
 logger = logging.getLogger("bark.help")
 
 
-def _walk_commands(command, path: list[str], out: list[tuple[str, str]]) -> None:
-    """Collect (full path, description) for every leaf command."""
-    if getattr(command, "commands", None):
-        for sub in command.commands:
-            _walk_commands(sub, path + [sub.name], out)
+def _walk_commands(command, prefix: str, path: list[str], out: list[tuple[str, str]]) -> None:
+    """Collect (full path, description) for every leaf prefix command."""
+    subs = getattr(command, "commands", None)
+    if subs:  # a group (e.g. bark!trivia start)
+        items = subs.values() if isinstance(subs, dict) else subs
+        for sub in items:
+            _walk_commands(sub, prefix, path + [sub.name], out)
     else:
-        out.append(("/" + " ".join(path), command.description or ""))
+        out.append((f"{prefix}{' '.join(path)}", command.description or ""))
 
 
 class HelpModule(BarkModule):
     name = "help"
     version = "1.0.0"
-    description = "DMs every available slash command plus dashboard info."
+    description = "DMs every available text command plus dashboard info."
 
-    def _group_name(self) -> str:
-        """The instance's slash-command group name (e.g. 'bark', or 'bob')."""
-        manager = getattr(getattr(self.ctx, "bot", None), "modules", None)
-        if manager is not None and hasattr(manager, "command_group_name"):
-            return manager.command_group_name()
-        return "bark"
+    def _prefix(self) -> str:
+        """The instance's configured command prefix (e.g. 'bark!')."""
+        return config.bot.command_prefix or "bark!"
 
     def get_commands(self) -> list[CommandRegistration]:
         return [
             CommandRegistration(
                 name="help",
-                description="Send a DM with every slash command and dashboard info",
+                description="Send a DM with every text command and dashboard info",
             )
         ]
 
     def _make_help_command(self):
         @discord.app_commands.command(
             name="help",
-            description="Send a DM with every slash command and dashboard info",
+            description="Send a DM with every text command and dashboard info",
         )
         async def help_cmd(interaction: discord.Interaction):
+            prefix = self._prefix()
             commands: list[tuple[str, str]] = []
-            tree = getattr(self.ctx.bot, "tree", None)
-            group_name = self._group_name()
-            if tree is not None:
-                for cmd in tree.get_commands():
-                    if cmd.name == group_name:
-                        _walk_commands(cmd, [group_name], commands)
+            bot = self.ctx.bot
+            for name, cmd in getattr(bot, "commands", {}).items():
+                _walk_commands(cmd, prefix, [name], commands)
 
             public_url = getattr(config.dashboard, "public_url", "")
             instructions = discord.Embed(
                 title="🐺 How to use Bark",
                 description=(
                     "Bark is a dashboard-first server manager: you run it from "
-                    "this dashboard, and command it from Discord with slash "
+                    "this dashboard, and command it from Discord with text "
                     "commands. Here's the quick tour:"
                 ),
                 color=discord.Color.blurple(),
@@ -99,11 +96,11 @@ class HelpModule(BarkModule):
                 inline=False,
             )
             instructions.add_field(
-                name=f"4. Use /{group_name} commands in Discord",
+                name=f"4. Use {prefix} commands in Discord",
                 value=(
-                    f"Everything lives under the global **`/{group_name}`** group — no "
-                    f"prefix to remember. Try `/{group_name} help` (this DM), `/{group_name} "
-                    f"warn`, `/{group_name} announce`, `/{group_name} serverinfo`…"
+                    f"Type commands with the **`{prefix}`** prefix. Try "
+                    f"`{prefix}help` (this DM), `{prefix}warn`, `{prefix}announce`, "
+                    f"`{prefix}serverinfo`…"
                 ),
                 inline=False,
             )
@@ -142,7 +139,7 @@ class HelpModule(BarkModule):
                 )
             reference.add_field(
                 name="Tip",
-                value=f"Run `/{group_name} help` anytime — the bot DMs you this list.",
+                value=f"Run `{prefix}help` anytime — the bot DMs you this list.",
                 inline=False,
             )
             reference.set_footer(text=f"Bark {self.name} v{self.version}")

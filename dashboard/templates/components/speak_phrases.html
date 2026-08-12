@@ -1,7 +1,7 @@
 <article class="content-card workspace-data-card" data-section="phrases">
   <div class="card-header">
     <div><h2 class="card-title">{{ icon("message-square", 16) }} Speak Phrases</h2>
-      <p class="card-description">Preset phrases members can trigger with <code>/{{ command_group_name }} speak &lt;key&gt;</code>. Anyone in the server can use them; only admins (or anyone granted via this module's Role Access) can edit them.</p>
+      <p class="card-description">Preset phrases members can trigger with <code>{{ command_prefix }}speak &lt;key&gt;</code>. Anyone in the server can use them; only admins (or anyone granted via this module's Role Access) can edit them.</p>
     </div>
     <div class="card-header-actions">
       <button type="button" class="btn btn-sm" data-speak-add aria-label="Add phrase">{{ icon("plus", 14) }} Add Phrase</button>
@@ -11,7 +11,7 @@
   <div class="form-group">
     <p class="form-hint">
       Keys are short tokens like <code>word1</code> or <code>phrase2</code> — members type
-      <code>/{{ command_group_name }} speak word1</code> to trigger the phrase. Deleting a key's text removes it.
+      <code>{{ command_prefix }}speak word1</code> to trigger the phrase. Deleting a key's text removes it.
     </p>
   </div>
   <div id="speak-phrases-content" aria-live="polite">

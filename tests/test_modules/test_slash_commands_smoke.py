@@ -1,11 +1,11 @@
-"""Smoke-test every registered /bark slash command.
+"""Smoke-test every registered text (prefix) command.
 
 Bots cannot trigger slash commands on Discord — only users can — so this
-harness exercises the real command tree the same way the gateway does:
-every module is discovered and enabled under the /bark group, then each
-leaf command's callback is invoked with realistic option values and a fake
-interaction whose response is recorded. Any handler crash or missing
-response fails the test for that command.
+harness exercises the real prefix-command table the same way the gateway does:
+every module is discovered and enabled, then each leaf command's handler is
+invoked (through the shim + per-guild enablement gate) with realistic option
+values and a fake context whose response is recorded. Any handler crash fails
+the test for that command.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -149,10 +150,18 @@ class FakeGuild:
         ]
         self.roles = [FakeRole(1, "@everyone", 0), FakeRole(2, "Member", 1)]
         self.members = [self.owner, FakeMember(11, "Alice", self), FakeMember(12, "Bob", self)]
+        self.text_channels = [c for c in self.channels if c.type == discord.ChannelType.text]
+        self.voice_channels = [c for c in self.channels if c.type == discord.ChannelType.voice]
 
     def get_member(self, user_id):
         for member in self.members:
             if member.id == user_id:
+                return member
+        return None
+
+    def get_member_named(self, name):
+        for member in self.members:
+            if member.name == name or str(member.id) == name:
                 return member
         return None
 
@@ -246,7 +255,7 @@ def _load_plugin_module(name: str):
 
 
 def _sample_for_param(param):
-    """A realistic value for each AppCommandParameter type."""
+    """A realistic typed value for each AppCommandParameter type (rich fakes)."""
     from discord.app_commands.commands import AppCommandOptionType
 
     t = param.type
@@ -267,18 +276,34 @@ def _sample_for_param(param):
     return "test"
 
 
-def _all_leaf_commands(tree, group_name, command=None, path=()):
-    """Yield (path, Command) for every leaf under the instance's command group."""
-    if command is None:
-        for cmd in tree.get_commands():
-            if cmd.name == group_name:
-                yield from _all_leaf_commands(tree, group_name, cmd, (group_name,))
-        return
-    if getattr(command, "commands", None):
-        for sub in command.commands:
-            yield from _all_leaf_commands(tree, group_name, sub, path + (sub.name,))
+class FakeContext:
+    """A minimal commands.Context for the prefix dispatch to build a shim from."""
+
+    def __init__(self, guild):
+        self.guild = guild
+        self.author = guild.get_member(11) or FakeMember(11, "Alice", guild)
+        self.channel = guild.get_channel(100) or FakeChannel(100, "general", "text")
+        self.message = SimpleNamespace(id=900, mentions=[], edit=async_noop, reply=async_noop)
+        self.send = AsyncMock()
+        self.command = None
+
+    @property
+    def bot(self):
+        return None
+
+
+def _all_leaf_commands(command, path=None):
+    """Yield (path, Command) for every leaf in the prefix-command table."""
+    if path is None:
+        path = [command.name]
+    subs = getattr(command, "commands", None)
+    if subs:  # a group (bark!trivia start)
+        items = subs.values() if isinstance(subs, dict) else subs
+        for sub in items:
+            yield from _all_leaf_commands(sub, path + [sub.name])
     else:
-        yield path, command
+        yield tuple(path), command
+
 
 
 @pytest.fixture(params=["bark", "Bob"])
@@ -321,6 +346,7 @@ async def tree(db, tmp_path, request):
             self._event_bus = MagicMock()
             self.guilds = []
             self.user = SimpleNamespace(name=bot_name)
+            self._commands: dict[str, object] = {}
 
         def get_guild(self, guild_id):
             return FakeGuild(id=guild_id or 1)
@@ -330,6 +356,16 @@ async def tree(db, tmp_path, request):
 
         async def fetch_channel(self, channel_id):
             return None
+
+        # discord.ext.commands.Bot command-table surface (prefix commands).
+        def add_command(self, cmd):
+            self._commands[cmd.name] = cmd
+
+        def get_command(self, name):
+            return self._commands.get(name)
+
+        def remove_command(self, name):
+            self._commands.pop(name, None)
 
     bot = FakeBot()
     manager = ModuleManager(bot)
@@ -343,46 +379,42 @@ async def tree(db, tmp_path, request):
 async def test_every_bark_slash_command_responds(tree):
     bot, manager = tree
     guild = FakeGuild()
-    user = FakeMember(11, "Alice", guild)
 
     failures = []
     tested = []
-    group_name = manager.command_group_name()
-    for path, command in _all_leaf_commands(bot.tree, group_name):
-        interaction = FakeInteraction(guild, user, command=group_name)
-        kwargs = {}
-        for param in getattr(command, "parameters", []):
-            kwargs[param.name] = _sample_for_param(param)
-        try:
-            await command.callback(interaction, **kwargs)
-            tested.append("/" + " ".join(path))
-        except Exception as exc:  # noqa: BLE001 — report every failing command
-            failures.append(f"/{' '.join(path)}: {type(exc).__name__}: {exc}")
+    for top in bot._commands.values():
+        for path, command in _all_leaf_commands(top):
+            ctx = FakeContext(guild)
+            kwargs = {
+                param.name: _sample_for_param(param)
+                for param in getattr(command, "_bark_params", [])
+            }
+            try:
+                await command._bark_invoke(ctx, **kwargs)
+                tested.append(" ".join(path))
+            except Exception as exc:  # noqa: BLE001 — report every failing command
+                failures.append(f"{' '.join(path)}: {type(exc).__name__}: {exc}")
 
     assert not failures, "failing commands:\n" + "\n".join(failures)
-    assert len(tested) >= 20, f"expected a full command tree, got {len(tested)}: {tested}"
+    assert len(tested) >= 20, f"expected a full command table, got {len(tested)}: {tested}"
     # Core module commands must always be deployed. The plugin commands
     # (fun, info, poll, trivia, birthdays, giveaway) only exist when the
     # bark-plugins sibling repo is present on the machine — a fresh checkout
     # has no plugins, so those are asserted conditionally below.
     for required in (
-        f"/{group_name} help",
-        f"/{group_name} moderation warn",
-        f"/{group_name} reputation leaderboard",
+        "help",  # bark!help
+        "moderation warn",  # bark!moderation warn
+        "reputation leaderboard",  # bark!reputation leaderboard
     ):
-        assert required in tested, f"missing command from tree: {required} in {tested}"
+        assert required in tested, f"missing command from table: {required} in {tested}"
     if PLUGINS_DIR.exists():
         for plugin_cmd in (
-            f"/{group_name} fun roll",
-            f"/{group_name} fun fact",
-            f"/{group_name} fun eightball",
-            f"/{group_name} info serverinfo",
-            f"/{group_name} info userinfo",
-            f"/{group_name} birthday set",
-            f"/{group_name} giveaway create",
-            f"/{group_name} poll",
-            f"/{group_name} trivia start",
+            "fun roll",  # bark!fun roll
+            "info serverinfo",  # bark!info serverinfo
+            "poll",  # single-command plugin -> flat
+            "trivia start",  # group-factory plugin
         ):
             assert plugin_cmd in tested, (
-                f"missing plugin command from tree: {plugin_cmd} in {tested}"
+                f"missing plugin command from table: {plugin_cmd} in {tested}"
             )
+

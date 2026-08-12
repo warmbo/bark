@@ -76,6 +76,7 @@ class FakeBot:
         self.guilds = []
         self.tree = None
         self.user = None
+        self._commands: dict[str, object] = {}
 
     @property
     def modules(self):
@@ -83,6 +84,16 @@ class FakeBot:
 
     def is_ready(self):
         return False
+
+    # discord.ext.commands.Bot command-table surface (prefix commands).
+    def add_command(self, cmd):
+        self._commands[cmd.name] = cmd
+
+    def get_command(self, name):
+        return self._commands.get(name)
+
+    def remove_command(self, name):
+        self._commands.pop(name, None)
 
 
 @pytest.fixture
@@ -374,20 +385,13 @@ async def test_reload_plugin_reloads_code(manager):
 
 @pytest.mark.asyncio
 async def test_module_commands_nest_under_single_bark_group(tmp_path):
-    """All module slash commands register as subcommands of one /bark group."""
+    """A module's slash handler is registered as a prefix command (bark!roll)."""
     import discord.app_commands as ac
-    from discord.app_commands import CommandTree
 
     from services.bark_context import BarkContext
     from services.module_manager import ModuleManager
 
     bot = FakeBot()
-    from unittest.mock import MagicMock
-
-    bot.http = MagicMock()
-    bot._connection = MagicMock()
-    bot._connection._command_tree = None
-    bot.tree = CommandTree(bot)  # real tree so nesting is observable
 
     class FakeModule:
         name = "fake"
@@ -429,36 +433,25 @@ async def test_module_commands_nest_under_single_bark_group(tmp_path):
     manager._modules["fake"] = FakeModule(BarkContext(bot, bot._event_bus))
     assert await manager.enable_module("fake") is True
 
-    bark = manager._get_bark_group()
-    assert bark.name == "bark"
-    # Single-command modules hang directly off /bark: /bark roll
-    assert [c.name for c in bark.commands] == ["roll"]
-    # The group itself is on the tree (global registration), not the subcommand.
-    assert "bark" in bot.tree._global_commands
-    assert "roll" not in bot.tree._global_commands
+    # The prefix command is registered on the bot's text-command table.
+    cmd = bot.get_command("roll")
+    assert cmd is not None
+    assert cmd.name == "roll"
 
-    # Disabling the module removes its subcommand but keeps the bark group.
+    # Disabling the module removes the prefix command.
     assert await manager.disable_module("fake") is True
-    assert [c.name for c in bark.commands] == []
-    assert "bark" in bot.tree._global_commands
+    assert bot.get_command("roll") is None
 
 
 @pytest.mark.asyncio
 async def test_multi_command_module_gets_subgroup(tmp_path):
-    """Multi-command modules nest under a per-module subgroup (/bark mod a)."""
+    """Each of a module's commands registers as a flat prefix command."""
     import discord.app_commands as ac
-    from discord.app_commands import CommandTree
 
     from services.bark_context import BarkContext
     from services.module_manager import ModuleManager
 
     bot = FakeBot()
-    from unittest.mock import MagicMock
-
-    bot.http = MagicMock()
-    bot._connection = MagicMock()
-    bot._connection._command_tree = None
-    bot.tree = CommandTree(bot)
 
     class MultiModule:
         name = "mod"
@@ -510,32 +503,26 @@ async def test_multi_command_module_gets_subgroup(tmp_path):
     manager._modules["mod"] = MultiModule(BarkContext(bot, bot._event_bus))
     assert await manager.enable_module("mod") is True
 
-    bark = manager._get_bark_group()
-    assert [c.name for c in bark.commands] == ["mod"]
-    subgroup = bark.commands[0]
-    assert [c.name for c in subgroup.commands] == ["alpha", "beta"]
+    # Multi-command modules register as a bark!<module> group (bark!mod alpha).
+    from discord.ext import commands
+
+    mod = bot.get_command("mod")
+    assert isinstance(mod, commands.Group)
+    assert {c.name for c in mod.commands} == {"alpha", "beta"}
 
     assert await manager.disable_module("mod") is True
-    # Empty subgroups are dropped so the /bark group never syncs empty groups.
-    assert [c.name for c in bark.commands] == []
+    assert bot.get_command("mod") is None
 
 
 @pytest.mark.asyncio
 async def test_namespaced_group_command_hangs_directly_off_bark(tmp_path):
-    """A module exposing a namespaced group (e.g. /bark trivia start) is a
-    direct child of /bark rather than wrapped in another subgroup."""
-    from discord.app_commands import CommandTree, Group
+    """A group-returning module becomes a text-command group (bark!trivia start)."""
+    from discord.app_commands import Group
 
     from services.bark_context import BarkContext
     from services.module_manager import ModuleManager
 
     bot = FakeBot()
-    from unittest.mock import MagicMock
-
-    bot.http = MagicMock()
-    bot._connection = MagicMock()
-    bot._connection._command_tree = None
-    bot.tree = CommandTree(bot)
 
     class GroupModule:
         name = "trivia"
@@ -583,10 +570,12 @@ async def test_namespaced_group_command_hangs_directly_off_bark(tmp_path):
     manager._modules["trivia"] = GroupModule(BarkContext(bot, bot._event_bus))
     assert await manager.enable_module("trivia") is True
 
-    bark = manager._get_bark_group()
-    assert [c.name for c in bark.commands] == ["trivia"]
-    trivia_group = bark.commands[0]
-    assert [c.name for c in trivia_group.commands] == ["start", "stop"]
+    # The group factory registers as a commands.Group (bark!trivia start).
+    from discord.ext import commands
+
+    trivia = bot.get_command("trivia")
+    assert isinstance(trivia, commands.Group)
+    assert {c.name for c in trivia.commands} == {"start", "stop"}
 
     assert await manager.disable_module("trivia") is True
-    assert [c.name for c in bark.commands] == []
+    assert bot.get_command("trivia") is None

@@ -72,7 +72,7 @@
             <li><strong>Add Bark to a server</strong> — use <a href="{{ config.dashboard.public_url }}/invite" target="_blank" rel="noopener">the invite link</a> to install Bark in any server you manage. Servers below show <span class="guild-state ready">Ready to manage</span> once Bark is in them.</li>
             <li><strong>Open a server</strong> — click a connected card to open its dashboard: overview, members, modules, moderation, and more.</li>
             <li><strong>Enable the modules you want</strong> — every server has its own <em>Modules</em> page. Core modules are on by default; add-on plugins are off until you turn them on for that server.</li>
-            <li><strong>Use <code>/{{ command_group_name }}</code> commands in Discord</strong> — type <code>/{{ command_group_name }} help</code> and Bark DMs you the full command list. Everything lives under the global <code>/{{ command_group_name }}</code> group, so there's no prefix to remember.</li>
+            <li><strong>Use <code>{{ command_prefix }}</code> commands in Discord</strong> — type <code>{{ command_prefix }}help</code> and Bark DMs you the full command list. Every command starts with the <code>{{ command_prefix }}</code> prefix.</li>
             <li><strong>Configure each module</strong> — open a module's page (or its <em>Configure</em> card) to set channels, roles, and rules per server.</li>
             <li><strong>Manage the instance</strong> — <em>Settings</em> covers updates, database backups, dashboard access, and bot appearance. Add more features any time from the <em>Modules → Plugin Manager</em>.</li>
         </ol>

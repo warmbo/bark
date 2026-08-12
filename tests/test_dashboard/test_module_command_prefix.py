@@ -1,9 +1,9 @@
-"""Regression tests: module pages render the bot's dynamic slash-command group.
+"""Regression tests: module pages render the bot's command prefix.
 
-The /bark group name follows the bot (BARK_COMMAND_GROUP override > bot
-username > "bark"), so every module page that lists commands must use the
-runtime-derived name instead of a hardcoded "/bark". This applies to core
-modules AND add-on plugins (they share the same routes/templates/helper).
+Commands are prefix-based (e.g. ``bark!help``), so every module page that lists
+commands must render the configured ``BARK_COMMAND_PREFIX`` (e.g. ``bark!``)
+followed by the command name, not a hardcoded ``/bark``. This applies to core
+modules AND add-on plugins (they share the same routes/templates).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _source(rel: str) -> str:
     return (TEMPLATES / rel).read_text(encoding="utf-8")
 
 
-# ── BarkModule.command_group_name() helper ─────────────────────
+# ── BarkModule.command_group_name() helper (still present, slash vestige) ──
 
 
 class _ConcreteModule(BarkModule):
@@ -64,47 +64,48 @@ def test_module_command_group_name_respects_config_override():
     config_module.config.bot.command_group = ""
 
 
-# ── Module pages render the dynamic prefix (not hardcoded /bark) ─
+# ── Module pages render the configured prefix (not hardcoded /bark) ─
 
 
-def test_module_detail_command_list_uses_dynamic_prefix():
+def test_module_detail_command_list_uses_prefix():
     html = _source("pages/module_detail.html")
-    # The command list must interpolate the runtime group name.
-    assert "/{{ command_group_name }} {{ cmd.name }}" in html
+    # The command list must interpolate the configured prefix before the name.
+    assert "{{ command_prefix }}{{ cmd.name }}" in html
     # And must NOT hardcode a /bark prefix on command names.
     assert "/bark {{ cmd.name }}" not in html
+    assert "command_group_name" not in html
 
 
-def test_modules_list_command_badge_uses_dynamic_prefix():
+def test_modules_list_command_badge_uses_prefix():
     html = _source("pages/modules.html")
-    assert "/{{ command_group_name }} {{ cmd.name }}" in html
+    assert "{{ command_prefix }}{{ cmd.name }}" in html
     assert "/bark {{ cmd.name }}" not in html
 
 
-def test_dashboard_help_text_uses_dynamic_prefix():
+def test_dashboard_help_text_uses_prefix():
     html = _source("pages/dashboard.html")
-    assert "/{{ command_group_name }}" in html
+    assert "{{ command_prefix }}" in html
     assert "code>/bark</code>" not in html
 
 
-def test_speak_phrases_tab_uses_dynamic_prefix():
+def test_speak_phrases_tab_uses_prefix():
     html = _source("components/speak_phrases.html")
-    assert "/{{ command_group_name }} speak" in html
+    assert "{{ command_prefix }}speak" in html
     assert "/bark speak" not in html
 
 
-# ── Routes inject command_group_name into the template context ──
+# ── Routes inject command_prefix into the template context ──
 
 
-def test_module_routes_pass_command_group_name():
+def test_module_routes_pass_command_prefix():
     src = (ROOT / "dashboard" / "routes" / "web" / "modules.py").read_text(
         encoding="utf-8"
     )
-    # Both the list page and the detail page must feed the name to the template.
-    assert '"command_group_name": bot.modules.command_group_name()' in src
-    assert src.count("command_group_name") >= 3  # both routes
+    # Both the list page and the detail page must feed the prefix to the template.
+    assert '"command_prefix": config.bot.command_prefix or "bark!"' in src
+    assert src.count("command_prefix") >= 3  # both routes
 
 
-def test_dashboard_route_passes_command_group_name():
+def test_dashboard_route_passes_command_prefix():
     src = (ROOT / "dashboard" / "__init__.py").read_text(encoding="utf-8")
-    assert '"command_group_name": bot.modules.command_group_name()' in src
+    assert '"command_prefix": config.bot.command_prefix or "bark!"' in src

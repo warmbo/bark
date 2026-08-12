@@ -106,13 +106,15 @@ class PrefixInteraction:
         self._done = True
 
 
-def _make_dispatch(slash_leaf):
+def _make_dispatch(slash_leaf, check=None):
     """Return ``async (ctx, *raw_args)`` that dispatches one slash command leaf.
 
     The returned callback converts raw message tokens to typed kwargs from the
     leaf's parameter metadata, builds a message-bound interaction shim, and
     invokes the original handler. The handler is a closure over the module (it
     captures ``self`` at factory time), so it is called as ``callback(shim)``.
+    ``check`` (optional) is an ``async (interaction) -> bool`` per-guild
+    enablement gate; when it returns False the command is refused.
     """
     from discord.app_commands.commands import AppCommandOptionType
 
@@ -121,6 +123,17 @@ def _make_dispatch(slash_leaf):
 
     async def dispatch(ctx: commands.Context, *raw_args: str) -> None:
         interaction = PrefixInteraction(ctx)
+        if check is not None:
+            try:
+                allowed = await check(interaction)
+            except Exception:
+                allowed = True
+            if not allowed:
+                await ctx.send(
+                    "This module isn't enabled for this server — turn it on in "
+                    "the dashboard **Modules** page."
+                )
+                return
         kwargs: dict[str, Any] = {}
         tokens = list(raw_args)
         for param in params:
@@ -146,12 +159,14 @@ def build_prefix_command(
     module: BarkModule,
     cmd_name: str,
     slash_cmd,
+    check=None,
 ):
     """Build a ``commands.Command``/``commands.Group`` for a module's slash command.
 
     A leaf ``app_commands.Command`` becomes a flat ``bark!<cmd>`` text command.
     An ``app_commands.Group`` (e.g. trivia) becomes a ``bark!<group> <sub>``
     command group, so subcommand paths survive in the text-command model.
+    ``check`` is an optional async per-guild enablement gate applied to leaves.
     """
     children = getattr(slash_cmd, "commands", None)
     if children:  # it's a Group -> build a text-command group with subcommands
@@ -166,16 +181,42 @@ def build_prefix_command(
         )
         for sub in children:
             sub_name = getattr(sub, "name", "")
-            sub_cmd = build_prefix_command(module, sub_name, sub)
+            sub_cmd = build_prefix_command(module, sub_name, sub, check=check)
             group.add_command(sub_cmd)
         return group
 
-    dispatch = _make_dispatch(slash_cmd)
-    return commands.Command(
+    dispatch = _make_dispatch(slash_cmd, check=check)
+    prefix_cmd: commands.Command = commands.Command(
         dispatch,
         name=cmd_name,
         description=getattr(slash_cmd, "description", "") or "",
     )
+    # Expose the original slash-command parameters (name/type/required) so
+    # callers (e.g. the smoke test) can generate realistic argument tokens.
+    prefix_cmd._bark_params = list(getattr(slash_cmd, "parameters", []))
+    # Test/observation hook: invoke the handler with explicit typed kwargs
+    # through the shim + enablement gate, bypassing token->type conversion
+    # (which needs a live guild). Used by the command smoke test.
+    callback = cast(Any, getattr(slash_cmd, "callback", None))
+
+    async def _bark_invoke(ctx: commands.Context, **kwargs: Any) -> bool:
+        interaction = PrefixInteraction(ctx)
+        if check is not None:
+            try:
+                if not await check(interaction):
+                    await ctx.send(
+                        "This module isn't enabled for this server — turn it on in "
+                        "the dashboard **Modules** page."
+                    )
+                    return False
+            except Exception:
+                pass
+        if callback is not None:
+            await callback(interaction, **kwargs)
+        return True
+
+    prefix_cmd._bark_invoke = _bark_invoke
+    return prefix_cmd
 
 
 

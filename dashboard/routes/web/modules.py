@@ -48,7 +48,7 @@ async def modules_page(request: Request, guild_id: int):
             "modules": all_modules,
             "module_states": module_states,
             "plugin_names": plugin_names,
-            "command_group_name": bot.modules.command_group_name(),
+            "command_prefix": config.bot.command_prefix or "bark!",
             "config": config,
         },
     )
@@ -174,7 +174,7 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
             "guild": guild,
             "module_name": module_name,
             "module_data": module_data,
-            "command_group_name": bot.modules.command_group_name(),
+            "command_prefix": config.bot.command_prefix or "bark!",
         },
     )
 

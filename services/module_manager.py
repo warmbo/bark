@@ -141,34 +141,58 @@ class ModuleManager:
 
     # ── Prefix (text) commands ────────────────────────
 
-    def _register_prefix_command(self, module_name, command_name, module, slash_cmd) -> None:
-        """Register a ``bark!<cmd>`` text command backed by the slash handler.
+    def _register_prefix_commands(self, module_name, module) -> None:
+        """Register a module's handlers as prefix (text) commands.
 
-        Prefix commands are flat (``bark!warn``, ``bark!roll``) and live on the
-        discord.ext ``commands.Bot`` command table, so they are NOT subject to
-        Discord's 25-child-per-group limit. A name already claimed by another
-        module is skipped with a warning rather than silently overwriting.
+        Single-command modules become a flat ``bark!<cmd>``. Multi-command
+        modules (and group-factory modules) become a ``bark!<module> <sub>``
+        group, so subcommand paths survive and command names stay
+        collision-free across modules and add-on plugins.
         """
         if not hasattr(self.bot, "add_command"):
             return
-        try:
-            from services.prefix_commands import build_prefix_command
+        from types import SimpleNamespace
 
-            prefix_cmd = build_prefix_command(module, command_name, slash_cmd)
-        except Exception:
-            logger.exception("Failed to build prefix command '%s' for module '%s'", command_name, module_name)
+        from services.prefix_commands import build_prefix_command
+
+        app_cmds: list = []
+        for cmd in module.get_commands():
+            if not cmd.slash:
+                continue
+            factory = getattr(module, f"_make_{cmd.name}_command", None)
+            if not factory:
+                continue
+            try:
+                app_cmds.append(factory())
+            except Exception:
+                logger.exception(
+                    "Failed to build command '%s' for module '%s'", cmd.name, module_name
+                )
+        if not app_cmds:
             return
-        existing = self.bot.get_command(command_name)
-        if existing is not None:
-            logger.warning(
-                "Prefix command '%s' already registered (%s); skipping for module '%s'",
-                command_name,
-                getattr(existing, "callback", None),
-                module_name,
-            )
-            return
-        self.bot.add_command(prefix_cmd)
-        self._prefix_commands.setdefault(module_name, {})[command_name] = prefix_cmd
+
+        check = self._command_enabled_check(module_name)
+        registered: dict[str, object] = {}
+
+        def _add_top(prefix_cmd) -> None:
+            if self.bot.get_command(prefix_cmd.name) is not None:
+                logger.warning(
+                    "Prefix command '%s' already registered; skipping for module '%s'",
+                    prefix_cmd.name,
+                    module_name,
+                )
+                return
+            self.bot.add_command(prefix_cmd)
+            registered[prefix_cmd.name] = prefix_cmd
+
+        if len(app_cmds) == 1:
+            _add_top(build_prefix_command(module, app_cmds[0].name, app_cmds[0], check=check))
+        else:
+            # Multiple leaf commands: namespace them under a bark!<module> group.
+            shim = SimpleNamespace(commands=app_cmds, description=getattr(module, "description", ""))
+            _add_top(build_prefix_command(module, module_name, shim, check=check))
+
+        self._prefix_commands[module_name] = registered
 
     def _unregister_prefix_commands(self, module_name: str) -> None:
         """Remove every prefix command registered for a module."""
@@ -501,33 +525,13 @@ class ModuleManager:
             await module.enable()
 
             # Centralized command registration
-            self._registered_commands[name] = set()
-            for cmd in module.get_commands():
-                if cmd.slash:
-                    factory = getattr(module, f"_make_{cmd.name}_command", None)
-                    if factory:
-                        app_cmd = factory()
-                        if hasattr(app_cmd, "add_check"):
-                            app_cmd.add_check(self._command_enabled_check(name))
-                        if getattr(self.bot, "tree", None) is not None:
-                            from discord.app_commands import Group
-
-                            single_command_module = (
-                                len([c for c in module.get_commands() if c.slash]) == 1
-                            )
-                            if isinstance(app_cmd, Group) or single_command_module:
-                                # /bark trivia start or /bark roll — namespaced
-                                # groups and single-command modules hang directly
-                                # off /bark (staying under Discord's 25-child cap).
-                                self._get_bark_group().add_command(app_cmd)
-                                self._command_owners.setdefault(name, {})[cmd.name] = None
-                            else:
-                                # Multi-command module: subgroup, e.g. /bark moderation warn
-                                subgroup = self._module_subgroup(name, module.description)
-                                subgroup.add_command(app_cmd)
-                                self._command_owners.setdefault(name, {})[cmd.name] = subgroup
-                        self._register_prefix_command(name, cmd.name, module, app_cmd)
-                        self._registered_commands[name].add(cmd.name)
+            self._registered_commands[name] = {
+                cmd.name for cmd in module.get_commands() if cmd.slash
+            }
+            # Slash commands are not registered (prefix-only). The factories
+            # still yield the handlers that `bark!<cmd>` routes to via the
+            # prefix adapter; multi-command modules become a bark!<module> group.
+            self._register_prefix_commands(name, module)
 
             # Centralized event subscription via EventBus
             self._registered_events[name] = []
