@@ -210,6 +210,17 @@
                 </div>
                 <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
             </div>
+
+            <!-- Diagnostics (download a redacted report for support) -->
+            <div class="content-card" id="diagnostics-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("file-text", 16) }} Diagnostics</h2><p class="card-description">Download a redacted report of this instance's version, environment, git/remote state and recent logs. Paste it back to us when diagnosing an issue.</p></div>
+                </div>
+                <div class="form-actions form-actions-static">
+                    <button type="button" class="btn" id="diagnostics-download-btn" aria-label="Download diagnostic report">{{ icon("download", 14) }} Download diagnostic report</button>
+                </div>
+                <div class="workspace-data-card" id="diagnostics-result" aria-live="polite"></div>
+            </div>
         </div>
     </div>
 
@@ -664,6 +675,45 @@
     // loadUpdateStatus() earlier (top-level, pre-declaration) hit the
     // temporal-dead-zone and aborted the whole settings script (P0, 2026-08-09).
     loadUpdateStatus();
+
+    // ── Diagnostics ──────────────────────────────────
+
+    const diagnosticsBtn = document.getElementById('diagnostics-download-btn');
+    const diagnosticsResult = document.getElementById('diagnostics-result');
+    if (diagnosticsBtn) {
+        diagnosticsBtn.addEventListener('click', async () => {
+            if (diagnosticsResult) diagnosticsResult.textContent = 'Preparing report…';
+            try {
+                // Plain fetch: this endpoint returns the report as text/plain,
+                // not the JSON envelope safeFetch expects.
+                const res = await fetch('/api/v1/instance/diagnostics', { cache: 'no-cache' });
+                if (res.status === 401) {
+                    window.location.href = '/auth/login';
+                    return;
+                }
+                if (!res.ok) {
+                    const body = await res.json().catch(() => null);
+                    throw new Error(body?.error || `Request failed (${res.status})`);
+                }
+                const text = await res.text();
+                let filename = `bark-diagnostics-${Date.now()}.txt`;
+                const cd = res.headers.get('Content-Disposition') || '';
+                const match = cd.match(/filename="([^"]+)"/);
+                if (match) filename = match[1];
+                const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                if (diagnosticsResult) diagnosticsResult.textContent = `Report downloaded (${filename}).`;
+            } catch (err) {
+                if (diagnosticsResult) diagnosticsResult.textContent = `Download failed: ${err.message || err}`;
+            }
+        });
+    }
 
     // ── Database Backup ──────────────────────────────
 

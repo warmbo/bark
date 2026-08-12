@@ -85,6 +85,21 @@ def test_check_update_no_update_when_in_sync(repo):
     assert status["update_available"] is False
 
 
+def test_resolve_remote_falls_back_to_origin(repo, monkeypatch):
+    """A fresh one-line install clones GitHub as `origin`, not `github`. The
+    configured update_remote ('github') doesn't exist, so updates must fall
+    back to origin instead of failing with 'could not find branch'."""
+    monkeypatch.setattr(update_service.config.instance, "update_remote", "github")
+    # 'github' remote does not exist in the test repo — _resolve_remote must
+    # fall through to origin and find main there.
+    resolved = update_service._resolve_remote("main")
+    assert resolved == "origin"
+
+    # A branch that exists nowhere still resolves to None (keeps the
+    # "could not find branch ... on remote" error path working).
+    assert update_service._resolve_remote("nonexistent-branch") is None
+
+
 def test_apply_update_resets_to_origin(repo):
     work, _ = repo
     old = _git(work, "rev-parse", "HEAD").stdout.strip()

@@ -46,6 +46,12 @@ _update_log_active = False
 _update_phase = ""
 _update_phase_done = False
 
+# Last update-check outcome ("" = last check succeeded). Persisted so the
+# diagnostics report can show "check failed: ..." without re-running the
+# (slow, network) git fetch.
+_last_check_error = ""
+_last_check_error_lock = threading.Lock()
+
 # UI progress phases (order matters — the modal derives a progress bar from
 # the current index and shows the per-phase estimated time).
 UPDATE_PHASES = ["fetch", "backup", "reset", "deps", "restart"]
@@ -100,6 +106,19 @@ def get_update_log(after: int = 0) -> dict:
             "phases": list(UPDATE_PHASES),
             "done": _update_phase_done,
         }
+
+
+def record_check_error(error: str) -> None:
+    """Persist the last update-check outcome ('' on success)."""
+    global _last_check_error
+    with _last_check_error_lock:
+        _last_check_error = error
+
+
+def last_check_error() -> str:
+    """Return the last update-check error, or '' if the last check succeeded."""
+    with _last_check_error_lock:
+        return _last_check_error
 
 
 def repo_root() -> Path:
@@ -168,18 +187,19 @@ def _fetch_remote_branch(remote: str, branch: str) -> bool:
 
 
 def _resolve_remote(branch: str) -> str | None:
-    """Fetch ``branch`` from the configured update remote.
+    """Fetch ``branch`` from the update remote.
 
-    Only ``config.instance.update_remote`` (default ``origin``) is ever
-    consulted — other remotes (e.g. a GitHub mirror with a stale ``main``)
-    are never used for updates. Returns the remote name on success, else
-    ``None``.
+    Prefers ``config.instance.update_remote`` (default ``github``), then falls
+    back to ``origin``. A fresh one-line install clones GitHub as ``origin``
+    (not ``github``), so relying only on the ``github`` remote name made updates
+    fail with "could not find branch 'main' on remote 'github'". Returns the
+    remote name on success, else ``None``.
     """
-    remote = config.instance.update_remote
-    if not remote:
-        return None
-    if _fetch_remote_branch(remote, branch) and _remote_has_branch(remote, branch):
-        return remote
+    for remote in (config.instance.update_remote, "origin"):
+        if not remote:
+            continue
+        if _fetch_remote_branch(remote, branch) and _remote_has_branch(remote, branch):
+            return remote
     return None
 
 
@@ -365,6 +385,9 @@ def check_update(channel: str | None = None) -> dict:
             available,
         )
         update_available = False
+    record_check_error(error)
+    if error:
+        log_line(f"update check failed: {error}", "error")
     return {
         "channel": get_channel(),
         "branch": branch,

@@ -11,9 +11,10 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from config import config
+from services.diagnostics import build_diagnostics_report, render_report
 from services.instance_auth import can_manage_instance
 from services.response import api_error, api_success
 from services.update_service import (
@@ -83,3 +84,26 @@ async def update_log(request: Request, after: int = 0):
     from services.update_service import get_update_log
 
     return api_success(get_update_log(max(after, 0)))
+
+
+@router.get("/instance/diagnostics")
+async def instance_diagnostics(request: Request):
+    """Download a redacted diagnostic report for remote support (owner-only).
+
+    Includes version, install method, environment/hardware, git + remote state,
+    the last update-check error, and recent logs — with secrets removed. Users
+    running Bark on their own hardware can download this and paste it back so
+    we can diagnose issues without shell access.
+    """
+    if not can_manage_instance(request):
+        return api_error("Owner access required", status_code=403)
+    report = await asyncio.to_thread(build_diagnostics_report)
+    text = render_report(report)
+    version = report["bark"]["version"]
+    return Response(
+        content=text,
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": f'attachment; filename="bark-diagnostics-{version}.txt"'
+        },
+    )

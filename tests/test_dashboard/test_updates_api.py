@@ -252,3 +252,29 @@ async def test_update_log_streams_entries_and_after_cursor(app, monkeypatch):
     update_service.clear_update_log()
     update_service.set_update_active(False)
     update_service.set_update_phase("", done=False)
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_endpoint_requires_owner(app):
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("43")),  # not the owner
+    ) as client:
+        response = await client.get("/api/v1/instance/diagnostics")
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_endpoint_downloads_plaintext_report(app):
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),  # the owner
+    ) as client:
+        response = await client.get("/api/v1/instance/diagnostics")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert 'filename="bark-diagnostics-' in response.headers.get("content-disposition", "")
+    assert "Bark diagnostic report" in response.text
+    assert "[Config (redacted)]" in response.text

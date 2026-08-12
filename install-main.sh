@@ -7,6 +7,12 @@
 # repository, creates the virtualenv, and either installs a systemd user
 # service or boots the first-time setup wizard — no .env hand-editing.
 #
+# Rootless by default: cloning, the virtualenv, and the systemd *user* unit
+# all live under $HOME and need no root. If Python 3.13+ is missing, it is
+# provisioned user-locally via uv (no system packages). sudo/apt is only used
+# as a last resort to install missing system tools; set BARK_NO_SUDO=1 to
+# forbid it entirely.
+#
 # Overrides (env vars):
 #   BARK_REPO_URL      git URL to install from (default: warmbo/bark on GitHub)
 #   BARK_BRANCH        branch to check out (default: main)
@@ -15,6 +21,8 @@
 #   BARK_INSTALL_HOST  dashboard bind address (default: 127.0.0.1 — set 0.0.0.0 for LAN)
 #   BARK_INSTALL_PORT  dashboard port (default: 8090)
 #   BARK_NO_START      set to 1 to install without launching anything
+#   BARK_NO_SUDO       set to 1 to NEVER call sudo (rootless-only install)
+#   BARK_LOCAL_BIN     user bin dir for a uv-managed Python (default: ~/.local/bin)
 #   BARK_TMPDIR        writable temp dir (default: $HOME/.bark-tmp). Set this
 #                      when the host's /tmp is unwritable — the installer
 #                      never relies on /tmp.
@@ -30,6 +38,11 @@ BARK_SYSTEMD="${BARK_SYSTEMD:-auto}"
 BARK_INSTALL_HOST="${BARK_INSTALL_HOST:-127.0.0.1}"
 BARK_INSTALL_PORT="${BARK_INSTALL_PORT:-8090}"
 BARK_NO_START="${BARK_NO_START:-0}"
+# Rootless installs: set BARK_NO_SUDO=1 to make the installer NEVER call sudo
+# (it will fail with guidance instead of prompting). Python 3.13+ is then
+# provisioned user-locally via uv into BARK_LOCAL_BIN (default ~/.local/bin),
+# so no system packages are touched.
+BARK_NO_SUDO="${BARK_NO_SUDO:-0}"
 
 log()  { printf '\033[1;34m[bark]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[bark]\033[0m %s\n' "$*"; }
@@ -57,6 +70,59 @@ log "Using temp dir: $BARK_TMPDIR"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+LOCAL_BIN="${BARK_LOCAL_BIN:-$HOME/.local/bin}"
+PY_PROVIDER="system"
+UV_BIN=""
+
+# Any remaining system-package install requires root. BARK_NO_SUDO=1 enforces a
+# strict rootless install: we never call sudo/apt and instead fail with
+# guidance so a locked-down box can't be mutated.
+need_root_or_fail() {
+    if [ "$BARK_NO_SUDO" = "1" ]; then
+        die "$1 — BARK_NO_SUDO=1 is set, so the installer will not use sudo. Install the missing package yourself (no root) or rerun with BARK_NO_SUDO=0 to allow sudo."
+    fi
+    if [ "$(id -u)" -ne 0 ] && ! have sudo; then
+        die "$1 — requires root or sudo, which is not available."
+    fi
+}
+
+# Install uv into the user's home ($LOCAL_BIN). Fully rootless. Returns 0 when
+# uv is usable (already present, or freshly installed).
+ensure_uv() {
+    if have uv; then
+        UV_BIN="$(command -v uv)"
+        return 0
+    fi
+    if [ -x "$LOCAL_BIN/uv" ]; then
+        UV_BIN="$LOCAL_BIN/uv"
+        export PATH="$LOCAL_BIN:$PATH"
+        return 0
+    fi
+    if have curl; then
+        mkdir -p "$LOCAL_BIN"
+        log "Installing uv to $LOCAL_BIN (user-local, no root)"
+        if curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$LOCAL_BIN" sh >/dev/null 2>&1 \
+            && [ -x "$LOCAL_BIN/uv" ]; then
+            UV_BIN="$LOCAL_BIN/uv"
+            export PATH="$LOCAL_BIN:$PATH"
+            return 0
+        fi
+        warn "uv install to $LOCAL_BIN failed — will fall back to a system Python"
+    fi
+    return 1
+}
+
+# Provision a standalone CPython 3.13 via uv — no system packages, no root.
+provision_python_uv() {
+    ensure_uv || return 1
+    if ! "$UV_BIN" python install 3.13 >/dev/null 2>&1; then
+        return 1
+    fi
+    PY_PROVIDER="uv"
+    log "Provisioned Python 3.13 via uv (user-local, no root)"
+    return 0
+}
+
 python_new_enough() {
     "$1" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)' 2>/dev/null
 }
@@ -72,10 +138,12 @@ resolve_python() {
 }
 
 install_python() {
-    log "Python 3.13+ not found — installing it"
-    if [ "$(id -u)" -ne 0 ] && ! have sudo; then
-        die "Python 3.13+ is required. Install it (e.g. 'sudo apt install python3 python3-venv') or run this installer with sudo, then retry."
+    log "Python 3.13+ not found — provisioning a rootless one via uv"
+    if provision_python_uv; then
+        return 0
     fi
+    warn "Could not provision Python 3.13 rootlessly — falling back to a system package install"
+    need_root_or_fail "Python 3.13+ is required"
     local apt="apt-get"
     [ "$(id -u)" -ne 0 ] && apt="sudo apt-get"
 
@@ -111,7 +179,8 @@ missing=""
 have git  || missing="$missing git"
 have curl || missing="$missing curl"
 if [ -n "$missing" ]; then
-    log "Installing missing tools:$missing"
+    warn "Missing tools:$missing"
+    need_root_or_fail "Installing missing system tools:$missing"
     if have apt-get; then
         if [ "$(id -u)" -eq 0 ]; then apt-get update -qq && apt-get install -y -qq $missing; else sudo apt-get update -qq && sudo apt-get install -y -qq $missing; fi
     else
@@ -123,7 +192,11 @@ resolve_python
 if [ -z "${PY:-}" ]; then
     install_python
 fi
-log "Using Python: $PY ($("$PY" -c 'import sys; print(sys.version.split()[0])'))"
+if [ "$PY_PROVIDER" = "uv" ]; then
+    log "Using Python: uv-managed 3.13"
+else
+    log "Using Python: $PY ($("$PY" -c 'import sys; print(sys.version.split()[0])'))"
+fi
 
 # Debian/Ubuntu don't ship the bundled pip wheels in the base python3 —
 # `import ensurepip` succeeds but `python3 -m venv` fails without the
@@ -131,22 +204,44 @@ log "Using Python: $PY ($("$PY" -c 'import sys; print(sys.version.split()[0])'))
 # module presence.
 ensure_venv_works() {
     local probe
+    if [ "$PY_PROVIDER" = "uv" ]; then
+        # uv venv always carries a matching interpreter + pip — no system pkg.
+        probe=$(mktemp -d)
+        if "$UV_BIN" venv --python 3.13 "$probe" >/dev/null 2>&1 && [ -x "$probe/bin/python" ]; then
+            rm -rf "$probe"
+            return 0
+        fi
+        rm -rf "$probe"
+        die "Could not create a Python virtualenv with uv. Install Python 3.13 manually and rerun."
+    fi
+    probe=$(mktemp -d)
+    if "$PY" -m venv "$probe" >/dev/null 2>&1 && [ -x "$probe/bin/pip" ]; then
+        rm -rf "$probe"
+        return 0
+    fi
+    rm -rf "$probe"
+    # venv broken with a system python: switch to a rootless uv-managed python
+    # before ever reaching for sudo.
+    log "System Python venv support missing — switching to a rootless uv-managed Python"
+    if provision_python_uv; then
+        probe=$(mktemp -d)
+        if "$UV_BIN" venv --python 3.13 "$probe" >/dev/null 2>&1 && [ -x "$probe/bin/python" ]; then
+            rm -rf "$probe"
+            return 0
+        fi
+        rm -rf "$probe"
+    fi
+    # Last resort: install the distro's python3-venv (needs root).
+    need_root_or_fail "Python venv support is missing"
+    local apt="apt-get"
+    [ "$(id -u)" -ne 0 ] && apt="sudo apt-get"
+    $apt install -y -qq "${PY}-venv" >/dev/null 2>&1 \
+        || $apt install -y -qq python3-venv >/dev/null 2>&1 \
+        || true
     probe=$(mktemp -d)
     if ! "$PY" -m venv "$probe" >/dev/null 2>&1 || [ ! -x "$probe/bin/pip" ]; then
         rm -rf "$probe"
-        log "Python venv support missing — installing ${PY}-venv"
-        if have apt-get; then
-            local apt="apt-get"
-            [ "$(id -u)" -ne 0 ] && apt="sudo apt-get"
-            $apt install -y -qq "${PY}-venv" >/dev/null 2>&1 \
-                || $apt install -y -qq python3-venv >/dev/null 2>&1 \
-                || true
-        fi
-        probe=$(mktemp -d)
-        if ! "$PY" -m venv "$probe" >/dev/null 2>&1 || [ ! -x "$probe/bin/pip" ]; then
-            rm -rf "$probe"
-            die "Could not create a Python virtualenv. Install the python3-venv package for this Python and rerun."
-        fi
+        die "Could not create a Python virtualenv. Install the python3-venv package for this Python and rerun."
     fi
     rm -rf "$probe"
 }
@@ -231,17 +326,26 @@ cd "$BARK_INSTALL_DIR"
 # ── 3. Virtualenv + dependencies ───────────────────────────
 log "Creating virtualenv"
 # A previous failed run can leave a .venv dir with a python but no pip
-# (Debian without python3-venv) — check for pip, not just the interpreter.
-if [ ! -x .venv/bin/pip ]; then
+# (Debian without python3-venv) — recreate when either piece is missing.
+if [ ! -x .venv/bin/python ] || [ ! -x .venv/bin/pip ]; then
     if [ -d .venv ]; then
         log "Recreating broken virtualenv"
         rm -rf .venv
     fi
-    "$PY" -m venv .venv
+    if [ "$PY_PROVIDER" = "uv" ]; then
+        "$UV_BIN" venv --python 3.13 .venv
+    else
+        "$PY" -m venv .venv
+    fi
 fi
 log "Installing dependencies (this can take a minute)"
-./.venv/bin/python -m pip install --quiet --upgrade pip
-./.venv/bin/pip install --quiet .
+if [ "$PY_PROVIDER" = "uv" ]; then
+    "$UV_BIN" pip install --python .venv/bin/python --upgrade pip
+    "$UV_BIN" pip install --python .venv/bin/python .
+else
+    ./.venv/bin/python -m pip install --quiet --upgrade pip
+    ./.venv/bin/pip install --quiet .
+fi
 
 # ── 4. Service or foreground ───────────────────────────────
 port_busy() {
