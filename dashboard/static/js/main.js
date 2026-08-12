@@ -745,16 +745,12 @@ function renderNavItem(page, activePage) {
 
     const isModule = !!page.module;
     const itemClass = isModule ? 'nav-item nav-item-module' : 'nav-item';
-    const statusDot = isModule
-        ? `<span class="nav-module-status ${page.enabled ? 'on' : 'off'}"></span>`
-        : '';
     const iconSize = isModule ? 14 : 16;
     const dataModule = isModule ? ` data-module="${escHtml(page.module)}"` : '';
 
     return `<a href="${pageRoute}" class="${itemClass} ${isActive ? 'active' : ''}"${isActive ? ' aria-current="page"' : ''}${dataModule}>
         <span class="nav-icon">${getIconSvg(page.icon || 'puzzle', iconSize)}</span>
         <span class="${isModule ? 'nav-module-name' : ''}">${escHtml(page.label)}</span>
-        ${statusDot}
     </a>`;
 }
 

@@ -474,28 +474,42 @@ textarea:focus-visible,
     font-size: 14px;
     text-decoration: none;
     color: var(--text-secondary);
-    transition: background var(--transition-fast), color var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
     cursor: pointer;
     position: relative;
 }
 
-.nav-item:hover { background: var(--glass-tint); color: var(--text-primary); }
+.nav-item:hover { background: var(--glass-tint); color: var(--text-primary); transform: translateX(1px); }
 .nav-item.active { background: var(--accent-muted); color: var(--accent); }
 .nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; background: var(--accent); }
 
 .nav-icon { display: flex; align-items: center; justify-content: center; width: 20px; flex-shrink: 0; transition: transform var(--transition-fast); }
 .nav-item:hover .nav-icon { transform: translateX(1px); }
 
-.nav-module-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-
-.nav-module-status {
-    width: 6px;
-    height: 6px;
-    border-radius: var(--radius-full);
-    flex-shrink: 0;
+.nav-module-name { flex: 1; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.nav-module-name::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -4px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent) 40%, var(--accent) 60%, transparent);
+    background-size: 200% 100%;
+    background-position: 200% 0;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
 }
-.nav-module-status.on { background: var(--green); }
-.nav-module-status.off { background: var(--text-tertiary); }
+.nav-item:hover .nav-module-name::after,
+.nav-item.active .nav-module-name::after {
+    opacity: 1;
+    animation: nav-shimmer 1.6s linear infinite;
+}
+
+@keyframes nav-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
 
 /* ── Page Layout ──────────────────────────────────── */
 
