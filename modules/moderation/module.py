@@ -485,7 +485,7 @@ class ModerationModule(BarkModule):
             },
             {
                 "title": "Display Warnings & Timeouts",
-                "description": "When a member breaks a rule, issue a warning or timeout from the dashboard or via /bark warn and /bark timeout slash commands. The member gets a DM, a case is logged, and the dashboard shows live status.",
+                "description": f"When a member breaks a rule, issue a warning or timeout from the dashboard or via /{self.command_group_name()} warn and /{self.command_group_name()} timeout slash commands. The member gets a DM, a case is logged, and the dashboard shows live status.",
             },
             {
                 "title": "AutoMod — Spam & Invite Protection",
@@ -497,7 +497,7 @@ class ModerationModule(BarkModule):
             },
             {
                 "title": "Usage",
-                "description": "Enable the module, then use /bark warn, /timeout, /kick, /ban slash commands or the dashboard Moderation page. Configure AutoMod rules and anti-raid settings in the Configuration section.",
+                "description": f"Enable the module, then use /{self.command_group_name()} warn, /timeout, /kick, /ban slash commands or the dashboard Moderation page. Configure AutoMod rules and anti-raid settings in the Configuration section.",
             },
         ]
 

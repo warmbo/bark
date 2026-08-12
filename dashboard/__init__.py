@@ -306,7 +306,11 @@ def create_app(bot: BarkBot) -> DashboardApp:
         return tmpl.TemplateResponse(
             request,
             "pages/dashboard.html",
-            {"guilds": guilds, "config": config},
+            {
+                "guilds": guilds,
+                "config": config,
+                "command_group_name": bot.modules.command_group_name(),
+            },
         )
 
     return DashboardApp(app, bot)

@@ -154,7 +154,7 @@ class AnnouncementsModule(BarkModule):
             },
             {
                 "title": "How to Set Up",
-                "description": "Enable the module, choose a default channel in Configure if you want, then post from Operate or with /bark announce.",
+                "description": f"Enable the module, choose a default channel in Configure if you want, then post from Operate or with /{self.command_group_name()} announce.",
             },
         ]
 

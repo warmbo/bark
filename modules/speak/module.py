@@ -57,7 +57,13 @@ def validate_phrases(raw: object) -> tuple[dict[str, str] | None, str | None]:
 class SpeakModule(BarkModule):
     name = "speak"
     version = "1.0.0"
-    description = "Preset phrases triggered by /bark speak — configured in the dashboard."
+
+    def __init__(self, ctx) -> None:
+        super().__init__(ctx)
+        self.description = (
+            f"Preset phrases triggered by /{self.command_group_name()} speak "
+            "— configured in the dashboard."
+        )
 
     # ── Registration ──────────────────────────────────
 
@@ -93,8 +99,8 @@ class SpeakModule(BarkModule):
             {
                 "title": "Speak",
                 "description": (
-                    "Preset phrases your members can trigger with "
-                    "`/bark speak <key>`. Only admins (or anyone the owner "
+                    f"Preset phrases your members can trigger with "
+                    f"/{self.command_group_name()} speak <key>. Only admins (or anyone the owner "
                     "grants via Role Access) can edit the phrases — everyone "
                     "else can trigger them."
                 ),

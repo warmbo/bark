@@ -198,6 +198,22 @@ class BarkModule(abc.ABC):
 
     # ── Helpers ───────────────────────────────────────
 
+    def command_group_name(self) -> str:
+        """The instance's slash-command group name (e.g. ``'bark'``, ``'bob'``).
+
+        Derived from the ``BARK_COMMAND_GROUP`` override, else the bot's
+        username (see ``ModuleManager.command_group_name``). Available to every
+        module — including add-on plugins — so module pages, help text and
+        command lists can render the correct slash-command prefix instead of a
+        hardcoded ``/bark``.
+        """
+        manager = getattr(getattr(self.ctx, "bot", None), "modules", None)
+        if manager is not None and hasattr(manager, "command_group_name"):
+            return manager.command_group_name()
+        from config import config, sanitize_command_group
+
+        return sanitize_command_group(config.bot.command_group or "bark")
+
     async def _get_setting(self, guild_id: int, section: str, key: str, default=None):
         """Read a value from this module's stored config, with dot-path traversal.
 
