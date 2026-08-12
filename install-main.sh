@@ -44,6 +44,13 @@ BARK_NO_START="${BARK_NO_START:-0}"
 # so no system packages are touched.
 BARK_NO_SUDO="${BARK_NO_SUDO:-0}"
 
+# Ports < 1024 are privileged — a non-root user can't bind them (Android/Termux
+# and unprivileged containers especially). Give a clear error instead of a
+# cryptic "Permission denied" at runtime.
+if [ "$BARK_INSTALL_PORT" -lt 1024 ] 2>/dev/null && [ "$(id -u)" -ne 0 ]; then
+    die "Dashboard port $BARK_INSTALL_PORT is below 1024 — non-root users cannot bind privileged ports. Set BARK_INSTALL_PORT to 1024 or higher (e.g. 8090) and rerun."
+fi
+
 log()  { printf '\033[1;34m[bark]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[bark]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[bark]\033[0m ERROR: %s\n' "$*" >&2; exit 1; }
@@ -436,6 +443,11 @@ log "     Message Content intents (Bark requires all three; missing them = gatew
 log "     error 4014 / connection restart loop)."
 log "  4. OAuth2 -> Redirects -> add: $url_callback"
 log "  5. Paste them into the setup page; Bark writes .env and restarts itself."
+
+if [ "$BARK_INSTALL_PORT" = "8090" ]; then
+    warn "If the dashboard will sit behind Cloudflare: port 8090 is NOT proxied by Cloudflare."
+    warn "Use a proxied port (8080/8443/8880) via BARK_INSTALL_PORT, or a Cloudflare Tunnel."
+fi
 
 if [ "$use_systemd" = "no" ]; then
     cd "$BARK_INSTALL_DIR"

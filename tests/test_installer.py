@@ -152,3 +152,20 @@ def test_install_main_never_relies_on_tmp():
     tmdir_export = src.index('export TMPDIR="$BARK_TMPDIR"')
     first_mktemp = src.index("mktemp -d")
     assert tmdir_export < first_mktemp, "TMPDIR must be set before any mktemp"
+
+
+def test_installer_guides_on_privileged_port():
+    """Ports < 1024 can't be bound by a non-root user (Android/Termux,
+    unprivileged containers). The installer must fail with a clear message
+    instead of a cryptic bind error."""
+    src = INSTALL_MAIN.read_text()
+    assert "below 1024" in src
+    assert "cannot bind privileged ports" in src
+
+
+def test_installer_warns_cloudflare_does_not_proxy_8090():
+    """Cloudflare doesn't proxy the default 8090 — the installer should say so
+    at the end so users don't chase a phantom connection issue."""
+    src = INSTALL_MAIN.read_text()
+    assert "8090" in src
+    assert "NOT proxied by Cloudflare" in src

@@ -151,6 +151,19 @@ class Config:
                 "Discord OAuth must be configured before exposing the dashboard "
                 "on a non-loopback BARK_DASHBOARD_HOST"
             )
+        # Ports < 1024 are privileged: non-root users (Android/Termux, unprivileged
+        # containers, normal desktops) can't bind them. Fail with a clear message
+        # instead of a cryptic "Permission denied" at bind time.
+        if (
+            self.dashboard.port < 1024
+            and hasattr(os, "geteuid")
+            and os.geteuid() != 0
+        ):
+            raise ConfigurationError(
+                f"BARK_DASHBOARD_PORT={self.dashboard.port} is below 1024 — non-root "
+                "users cannot bind privileged ports. Set BARK_DASHBOARD_PORT to 1024 "
+                "or higher (e.g. 8090), or run Bark as root."
+            )
         if self.oauth2.enabled and not self.oauth2.owner_discord_ids:
             raise ConfigurationError(
                 "BARK_OWNER_DISCORD_IDS is required when Discord OAuth is enabled"

@@ -101,6 +101,22 @@ def test_startup_validation_rejects_public_dashboard_without_oauth(monkeypatch, 
         loaded.validate_startup()
 
 
+def test_startup_validation_rejects_privileged_port_for_nonroot(monkeypatch, tmp_path):
+    import os
+
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("running as root — privileged ports are bindable")
+
+    monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("BARK_BOT_TOKEN", "configured-token")
+    monkeypatch.setenv("BARK_DASHBOARD_PORT", "80")
+
+    loaded = Config.load()
+
+    with pytest.raises(ConfigurationError, match="below 1024"):
+        loaded.validate_startup()
+
+
 def test_session_ttl_defaults_to_thirty_days(monkeypatch, tmp_path):
     monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
     monkeypatch.delenv("BARK_DASHBOARD_SESSION_TTL", raising=False)
