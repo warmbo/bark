@@ -6,6 +6,7 @@ Wraps the FastAPI app with uvicorn for async execution.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING
 
@@ -21,13 +22,33 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bark.dashboard")
 
 
+class _SignalNeutralServer(Server):
+    """uvicorn Server that does NOT install its own SIGINT/SIGTERM handlers.
+
+    Uvicorn's ``serve()`` wraps the loop in ``capture_signals()``, which replaces
+    the process's SIGINT/SIGTERM handlers with uvicorn's own ``handle_exit``.
+    That only tells *the web server* to stop — it never stops the Discord bot
+    running in the same process, so SIGINT could leave the bot task alive and
+    the process hanging (you'd have to ``kill -9`` by PID).
+
+    Bark installs one coordinated signal handler (see app.main) that stops the
+    bot, the dashboard, and closes the database together. By neutralising
+    uvicorn's handler here we keep a single, deterministic shutdown path.
+    """
+
+    @contextlib.contextmanager
+    def capture_signals(self):  # type: ignore[override]
+        """No-op: do not hijack process signals; app.main owns them."""
+        yield
+
+
 class DashboardApp:
     """Wraps a FastAPI app with uvicorn lifecycle management."""
 
     def __init__(self, app: FastAPI, bot: BarkBot) -> None:
         self.app = app
         self.bot = bot
-        self._server: Server | None = None
+        self._server: _SignalNeutralServer | None = None
 
     async def run(self) -> None:
         """Run the dashboard server. Blocks until shutdown."""
@@ -52,9 +73,19 @@ class DashboardApp:
             proxy_headers=True,
             forwarded_allow_ips=config.dashboard.forwarded_allow_ips,
         )
-        server = uvicorn.Server(config_obj)
+        server = _SignalNeutralServer(config_obj)
         self._server = server
         try:
             await server.serve()
         except SystemExit:
             logger.exception("Dashboard exited with SystemExit")
+
+    def stop(self) -> None:
+        """Ask uvicorn to stop accepting/processing requests and shut down.
+
+        Safe to call from a signal handler: it only flips a flag that uvicorn's
+        main loop checks, letting the running ``await server.serve()`` return so
+        ``app.main``'s coordinated shutdown can finish.
+        """
+        if self._server is not None:
+            self._server.should_exit = True

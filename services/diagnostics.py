@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import platform
 import shutil
 import tempfile
@@ -278,6 +279,7 @@ def build_diagnostics_report() -> dict:
             "install_dir": str(root),
             "install_method": install_method(),
             "systemd_active": _systemd_active(),
+            "pid": os.getpid(),
             "tmp_writable": _tmp_writable(),
             "disk_free_bytes": disk_free,
             "disk_total_bytes": disk_total,
@@ -345,6 +347,7 @@ def render_report(report: dict) -> str:
     lines.append(f"  Machine    : {env['machine']}")
     lines.append(f"  Python     : {env['python_version']}")
     lines.append(f"  Hostname   : {env['hostname']}")
+    lines.append(f"  PID        : {env.get('pid', '(n/a)')}  (kill -INT <pid> / systemctl restart)")
     lines.append(f"  Install dir: {env['install_dir']}")
     lines.append(f"  Install    : {env['install_method']}")
     lines.append(f"  systemd    : {'yes' if env['systemd_active'] else 'no'}")
