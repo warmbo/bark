@@ -84,7 +84,7 @@
 
     <section class="modules-section" aria-labelledby="modules-plugins-title">
         <h2 id="modules-plugins-title" class="modules-section-title">{{ icon("package-plus", 16) }} Plugin Manager</h2>
-        <p class="modules-section-subtitle">Extra single-file modules. Upload a <code>.py</code> file to add functionality; removing one unloads it immediately.</p>
+        <p class="modules-section-subtitle">Extra single-file modules. Upload a <code>.py</code> file to add functionality; removing one unloads it immediately. Browse ready-made plugins in <a href="https://github.com/warmbo/bark-plugins" target="_blank" rel="noopener">warmbo/bark-plugins</a>.</p>
         {% if not config.oauth2.owner_discord_ids or request.session.get('user', {}).get('id') in config.oauth2.owner_discord_ids %}
         <div class="content-card">
             <div class="plugins-upload-row">

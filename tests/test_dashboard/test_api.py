@@ -687,6 +687,28 @@ async def test_modules_grid_renders_human_module_names(client, app):
 
 
 @pytest.mark.asyncio
+async def test_modules_plugin_manager_links_plugins_repo(client, app):
+    """The Plugin Manager must link to the plugins repository so owners can
+    find ready-made single-file modules to upload."""
+    from unittest.mock import MagicMock
+
+    module = MagicMock()
+    module.version = "1.0.0"
+    module.description = "plugin"
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    app.state.bot.modules.get_all_modules.return_value = {"auto_voice": module}
+
+    response = await client.get("/guild/1/modules")
+    assert response.status_code == 200
+    assert (
+        'href="https://github.com/warmbo/bark-plugins" target="_blank" rel="noopener"'
+        in response.text
+    )
+
+
+@pytest.mark.asyncio
 async def test_modules_grid_addons_default_off(client, app):
     """Add-on plugins with no persisted per-guild row render OFF (not ON).
 
