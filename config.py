@@ -35,6 +35,14 @@ class DashboardConfig:
     session_ttl: int = 2592000  # 30 days — signed session cookie lifetime
     cors_origins: list[str] = field(default_factory=lambda: ["*"])
     force_https: bool = False
+    # Comma-separated IPs/CIDRs allowed to set X-Forwarded-* headers (used for
+    # the real client IP and the https scheme when behind a TLS-terminating
+    # proxy like Cloudflare). Default "127.0.0.1" covers a same-host reverse
+    # proxy / Cloudflare Tunnel (cloudflared connects to loopback). Set to "*"
+    # (or Cloudflare's edge ranges) when Cloudflare connects directly to the
+    # origin, and firewall the origin to Cloudflare so clients can't spoof the
+    # headers.
+    forwarded_allow_ips: str = "127.0.0.1"
     rate_limit_per_minute: int = 60
     invite_url: str = ""
 
@@ -188,6 +196,9 @@ class Config:
         if not 1 <= cfg.dashboard.port <= 65535:
             raise ConfigurationError("BARK_DASHBOARD_PORT must be between 1 and 65535")
         cfg.dashboard.force_https = os.getenv("BARK_FORCE_HTTPS", "false").lower() == "true"
+        cfg.dashboard.forwarded_allow_ips = os.getenv(
+            "BARK_FORWARDED_ALLOW_IPS", "127.0.0.1"
+        )
         cfg.dashboard.public_url = os.getenv("BARK_PUBLIC_URL", cfg.dashboard.public_url).rstrip(
             "/"
         )

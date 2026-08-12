@@ -119,6 +119,8 @@ def _boot_mock() -> None:
         host=config.dashboard.host,
         port=config.dashboard.port,
         log_level="warning",
+        proxy_headers=True,
+        forwarded_allow_ips=config.dashboard.forwarded_allow_ips,
     )
 
 

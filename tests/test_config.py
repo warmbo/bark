@@ -127,6 +127,19 @@ def test_session_ttl_invalid_env_fails_with_setting_name(monkeypatch, tmp_path):
         Config.load()
 
 
+def test_forwarded_allow_ips_default_and_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("BARK_FORWARDED_ALLOW_IPS", raising=False)
+
+    loaded = Config.load()
+    # Default trusts loopback proxies (same-host reverse proxy / Cloudflare Tunnel).
+    assert loaded.dashboard.forwarded_allow_ips == "127.0.0.1"
+
+    monkeypatch.setenv("BARK_FORWARDED_ALLOW_IPS", "*")
+    loaded = Config.load()
+    assert loaded.dashboard.forwarded_allow_ips == "*"
+
+
 def test_update_remote_defaults_to_github_and_env_override(monkeypatch, tmp_path):
     monkeypatch.setenv("BARK_DATA_DIR", str(tmp_path))
     monkeypatch.delenv("BARK_UPDATE_REMOTE", raising=False)

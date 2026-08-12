@@ -109,6 +109,8 @@ BARK_PUBLIC_URL=https://bark.example.com
 
 The dashboard serves on `BARK_DASHBOARD_HOST:BARK_DASHBOARD_PORT` (default `127.0.0.1:8090`); health is at `/api/v1/health`. Add the `deploy/bark.service.example` systemd user unit for a persistent install, and terminate TLS at a reverse proxy in production.
 
+**Behind a reverse proxy / Cloudflare.** Set `BARK_PUBLIC_URL` to the public `https://` hostname (the OAuth callback is derived from it). Bark trusts `X-Forwarded-*` headers from the proxies listed in `BARK_FORWARDED_ALLOW_IPS` (default `127.0.0.1`, which covers a same-host reverse proxy or a Cloudflare Tunnel, whose `cloudflared` connects to loopback). This keeps `force_https`, secure session cookies, and per-client rate limiting correct. If Cloudflare connects to the origin directly (not via Tunnel), set `BARK_FORWARDED_ALLOW_IPS=*` — and firewall the origin to Cloudflare's IP ranges so clients can't spoof the headers. Real-time updates use SSE (`text/event-stream`), so no WebSocket toggle is needed in Cloudflare; if live events appear buffered, disable response buffering for the dashboard (e.g. a Cloudflare Worker or transform rule).
+
 ## Dashboard access
 
 Dashboard authorization has four ordered roles: `viewer < moderator < admin < owner`. Page and API authorization are both enforced — hiding a button is not a substitute for checking its route. Discord OAuth2 login is optional: with OAuth disabled the dashboard runs fully public for trusted local networks, with `BARK_OWNER_DISCORD_IDS` reserved for production deployments.

@@ -46,6 +46,11 @@ class DashboardApp:
             port=port,
             log_level="warning",
             access_log=False,
+            # Trust X-Forwarded-* from the configured proxies so the real client
+            # IP (rate limiting) and scheme (force_https, secure cookies) are
+            # correct behind a TLS-terminating reverse proxy / Cloudflare.
+            proxy_headers=True,
+            forwarded_allow_ips=config.dashboard.forwarded_allow_ips,
         )
         server = uvicorn.Server(config_obj)
         self._server = server
