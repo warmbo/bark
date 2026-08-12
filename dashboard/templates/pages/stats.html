@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Statistics — {{ guild.name }}{% endblock %}
+
+{% block content %}
+{% set active_page = "stats" %}
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">{{ icon("bar-chart-3", 24) }} Statistics</h1>
+        <p class="page-subtitle">Server activity, growth, and engagement charts</p>
+    </div>
+
+    <div class="content-card">
+        <div class="stats-placeholder">
+            <div class="stats-placeholder-icon">{{ icon("bar-chart-3", 40) }}</div>
+            <h2 class="stats-placeholder-title">Charts coming soon</h2>
+            <p class="stats-placeholder-text">
+                The statistics and charts page is under active development. Check back shortly for
+                activity, growth, and engagement visualizations for <strong>{{ guild.name }}</strong>.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -3313,3 +3313,33 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 /* Auto Voice: name-template preview/help spans the whole config grid row */
 .template-preview, .template-help { grid-column: 1 / -1; }
+
+/* ── Statistics placeholder page ──────────────────── */
+.stats-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 8px;
+    padding: 56px 24px;
+}
+.stats-placeholder-icon {
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-full);
+    background: var(--accent-muted);
+    color: var(--accent);
+    margin-bottom: 6px;
+}
+.stats-placeholder-title { font-size: 18px; margin: 0; }
+.stats-placeholder-text {
+    max-width: 460px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+}
+.stats-placeholder-text strong { color: var(--text-primary); }

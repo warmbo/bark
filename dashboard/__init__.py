@@ -152,12 +152,14 @@ def create_app(bot: BarkBot) -> DashboardApp:
     from dashboard.routes.web.moderation import router as moderation_router
     from dashboard.routes.web.modules import router as modules_router
     from dashboard.routes.web.settings import router as settings_router
+    from dashboard.routes.web.stats import router as stats_router
 
     app.include_router(home_router, prefix="")
     app.include_router(modules_router, prefix="/guild/{guild_id}")
     app.include_router(moderation_router, prefix="/guild/{guild_id}")
     app.include_router(settings_router, prefix="/guild/{guild_id}")
     app.include_router(members_router, prefix="/guild/{guild_id}")
+    app.include_router(stats_router, prefix="/guild/{guild_id}")
 
     # ── API Routes ────────────────────────────────────
 
@@ -309,7 +311,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
             {
                 "guilds": guilds,
                 "config": config,
-                "command_group_name": bot.modules.command_group_name(),
+                "command_prefix": config.bot.command_prefix or "bark!",
             },
         )
 

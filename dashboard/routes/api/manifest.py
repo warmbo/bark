@@ -80,6 +80,12 @@ CORE_PAGES = [
         "category": "community",
     },
     {
+        "route": "/guild/{guild_id}/stats",
+        "label": "Statistics",
+        "icon": "bar-chart-3",
+        "category": "community",
+    },
+    {
         "route": "/guild/{guild_id}/modules",
         "label": "Modules",
         "icon": "puzzle",
