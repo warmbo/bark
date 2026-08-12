@@ -267,23 +267,29 @@ def _sample_for_param(param):
     return "test"
 
 
-def _all_leaf_commands(tree, command=None, path=()):
-    """Yield (path, Command) for every leaf under the /bark group."""
+def _all_leaf_commands(tree, group_name, command=None, path=()):
+    """Yield (path, Command) for every leaf under the instance's command group."""
     if command is None:
         for cmd in tree.get_commands():
-            if cmd.name == "bark":
-                yield from _all_leaf_commands(tree, cmd, ("bark",))
+            if cmd.name == group_name:
+                yield from _all_leaf_commands(tree, group_name, cmd, (group_name,))
         return
     if getattr(command, "commands", None):
         for sub in command.commands:
-            yield from _all_leaf_commands(tree, sub, path + (sub.name,))
+            yield from _all_leaf_commands(tree, group_name, sub, path + (sub.name,))
     else:
         yield path, command
 
 
-@pytest.fixture
-async def tree(db, tmp_path):
-    """A real ModuleManager with every module (core + plugins) enabled."""
+@pytest.fixture(params=["bark", "Bob"])
+async def tree(db, tmp_path, request):
+    """A real ModuleManager with every module (core + plugins) enabled.
+
+    ``bot_name`` is set on the fake bot before discovery so the command group
+    is created under that name (as production does — the bot's username is
+    known before modules enable). Parametrising here proves the whole command
+    tree walks correctly under both a default and a renamed group.
+    """
     import shutil
     from unittest.mock import MagicMock
 
@@ -291,6 +297,7 @@ async def tree(db, tmp_path):
 
     from services.module_manager import ModuleManager
 
+    bot_name = request.param
     plugins_dir = tmp_path / "plugins"
     plugins_dir.mkdir(exist_ok=True)
     for plugin_file in PLUGINS_DIR.glob("*.py"):
@@ -313,7 +320,7 @@ async def tree(db, tmp_path):
             self.tree = ac.CommandTree(self)
             self._event_bus = MagicMock()
             self.guilds = []
-            self.user = None
+            self.user = SimpleNamespace(name=bot_name)
 
         def get_guild(self, guild_id):
             return FakeGuild(id=guild_id or 1)
@@ -340,8 +347,9 @@ async def test_every_bark_slash_command_responds(tree):
 
     failures = []
     tested = []
-    for path, command in _all_leaf_commands(bot.tree):
-        interaction = FakeInteraction(guild, user, command="bark")
+    group_name = manager.command_group_name()
+    for path, command in _all_leaf_commands(bot.tree, group_name):
+        interaction = FakeInteraction(guild, user, command=group_name)
         kwargs = {}
         for param in getattr(command, "parameters", []):
             kwargs[param.name] = _sample_for_param(param)
@@ -358,21 +366,23 @@ async def test_every_bark_slash_command_responds(tree):
     # bark-plugins sibling repo is present on the machine — a fresh checkout
     # has no plugins, so those are asserted conditionally below.
     for required in (
-        "/bark help",
-        "/bark moderation warn",
-        "/bark reputation leaderboard",
+        f"/{group_name} help",
+        f"/{group_name} moderation warn",
+        f"/{group_name} reputation leaderboard",
     ):
         assert required in tested, f"missing command from tree: {required} in {tested}"
     if PLUGINS_DIR.exists():
         for plugin_cmd in (
-            "/bark fun roll",
-            "/bark fun fact",
-            "/bark fun eightball",
-            "/bark info serverinfo",
-            "/bark info userinfo",
-            "/bark birthday set",
-            "/bark giveaway create",
-            "/bark poll",
-            "/bark trivia start",
+            f"/{group_name} fun roll",
+            f"/{group_name} fun fact",
+            f"/{group_name} fun eightball",
+            f"/{group_name} info serverinfo",
+            f"/{group_name} info userinfo",
+            f"/{group_name} birthday set",
+            f"/{group_name} giveaway create",
+            f"/{group_name} poll",
+            f"/{group_name} trivia start",
         ):
-            assert plugin_cmd in tested, f"missing plugin command from tree: {plugin_cmd} in {tested}"
+            assert plugin_cmd in tested, (
+                f"missing plugin command from tree: {plugin_cmd} in {tested}"
+            )
