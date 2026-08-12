@@ -282,6 +282,10 @@ def create_app(bot: BarkBot) -> DashboardApp:
                 client_id=config.oauth2.client_id,
                 moderator_roles_by_guild=moderator_roles,
                 admin_roles_by_guild=admin_roles,
+                is_instance_owner=bool(
+                    config.oauth2.owner_discord_ids
+                    and user_id in config.oauth2.owner_discord_ids
+                ),
             )
         else:
             guilds = [

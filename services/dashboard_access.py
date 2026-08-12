@@ -120,15 +120,21 @@ def user_ready_to_manage(
     access: DashboardGuildAccess,
     moderator_role_ids: set[str],
     admin_role_id: str | None = None,
+    *,
+    is_instance_owner: bool = False,
 ) -> bool:
     """Return whether the user can manage this server in the dashboard.
 
-    Grants come ONLY from: being the server owner, holding the owner-
-    configured admin role, or holding one of the owner-configured moderator
-    roles. Discord's ADMINISTRATOR/MANAGE_GUILD permissions are intentionally
-    not treated as dashboard privileges (explicit staff roles only).
+    Grants come ONLY from: running this Bark instance (its owner), being the
+    server owner, holding the owner-configured admin role, or holding one of
+    the owner-configured moderator roles. Discord's ADMINISTRATOR/MANAGE_GUILD
+    permissions are intentionally not treated as dashboard privileges (explicit
+    staff roles only). ``is_instance_owner`` is the person who set up this
+    Bark instance — they can manage every server their own bot is in, even when
+    they are not the Discord server owner and hold no configured staff role
+    (so two owners' Bark bots can share a server without blocking each other).
     """
-    if access.owner:
+    if is_instance_owner or access.owner:
         return True
     member_roles = _roles_from_access(access)
     if admin_role_id and admin_role_id in member_roles:
@@ -140,16 +146,19 @@ def role_from_access_with_staff_roles(
     access: DashboardGuildAccess,
     moderator_role_ids: set[str],
     admin_role_id: str | None = None,
+    *,
+    is_instance_owner: bool = False,
 ) -> str:
     """Map a persisted access snapshot to a dashboard role tier.
 
     Honors the server owner's configured admin + moderator roles: admin role
-    → ``admin``, moderator roles → ``moderator``, server owner → ``admin``.
-    Discord permissions alone never imply a dashboard role (explicit staff
-    roles only). Used by the request middleware so API gating matches the
-    per-server "Ready to manage" shown on the server list.
+    → ``admin``, moderator roles → ``moderator``, server owner → ``admin``, and
+    the Bark instance owner → ``admin`` (they run the bot). Discord permissions
+    alone never imply a dashboard role (explicit staff roles only). Used by the
+    request middleware so API gating matches the per-server "Ready to manage"
+    shown on the server list.
     """
-    if access.owner:
+    if is_instance_owner or access.owner:
         return "admin"
     member_roles = _roles_from_access(access)
     if admin_role_id and admin_role_id in member_roles:
@@ -377,6 +386,7 @@ def build_guild_catalog(
     client_id: str,
     moderator_roles_by_guild: dict[str, set[str]] | None = None,
     admin_roles_by_guild: dict[str, str | None] | None = None,
+    is_instance_owner: bool = False,
 ) -> list[dict[str, Any]]:
     """Merge a user's complete Discord server list with live bot state.
 
@@ -384,7 +394,9 @@ def build_guild_catalog(
     moderator role IDs and ``admin_roles_by_guild`` the owner-configured
     admin role (see ``get_dashboard_moderator_roles`` /
     ``get_dashboard_admin_role``); they drive the per-server
-    ``ready_to_manage`` flag shown as "Ready to manage".
+    ``ready_to_manage`` flag shown as "Ready to manage". ``is_instance_owner``
+    marks the person running this Bark instance, who can manage every server
+    their bot is in.
     """
     installed = {str(guild.id): guild for guild in bot_guilds}
     moderator_roles_by_guild = moderator_roles_by_guild or {}
@@ -414,6 +426,7 @@ def build_guild_catalog(
                     access,
                     moderator_roles_by_guild.get(access.guild_id, set()),
                     admin_roles_by_guild.get(access.guild_id),
+                    is_instance_owner=is_instance_owner,
                 ),
                 "access_tier": access_tier,
                 "invite_url": build_bot_invite_url(client_id, access.guild_id),

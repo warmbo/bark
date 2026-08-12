@@ -266,10 +266,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # "Ready to manage" on the server list.
             guild_moderator_roles = moderator_roles.get(str(guild_id), set())
             guild_admin_role = admin_role.get(str(guild_id))
+            # The person who runs this Bark instance can manage every server
+            # their own bot is in, even when they aren't the Discord server
+            # owner and hold no configured staff role — so two owners' Bark
+            # bots can share a server without blocking each other.
+            is_instance_owner = bool(
+                config.oauth2.owner_discord_ids
+                and user.get("id") in config.oauth2.owner_discord_ids
+            )
             request.session["role"] = role_from_access_with_staff_roles(
                 access,
                 guild_moderator_roles,
                 guild_admin_role,
+                is_instance_owner=is_instance_owner,
             )
             # View-only members (no admin/moderator rights in this server) see
             # a read-only metrics/status page: management pages and module
@@ -278,6 +287,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 access,
                 guild_moderator_roles,
                 guild_admin_role,
+                is_instance_owner=is_instance_owner,
             )
             if request.state.guild_viewer and _is_management_page(path):
                 if path.startswith("/api/"):

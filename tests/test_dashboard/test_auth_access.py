@@ -819,6 +819,12 @@ def test_user_ready_to_manage_owner_or_configured_staff_roles_only():
     assert not user_ready_to_manage(access(permissions=0x20), mod_roles, admin_role)
     assert not user_ready_to_manage(access(permissions=0x8), set(), None)
     assert not user_ready_to_manage(access(permissions=0x20), set(), None)
+    # The Bark instance owner manages every server their bot is in, even as a
+    # plain member with no configured staff role — so two owners' bots can
+    # share a server without blocking each other.
+    assert user_ready_to_manage(access(), mod_roles, admin_role, is_instance_owner=True)
+    assert user_ready_to_manage(access(roles=""), mod_roles, None, is_instance_owner=True)
+    assert user_ready_to_manage(access(roles="111,666"), mod_roles, admin_role, is_instance_owner=True)
 
 
 def test_parse_admin_role_id_accepts_json_and_plain():
@@ -874,6 +880,14 @@ def test_role_from_access_tiers_only_owner_and_configured_roles():
     assert role_from_access_with_staff_roles(access(permissions=0x8), {"555"}, "777") == "viewer"
     assert role_from_access_with_staff_roles(access(permissions=0x20), {"555"}, "777") == "viewer"
     assert role_from_access_with_staff_roles(access(permissions=0x8), set(), None) == "viewer"
+    # The Bark instance owner is admin for every server their bot is in, even
+    # without server ownership or a configured staff role.
+    assert role_from_access_with_staff_roles(
+        access(), {"555"}, "777", is_instance_owner=True
+    ) == "admin"
+    assert role_from_access_with_staff_roles(
+        access(roles=""), set(), None, is_instance_owner=True
+    ) == "admin"
 
 
 @pytest.mark.asyncio
@@ -966,6 +980,43 @@ def test_catalog_marks_ready_to_manage_per_server_from_configured_roles():
     assert by_id["200"]["ready_to_manage"] is False
     assert by_id["300"]["access_tier"] == "other"
     assert by_id["300"]["ready_to_manage"] is False
+
+
+def test_catalog_instance_owner_can_manage_every_connected_server():
+    """The person running the Bark instance can manage every server their own
+    bot is in, even as a plain member with no configured staff role — so two
+    owners' Bark bots can share a server without either being locked out."""
+    from services.dashboard_access import build_guild_catalog
+
+    def access(guild_id, roles=""):
+        return type(
+            "Access",
+            (),
+            {
+                "guild_id": guild_id,
+                "name": f"Server {guild_id}",
+                "icon_hash": None,
+                "owner": False,
+                "permissions": 0,
+                "can_manage": False,
+                "roles": roles,
+            },
+        )()
+
+    bot_guilds = [
+        type(
+            "Guild", (), {"id": 100, "name": "Server 100", "member_count": 5, "icon": None}
+        )()
+    ]
+
+    # Plain member of a connected server, but the Bark instance owner -> manage.
+    catalog = build_guild_catalog([access("100")], bot_guilds, client_id="123", is_instance_owner=True)
+    assert catalog[0]["access_tier"] == "connected"
+    assert catalog[0]["ready_to_manage"] is True
+
+    # Same plain member without the instance-owner flag stays view-only.
+    catalog2 = build_guild_catalog([access("100")], bot_guilds, client_id="123")
+    assert catalog2[0]["ready_to_manage"] is False
 
 
 @pytest.mark.asyncio
