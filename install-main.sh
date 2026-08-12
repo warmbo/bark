@@ -327,8 +327,11 @@ fi
 log "Setup steps:"
 log "  1. Create an app at https://discord.com/developers/applications -> New Application"
 log "  2. Bot -> Reset Token -> copy it; OAuth2 -> copy Client ID / Client Secret"
-log "  3. OAuth2 -> Redirects -> add: $url_callback"
-log "  4. Paste them into the setup page; Bark writes .env and restarts itself."
+log "  3. Bot -> Privileged Gateway Intents -> enable Presence, Server Members, and"
+log "     Message Content intents (Bark requires all three; missing them = gateway"
+log "     error 4014 / connection restart loop)."
+log "  4. OAuth2 -> Redirects -> add: $url_callback"
+log "  5. Paste them into the setup page; Bark writes .env and restarts itself."
 
 if [ "$use_systemd" = "no" ]; then
     cd "$BARK_INSTALL_DIR"

@@ -9,6 +9,8 @@ import logging
 import os
 import sys
 
+import discord
+
 from bark_version import __version__
 from bot.client import BarkBot
 from config import config
@@ -85,7 +87,20 @@ async def main() -> None:
         )
         for label, result in zip(("bot", "dashboard"), results, strict=True):
             if isinstance(result, Exception):
-                logger.error("%s failed: %s", label, result)
+                if isinstance(result, discord.errors.PrivilegedIntentsRequired):
+                    # Discord gateway error 4014 (Disallowed intents): the bot
+                    # app is missing a privileged gateway intent Bark requests.
+                    # Unrecoverable without a Developer Portal change — make the
+                    # fix obvious instead of a cryptic restart loop.
+                    logger.critical(
+                        "Discord rejected the connection (gateway error 4014, Disallowed intents). "
+                        "Bark needs these Privileged Gateway Intents enabled in the Discord "
+                        "Developer Portal -> your app -> Bot -> Privileged Gateway Intents: "
+                        "Presence Intent, Server Members Intent, and Message Content Intent. "
+                        "Enable all three, then restart Bark."
+                    )
+                else:
+                    logger.error("%s failed: %s", label, result)
     finally:
         try:
             await bot.close()
@@ -98,17 +113,39 @@ async def bot_ready_watchdog(bot, timeout: float = BOT_CONNECT_TIMEOUT) -> None:
 
     A hung gateway handshake previously left the dashboard alive with a dead
     bot (0 connected servers, every guild page failing) and no log line. With
-    the watchdog, the process exits after ``timeout`` seconds and systemd
-    restarts it — the retry connects in the normal few seconds.
+    the watchdog, the process exits after ``timeout`` seconds and the
+    supervisor/systemd restarts it — the retry connects in the normal few
+    seconds.
+
+    ``bot.wait_until_ready()`` raises ``RuntimeError`` when the client has not
+    been initialised yet — it races ``bot.start()`` at boot, and it fires
+    immediately when the login/connect step fails (bad token, no gateway
+    connection). That is "not ready yet", not a hang, so keep waiting until the
+    deadline rather than letting the exception escape as an unretrieved task
+    error.
     """
-    try:
-        await asyncio.wait_for(bot.wait_until_ready(), timeout)
-    except asyncio.TimeoutError:
-        logger.critical(
-            "Bot did not connect to Discord within %ss — exiting for systemd restart",
-            timeout,
-        )
-        os._exit(1)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            logger.critical(
+                "Bot did not connect to Discord within %ss — exiting for restart",
+                timeout,
+            )
+            os._exit(1)
+            return  # unreachable in production; present so tests that mock os._exit end the loop
+        try:
+            await asyncio.wait_for(bot.wait_until_ready(), timeout=min(remaining, 5.0))
+            return  # ready
+        except asyncio.TimeoutError:
+            continue  # still connecting; re-check the deadline
+        except RuntimeError:
+            # Client not initialised yet (races bot.start() at boot, or login
+            # failed). Not a hang — keep waiting; either a later iteration sees
+            # ready, or the deadline exits.
+            logger.debug("Bot not initialised yet — continuing to wait")
+            await asyncio.sleep(0.5)
 
 
 def run() -> None:

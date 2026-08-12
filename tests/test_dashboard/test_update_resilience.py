@@ -42,6 +42,33 @@ def test_ready_watchdog_returns_when_ready(monkeypatch):
     assert exits == [], "watchdog must not exit when the bot connects"
 
 
+def test_ready_watchdog_retries_when_bot_not_initialised(monkeypatch):
+    """wait_until_ready raising RuntimeError (client not initialised yet — the
+    boot race with bot.start(), or a failed login/connect) must NOT crash the
+    watchdog with an unretrieved exception. It keeps waiting, then exits after
+    the deadline. Regression for the Termux "Task exception was never
+    retrieved" error."""
+    exits = []
+    monkeypatch.setattr(app_module.os, "_exit", lambda code: exits.append(code))
+
+    bot = MagicMock()
+    calls = {"n": 0}
+
+    async def not_initialised():
+        calls["n"] += 1
+        raise RuntimeError(
+            "Client has not been properly initialised. Please use the login "
+            "method or asynchronous context manager before calling this method"
+        )
+
+    bot.wait_until_ready = not_initialised
+
+    # Short deadline so the test terminates; the RuntimeError must never escape.
+    asyncio.run(app_module.bot_ready_watchdog(bot, timeout=0.1))
+    assert calls["n"] >= 1, "wait_until_ready should have been called"
+    assert exits == [1], "watchdog must exit(1) after the deadline, not raise"
+
+
 @pytest.fixture
 def offline_app(db, monkeypatch):
     import config as cfg
