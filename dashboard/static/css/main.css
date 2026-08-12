@@ -58,6 +58,11 @@
     --pink: #d946ef;
     --pink-muted: rgba(217, 70, 239, 0.1);
 
+    /* ── Plugin / browse accent (distinct violet) ── */
+    --plugin: #8b5cf6;
+    --plugin-hover: #7c3aed;
+    --plugin-muted: rgba(139, 92, 246, 0.14);
+
     /* ── Radius (sharp corners) ── */
     --radius-sm: 0px;
     --radius-md: 0px;
@@ -1850,6 +1855,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .btn-primary:hover { background: var(--accent-hover); color: #fff; }
 .btn-danger { background: var(--red); color: #fff; border-color: var(--red); }
 .btn-danger:hover { background: var(--red); color: #fff; }
+
+/* Distinct accent for the "Browse Plugins" call-to-action in the Plugin Manager. */
+.btn-plugins { background: var(--plugin); color: #fff; border-color: transparent; }
+.btn-plugins:hover { background: var(--plugin-hover); color: #fff; }
 
 .btn-xs { padding: 2px 8px; font-size: 11px; line-height: 1.6; }
 

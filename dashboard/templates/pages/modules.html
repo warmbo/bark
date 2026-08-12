@@ -84,10 +84,11 @@
 
     <section class="modules-section" aria-labelledby="modules-plugins-title">
         <h2 id="modules-plugins-title" class="modules-section-title">{{ icon("package-plus", 16) }} Plugin Manager</h2>
-        <p class="modules-section-subtitle">Extra single-file modules. Upload a <code>.py</code> file to add functionality; removing one unloads it immediately. Browse ready-made plugins in <a href="https://github.com/warmbo/bark-plugins" target="_blank" rel="noopener">warmbo/bark-plugins</a>.</p>
+        <p class="modules-section-subtitle">Extra single-file modules. Upload a <code>.py</code> file to add functionality; removing one unloads it immediately.</p>
         {% if not config.oauth2.owner_discord_ids or request.session.get('user', {}).get('id') in config.oauth2.owner_discord_ids %}
         <div class="content-card">
             <div class="plugins-upload-row">
+                <a href="https://github.com/warmbo/bark-plugins" target="_blank" rel="noopener" class="btn btn-sm btn-plugins">{{ icon("download", 14) }} Browse Plugins</a>
                 <input type="file" id="plugin-file-input" name="plugin_file" accept=".py" hidden>
                 <label class="btn btn-sm" for="plugin-file-input">{{ icon("upload", 14) }} Choose .py file</label>
                 <span class="form-hint" id="plugin-file-name">No file selected</span>
