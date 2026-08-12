@@ -40,6 +40,38 @@ def test_dashboard_app_stop_is_safe_before_run():
     dashboard.stop()  # no-op, no exception
 
 
+def test_dashboard_app_bounds_graceful_shutdown(monkeypatch):
+    """uvicorn must not wait forever for in-flight streams during shutdown.
+
+    timeout_graceful_shutdown defaults to None (wait indefinitely); an open
+    SSE stream loops forever, so without a bound the process would hang in
+    shutdown until force-killed. Assert we set a finite window.
+    """
+    import asyncio
+
+    captured: dict = {}
+
+    class FakeServer:
+        """_SignalNeutralServer stand-in whose serve() is a no-op coroutine."""
+
+        def __init__(self, config_obj):
+            self.config = config_obj
+            captured["timeout_graceful_shutdown"] = config_obj.timeout_graceful_shutdown
+
+        async def serve(self):
+            return None
+
+    monkeypatch.setattr("dashboard.app._SignalNeutralServer", FakeServer)
+
+    async def drive():
+        dashboard = DashboardApp(app=MagicMock(), bot=MagicMock())
+        await dashboard.run()
+
+    asyncio.run(drive())
+
+    assert captured["timeout_graceful_shutdown"] is not None
+
+
 @pytest.mark.asyncio
 async def test_main_installs_signal_handlers(monkeypatch):
     """main() registers coordinated SIGINT/SIGTERM handlers on the loop."""
