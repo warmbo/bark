@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from services.diagnostics import build_diagnostics_report, render_report
+from services.diagnostics import (
+    _bot_app_id,
+    _database_path,
+    build_diagnostics_report,
+    render_report,
+)
 
 
 def test_report_contains_expected_sections():
@@ -25,6 +30,34 @@ def test_report_contains_expected_sections():
     assert report["intents"]["message_content"] is True
     assert report["intents"]["server_members"] is True
     assert report["intents"]["presence"] is True
+    # The resolved log path is surfaced (was previously hardcoded to bark.log).
+    assert report["logs"]["log_path"]
+
+
+def test_bot_app_id_decodes_from_token(monkeypatch):
+    import base64
+
+    import config as config_module
+
+    app_id = 987654321
+    first = base64.urlsafe_b64encode(str(app_id).encode()).decode().rstrip("=")
+    monkeypatch.setattr(config_module.config.bot, "token", f"{first}.timestamp.sig")
+    assert _bot_app_id() == str(app_id)
+
+
+def test_bot_app_id_no_token(monkeypatch):
+    import config as config_module
+
+    monkeypatch.setattr(config_module.config.bot, "token", "")
+    assert _bot_app_id() == "(no token set)"
+
+
+def test_database_path_resolves_relative_sqlite(monkeypatch, tmp_path):
+    import config as config_module
+
+    monkeypatch.setattr(config_module.config.database, "url", "sqlite+aiosqlite:///bark.db")
+    monkeypatch.setattr(config_module.config, "data_dir", tmp_path)
+    assert _database_path() == str(tmp_path / "bark.db")
 
 
 def test_report_never_leaks_secrets(monkeypatch):

@@ -9,6 +9,7 @@ and recent logs — with secrets redacted so it is safe to share.
 
 from __future__ import annotations
 
+import base64
 import logging
 import platform
 import shutil
@@ -24,10 +25,15 @@ logger = logging.getLogger("bark.diagnostics")
 # (remote, branch) pairs of interest so a missing/renamed remote or branch
 # (e.g. the "could not find branch 'main' on remote 'github'" failure on a
 # fresh one-line install, which clones GitHub as `origin`) shows up instantly.
+# `master` is included because the Forgejo mirror uses `master` as its default
+# branch while GitHub uses `main` — checking only `main`/`dev` produced a false
+# "origin/main ABSENT" on mirror installs.
 _REMOTE_REFS = (
     ("origin", "main"),
+    ("origin", "master"),
     ("origin", "dev"),
     ("github", "main"),
+    ("github", "master"),
     ("github", "dev"),
 )
 
@@ -63,9 +69,104 @@ def _systemd_active() -> bool:
         return False
 
 
+def _running_unit() -> str:
+    """Best-effort name of the systemd unit running this process.
+
+    Reads the scoped unit from /proc/self/cgroup. This is the *actual* unit
+    (e.g. ``bark-dev.service``) rather than the configured default
+    (``bark.service``), which fixes the wrong-unit report on dev instances.
+    Returns the configured service_name as a fallback.
+    """
+    try:
+        raw = Path("/proc/self/cgroup").read_text(errors="replace")
+        for line in raw.splitlines():
+            # last field is e.g. /system.slice/bark-dev.service or bark-dev.scope
+            name = line.rsplit(":", 1)[-1].strip().split("/")[-1]
+            if name.endswith(".service"):
+                return name
+    except OSError:
+        pass
+    return config.instance.service_name
+
+
+def _log_path() -> Path:
+    """Resolve the real application log the running systemd unit writes to.
+
+    The diagnostics used to hardcode ``bark.log`` at the repo root, but a
+    multi-instance host writes each instance's logs to its own file
+    (``bark-dev.log`` via ``StandardOutput=append:``). The ground truth is the
+    running process's own stdout — we read the unit's MainPID and follow
+    ``/proc/<pid>/fd/1`` to the actual log file. Falls back to the unit's
+    StandardOutput target, then ``bark.log`` at the repo root.
+    """
+    unit = _running_unit()
+    # 1) Follow the main process's stdout fd — the definitive destination.
+    try:
+        result = update_service._run(["systemctl", "show", unit, "-p", "MainPID", "--value"])
+        pid = result.stdout.strip() if result.returncode == 0 else ""
+        if pid and pid.isdigit() and pid != "0":
+            fd = Path(f"/proc/{pid}/fd/1")
+            if fd.is_symlink():
+                target = fd.resolve()
+                if target.is_file():
+                    return target
+    except Exception:
+        pass
+    # 2) Parse StandardOutput=append:<path> if present.
+    try:
+        result = update_service._run(["systemctl", "show", unit, "-p", "StandardOutput", "--value"])
+        if result.returncode == 0:
+            value = result.stdout.strip()
+            if value.startswith("append:"):
+                path = Path(value[len("append:") :].strip())
+                if path.is_absolute() and path.exists():
+                    return path
+    except Exception:
+        pass
+    return repo_root() / "bark.log"
+
+
+def _database_path() -> str:
+    """Resolve the on-disk database path (relative sqlite URLs resolved like engine)."""
+    url = config.database.url
+    if url.startswith("sqlite+aiosqlite:///"):
+        rel = url[len("sqlite+aiosqlite:///") :]
+        if not rel.startswith("/"):
+            return str(config.data_dir / rel)
+        return rel
+    # Non-sqlite: return the DSN with credentials redacted.
+    try:
+        from sqlalchemy.engine import make_url
+
+        return make_url(url).render_as_string(hide_password=True)
+    except Exception:
+        return url
+
+
+def _bot_app_id() -> str:
+    """Decode the bot's application ID from the token's first (base64) segment.
+
+    Discord bot tokens are ``<base64(app_id)>.<base64(timestamp)>.<base64(hmac)>``.
+    The first segment base64-decodes to the decimal application ID — a public
+    identifier, safe to include (we never print the token itself). Empty if no
+    token configured or it can't be decoded.
+    """
+    token = config.bot.token or ""
+    if not token:
+        return "(no token set)"
+    first = token.split(".", 1)[0]
+    try:
+        padded = first + "=" * (-len(first) % 4)
+        decoded = base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
+        return decoded if decoded.isdigit() else "(unable to decode)"
+    except Exception:
+        return "(unable to decode)"
+
+
 def install_method() -> str:
+    unit = _running_unit()
     if _systemd_active():
-        return f"systemd service ({config.instance.service_name}.service)"
+        return f"systemd service ({unit}.service)"
     if (repo_root() / "run.sh").exists():
         return "foreground / manual (run.sh or python app.py)"
     return "manual (python app.py)"
@@ -111,6 +212,9 @@ def _redacted_config() -> dict[str, str]:
         "oauth_client_id": oauth.client_id or "(not set)",
         "oauth_redirect_uri": oauth.redirect_uri or "(not set)",
         "oauth_owners_count": str(len(oauth.owner_discord_ids)),
+        "bot_app_id": _bot_app_id(),
+        "database_path": _database_path(),
+        "systemd_unit": _running_unit(),
         "update_remote": inst.update_remote,
         "stable_branch": inst.stable_branch,
         "command_prefix": bot.command_prefix,
@@ -141,13 +245,16 @@ def build_diagnostics_report() -> dict:
             remotes.append({"name": name, "url": _redact_url(url)})
 
     refs = {
-        f"{remote}/{branch}": bool(_git("rev-parse", "--verify", "--quiet", f"refs/remotes/{remote}/{branch}"))
+        f"{remote}/{branch}": bool(
+            _git("rev-parse", "--verify", "--quiet", f"refs/remotes/{remote}/{branch}")
+        )
         for remote, branch in _REMOTE_REFS
     }
 
-    # Recent application log (the systemd/installer unit writes bark.log at
-    # the repo root when present).
-    log_path = root / "bark.log"
+    # Recent application log (resolved from the running systemd unit's
+    # StandardOutput so multi-instance hosts report their own log file,
+    # falling back to bark.log at the repo root).
+    log_path = _log_path()
     log_tail: list[str] = []
     if log_path.exists():
         try:
@@ -189,7 +296,7 @@ def build_diagnostics_report() -> dict:
                 entry["line"] for entry in update_service.get_update_log().get("entries", [])
             ][-100:],
         },
-        "logs": {"bark_log_tail": log_tail},
+        "logs": {"log_path": str(log_path), "bark_log_tail": log_tail},
     }
 
 
@@ -210,6 +317,7 @@ def render_report(report: dict) -> str:
 
     bark = report["bark"]
     env = report["environment"]
+    cfg = report["config"]
     lines: list[str] = []
     lines.append(f"Bark diagnostic report — v{bark['version']}")
     lines.append("=" * 60)
@@ -220,6 +328,17 @@ def render_report(report: dict) -> str:
     lines.append(f"  Commit         : {bark['commit']}")
     lines.append(f"  Branch         : {bark['branch']}")
     lines.append(f"  Update channel : {bark['update_channel']}")
+    lines.append(f"  Bot app ID     : {cfg.get('bot_app_id', '(n/a)')}")
+    # Cross-check: the token's app id should match the OAuth client id. If the
+    # installed token points at a different Discord app than the one the
+    # dashboard is configured for, that's a misconfiguration worth flagging.
+    app_id = cfg.get("bot_app_id", "")
+    oauth_id = cfg.get("oauth_client_id", "")
+    if app_id and oauth_id and app_id != oauth_id:
+        lines.append(
+            f"  ⚠ app/token mismatch: token decodes to app {app_id} but "
+            f"OAuth client_id is {oauth_id}"
+        )
     lines.append("")
     lines.append("[Environment / hardware]")
     lines.append(f"  Platform   : {env['platform']}")
@@ -259,11 +378,14 @@ def render_report(report: dict) -> str:
     if not report["update"]["log_tail"]:
         lines.append("  (no update log entries)")
     lines.append("")
-    lines.append("[Recent log (bark.log tail)]")
+    lines.append("[Recent log]")
+    log_path = report["logs"].get("log_path", "")
+    if log_path:
+        lines.append(f"  (source: {log_path})")
     for entry in report["logs"]["bark_log_tail"]:
         lines.append(f"  {entry}")
     if not report["logs"]["bark_log_tail"]:
-        lines.append("  (no bark.log found)")
+        lines.append("  (no log found)")
     lines.append("")
     lines.append("--- end of report ---")
     return "\n".join(lines)
