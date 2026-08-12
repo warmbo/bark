@@ -9,6 +9,7 @@ import discord
 from discord.ext import commands
 
 from modules.base import BarkModule
+from services.module_manager import ModuleManager
 from services.prefix_commands import (
     PrefixFollowup,
     PrefixInteraction,
@@ -101,3 +102,89 @@ def test_prefix_interaction_exposes_guild_and_user():
     assert inter.guild_id == 1
     assert inter.response is not None
     assert inter.followup is not None
+
+
+def _make_trivia_group():
+    """A group-like slash command with subcommands (mirrors the trivia module)."""
+    from types import SimpleNamespace
+
+    @discord.app_commands.command(name="start", description="Start trivia")
+    async def start_cmd(interaction: discord.Interaction) -> None:
+        _captured["sub"] = "start"
+        await interaction.response.send_message("trivia started")
+
+    @discord.app_commands.command(name="stop", description="Stop trivia")
+    async def stop_cmd(interaction: discord.Interaction) -> None:
+        _captured["sub"] = "stop"
+        await interaction.response.send_message("trivia stopped")
+
+    return SimpleNamespace(
+        name="trivia",
+        description="Trivia commands",
+        commands=[start_cmd, stop_cmd],
+    )
+
+
+def test_build_prefix_command_from_group_makes_text_group():
+    group = build_prefix_command(_ConcreteModule(MagicMock()), "trivia", _make_trivia_group())
+    assert isinstance(group, commands.Group)
+    names = {c.name for c in group.commands}
+    assert names == {"start", "stop"}
+
+
+# ── ModuleManager integration: enable_module registers prefix commands ─────
+
+
+def test_enable_module_registers_prefix_commands(db, tmp_path):
+    import discord.app_commands as ac
+
+    registered: dict[str, object] = {}
+
+    class FakeBot:
+        def __init__(self):
+            self.http = MagicMock()
+            self._connection = MagicMock()
+            self._connection._command_tree = None
+            self.tree = ac.CommandTree(self)
+            self._event_bus = MagicMock()
+            self.guilds = []
+            self.user = MagicMock()
+            self.user.name = "bark"
+
+        def add_command(self, cmd):
+            registered[cmd.name] = cmd
+
+        def get_command(self, name):
+            return registered.get(name)
+
+        def remove_command(self, name):
+            registered.pop(name, None)
+
+        async def is_ready(self):
+            return True
+
+    bot = FakeBot()
+
+    class SampleModule(_ConcreteModule):
+        name = "sample"
+
+        def get_commands(self):
+            from modules.base import CommandRegistration
+
+            return [CommandRegistration(name="greet", description="greet")]
+
+        def _make_greet_command(self):
+            return _make_greet_command()  # real app_commands Command
+
+    bot.modules = ModuleManager(bot)
+    bot.modules.discover = MagicMock()
+    bot.modules._register_module(SampleModule(bot.modules._context))
+
+    import asyncio
+
+    asyncio.run(bot.modules.enable_module("sample"))
+    assert "greet" in registered
+    # Disable removes it.
+    asyncio.run(bot.modules.disable_module("sample"))
+    assert "greet" not in registered
+

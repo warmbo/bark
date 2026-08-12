@@ -106,25 +106,20 @@ class PrefixInteraction:
         self._done = True
 
 
-def build_prefix_command(
-    module: BarkModule,
-    cmd_name: str,
-    slash_cmd: discord.app_commands.Command,
-) -> commands.Command:
-    """Build a ``commands.Command`` that dispatches ``slash_cmd`` via a shim.
+def _make_dispatch(slash_leaf):
+    """Return ``async (ctx, *raw_args)`` that dispatches one slash command leaf.
 
-    Parameters are converted from the raw message tokens in declaration order,
-    matching the slash command's parameter metadata (name, type, required).
+    The returned callback converts raw message tokens to typed kwargs from the
+    leaf's parameter metadata, builds a message-bound interaction shim, and
+    invokes the original handler. The handler is a closure over the module (it
+    captures ``self`` at factory time), so it is called as ``callback(shim)``.
     """
     from discord.app_commands.commands import AppCommandOptionType
 
-    params = list(getattr(slash_cmd, "parameters", []))
-    # The @app_commands decorated callback is a closure over the module (it
-    # captures ``self`` at factory time) typed as taking an Interaction. We
-    # call it with the shim; silence the typing mismatch.
-    callback = cast(Any, slash_cmd.callback)
+    params = list(getattr(slash_leaf, "parameters", []))
+    callback = cast(Any, slash_leaf.callback)
 
-    async def prefix_callback(ctx: commands.Context, *raw_args: str) -> None:
+    async def dispatch(ctx: commands.Context, *raw_args: str) -> None:
         interaction = PrefixInteraction(ctx)
         kwargs: dict[str, Any] = {}
         tokens = list(raw_args)
@@ -144,11 +139,44 @@ def build_prefix_command(
                 kwargs[param.name] = await _to_channel(ctx, tokens.pop(0)) if tokens else None
         await callback(interaction, **kwargs)
 
-    name = cmd_name
-    prefix_cmd: commands.Command = commands.Command(
-        prefix_callback, name=name, description=slash_cmd.description or ""
+    return dispatch
+
+
+def build_prefix_command(
+    module: BarkModule,
+    cmd_name: str,
+    slash_cmd,
+):
+    """Build a ``commands.Command``/``commands.Group`` for a module's slash command.
+
+    A leaf ``app_commands.Command`` becomes a flat ``bark!<cmd>`` text command.
+    An ``app_commands.Group`` (e.g. trivia) becomes a ``bark!<group> <sub>``
+    command group, so subcommand paths survive in the text-command model.
+    """
+    children = getattr(slash_cmd, "commands", None)
+    if children:  # it's a Group -> build a text-command group with subcommands
+        async def _group_bare(ctx: commands.Context) -> None:  # pragma: no cover
+            names = ", ".join(getattr(c, "name", "") for c in children)
+            await ctx.send(f"Subcommands: {names}")
+
+        group: commands.Group = commands.Group(
+            _group_bare,
+            name=cmd_name,
+            description=getattr(slash_cmd, "description", "") or "",
+        )
+        for sub in children:
+            sub_name = getattr(sub, "name", "")
+            sub_cmd = build_prefix_command(module, sub_name, sub)
+            group.add_command(sub_cmd)
+        return group
+
+    dispatch = _make_dispatch(slash_cmd)
+    return commands.Command(
+        dispatch,
+        name=cmd_name,
+        description=getattr(slash_cmd, "description", "") or "",
     )
-    return prefix_cmd
+
 
 
 def _to_int(raw: str) -> int:
