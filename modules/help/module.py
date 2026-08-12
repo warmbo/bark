@@ -32,6 +32,13 @@ class HelpModule(BarkModule):
     version = "1.0.0"
     description = "DMs every available slash command plus dashboard info."
 
+    def _group_name(self) -> str:
+        """The instance's slash-command group name (e.g. 'bark', or 'bob')."""
+        manager = getattr(getattr(self.ctx, "bot", None), "modules", None)
+        if manager is not None and hasattr(manager, "command_group_name"):
+            return manager.command_group_name()
+        return "bark"
+
     def get_commands(self) -> list[CommandRegistration]:
         return [
             CommandRegistration(
@@ -48,10 +55,11 @@ class HelpModule(BarkModule):
         async def help_cmd(interaction: discord.Interaction):
             commands: list[tuple[str, str]] = []
             tree = getattr(self.ctx.bot, "tree", None)
+            group_name = self._group_name()
             if tree is not None:
                 for cmd in tree.get_commands():
-                    if cmd.name == "bark":
-                        _walk_commands(cmd, ["bark"], commands)
+                    if cmd.name == group_name:
+                        _walk_commands(cmd, [group_name], commands)
 
             public_url = getattr(config.dashboard, "public_url", "")
             instructions = discord.Embed(
@@ -91,11 +99,11 @@ class HelpModule(BarkModule):
                 inline=False,
             )
             instructions.add_field(
-                name="4. Use /bark commands in Discord",
+                name=f"4. Use /{group_name} commands in Discord",
                 value=(
-                    "Everything lives under the global **`/bark`** group — no "
-                    "prefix to remember. Try `/bark help` (this DM), `/bark "
-                    "warn`, `/bark announce`, `/bark serverinfo`…"
+                    f"Everything lives under the global **`/{group_name}`** group — no "
+                    f"prefix to remember. Try `/{group_name} help` (this DM), `/{group_name} "
+                    f"warn`, `/{group_name} announce`, `/{group_name} serverinfo`…"
                 ),
                 inline=False,
             )
@@ -111,10 +119,7 @@ class HelpModule(BarkModule):
             if public_url:
                 instructions.add_field(
                     name="Links",
-                    value=(
-                        f"**Dashboard:** {public_url}\n"
-                        f"**Invite:** {public_url}/invite"
-                    ),
+                    value=(f"**Dashboard:** {public_url}\n**Invite:** {public_url}/invite"),
                     inline=False,
                 )
             instructions.set_footer(text=f"Bark {self.name} v{self.version}")
@@ -137,7 +142,7 @@ class HelpModule(BarkModule):
                 )
             reference.add_field(
                 name="Tip",
-                value="Run `/bark help` anytime — the bot DMs you this list.",
+                value=f"Run `/{group_name} help` anytime — the bot DMs you this list.",
                 inline=False,
             )
             reference.set_footer(text=f"Bark {self.name} v{self.version}")

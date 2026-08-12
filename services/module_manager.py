@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from discord.app_commands import Group
 
+from config import config
 from modules.base import BarkModule, PageRegistration
 from services.bark_context import BarkContext
 from services.event_bus import EventBus
@@ -62,19 +63,39 @@ class ModuleManager:
 
     # ── Command namespace ─────────────────────────────
 
+    def command_group_name(self) -> str:
+        """Resolve the slash-command group name for this instance.
+
+        Precedence: an explicit ``BARK_COMMAND_GROUP`` override, else the bot's
+        own Discord username (sanitised to a valid command name), else ``bark``.
+        This is how the group follows the bot — rename the bot to "Bob" and the
+        commands become ``/bob ...`` instead of ``/bark ...``.
+        """
+        from config import sanitize_command_group
+
+        if config.bot.command_group:
+            return sanitize_command_group(config.bot.command_group)
+        user = getattr(self.bot, "user", None)
+        name = getattr(user, "name", None)
+        if name:
+            return sanitize_command_group(name)
+        return "bark"
+
     def _get_bark_group(self):
-        """Return the shared /bark group, registering it on the tree once."""
+        """Return the shared command group, registering it on the tree once."""
         if self._bark_group is not None:
             return self._bark_group
         from discord.app_commands import Group
 
+        group_name = self.command_group_name()
         group = Group(
-            name="bark",
-            description="Bark commands — every module's commands live under this one.",
+            name=group_name,
+            description=f"{group_name} commands — every module's commands live under this one.",
         )
         self._bark_group = group
         if getattr(self.bot, "tree", None) is not None:
             self.bot.tree.add_command(group, guild=self._command_guild())
+        logger.info("Registering slash command group '/%s'", group_name)
         return group
 
     def _module_subgroup(self, module_name: str, description: str):
@@ -305,9 +326,7 @@ class ModuleManager:
             self._plugin_files[name] = destination
             self._register_module_api_routes(name)
             if not await self.enable_module(name):
-                raise PluginValidationError(
-                    "Plugin failed to enable; check its enable() method."
-                )
+                raise PluginValidationError("Plugin failed to enable; check its enable() method.")
         except Exception:
             # Roll back the registries so the failed plugin is fully inert.
             self._modules.pop(name, None)
@@ -331,9 +350,7 @@ class ModuleManager:
             try:
                 await self.bot.tree.sync()
             except Exception:
-                logger.exception(
-                    "Plugin '%s' installed but slash command sync failed", name
-                )
+                logger.exception("Plugin '%s' installed but slash command sync failed", name)
 
         logger.info("Plugin '%s' installed (v%s)", name, instance.version)
         return self._plugin_metadata(name)
@@ -376,9 +393,7 @@ class ModuleManager:
         from database.models.permissions import ModuleRoleAccess
 
         async with session_scope() as session:
-            await session.execute(
-                delete(ModuleConfig).where(ModuleConfig.module_name == name)
-            )
+            await session.execute(delete(ModuleConfig).where(ModuleConfig.module_name == name))
             await session.execute(
                 delete(ModuleRoleAccess).where(ModuleRoleAccess.module_name == name)
             )
@@ -400,9 +415,7 @@ class ModuleManager:
             try:
                 await self.bot.tree.sync()
             except Exception:
-                logger.exception(
-                    "Plugin '%s' uninstalled but slash command sync failed", name
-                )
+                logger.exception("Plugin '%s' uninstalled but slash command sync failed", name)
 
         logger.info("Plugin '%s' uninstalled", name)
         return True

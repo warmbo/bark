@@ -8,6 +8,7 @@ Priority:
 """
 
 import os
+import re
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,8 +23,25 @@ class BotConfig:
     token: str = ""
     command_prefix: str = "!"
     sync_commands: bool = True
-    sync_guild_id: int | None = None  # if set, sync slash commands to this guild only (instant, no global cache)
+    sync_guild_id: int | None = (
+        None  # if set, sync slash commands to this guild only (instant, no global cache)
+    )
     activity_text: str = "with the dashboard"
+    # Explicit override for the slash-command group name (e.g. BARK_COMMAND_GROUP=bob
+    # forces /bob). Empty = auto-derive from the bot's Discord username.
+    command_group: str = ""
+
+
+def sanitize_command_group(name: str) -> str:
+    """Return a Discord-safe lowercase group name from an arbitrary bot name.
+
+    Discord app-command names must be lowercase and match ``[a-z0-9_-]`` (with
+    ``_``/``-`` separators). We lowercase, collapse anything else to ``_``, trim
+    separators, and cap at 32 chars. Falls back to ``bark`` if the result is
+    empty so a bot named e.g. ``###`` still exposes a usable group.
+    """
+    cleaned = re.sub(r"[^a-z0-9_-]+", "_", name.lower()).strip("_-")
+    return cleaned[:32] or "bark"
 
 
 @dataclass
@@ -154,11 +172,7 @@ class Config:
         # Ports < 1024 are privileged: non-root users (Android/Termux, unprivileged
         # containers, normal desktops) can't bind them. Fail with a clear message
         # instead of a cryptic "Permission denied" at bind time.
-        if (
-            self.dashboard.port < 1024
-            and hasattr(os, "geteuid")
-            and os.geteuid() != 0
-        ):
+        if self.dashboard.port < 1024 and hasattr(os, "geteuid") and os.geteuid() != 0:
             raise ConfigurationError(
                 f"BARK_DASHBOARD_PORT={self.dashboard.port} is below 1024 — non-root "
                 "users cannot bind privileged ports. Set BARK_DASHBOARD_PORT to 1024 "
@@ -196,6 +210,7 @@ class Config:
             cfg.bot.sync_guild_id = int(raw_sync_guild) if raw_sync_guild else None
         except ValueError:
             cfg.bot.sync_guild_id = None
+        cfg.bot.command_group = os.getenv("BARK_COMMAND_GROUP", "")
 
         # Dashboard
         cfg.dashboard.host = os.getenv("BARK_DASHBOARD_HOST", cfg.dashboard.host)
@@ -209,15 +224,15 @@ class Config:
         if not 1 <= cfg.dashboard.port <= 65535:
             raise ConfigurationError("BARK_DASHBOARD_PORT must be between 1 and 65535")
         cfg.dashboard.force_https = os.getenv("BARK_FORCE_HTTPS", "false").lower() == "true"
-        cfg.dashboard.forwarded_allow_ips = os.getenv(
-            "BARK_FORWARDED_ALLOW_IPS", "127.0.0.1"
-        )
+        cfg.dashboard.forwarded_allow_ips = os.getenv("BARK_FORWARDED_ALLOW_IPS", "127.0.0.1")
         cfg.dashboard.public_url = os.getenv("BARK_PUBLIC_URL", cfg.dashboard.public_url).rstrip(
             "/"
         )
         raw_session_ttl = os.getenv("BARK_DASHBOARD_SESSION_TTL", "")
         try:
-            cfg.dashboard.session_ttl = int(raw_session_ttl) if raw_session_ttl else cfg.dashboard.session_ttl
+            cfg.dashboard.session_ttl = (
+                int(raw_session_ttl) if raw_session_ttl else cfg.dashboard.session_ttl
+            )
         except ValueError:
             raise ConfigurationError(
                 f"BARK_DASHBOARD_SESSION_TTL must be an integer number of seconds, got {raw_session_ttl!r}"
