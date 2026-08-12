@@ -45,6 +45,7 @@ class BarkBot(commands.Bot):
         super().__init__(
             command_prefix=config.bot.command_prefix,
             intents=intents,
+            help_command=None,  # our help module provides `bark!help`
             activity=discord.Activity(
                 type=discord.ActivityType.playing,
                 name=config.bot.activity_text,

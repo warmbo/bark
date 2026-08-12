@@ -60,6 +60,8 @@ class ModuleManager:
         self._bark_group: Group | None = None
         # module -> {command name -> owning subgroup (None = direct /bark child)}
         self._command_owners: dict[str, dict[str, object]] = {}
+        # module -> {command name -> registered prefix Command} (text commands)
+        self._prefix_commands: dict[str, dict[str, object]] = {}
 
     # ── Command namespace ─────────────────────────────
 
@@ -136,6 +138,48 @@ class ModuleManager:
                 command_name,
                 module_name,
             )
+
+    # ── Prefix (text) commands ────────────────────────
+
+    def _register_prefix_command(self, module_name, command_name, module, slash_cmd) -> None:
+        """Register a ``bark!<cmd>`` text command backed by the slash handler.
+
+        Prefix commands are flat (``bark!warn``, ``bark!roll``) and live on the
+        discord.ext ``commands.Bot`` command table, so they are NOT subject to
+        Discord's 25-child-per-group limit. A name already claimed by another
+        module is skipped with a warning rather than silently overwriting.
+        """
+        if not hasattr(self.bot, "add_command"):
+            return
+        try:
+            from services.prefix_commands import build_prefix_command
+
+            prefix_cmd = build_prefix_command(module, command_name, slash_cmd)
+        except Exception:
+            logger.exception("Failed to build prefix command '%s' for module '%s'", command_name, module_name)
+            return
+        existing = self.bot.get_command(command_name)
+        if existing is not None:
+            logger.warning(
+                "Prefix command '%s' already registered (%s); skipping for module '%s'",
+                command_name,
+                getattr(existing, "callback", None),
+                module_name,
+            )
+            return
+        self.bot.add_command(prefix_cmd)
+        self._prefix_commands.setdefault(module_name, {})[command_name] = prefix_cmd
+
+    def _unregister_prefix_commands(self, module_name: str) -> None:
+        """Remove every prefix command registered for a module."""
+        registered = self._prefix_commands.pop(module_name, {})
+        if not hasattr(self.bot, "remove_command"):
+            return
+        for command_name in registered:
+            try:
+                self.bot.remove_command(command_name)
+            except Exception:
+                logger.exception("Failed to remove prefix command '%s'", command_name)
 
     # ── Discovery ─────────────────────────────────────
 
@@ -482,6 +526,7 @@ class ModuleManager:
                                 subgroup = self._module_subgroup(name, module.description)
                                 subgroup.add_command(app_cmd)
                                 self._command_owners.setdefault(name, {})[cmd.name] = subgroup
+                        self._register_prefix_command(name, cmd.name, module, app_cmd)
                         self._registered_commands[name].add(cmd.name)
 
             # Centralized event subscription via EventBus
@@ -547,6 +592,9 @@ class ModuleManager:
                         except Exception:
                             pass
                 self._registered_commands[name].clear()
+
+            # Remove prefix (text) commands for this module.
+            self._unregister_prefix_commands(name)
 
             # Unsubscribe events — handler-specific so we don't nuke other modules
             if name in self._registered_events:

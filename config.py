@@ -21,7 +21,7 @@ class ConfigurationError(ValueError):
 @dataclass
 class BotConfig:
     token: str = ""
-    command_prefix: str = "!"
+    command_prefix: str = "bark!"
     sync_commands: bool = True
     sync_guild_id: int | None = (
         None  # if set, sync slash commands to this guild only (instant, no global cache)
@@ -203,7 +203,7 @@ class Config:
                 token_path = Path(".token")
                 if token_path.exists():
                     cfg.bot.token = token_path.read_text().strip()
-        cfg.bot.command_prefix = os.getenv("BARK_COMMAND_PREFIX", "!")
+        cfg.bot.command_prefix = os.getenv("BARK_COMMAND_PREFIX", "bark!")
         cfg.bot.sync_commands = os.getenv("BARK_SYNC_COMMANDS", "true").lower() == "true"
         raw_sync_guild = os.getenv("BARK_SYNC_GUILD_ID", "")
         try:
