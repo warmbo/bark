@@ -27,26 +27,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bark.bot")
 
 
-async def _per_guild_prefix(bot: "BarkBot", message: discord.Message):
-    """Resolve the command prefix for a message's guild (per-guild setting).
-
-    Falls back to the instance default (``config.bot.command_prefix``) when the
-    message has no guild or the lookup fails. ``discord.ext.commands`` supports
-    an async callable here, which is how per-server prefixes are applied at
-    message time without a restart.
-    """
-    guild = getattr(message, "guild", None)
-    guild_id = getattr(guild, "id", None)
-    if guild_id is not None:
-        from services.command_prefix import resolve_guild_prefixes
-
-        try:
-            return await resolve_guild_prefixes(bot, guild_id)
-        except Exception:
-            logger.exception("Prefix resolution failed for guild %s", guild_id)
-    return config.bot.command_prefix or "bark!"
-
-
 class BarkBot(commands.Bot):
     """
     Minimal Discord bot runtime.
@@ -62,10 +42,13 @@ class BarkBot(commands.Bot):
         intents.moderation = True
         intents.presences = True
 
+        # Slash commands (the single /bark dispatcher) are the primary
+        # interface. A static text prefix is kept purely as a fallback so
+        # bark!help still works; it is no longer per-guild configurable.
         super().__init__(
-            command_prefix=_per_guild_prefix,
+            command_prefix=config.bot.command_prefix or "bark!",
             intents=intents,
-            help_command=None,  # our help module provides `bark!help`
+            help_command=None,  # our help module provides `bark!help` / /bark help
             activity=discord.Activity(
                 type=discord.ActivityType.playing,
                 name=config.bot.activity_text,

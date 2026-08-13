@@ -13,6 +13,8 @@ htmlcov/
 
 # Database
 data/*.db
+data/*.db-shm
+data/*.db-wal
 data/.secret_key
 *.db
 

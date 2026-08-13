@@ -135,41 +135,6 @@
             {% if is_owner %}
             {% include "components/bot_customization.html" %}
             {% endif %}
-
-            <!-- Command Settings -->
-            <div class="content-card">
-                <div class="card-header">
-                    <h2 class="card-title">{{ icon("message-square", 16) }} Command Settings</h2>
-                </div>
-                <div class="card-body">
-                    <p class="config-subsection-desc">
-                        The text prefix members type before a command in this server
-                        (e.g. <code>bark!help</code>, <code>bark!warn</code>). Change it
-                        and it applies immediately — no restart needed.
-                    </p>
-                    <div class="form-group">
-                        <label class="form-label" for="command-prefix-input">Command prefix</label>
-                        <div class="input-row">
-                            <input class="form-input" id="command-prefix-input" type="text"
-                                   name="command_prefix" maxlength="10" placeholder="bark!"
-                                   autocomplete="off" spellcheck="false">
-                            <button type="button" class="btn btn-primary btn-sm" id="command-settings-save">
-                                {{ icon("save", 14) }} Save
-                            </button>
-                        </div>
-                        <span class="form-hint" id="command-prefix-hint"></span>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-checkbox">
-                            <input type="checkbox" id="command-mention-toggle" name="command_mention"
-                                   aria-label="Allow mentioning the bot to trigger commands">
-                            <span>Allow @mentioning the bot to trigger commands</span>
-                        </label>
-                        <p class="config-subsection-desc">If on, <code>@Bark help</code> works the same as <code>bark!help</code>.</p>
-                    </div>
-                    <div class="workspace-data-card" id="command-settings-result" aria-live="polite"></div>
-                </div>
-            </div>
         </div>
 
         <!-- Side column: Module Configuration, Config Health, then Updates -->
@@ -1069,49 +1034,6 @@
     });
     loadInstanceInvites();
 
-    // ── Command Settings ─────────────────────────────
-    const prefixInput = document.getElementById('command-prefix-input');
-    const mentionToggle = document.getElementById('command-mention-toggle');
-    const cmdSaveBtn = document.getElementById('command-settings-save');
-    const cmdResult = document.getElementById('command-settings-result');
-    const cmdHint = document.getElementById('command-prefix-hint');
-
-    async function loadCommandSettings() {
-        if (!prefixInput) return;
-        try {
-            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/commands/settings`, {cache: 'no-cache'});
-            const data = result?.data || {};
-            prefixInput.value = data.prefix || 'bark!';
-            if (mentionToggle) mentionToggle.checked = !!data.mention;
-        } catch (error) {
-            if (cmdHint) cmdHint.textContent = error.message || 'Could not load command settings.';
-        }
-    }
-
-    cmdSaveBtn?.addEventListener('click', async () => {
-        cmdSaveBtn.disabled = true;
-        if (cmdResult) cmdResult.innerHTML = '';
-        const payload = { prefix: prefixInput.value.trim(), mention: !!mentionToggle?.checked };
-        try {
-            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/commands/settings`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload),
-            });
-            if (result.success === false) throw new Error(result.error || 'Could not save command settings');
-            const data = result.data || {};
-            prefixInput.value = data.prefix || prefixInput.value;
-            if (mentionToggle) mentionToggle.checked = !!data.mention;
-            showToast('Command settings saved', 'success');
-            if (cmdHint) cmdHint.textContent = `Commands now use \`${data.prefix}\`.`;
-        } catch (error) {
-            showToast(error.message || 'Failed to save command settings', 'error');
-        } finally {
-            cmdSaveBtn.disabled = false;
-        }
-    });
-
-    loadCommandSettings();
     loadBotAppearance();
 </script>
 {% endblock %}
