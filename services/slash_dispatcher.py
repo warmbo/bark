@@ -133,6 +133,12 @@ class SlashDispatcher:
             await self._show_overview(interaction, guild_id)
             return
 
+        # 1b. /bark help <command> -> detailed help for a specific command.
+        if path == "help" and (args or "").strip():
+            target = (args or "").strip().split()[0]
+            await self._show_help_for(interaction, target)
+            return
+
         # 2. Exact leaf (e.g. "announce") -> run it, or show usage if it needs
         #    required args the user hasn't supplied.
         leaf = self._registry.get(path)
@@ -202,6 +208,15 @@ class SlashDispatcher:
         line = f"`/{self._group_name()} {leaf.path}" + (f" {params}`" if params else "`")
         return f"{line} — {desc}" if desc else line
 
+    def _param_lines(self, leaf: Leaf) -> list[str]:
+        """One line per parameter: `<name> — description (required|optional)`."""
+        lines = []
+        for p in leaf.command.parameters:
+            req = "required" if getattr(p, "required", False) else "optional"
+            desc = getattr(p, "description", "") or ""
+            lines.append(f"`<{p.name}>` — {desc} *({req})*".rstrip() if desc else f"`<{p.name}>` *({req})*")
+        return lines
+
     async def _show_usage(self, interaction: discord.Interaction, leaf: Leaf) -> None:
         embed = discord.Embed(
             title=f"🐺 {leaf.path.title()}",
@@ -213,6 +228,54 @@ class SlashDispatcher:
             value=f"Type `{self._usage_line(leaf)}`.",
             inline=False,
         )
+        if leaf.command.parameters:
+            embed.add_field(
+                name="Arguments",
+                value="\n".join(self._param_lines(leaf)),
+                inline=False,
+            )
+        embed.add_field(
+            name="Need more?",
+            value=f"Run `/{self._group_name()} help {leaf.path}` for the full breakdown.",
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def _show_help_for(self, interaction: discord.Interaction, target: str) -> None:
+        """Detailed help for one command: params, descriptions, usage."""
+        target = (target or "").strip().lower()
+        leaf = self._registry.get(target)
+        if leaf is None:
+            # Maybe a module/group -> point at its menu.
+            if target in self._module_paths:
+                await self._show_module_menu(interaction, target, getattr(interaction, "guild_id", None))
+                return
+            matches = [p for p in self._registry if p.startswith(target)]
+            if len(matches) == 1:
+                leaf = self._registry[matches[0]]
+            else:
+                await self._show_unknown(interaction, target)
+                return
+        embed = discord.Embed(
+            title=f"🐺 {leaf.path} — command help",
+            color=discord.Color.blurple(),
+        )
+        embed.description = (
+            f"{getattr(leaf.command, 'description', '') or ''}\n\n"
+            f"**Usage:** `{self._usage_line(leaf)}`"
+        )
+        if leaf.command.parameters:
+            embed.add_field(
+                name="Arguments",
+                value="\n".join(self._param_lines(leaf)),
+                inline=False,
+            )
+        embed.add_field(
+            name="Module",
+            value=leaf.module_name.title(),
+            inline=True,
+        )
+        embed.set_footer(text=f"Part of {self._group_name()}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def _show_unknown(self, interaction: discord.Interaction, path: str) -> None:
@@ -281,7 +344,8 @@ class SlashDispatcher:
         how_to = (
             "Bark commands run through a single slash command. Type "
             f"`/{self._group_name()} <command> [args...]`, or type a module name "
-            f"(e.g. `{self._group_name()} moderation`) for its menu."
+            f"(e.g. `{self._group_name()} moderation`) for its menu. For details "
+            f"on any command, use `/{self._group_name()} help <command>`."
         )
         pages: list[discord.Embed] = []
         core_chunks = self._chunk_by_module(core)

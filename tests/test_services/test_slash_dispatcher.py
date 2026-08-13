@@ -184,6 +184,49 @@ async def test_overview_has_separate_addon_modules_page_for_plugins():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_help_with_command_shows_detailed_help():
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    d.build_command("bark")
+    leaf, _ = _make_leaf(
+        "warn",
+        params=[
+            SimpleNamespace(name="member", type=discord.AppCommandOptionType.mentionable,
+                            required=True, description="The member to warn"),
+            SimpleNamespace(name="reason", type=discord.AppCommandOptionType.string,
+                            required=False, description="Why they're being warned"),
+        ],
+    )
+    _register_fake_module(d, "moderation", "warn", leaf)
+    interaction = MagicMock()
+    interaction.guild_id = 1
+    interaction.response.send_message = AsyncMock()
+
+    await d.dispatch(interaction, "help", "warn")
+    interaction.response.send_message.assert_awaited_once()
+    _, kwargs = interaction.response.send_message.await_args
+    embed = kwargs["embed"]
+    assert "warn" in (embed.title or "").lower()
+    field_text = " ".join((f.name or "") + (f.value or "") for f in embed.fields)
+    assert "The member to warn" in field_text  # param description surfaced
+    assert "required" in field_text
+    assert "optional" in field_text
+
+
+@pytest.mark.asyncio
+async def test_dispatch_help_with_unknown_shows_guidance():
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    d.build_command("bark")
+    interaction = MagicMock()
+    interaction.guild_id = 1
+    interaction.response.send_message = AsyncMock()
+
+    await d.dispatch(interaction, "help", "nonexistent")
+    interaction.response.send_message.assert_awaited_once()
+    _, kwargs = interaction.response.send_message.await_args
+    assert "recognised" in kwargs["embed"].title
+
+
+@pytest.mark.asyncio
 async def test_autocomplete_filters_by_current():
     d = SlashDispatcher(_make_bot(), _make_manager())
     _register_fake_module(d, "moderation", "warn", _make_leaf("warn")[0])
