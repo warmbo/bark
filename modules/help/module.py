@@ -161,9 +161,21 @@ class HelpModule(BarkModule):
             )
             reference.set_footer(text=f"Bark {self.name} v{self.version}")
 
+            # Interactive: a select menu on the reference DM lets the user run
+            # any command straight from the picker.
+            picker = None
+            dispatcher = getattr(getattr(self.ctx.bot, "modules", None), "_dispatcher", None)
+            if dispatcher is not None:
+                from services.interactions import attach_command_picker
+
+                picker = attach_command_picker(dispatcher)
+
             try:
                 await interaction.user.send(embed=instructions)
-                await interaction.user.send(embed=reference)
+                if picker is not None:
+                    await interaction.user.send(embed=reference, view=picker)
+                else:
+                    await interaction.user.send(embed=reference)
             except discord.Forbidden:
                 await interaction.response.send_message(
                     "I couldn't DM you (DMs from server members may be off). "
