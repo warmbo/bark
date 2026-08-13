@@ -60,6 +60,19 @@ class BarkActionView(discord.ui.View):
         self.add_item(BarkCommandSelect(dispatch, paths))
 
 
+def command_picker_view(dispatcher, paths: list[str]) -> BarkActionView:
+    """A select-menu view that runs any of the given command paths via dispatcher.
+
+    Used on menus/overviews so a user can click to run a command instead of
+    re-typing the slash command.
+    """
+
+    def _dispatch(interaction: discord.Interaction, command: str, args: str) -> Any:
+        return dispatcher.dispatch(interaction, command, args)
+
+    return BarkActionView(_dispatch, paths)
+
+
 def attach_command_picker(
     dispatcher,
     paths: list[str] | None = None,
@@ -67,8 +80,4 @@ def attach_command_picker(
     """Build a view whose select re-runs a command via the dispatcher."""
     if paths is None:
         paths = sorted(dispatcher._registry.keys())  # noqa: SLF001
-
-    def _dispatch(interaction: discord.Interaction, command: str, args: str) -> Any:
-        return dispatcher.dispatch(interaction, command, args)
-
-    return BarkActionView(_dispatch, paths)
+    return command_picker_view(dispatcher, paths)

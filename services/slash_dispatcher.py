@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Any, Callable
 import discord
 from discord import app_commands
 
+from services.interactions import command_picker_view
+
 if TYPE_CHECKING:
     from modules.base import BarkModule
 
@@ -52,6 +54,7 @@ class SlashDispatcher:
         self.bot = bot
         self.manager = module_manager
         self._registry: dict[str, Leaf] = {}
+        self._module_paths: dict[str, list[str]] = {}  # module name -> command paths
         self._cmd: app_commands.Command | None = None
 
     # ── Registration ──────────────────────────────────
@@ -88,11 +91,13 @@ class SlashDispatcher:
         if path in self._registry:
             path = f"{module_name} {path}".strip()
         self._registry[path] = Leaf(command=cmd, check=check, path=path, module_name=module_name)
+        self._module_paths.setdefault(module_name, []).append(path)
 
     def unregister_module(self, module_name: str) -> None:
         """Drop every path contributed by a module."""
         for path in [p for p, leaf in self._registry.items() if leaf.module_name == module_name]:
             del self._registry[path]
+        self._module_paths.pop(module_name, None)
 
     # ── Command build ─────────────────────────────────
 
@@ -100,10 +105,11 @@ class SlashDispatcher:
         """Construct the single top-level ``/<group_name>`` app command.
 
         Options are auto-derived from the callback signature: ``command``
-        (required string, autocompleted) and ``args`` (optional string).
+        (optional string, autocompleted) and ``args`` (optional string). Making
+        ``command`` optional lets a bare ``/bark`` show guidance.
         """
         async def _callback(
-            interaction: discord.Interaction, command: str, args: str = ""
+            interaction: discord.Interaction, command: str = "", args: str = ""
         ) -> None:
             await self.dispatch(interaction, command, args)
 
@@ -119,19 +125,49 @@ class SlashDispatcher:
     # ── Dispatch ──────────────────────────────────────
 
     async def dispatch(self, interaction: discord.Interaction, command: str, args: str = "") -> None:
-        path = (command or "").strip()
+        path = (command or "").strip().lower()
+        guild_id = getattr(interaction, "guild_id", None)
+
+        # 1. Bare /bark -> top-level overview so users always get guidance.
+        if not path:
+            await self._show_overview(interaction, guild_id)
+            return
+
+        # 2. Exact leaf (e.g. "announce") -> run it, or show usage if it needs
+        #    required args the user hasn't supplied.
         leaf = self._registry.get(path)
         if leaf is None:
-            matches = [p for p in self._registry if p.startswith(path)] if path else []
+            matches = [p for p in self._registry if p.startswith(path)]
             if len(matches) == 1:
                 path, leaf = matches[0], self._registry[matches[0]]
-        if leaf is None:
-            await interaction.response.send_message(
-                f"Unknown command `{path or '<none>'}`. Type `/{self._cmd.name if self._cmd else 'bark'}` "
-                "and pick one from the autocomplete list.",
-                ephemeral=True,
+        if leaf is not None:
+            await self._invoke_leaf(interaction, leaf, args)
+            return
+
+        # 3. A module/category name (e.g. "moderation") -> menu of its commands.
+        if path in self._module_paths:
+            await self._show_module_menu(interaction, path, guild_id)
+            return
+
+        # 4. A group prefix (e.g. "trivia" for "trivia start") -> submenu.
+        group = [p for p in self._registry if p.startswith(path + " ")]
+        if group:
+            await self._show_menu(
+                interaction,
+                title=f"🐺 {path.title()} commands",
+                paths=group,
+                guild_id=guild_id,
+                detail=(
+                    "Add the subcommand to complete it, e.g. "
+                    f"`/{self._cmd.name if self._cmd else 'bark'} {group[0]}`."
+                ),
             )
             return
+
+        # 5. Nothing resolved -> guidance.
+        await self._show_unknown(interaction, path)
+
+    async def _invoke_leaf(self, interaction: discord.Interaction, leaf: Leaf, args: str) -> None:
         if leaf.check is not None:
             try:
                 if not await leaf.check(interaction):
@@ -142,9 +178,130 @@ class SlashDispatcher:
                     )
                     return
             except Exception:
-                logger.exception("Enablement check failed for command %s", path)
+                logger.exception("Enablement check failed for command %s", leaf.path)
+        # Show usage if a required arg is missing, instead of acting on a
+        # default (e.g. warning the invoker because no target was given).
+        if _missing_required_arg(leaf.command, args):
+            await self._show_usage(interaction, leaf)
+            return
         kwargs = await parse_args_to_kwargs(interaction, leaf.command, args)
         await leaf.command.callback(interaction, **kwargs)
+
+    # ── Guidance / menus ──────────────────────────────
+
+    def _group_name(self) -> str:
+        return self._cmd.name if self._cmd else "bark"
+
+    def _usage_line(self, leaf: Leaf) -> str:
+        params = " ".join(f"<{p.name}>" for p in leaf.command.parameters)
+        return f"/{self._group_name()} {leaf.path} {params}".strip()
+
+    def _usage_desc(self, leaf: Leaf) -> str:
+        desc = getattr(leaf.command, "description", "") or ""
+        params = " ".join(f"<{p.name}>" for p in leaf.command.parameters)
+        line = f"`/{self._group_name()} {leaf.path}" + (f" {params}`" if params else "`")
+        return f"{line} — {desc}" if desc else line
+
+    async def _show_usage(self, interaction: discord.Interaction, leaf: Leaf) -> None:
+        embed = discord.Embed(
+            title=f"🐺 {leaf.path.title()}",
+            description=self._usage_desc(leaf),
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(
+            name="How to use",
+            value=f"Type `{self._usage_line(leaf)}`.",
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def _show_unknown(self, interaction: discord.Interaction, path: str) -> None:
+        embed = discord.Embed(
+            title="🤔 That command isn't recognised",
+            description=(
+                f"`{path or '<none>'}` isn't a command. Type `/{self._group_name()}` and "
+                "pick one from the autocomplete list, or run `help`."
+            ),
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(
+            name="Tip",
+            value=(
+                f"Typing `/{self._group_name()} <module>` (e.g. `moderation`) shows every "
+                "command in that module."
+            ),
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def _show_module_menu(
+        self, interaction: discord.Interaction, module_name: str, guild_id
+    ) -> None:
+        paths = self._module_paths.get(module_name, [])
+        await self._show_menu(
+            interaction,
+            title=f"🐺 {module_name.title()} commands",
+            paths=paths,
+            guild_id=guild_id,
+            detail=(
+                f"`/{self._group_name()} <command> [args...]` — pick a command below or "
+                "type it after the slash command."
+            ),
+        )
+
+    async def _show_menu(
+        self, interaction: discord.Interaction, title: str, paths: list[str],
+        guild_id, detail: str = "",
+    ) -> None:
+        enabled = [
+            p for p in paths
+            if self._path_enabled(guild_id, self._registry[p])
+        ]
+        embed = discord.Embed(title=title, color=discord.Color.blurple())
+        if detail:
+            embed.description = detail
+        if enabled:
+            for p in sorted(enabled):
+                embed.add_field(
+                    name=f"/{self._group_name()} {p}",
+                    value=self._registry[p].command.description or "—",
+                    inline=False,
+                )
+        else:
+            embed.description = "No commands in this module are enabled for this server."
+        view = None
+        if enabled:
+            view = command_picker_view(dispatcher=self, paths=enabled)
+        if view is not None:
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def _show_overview(self, interaction: discord.Interaction, guild_id) -> None:
+        enabled = sorted(p for p in self._registry if self._path_enabled(guild_id, self._registry[p]))
+        embed = discord.Embed(
+            title=f"🐺 {self._group_name().title()} — how to use",
+            description=(
+                "Commands run through a single slash command. Type `/"
+                f"{self._group_name()} <command> [args...]` (or pick a command from the "
+                "autocomplete), and you'll get an interactive response."
+            ),
+            color=discord.Color.blurple(),
+        )
+        # Group by module for a scannable overview.
+        by_module: dict[str, list[str]] = {}
+        for p in enabled:
+            by_module.setdefault(self._registry[p].module_name, []).append(p)
+        for module_name, paths in sorted(by_module.items()):
+            sample = ", ".join(f"`{p}`" for p in sorted(paths)[:4])
+            more = f" +{len(paths) - 4} more" if len(paths) > 4 else ""
+            embed.add_field(
+                name=module_name.title(),
+                value=f"{sample}{more}",
+                inline=False,
+            )
+        view = command_picker_view(dispatcher=self, paths=enabled)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     # ── Autocomplete ──────────────────────────────────
 
@@ -266,3 +423,19 @@ def _extract_id(raw: str, start: str, end: str) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _missing_required_arg(command, args: str) -> bool:
+    """True when the leaf has required params but ``args`` supplies too few tokens.
+
+    Used to show usage guidance instead of running a command against defaults
+    (e.g. warning the invoker because no target member was given).
+    """
+    required = [
+        p for p in getattr(command, "parameters", [])
+        if getattr(p, "required", False)
+    ]
+    if not required:
+        return False
+    supplied = len((args or "").split())
+    return supplied < len(required)

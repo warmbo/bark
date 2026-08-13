@@ -53,7 +53,8 @@ def test_build_command_derives_command_and_args_params():
     cmd = d.build_command("bark")
     assert cmd.name == "bark"
     names = [(p.name, p.required) for p in cmd.parameters]
-    assert names == [("command", True), ("args", False)]
+    # Both optional so a bare /bark shows guidance.
+    assert names == [("command", False), ("args", False)]
 
 
 def test_register_module_collects_leaf_paths():
@@ -69,15 +70,19 @@ def test_register_module_collects_leaf_paths():
     module._make_ban_command = lambda: leaf2
     d.register_module("moderation", module)
     assert set(d._registry.keys()) == {"warn", "ban"}
+    assert d._module_paths["moderation"] == ["warn", "ban"]
 
 
-def test_dispatch_unknown_command_sends_ephemeral_error():
+def test_dispatch_unknown_command_sends_guidance_embed():
     d = SlashDispatcher(_make_bot(), _make_manager())
+    d.build_command("bark")
     interaction = MagicMock()
     interaction.response.send_message = AsyncMock()
     asyncio.run(d.dispatch(interaction, "nonexistent", ""))
     interaction.response.send_message.assert_awaited_once()
-    assert "Unknown command" in interaction.response.send_message.await_args.args[0]
+    _, kwargs = interaction.response.send_message.await_args
+    assert "recognised" in kwargs["embed"].title
+    assert kwargs["embed"].description
 
 
 @pytest.mark.asyncio
@@ -102,6 +107,60 @@ async def test_dispatch_invokes_leaf_callback_with_kwargs():
     kwargs = callback.await_args.kwargs
     assert kwargs["reason"] == "reason"
     assert kwargs["member"] is not None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_missing_required_arg_shows_usage_not_dispatch():
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    d.build_command("bark")
+    leaf, callback = _make_leaf(
+        "warn",
+        params=[SimpleNamespace(name="member", type=discord.AppCommandOptionType.mentionable, required=True)],
+    )
+    _register_fake_module(d, "moderation", "warn", leaf)
+    interaction = MagicMock()
+    interaction.user = "u"
+    interaction.guild = None
+    interaction.response.send_message = AsyncMock()
+
+    await d.dispatch(interaction, "warn", "")
+    assert callback.await_count == 0  # never acted on a default target
+    interaction.response.send_message.assert_awaited_once()
+    _, kwargs = interaction.response.send_message.await_args
+    assert kwargs["embed"].title == "🐺 Warn"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_module_name_shows_menu():
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    d.build_command("bark")
+    _register_fake_module(d, "moderation", "warn", _make_leaf("warn")[0])
+    _register_fake_module(d, "moderation", "ban", _make_leaf("ban")[0])
+    interaction = MagicMock()
+    interaction.guild_id = 1
+    interaction.response.send_message = AsyncMock()
+
+    await d.dispatch(interaction, "moderation", "")
+    interaction.response.send_message.assert_awaited_once()
+    _, kwargs = interaction.response.send_message.await_args
+    embed = kwargs["embed"]
+    assert "Moderation commands" in embed.title
+    assert kwargs.get("view") is not None  # interactive command picker attached
+
+
+@pytest.mark.asyncio
+async def test_dispatch_bare_shows_overview():
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    d.build_command("bark")
+    _register_fake_module(d, "moderation", "warn", _make_leaf("warn")[0])
+    interaction = MagicMock()
+    interaction.guild_id = 1
+    interaction.response.send_message = AsyncMock()
+
+    await d.dispatch(interaction, "", "")
+    interaction.response.send_message.assert_awaited_once()
+    _, kwargs = interaction.response.send_message.await_args
+    assert "how to use" in kwargs["embed"].title.lower()
 
 
 @pytest.mark.asyncio
