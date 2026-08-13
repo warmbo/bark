@@ -103,6 +103,7 @@
             </div>
 
             <!-- Backups (database snapshot + module settings export/import) -->
+            {% if is_owner %}
             <div class="content-card">
                 <div class="card-header">
                     <div><h2 class="card-title">{{ icon("database", 16) }} Backups</h2><p class="card-description">Snapshot the full database, or export and restore every module's settings as one JSON file.</p></div>
@@ -128,9 +129,12 @@
                 <div class="workspace-data-card" id="db-backup-result" aria-live="polite"></div>
                 <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
             </div>
+            {% endif %}
 
             <!-- Bot Customization -->
+            {% if is_owner %}
             {% include "components/bot_customization.html" %}
+            {% endif %}
 
             <!-- Command Settings -->
             <div class="content-card">
@@ -208,6 +212,7 @@
             </div>
 
             <!-- Updates (from GitHub, by release version) -->
+            {% if is_owner %}
             <div class="content-card">
                 <div class="card-header">
                     <div><h2 class="card-title">{{ icon("refresh-cw", 16) }} Updates</h2><p class="card-description">Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.</p></div>
@@ -256,10 +261,11 @@
                 </div>
                 <div class="workspace-data-card" id="diagnostics-result" aria-live="polite"></div>
             </div>
+            {% endif %}
         </div>
     </div>
 
-    {% if request.session.get('user', {}).get('id') in config.oauth2.owner_discord_ids %}
+    {% if is_owner %}
     <div class="content-card" id="instance-invites">
         <div class="card-header">
             <div>

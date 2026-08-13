@@ -24,8 +24,17 @@ async def settings_page(request: Request, guild_id: int):
     if guild is None:
         return HTMLResponse("Guild not found", status_code=404)
 
+    # Owner-only sections (Backups, Updates, Diagnostics, Bot Customization,
+    # Hosted Instance Access) are hidden for non-owners. This mirrors the
+    # owner gate used by each owner-only API route.
+    from services.instance_auth import can_manage_instance
+
     return templates.TemplateResponse(
         request,
         "pages/settings.html",
-        {"guild": guild, "config": config},
+        {
+            "guild": guild,
+            "config": config,
+            "is_owner": can_manage_instance(request),
+        },
     )
