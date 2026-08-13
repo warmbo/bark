@@ -367,6 +367,11 @@ async def tree(db, tmp_path, request):
         def remove_command(self, name):
             self._commands.pop(name, None)
 
+        @property
+        def commands(self):
+            # discord.py exposes Bot.commands as a SET of Command objects.
+            return set(self._commands.values())
+
     bot = FakeBot()
     manager = ModuleManager(bot)
     manager.discover()

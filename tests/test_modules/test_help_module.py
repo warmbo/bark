@@ -19,11 +19,12 @@ class FakeCommand:
 
 
 def _build_prefix_table():
-    """bot.commands dict: a direct child (roll) and a group (trivia start)."""
+    """bot.commands as a SET of Command objects (as discord.py returns it):
+    a direct child (roll) and a group (trivia start)."""
     roll = FakeCommand("roll", "Roll dice")
     start = FakeCommand("start", "Start a trivia game")
     trivia = FakeCommand("trivia", "Trivia commands", commands=[start])
-    return {"roll": roll, "trivia": trivia}
+    return {roll, trivia}
 
 
 class _CaptureSend:

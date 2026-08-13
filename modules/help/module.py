@@ -61,8 +61,13 @@ class HelpModule(BarkModule):
             )
             commands: list[tuple[str, str]] = []
             bot = self.ctx.bot
-            for name, cmd in getattr(bot, "commands", {}).items():
-                _walk_commands(cmd, prefix, [name], commands)
+            # discord.ext.commands.Bot.commands is a SET of Command objects
+            # (not a dict) — handle both shapes defensively.
+            raw = getattr(bot, "commands", ()) or ()
+            iterable = list(raw.values()) if isinstance(raw, dict) else list(raw)
+            for cmd in iterable:
+                _walk_commands(cmd, prefix, [cmd.name], commands)
+            commands.sort(key=lambda item: item[0])
 
             public_url = getattr(config.dashboard, "public_url", "")
             instructions = discord.Embed(
