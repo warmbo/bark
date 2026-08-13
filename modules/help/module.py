@@ -35,12 +35,17 @@ class HelpModule(BarkModule):
     description = "DMs every available text command plus dashboard info."
 
     async def _prefix(self, guild_id=None) -> str:
-        """The command prefix for a guild (falls back to the instance default)."""
-        if guild_id is not None:
-            from services.command_prefix import resolve_guild_prefix
+        """The slash invocation prefix, e.g. ``/bark `` (slash commands are the
+        interface now). Returns a trailing-space string so paths read
+        ``/bark warn``, ``/bark trivia start``.
+        """
+        return f"/{self._group_name()} "
 
-            return await resolve_guild_prefix(guild_id)
-        return config.bot.command_prefix or "bark!"
+    def _group_name(self) -> str:
+        try:
+            return self.ctx.bot.modules.command_group_name()
+        except Exception:
+            return config.bot.command_group or "bark"
 
     def get_commands(self) -> list[CommandRegistration]:
         return [
@@ -107,11 +112,12 @@ class HelpModule(BarkModule):
                 inline=False,
             )
             instructions.add_field(
-                name=f"4. Use {prefix} commands in Discord",
+                name=f"4. Use {prefix}commands in Discord",
                 value=(
-                    f"Type commands with the **`{prefix}`** prefix. Try "
-                    f"`{prefix}help` (this DM), `{prefix}warn`, `{prefix}announce`, "
-                    f"`{prefix}serverinfo`…"
+                    f"Type `{prefix}help` (this DM), `{prefix}warn`, "
+                    f"`{prefix}announce`, `{prefix}serverinfo`… Type `/` then "
+                    f"`{self._group_name()}` and pick a command from the "
+                    "autocomplete list."
                 ),
                 inline=False,
             )

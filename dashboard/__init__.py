@@ -313,7 +313,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
             {
                 "guilds": guilds,
                 "config": config,
-                "command_prefix": config.bot.command_prefix or "bark!",
+                "command_prefix": f"/{bot.modules.command_group_name()} ",
             },
         )
 

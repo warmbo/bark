@@ -101,12 +101,12 @@ def test_module_routes_pass_command_prefix():
     src = (ROOT / "dashboard" / "routes" / "web" / "modules.py").read_text(
         encoding="utf-8"
     )
-    # Both the list page and the detail page resolve the guild's prefix and
-    # feed it to the template.
-    assert "resolve_guild_prefix(guild_id)" in src
-    assert src.count("command_prefix") >= 4  # import + assignment + both routes
+    # Both the list page and the detail page feed the slash invocation prefix
+    # (e.g. "/bark ") to the template so command badges read "/bark warn".
+    assert "bot.modules.command_group_name()" in src
+    assert src.count("command_prefix") >= 2  # assignment + both routes
 
 
 def test_dashboard_route_passes_command_prefix():
     src = (ROOT / "dashboard" / "__init__.py").read_text(encoding="utf-8")
-    assert '"command_prefix": config.bot.command_prefix or "bark!"' in src
+    assert '"command_prefix": f"/{bot.modules.command_group_name()} "' in src

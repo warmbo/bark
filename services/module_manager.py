@@ -24,6 +24,7 @@ from config import config
 from modules.base import BarkModule, PageRegistration
 from services.bark_context import BarkContext
 from services.event_bus import EventBus
+from services.slash_dispatcher import SlashDispatcher
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -62,6 +63,20 @@ class ModuleManager:
         self._command_owners: dict[str, dict[str, object]] = {}
         # module -> {command name -> registered prefix Command} (text commands)
         self._prefix_commands: dict[str, dict[str, object]] = {}
+        # Single /bark dispatcher: one slash command hosting every module command.
+        self._dispatcher = SlashDispatcher(self.bot, self)
+
+    # ── Single /bark dispatcher ───────────────────────
+
+    def _ensure_dispatcher_command(self):
+        """Register the single ``/bark`` dispatcher command on the tree once."""
+        if self._dispatcher._cmd is not None:  # noqa: SLF001
+            return self._dispatcher._cmd
+        cmd = self._dispatcher.build_command(self.command_group_name())
+        if getattr(self.bot, "tree", None) is not None:
+            self.bot.tree.add_command(cmd, guild=self._command_guild())
+            logger.info("Registered slash dispatcher command '/%s'", cmd.name)
+        return cmd
 
     # ── Command namespace ─────────────────────────────
 
@@ -79,7 +94,7 @@ class ModuleManager:
             return sanitize_command_group(config.bot.command_group)
         user = getattr(self.bot, "user", None)
         name = getattr(user, "name", None)
-        if name:
+        if isinstance(name, str) and name:
             return sanitize_command_group(name)
         return "bark"
 
@@ -528,9 +543,12 @@ class ModuleManager:
             self._registered_commands[name] = {
                 cmd.name for cmd in module.get_commands() if cmd.slash
             }
-            # Slash commands are not registered (prefix-only). The factories
-            # still yield the handlers that `bark!<cmd>` routes to via the
-            # prefix adapter; multi-command modules become a bark!<module> group.
+            # Slash commands are served through the single /bark dispatcher
+            # (one command hosting every module/plugin command, so we never hit
+            # Discord's per-group subcommand cap). Prefix commands remain as a
+            # fallback until slash is confirmed.
+            self._dispatcher.register_module(name, module)
+            self._ensure_dispatcher_command()
             self._register_prefix_commands(name, module)
 
             # Centralized event subscription via EventBus
@@ -599,6 +617,7 @@ class ModuleManager:
 
             # Remove prefix (text) commands for this module.
             self._unregister_prefix_commands(name)
+            self._dispatcher.unregister_module(name)
 
             # Unsubscribe events — handler-specific so we don't nuke other modules
             if name in self._registered_events:

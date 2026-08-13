@@ -30,9 +30,7 @@ async def modules_page(request: Request, guild_id: int):
 
     all_modules = bot.modules.get_all_modules()
     plugin_names = bot.modules.plugin_names()
-    from services.command_prefix import resolve_guild_prefix
-
-    command_prefix = await resolve_guild_prefix(guild_id)
+    command_prefix = f"/{bot.modules.command_group_name()} "
     # Authoritative per-guild state straight from the runtime: persisted rows
     # win, and modules with no row fall back to the per-module default (core
     # modules default enabled; add-on plugins default disabled). Building the
@@ -75,8 +73,6 @@ def _ensure_nested_config(raw: dict, schema: dict) -> dict:
 
 @router.get("/modules/{module_name}", response_class=HTMLResponse)
 async def module_detail_page(request: Request, guild_id: int, module_name: str):
-    from services.command_prefix import resolve_guild_prefix
-
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
 
@@ -179,7 +175,7 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
             "guild": guild,
             "module_name": module_name,
             "module_data": module_data,
-            "command_prefix": await resolve_guild_prefix(guild_id),
+            "command_prefix": f"/{bot.modules.command_group_name()} ",
         },
     )
 

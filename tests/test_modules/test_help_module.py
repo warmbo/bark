@@ -105,12 +105,12 @@ async def test_help_dms_every_command_and_dashboard_info(monkeypatch):
     )
     assert "Enable the modules you want" in guide_text
     assert "add-on plugins are off until you turn them on" in guide_text
-    assert "bark!help" in guide_text
+    assert "/bark help" in guide_text
 
-    # Reference message lists every command with the prefix
+    # Reference message lists every command in slash format
     assert reference.title == "🐺 Bark — Command Reference"
-    assert "`bark!roll` — Roll dice" in reference.description
-    assert "`bark!trivia start` — Start a trivia game" in reference.description
+    assert "`/bark roll` — Roll dice" in reference.description
+    assert "`/bark trivia start` — Start a trivia game" in reference.description
     # dashboard access info is included
     public_url = cfg.config.dashboard.public_url
     field_values = " ".join(field.value for field in reference.fields)
