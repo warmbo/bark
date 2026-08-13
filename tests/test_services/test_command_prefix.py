@@ -10,12 +10,21 @@ import pytest
 
 from services import command_prefix as cp
 
+# Capture the real DB-backed functions so _stub_read/_stub_write can be
+# reverted in the _clear_cache fixture — otherwise the direct module-attribute
+# assignments leak into tests in other files (a later test would read from a
+# stale stub instead of the real DB).
+_ORIG_READ = cp._read_setting
+_ORIG_WRITE = cp._write_setting
+
 
 @pytest.fixture(autouse=True)
 def _clear_cache():
     cp.invalidate_all()
     yield
     cp.invalidate_all()
+    cp._read_setting = _ORIG_READ  # type: ignore[assignment]
+    cp._write_setting = _ORIG_WRITE  # type: ignore[assignment]
 
 
 def _stub_read(value: str | None):
@@ -85,9 +94,11 @@ async def test_set_prefix_rejects_too_long():
 
 
 @pytest.mark.asyncio
-async def test_mention_defaults_false():
+async def test_mention_defaults_true():
+    # Mention triggers are ON by default so @Bark works in every server out of
+    # the box; owners can still opt out explicitly.
     _stub_read(None)
-    assert await cp.guild_uses_mention(123) is False
+    assert await cp.guild_uses_mention(123) is True
 
 
 @pytest.mark.asyncio

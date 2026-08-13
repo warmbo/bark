@@ -11,6 +11,19 @@ import pytest_asyncio
 # ── Fixtures ──────────────────────────────────────────
 
 
+@pytest.fixture(autouse=True)
+def _reset_command_prefix_cache():
+    """Each test starts with a clean per-guild prefix/mention cache.
+
+    services.command_prefix caches per-guild values in module globals that
+    leak across tests (a fresh `db` fixture doesn't reset them), which makes
+    default-value assertions order-dependent.
+    """
+    from services import command_prefix
+
+    command_prefix.invalidate_all()
+
+
 @pytest_asyncio.fixture
 async def app(db):
     """Create the FastAPI app with a minimal mock bot for testing."""
@@ -118,12 +131,13 @@ async def test_health_check(client):
 
 @pytest.mark.asyncio
 async def test_get_command_settings_default(client):
-    """Unset guild falls back to the default prefix + mention off."""
+    """Unset guild falls back to the default prefix + mention on."""
     resp = await client.get("/api/v1/guilds/1/commands/settings")
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["prefix"] == "bark!"
-    assert data["mention"] is False
+    # @mention triggers are enabled by default (opt-out per guild).
+    assert data["mention"] is True
 
 
 @pytest.mark.asyncio

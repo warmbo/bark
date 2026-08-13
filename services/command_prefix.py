@@ -95,12 +95,19 @@ async def resolve_guild_prefix(guild_id) -> str:
 
 
 async def guild_uses_mention(guild_id) -> bool:
-    """Whether ``@Bark <command>`` also triggers commands for this guild."""
+    """Whether ``@Bark <command>`` also triggers commands for this guild.
+
+    Defaults to ON: a mention is a valid prefix in every server out of the box
+    (standard bot behaviour). A server owner can opt OUT by storing ``false``.
+    """
     key = str(guild_id)
     if key in _mention_cache:
         return _mention_cache[key]
     raw = await _read_setting(key, MENTION_SETTING)
-    enabled = (raw or "").strip().lower() in ("1", "true", "yes", "on")
+    if not raw:
+        enabled = True  # mention works by default
+    else:
+        enabled = raw.strip().lower() in ("1", "true", "yes", "on")
     _mention_cache[key] = enabled
     return enabled
 
