@@ -2957,7 +2957,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .bot-offline-banner[hidden] { display: none; }
 
 /* ── Dashboard getting-started guide ─────────────────── */
-.getting-started { margin: 0 0 18px; border: 1px solid var(--border-hover); border-radius: 12px; background: var(--bg-card-solid); overflow: hidden; }
+.getting-started { margin: 0 0 18px; border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--bg-card); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); overflow: hidden; }
 .getting-started summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 14px 18px; font-weight: 600; list-style: none; color: var(--text-primary); }
 .getting-started summary::-webkit-details-marker { display: none; }
 .getting-started summary:hover { background: rgba(255,255,255,.03); }
