@@ -59,6 +59,9 @@ class BarkBot(commands.Bot):
         self._app = None  # FastAPI app, set by dashboard at creation
         self._data_collector: GuildDataCollector | None = None
         self._initialized_once = False
+        from services.paginator import ReactionPaginator
+
+        self.paginator = ReactionPaginator()
         self._install_tree_error_handler()
 
     # ── Properties ────────────────────────────────────
@@ -311,6 +314,13 @@ class BarkBot(commands.Bot):
         await self.process_commands(message)
         bus = self.modules.event_bus
         await bus.emit("discord_message", message=message)
+
+    async def on_reaction_add(self, reaction: discord.Reaction, user) -> None:
+        """Drive ◀ ▶ navigation on paginated guidance menus."""
+        try:
+            await self.paginator.on_reaction_add(reaction, user)
+        except Exception:
+            logger.exception("Paginator reaction handling failed")
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         if before.author.bot:

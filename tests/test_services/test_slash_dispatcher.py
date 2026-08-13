@@ -21,12 +21,14 @@ def _make_manager() -> MagicMock:
     mgr = MagicMock()
     mgr._command_enabled_check.return_value = None
     mgr.is_enabled_for_guild.return_value = True
+    mgr.is_plugin.return_value = False  # default: everything is a core module
     return mgr
 
 
 def _make_bot() -> MagicMock:
     bot = MagicMock()
     bot.tree = MagicMock()
+    bot.paginator = None  # fall back to a simple (non-paginated) response
     return bot
 
 
@@ -161,6 +163,24 @@ async def test_dispatch_bare_shows_overview():
     interaction.response.send_message.assert_awaited_once()
     _, kwargs = interaction.response.send_message.await_args
     assert "how to use" in kwargs["embed"].title.lower()
+
+
+@pytest.mark.asyncio
+async def test_overview_has_separate_addon_modules_page_for_plugins():
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    d.build_command("bark")
+    _register_fake_module(d, "moderation", "warn", _make_leaf("warn")[0])
+    # Treat "birthday" as an installed add-on plugin.
+    def _is_plugin(name):
+        return name == "birthday"
+
+    d.manager.is_plugin.side_effect = _is_plugin
+    _register_fake_module(d, "birthday", "birthday", _make_leaf("birthday")[0])
+
+    pages = d._build_overview_pages(1)
+    titles = [(e.title or "") for e in pages]
+    assert any("how to use" in t.lower() for t in titles)  # core page
+    assert any("Add-on Modules" in t for t in titles)  # plugin section
 
 
 @pytest.mark.asyncio

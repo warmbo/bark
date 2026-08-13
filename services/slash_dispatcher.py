@@ -234,74 +234,149 @@ class SlashDispatcher:
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def _show_module_menu(
-        self, interaction: discord.Interaction, module_name: str, guild_id
-    ) -> None:
-        paths = self._module_paths.get(module_name, [])
-        await self._show_menu(
-            interaction,
-            title=f"🐺 {module_name.title()} commands",
-            paths=paths,
-            guild_id=guild_id,
-            detail=(
-                f"`/{self._group_name()} <command> [args...]` — pick a command below or "
-                "type it after the slash command."
-            ),
-        )
+    def _command_line(self, leaf: Leaf) -> str:
+        """A single menu item: `/bark <path> <params> — description`."""
+        params = " ".join(f"<{p.name}>" for p in leaf.command.parameters)
+        usage = f"/{self._group_name()} {leaf.path}" + (f" {params}" if params else "")
+        desc = getattr(leaf.command, "description", "") or ""
+        return f"`{usage}` — {desc}" if desc else f"`{usage}`"
 
-    async def _show_menu(
-        self, interaction: discord.Interaction, title: str, paths: list[str],
-        guild_id, detail: str = "",
-    ) -> None:
-        enabled = [
-            p for p in paths
-            if self._path_enabled(guild_id, self._registry[p])
+    def _enabled_leaves(self, guild_id) -> list[Leaf]:
+        return [
+            leaf for _, leaf in sorted(self._registry.items())
+            if self._path_enabled(guild_id, leaf)
         ]
-        embed = discord.Embed(title=title, color=discord.Color.blurple())
-        if detail:
-            embed.description = detail
-        if enabled:
-            for p in sorted(enabled):
+
+    @staticmethod
+    def _chunk_by_module(leaves: list[Leaf], max_fields: int = 6) -> list[list[tuple[str, list[Leaf]]]]:
+        """Group leaves by module into page-chunks of at most ``max_fields``."""
+        by_module: dict[str, list[Leaf]] = {}
+        for leaf in leaves:
+            by_module.setdefault(leaf.module_name, []).append(leaf)
+        pages: list[list[tuple[str, list[Leaf]]]] = []
+        current: list[tuple[str, list[Leaf]]] = []
+        for module_name in sorted(by_module):
+            if current and len(current) >= max_fields:
+                pages.append(current)
+                current = []
+            current.append((module_name, sorted(by_module[module_name], key=lambda leaf: leaf.path)))
+        if current:
+            pages.append(current)
+        return pages
+
+    @staticmethod
+    def _set_footers(pages: list[discord.Embed]) -> None:
+        total = len(pages)
+        for i, embed in enumerate(pages):
+            if total > 1:
+                embed.set_footer(text=f"Page {i + 1}/{total} — react ◀ ▶ to navigate")
+            else:
+                embed.set_footer(text="React ◀ ▶ to page through the rest")
+
+    def _build_overview_pages(self, guild_id) -> list[discord.Embed]:
+        enabled = self._enabled_leaves(guild_id)
+        core = [leaf for leaf in enabled if not self.manager.is_plugin(leaf.module_name)]
+        plugins = [leaf for leaf in enabled if self.manager.is_plugin(leaf.module_name)]
+
+        how_to = (
+            "Bark commands run through a single slash command. Type "
+            f"`/{self._group_name()} <command> [args...]`, or type a module name "
+            f"(e.g. `{self._group_name()} moderation`) for its menu."
+        )
+        pages: list[discord.Embed] = []
+        core_chunks = self._chunk_by_module(core)
+        for i, chunk in enumerate(core_chunks):
+            embed = discord.Embed(
+                title="🐺 Bark — how to use" if i == 0 else "🐺 Bark commands",
+                color=discord.Color.blurple(),
+            )
+            if i == 0:
+                embed.description = how_to
+            for module_name, ls in chunk:
                 embed.add_field(
-                    name=f"/{self._group_name()} {p}",
-                    value=self._registry[p].command.description or "—",
+                    name=module_name.title(),
+                    value="\n".join(self._command_line(leaf) for leaf in ls),
                     inline=False,
                 )
-        else:
-            embed.description = "No commands in this module are enabled for this server."
-        view = None
-        if enabled:
-            view = command_picker_view(dispatcher=self, paths=enabled)
-        if view is not None:
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            pages.append(embed)
+        if plugins:
+            for chunk in self._chunk_by_module(plugins):
+                embed = discord.Embed(
+                    title="🧩 Add-on Modules",
+                    description="Commands from installed add-on plugins.",
+                    color=discord.Color.blurple(),
+                )
+                for module_name, ls in chunk:
+                    embed.add_field(
+                        name=module_name.title(),
+                        value="\n".join(self._command_line(leaf) for leaf in ls),
+                        inline=False,
+                    )
+                pages.append(embed)
+        if not pages:
+            pages = [discord.Embed(title="🐺 Bark", description="No commands available yet.")]
+        self._set_footers(pages)
+        return pages
+
+    def _build_menu_pages(self, leaves: list[Leaf], title: str, detail: str) -> list[discord.Embed]:
+        pages: list[discord.Embed] = []
+        for chunk in self._chunk_by_module(leaves, max_fields=8):
+            embed = discord.Embed(title=title, color=discord.Color.blurple())
+            if detail and pages == []:
+                embed.description = detail
+            for module_name, ls in chunk:
+                embed.add_field(
+                    name=module_name.title(),
+                    value="\n".join(self._command_line(leaf) for leaf in ls),
+                    inline=False,
+                )
+            pages.append(embed)
+        if not pages:
+            pages = [
+                discord.Embed(
+                    title=title,
+                    description="No commands in this section are enabled for this server.",
+                )
+            ]
+        self._set_footers(pages)
+        return pages
+
+    async def _send_paginated(self, interaction: discord.Interaction, pages: list[discord.Embed],
+                              picker_paths: list[str]) -> None:
+        view = command_picker_view(dispatcher=self, paths=picker_paths) if picker_paths else None
+        paginator = getattr(self.bot, "paginator", None)
+        if paginator is None:
+            if view is not None:
+                await interaction.response.send_message(embed=pages[0], view=view)
+            else:
+                await interaction.response.send_message(embed=pages[0])
+            return
+        await paginator.send(interaction, pages, view=view)
+
+    async def _show_module_menu(self, interaction: discord.Interaction, module_name: str, guild_id) -> None:
+        leaves = [
+            self._registry[p] for p in self._module_paths.get(module_name, [])
+            if self._path_enabled(guild_id, self._registry[p])
+        ]
+        detail = (
+            f"`/{self._group_name()} <command> [args...]` — pick a command below or "
+            "type it after the slash command."
+        )
+        pages = self._build_menu_pages(leaves, title=f"🐺 {module_name.title()} commands", detail=detail)
+        picker = [leaf.path for leaf in leaves]
+        await self._send_paginated(interaction, pages, picker)
+
+    async def _show_menu(self, interaction: discord.Interaction, title: str, paths: list[str],
+                         guild_id, detail: str = "") -> None:
+        leaves = [self._registry[p] for p in paths if self._path_enabled(guild_id, self._registry[p])]
+        pages = self._build_menu_pages(leaves, title=title, detail=detail)
+        picker = [leaf.path for leaf in leaves]
+        await self._send_paginated(interaction, pages, picker)
 
     async def _show_overview(self, interaction: discord.Interaction, guild_id) -> None:
-        enabled = sorted(p for p in self._registry if self._path_enabled(guild_id, self._registry[p]))
-        embed = discord.Embed(
-            title=f"🐺 {self._group_name().title()} — how to use",
-            description=(
-                "Commands run through a single slash command. Type `/"
-                f"{self._group_name()} <command> [args...]` (or pick a command from the "
-                "autocomplete), and you'll get an interactive response."
-            ),
-            color=discord.Color.blurple(),
-        )
-        # Group by module for a scannable overview.
-        by_module: dict[str, list[str]] = {}
-        for p in enabled:
-            by_module.setdefault(self._registry[p].module_name, []).append(p)
-        for module_name, paths in sorted(by_module.items()):
-            sample = ", ".join(f"`{p}`" for p in sorted(paths)[:4])
-            more = f" +{len(paths) - 4} more" if len(paths) > 4 else ""
-            embed.add_field(
-                name=module_name.title(),
-                value=f"{sample}{more}",
-                inline=False,
-            )
-        view = command_picker_view(dispatcher=self, paths=enabled)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        pages = self._build_overview_pages(guild_id)
+        enabled = [leaf.path for leaf in self._enabled_leaves(guild_id)]
+        await self._send_paginated(interaction, pages, enabled)
 
     # ── Autocomplete ──────────────────────────────────
 
