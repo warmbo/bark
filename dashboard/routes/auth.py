@@ -293,9 +293,20 @@ async def logout(request: Request):
 async def me(request: Request):
     """Return current user info from session."""
     if not _oauth_enabled():
+        # Permissive mode (OAuth not configured — local/test/dev): everyone is
+        # treated as an authenticated admin so the dashboard renders without a
+        # Discord login. The realtime/session guard depends on this.
         from services.response import api_success
 
-        return api_success({"authenticated": False})
+        return api_success(
+            {
+                "authenticated": True,
+                "user": {"id": "local", "username": "Local Admin", "display_name": "Local Admin"},
+                "role": "admin",
+                "guilds": [],
+                "capabilities": [],
+            }
+        )
     user = request.session.get("user")
     guilds = []
     if user is not None:
