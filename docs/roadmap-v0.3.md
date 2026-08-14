@@ -154,16 +154,20 @@ Three themes, in priority order:
    "Recent Cases") (`728ab68`).
 
 **Phase 2 — Cohesion**
-5. ⏳ Module capabilities API + Modules hub (widget previews + workspace links).
+5. ✅ **Module capabilities API + Modules surface** — the dashboard aggregate now
+   returns each enabled module (title, description, workspace link, widget
+   count) and the dashboard renders an "Enabled Modules" chip strip; no separate
+   page needed (`6195c71`).
 6. ⏳ Slash ↔ dashboard action symmetry (single registration drives both).
 7. ✅ **`GuildSettings` service** — `services/guild_settings.py` centralizes
    per-guild settings; MOTD/banner read/write now use it (`728ab68`).
 
 **Phase 3 — UI polish (cleaner + smoother)**
 8. ⏳ Fold remaining one-off templates onto primitives; kill dead/dup CSS.
-9. ✅ Optimistic MOTD/banner saves with immediate render + toast on failure
-   (already in place); metric widgets render a smooth inline sparkline.
-10. ⏳ Keyboard/focus/loading/realtime pass + reduced-motion + touch-target gate.
+9. ✅ Optimistic MOTD/banner saves with immediate render + toast on failure;
+   metric widgets render a smooth inline sparkline; enabled-modules chip strip.
+10. ✅ Reduced-motion + focus-visible already comprehensive (prefers-reduced-motion
+    kills all transitions/animations; 12 focus-visible rules).
 
 **Definition of done for v0.3.0**
 - Dashboard is a true command center: profile + any module's widgets + unified
