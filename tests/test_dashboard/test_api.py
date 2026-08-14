@@ -678,6 +678,100 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     assert sdata["top_emojis_today"][0] == {"name": "laugh", "count": 4}
 
 
+@pytest.mark.asyncio
+async def test_set_guild_banner_persists_and_clears(app, monkeypatch):
+    """PUT /guilds/{id}/banner stores a custom banner URL (and clears it)."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+
+    async with session_scope() as s:
+        from sqlalchemy import select
+
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "222222"))).scalars().first():
+            s.add(Guild(discord_id="222222", name="Banner Guild"))
+            await s.commit()
+
+    guild = SimpleNamespace(
+        id=222222, name="Banner Guild", member_count=10, owner_id=1, owner=None,
+        banner=None, icon=None, description=None, premium_tier=0,
+        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
+        channels=[], roles=[], emojis=[], created_at=None,
+        verification_level=None, features=[], scheduled_events=[], members=[],
+        text_channels=[], voice_channels=[],
+    )
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot), session={"role": "admin"},
+        url=SimpleNamespace(path="/api/v1/guilds/222222/banner"),
+    )
+
+    import json
+
+    class _Req(SimpleNamespace):
+        _body = {}
+
+        async def json(self):
+            return self._body
+
+    # Set a custom banner.
+    set_req = _Req(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    set_req._body = {"banner_url": "https://example.com/banner.png"}
+    set_req.state.guild_viewer = False
+    resp = await guilds.set_guild_banner(set_req, 222222)
+    assert resp.status_code == 200
+    # Reading it back.
+    profile = await guilds.get_guild(request, 222222)
+    data = json.loads(profile.body)["data"]
+    assert data["custom_banner_url"] == "https://example.com/banner.png"
+
+    # Clear it.
+    req = _Req(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    req._body = {"banner_url": ""}
+    req.state.guild_viewer = False
+    await guilds.set_guild_banner(req, 222222)
+    profile2 = await guilds.get_guild(req, 222222)
+    assert json.loads(profile2.body)["data"]["custom_banner_url"] == ""
+
+
+@pytest.mark.asyncio
+async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
+    """The /dashboard endpoint returns add-on widget cards from enabled modules."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    guild = SimpleNamespace(id=333333, name="Cards Guild")
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    async def fake_cards(_gid):
+        return [{"id": "reputation_top", "module": "reputation", "title": "Top Members", "type": "list", "items": []}]
+
+    bot.modules.get_dashboard_cards = fake_cards
+    request = SimpleNamespace(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+
+    import json
+    resp = await guilds.get_guild_dashboard_cards(request, 333333)
+    assert resp.status_code == 200
+    cards = json.loads(resp.body)["data"]["cards"]
+    assert cards[0]["id"] == "reputation_top"
+    assert cards[0]["module"] == "reputation"
+
+
 def test_module_config_validation_rejects_array_and_enum_type_drift():
     from dashboard.routes.api.modules import _validate_config
 

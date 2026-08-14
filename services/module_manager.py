@@ -766,6 +766,31 @@ class ModuleManager:
     def get_enabled_modules(self) -> dict[str, BarkModule]:
         return {n: m for n, m in self._modules.items() if m.enabled}
 
+    async def get_dashboard_cards(self, guild_id: int) -> list[dict]:
+        """Collect dashboard widget cards from modules enabled for the guild.
+
+        Modules that override ``BarkModule.get_dashboard_cards`` contribute
+        add-on sections to the server overview (e.g. an "Upcoming Birthdays"
+        widget). Only enabled modules contribute cards.
+        """
+        cards: list[dict] = []
+        for name, module in self._modules.items():
+            try:
+                if not self.is_enabled_for_guild(guild_id, name):
+                    continue
+                contributed = await module.get_dashboard_cards(guild_id) or []
+                for card in contributed:
+                    if isinstance(card, dict) and card.get("id"):
+                        card.setdefault("module", name)
+                        cards.append(card)
+            except Exception:
+                import logging
+
+                logging.getLogger("bark.modules").exception(
+                    "Failed to collect dashboard cards from module '%s'", name
+                )
+        return cards
+
     def get_dashboard_pages(self) -> dict[str, list[PageRegistration]]:
         return dict(self._page_registry)
 

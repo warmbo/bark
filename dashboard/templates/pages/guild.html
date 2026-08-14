@@ -8,14 +8,24 @@
 <div class="page-container">
     <!-- Server profile header -->
     <div class="server-profile">
-        {% if guild.banner %}
-        <div class="server-banner" role="img" aria-label="Server banner">
-            <img src="{{ guild.banner.url }}" data-fallback-src="/static/img/bark-avatar.png" alt="" loading="lazy">
+        <div class="server-banner" id="server-banner" role="img" aria-label="Server banner">
+            {% if guild.banner %}<img src="{{ guild.banner.url }}" data-fallback-src="/static/img/bark-avatar.png" alt="" loading="lazy">{% endif %}
+            <button type="button" class="banner-set-btn" id="banner-set" hidden aria-label="Set custom banner" title="Set a custom banner image">{{ icon("image", 14) }}</button>
+            <div class="banner-editor" id="banner-editor" hidden>
+                <div class="banner-editor-row">
+                    <input type="file" id="banner-file" name="banner_file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Upload banner image">
+                    <input type="text" id="banner-url" name="banner_url" placeholder="…or paste an image URL" aria-label="Banner image URL">
+                </div>
+                <div class="banner-editor-actions">
+                    <button type="button" class="btn btn-sm btn-accent" id="banner-save">{{ icon("check", 14) }} Set banner</button>
+                    <button type="button" class="btn btn-sm" id="banner-remove" hidden>{{ icon("trash-2", 13) }} Remove</button>
+                    <button type="button" class="btn btn-sm" id="banner-cancel">Cancel</button>
+                </div>
+            </div>
         </div>
-        {% endif %}
         <div class="server-profile-body">
             <div class="server-profile-head">
-                <span class="server-avatar-lg">{{ icon("shield", 22) }}</span>
+                <span class="server-avatar-lg">{{ icon("shield", 30) }}</span>
                 <div class="server-profile-titles">
                     <h1 class="page-title server-profile-name">{{ guild.name }}</h1>
                     {% if guild.description %}<p class="server-profile-desc">{{ guild.description }}</p>{% endif %}
@@ -60,6 +70,9 @@
             <div class="skeleton skeleton-text"></div>
         </div>
     </div>
+
+    <!-- Add-on module dashboard widgets -->
+    <div class="dashboard-widgets" id="dashboard-widgets" hidden></div>
 </div>
 {% endblock %}
 
@@ -112,6 +125,101 @@ function renderServerProfile(g) {
 
     // Scheduled events
     renderEvents(g.scheduled_events || []);
+
+    // Custom banner
+    renderBanner(g.custom_banner_url || g.banner_url);
+}
+
+const bannerEl = document.getElementById('server-banner');
+const bannerSetBtn = document.getElementById('banner-set');
+const bannerEditor = document.getElementById('banner-editor');
+const bannerFile = document.getElementById('banner-file');
+const bannerUrl = document.getElementById('banner-url');
+const bannerSaveBtn = document.getElementById('banner-save');
+const bannerRemoveBtn = document.getElementById('banner-remove');
+const bannerCancelBtn = document.getElementById('banner-cancel');
+let currentBannerUrl = '';
+let hasCustomBanner = false;
+
+function renderBanner(url) {
+    currentBannerUrl = url || '';
+    if (!bannerEl) return;
+    let img = bannerEl.querySelector('img');
+    if (url) {
+        if (!img) {
+            img = document.createElement('img');
+            img.alt = '';
+            img.loading = 'lazy';
+            img.dataset.fallbackSrc = '/static/img/bark-avatar.png';
+            bannerEl.insertBefore(img, bannerEl.firstChild);
+        }
+        img.src = url;
+    } else if (img) {
+        img.remove();
+    }
+}
+function setBannerMode(edit) {
+    if (bannerEditor) bannerEditor.hidden = !edit;
+    if (bannerSetBtn) bannerSetBtn.hidden = edit || GUID_VIEWER;
+}
+bannerSetBtn?.addEventListener('click', () => {
+    setBannerMode(true);
+    if (bannerRemoveBtn) bannerRemoveBtn.hidden = !hasCustomBanner;
+});
+bannerCancelBtn?.addEventListener('click', () => {
+    if (bannerFile) bannerFile.value = '';
+    if (bannerUrl) bannerUrl.value = '';
+    setBannerMode(false);
+});
+bannerRemoveBtn?.addEventListener('click', async () => {
+    await saveBanner('');
+});
+async function saveBanner(url) {
+    if (bannerSaveBtn) { bannerSaveBtn.disabled = true; bannerSaveBtn.innerHTML = getIconSvg('loader', 14) + ' Saving…'; }
+    try {
+        let target = url;
+        if (!target && bannerFile && bannerFile.files.length) {
+            const fd = new FormData();
+            fd.append('file', bannerFile.files[0]);
+            const up = await safeFetch(`/api/v1/guilds/${GUILD_ID}/uploads`, {method: 'POST', body: fd});
+            target = (up && (up.data || up).url) || '';
+        } else if (!target && bannerUrl && bannerUrl.value.trim()) {
+            target = bannerUrl.value.trim();
+        }
+        if (!target) return;
+        await safeFetch(`/api/v1/guilds/${GUILD_ID}/banner`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({banner_url: target})});
+        hasCustomBanner = true;
+        renderBanner(target);
+        if (bannerFile) bannerFile.value = '';
+        if (bannerUrl) bannerUrl.value = '';
+        setBannerMode(false);
+    } catch (e) {
+        showToast ? showToast('Could not set banner', 'error') : null;
+    } finally {
+        if (bannerSaveBtn) { bannerSaveBtn.disabled = false; bannerSaveBtn.innerHTML = getIconSvg('check', 14) + ' Set banner'; }
+    }
+}
+bannerSaveBtn?.addEventListener('click', () => saveBanner(''));
+
+function renderWidgets(cards) {
+    const wrap = document.getElementById('dashboard-widgets');
+    if (!wrap) return;
+    if (!cards || !cards.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+    wrap.hidden = false;
+    wrap.innerHTML = cards.map(card => {
+        const icon = card.icon ? (typeof getIconSvg === 'function' ? getIconSvg(card.icon, 16) : '') : '';
+        const desc = card.description ? '<p class="card-description">' + escHtml(card.description) + '</p>' : '';
+        let body = '';
+        if (card.type === 'metric') {
+            body = '<div class="widget-metric">' + escHtml(card.value ?? '—') + '</div>';
+        } else {
+            body = '<ul class="widget-list">' + (card.items || []).map(it =>
+                '<li class="widget-item"><span class="widget-item-label">' + (it.icon && typeof getIconSvg === 'function' ? getIconSvg(it.icon, 13) + ' ' : '') + escHtml(it.label) + '</span><span class="widget-item-value">' + escHtml(it.value ?? '') + '</span></li>'
+            ).join('') + '</ul>';
+        }
+        return '<div class="content-card dashboard-widget" data-widget="' + escHtml(card.id) + '"><div class="card-header"><div><h2 class="card-title">' + icon + ' ' + escHtml(card.title) + '</h2>' + desc + '</div></div>' + body + '</div>';
+    }).join('');
+    if (typeof refreshIcons === 'function') refreshIcons();
 }
 
 function renderEvents(events) {
@@ -158,13 +266,18 @@ motdSaveBtn?.addEventListener('click', async () => {
 
 async function loadGuildProfile() {
     try {
-        const [manifestRaw, guildRaw] = await Promise.all([
+        const [manifestRaw, guildRaw, widgetsRaw] = await Promise.all([
             safeFetch(`/api/v1/guilds/${GUILD_ID}/manifest`, {cache: 'no-cache'}),
             safeFetch(`/api/v1/guilds/${GUILD_ID}`, {cache: 'no-cache'}),
+            safeFetch(`/api/v1/guilds/${GUILD_ID}/dashboard`, {cache: 'no-cache'}),
         ]);
         if (manifestRaw && manifestRaw.data) GUID_VIEWER = !!manifestRaw.data.viewer;
         const g = (guildRaw && (guildRaw.data || guildRaw)) || {};
+        hasCustomBanner = !!g.custom_banner_url;
+        if (bannerSetBtn) bannerSetBtn.hidden = GUID_VIEWER;
         renderServerProfile(g);
+        const cards = (widgetsRaw && (widgetsRaw.data || widgetsRaw).cards) || [];
+        renderWidgets(cards);
     } catch (e) {
         if (eventsFeed) eventsFeed.innerHTML = '<div class="state-panel state-error" role="alert"><div><strong>Could not load server profile</strong><p>' + (typeof escHtml === 'function' ? escHtml(e.message || 'Try again.') : 'Try again.') + '</p></div></div>';
     }

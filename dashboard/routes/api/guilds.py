@@ -118,8 +118,9 @@ async def get_guild(request: Request, guild_id: int):
     except Exception:
         verification_level = None
 
-    # Server MOTD (stored per-guild in GuildSetting) + Discord scheduled events.
+    # Server MOTD + custom banner (stored per-guild in GuildSetting).
     motd = ""
+    custom_banner_url = ""
     try:
         from sqlalchemy import select
 
@@ -127,17 +128,21 @@ async def get_guild(request: Request, guild_id: int):
         from database.models.guild import GuildSetting
 
         async with session_scope() as session:
-            row = (
+            settings = (
                 await session.execute(
                     select(GuildSetting).where(
                         GuildSetting.guild_id == str(guild_id),
-                        GuildSetting.key == "motd",
+                        GuildSetting.key.in_(["motd", "banner_url"]),
                     )
                 )
-            ).scalars().first()
-            motd = row.value if row else ""
+            ).scalars().all()
+            for row in settings:
+                if row.key == "motd":
+                    motd = row.value
+                elif row.key == "banner_url":
+                    custom_banner_url = row.value
     except Exception:
-        motd = ""
+        pass
 
     scheduled_events = []
     try:
@@ -179,9 +184,43 @@ async def get_guild(request: Request, guild_id: int):
             "verification_level": verification_level,
             "features": list(guild.features or []),
             "motd": motd,
+            "custom_banner_url": custom_banner_url,
             "scheduled_events": scheduled_events,
         }
     )
+
+
+@router.put("/guilds/{guild_id}/banner")
+async def set_guild_banner(request: Request, guild_id: int):
+    """Set a custom banner image (URL) shown on the dashboard profile."""
+    if getattr(request.state, "guild_viewer", False):
+        return api_forbidden("Insufficient permissions")
+
+    body = await request.json()
+    url = str((body or {}).get("banner_url") or "").strip()[:2000]
+
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.guild import GuildSetting
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(GuildSetting).where(
+                    GuildSetting.guild_id == str(guild_id),
+                    GuildSetting.key == "banner_url",
+                )
+            )
+        ).scalars().first()
+        if url:
+            if row:
+                row.value = url
+            else:
+                session.add(GuildSetting(guild_id=str(guild_id), key="banner_url", value=url))
+        elif row:
+            await session.delete(row)
+    return api_success({"banner_url": url})
 
 
 @router.put("/guilds/{guild_id}/motd")
@@ -299,6 +338,21 @@ async def _guild_growth_series(session, guild_id: int, days: int = 30) -> list[d
         }
         for row in result.scalars().all()
     ]
+
+
+@router.get("/guilds/{guild_id}/dashboard")
+async def get_guild_dashboard_cards(request: Request, guild_id: int):
+    """Collect add-on dashboard widget cards from the guild's enabled modules."""
+    bot = request.state.bot
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return api_not_found("Guild")
+    cards = []
+    try:
+        cards = await bot.modules.get_dashboard_cards(guild_id)
+    except Exception:
+        cards = []
+    return api_success({"cards": cards})
 
 
 @router.get("/guilds/{guild_id}/events")

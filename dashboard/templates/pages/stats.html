@@ -108,9 +108,9 @@ async function loadStats() {
         if (window.BarkCharts) {
             BarkCharts.lineChart(document.getElementById('chart-growth'), growth, {label: 'Member count', valueLabel: 'Members'});
             const cases = Object.entries(d.cases_by_type || {}).map(([k, v]) => ({label: k, value: v})).sort((a, b) => b.value - a.value);
-            BarkCharts.barChart(document.getElementById('chart-cases'), cases, {label: 'Cases by type'});
+            BarkCharts.pieChart(document.getElementById('chart-cases'), cases, {label: 'Cases by type'});
             const channels = (d.top_channels_today || []).map(c => ({label: '#' + c.name, value: c.count}));
-            BarkCharts.barChart(document.getElementById('chart-channels'), channels, {label: 'Messages by channel'});
+            BarkCharts.pieChart(document.getElementById('chart-channels'), channels, {label: 'Messages by channel'});
             const emojis = (d.top_emojis_today || []).map(e => ({label: e.name, value: e.count}));
             BarkCharts.barChart(document.getElementById('chart-emojis'), emojis, {label: 'Emoji reactions'});
         }

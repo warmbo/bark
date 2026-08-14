@@ -180,6 +180,29 @@ class BarkModule(abc.ABC):
         """
         return []
 
+    # ── Dashboard Widgets (add-on dashboard sections) ──
+
+    async def get_dashboard_cards(self, guild_id: int) -> list[dict]:
+        """
+        Return dashboard widget cards this module contributes to the server
+        overview (dashboard) page.
+
+        A card is a serializable dict:
+          - id: unique card id (module-prefixed, e.g. ``reputation_top``)
+          - title: card heading
+          - icon: lucide icon name (optional)
+          - description: short helper text (optional)
+          - type: ``"list"`` (default) — items render as rows with a label/value
+            and optional icon; ``"metric"`` — a single headline number.
+          - items: for ``"list"``, list of {"label", "value", "subtitle"?, "icon"?}
+          - value: for ``"metric"``, the headline number/string.
+
+        Modules return empty by default. This is the extension point for
+        add-on dashboard sections (e.g. a birthdays module's "Upcoming
+        Birthdays"). Only cards from modules enabled for the guild are shown.
+        """
+        return []
+
     # ── Module Stats (backup/export support) ──────────
 
     async def export_stats(self, guild_id: int) -> dict[str, Any]:

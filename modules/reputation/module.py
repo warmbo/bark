@@ -221,6 +221,59 @@ class ReputationModule(BarkModule):
             },
         ]
 
+    async def get_dashboard_cards(self, guild_id: int) -> list[dict]:
+        """Add a 'Top Members' leaderboard widget to the server overview."""
+        try:
+            from sqlalchemy import desc, select
+
+            from database.engine import session_scope
+            from database.models.reputation import ReputationProfile
+
+            async with session_scope() as session:
+                rows = (
+                    await session.execute(
+                        select(ReputationProfile)
+                        .where(ReputationProfile.guild_id == str(guild_id))
+                        .order_by(desc(ReputationProfile.total_score))
+                        .limit(5)
+                    )
+                ).scalars().all()
+            if not rows:
+                return []
+
+            guild = getattr(getattr(self.ctx, "bot", None), "get_guild", lambda _g: None)(guild_id)
+            items = []
+            for i, row in enumerate(rows, start=1):
+                name = row.user_id
+                if guild is not None:
+                    try:
+                        member = guild.get_member(int(row.user_id))
+                        if member is not None:
+                            name = getattr(member, "display_name", None) or name
+                    except Exception:
+                        pass
+                items.append(
+                    {
+                        "label": f"#{i} {name}",
+                        "value": f"{row.total_score:g} pts",
+                        "subtitle": f"Level {row.level} · {row.current_tier}",
+                        "icon": "trophy",
+                    }
+                )
+            return [
+                {
+                    "id": "reputation_top",
+                    "title": "Top Members",
+                    "icon": "trophy",
+                    "description": "Highest reputation in this server",
+                    "type": "list",
+                    "items": items,
+                }
+            ]
+        except Exception:
+            self.log("warning", "Could not build reputation dashboard card", exc_info=True)
+            return []
+
     def get_api_routes(self):
         """API endpoints for reputation dashboard data."""
         from fastapi import APIRouter

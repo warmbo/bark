@@ -114,5 +114,43 @@
     el.innerHTML = html;
   }
 
-  window.BarkCharts = { lineChart: lineChart, barChart: barChart, esc: esc };
+  /**
+   * Pie / donut chart.
+   * data: [{label, value}] — value must be > 0.
+   */
+  function pieChart(el, data, opts) {
+    opts = opts || {};
+    if (!el || !data || !data.length) {
+      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No data</strong></div></div>';
+      return;
+    }
+    const rows = data.filter(d => Number(d.value) > 0);
+    const total = rows.reduce((s, r) => s + Number(r.value), 0);
+    if (!total) {
+      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No data</strong></div></div>';
+      return;
+    }
+    const size = 180, cx = size / 2, cy = size / 2, r = 72;
+    const palette = ['var(--accent)', '#e91e63', '#2ecc71', '#f1c40f', '#9b59b6', '#3498db', '#e67e22', '#1abc9c', '#e74c3c', '#607d8b'];
+    let angle = -Math.PI / 2;
+    let arcs = '';
+    rows.forEach((row, i) => {
+      const frac = Number(row.value) / total;
+      const start = angle;
+      const end = angle + frac * 2 * Math.PI;
+      const x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
+      const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
+      const large = frac > 0.5 ? 1 : 0;
+      const color = palette[i % palette.length];
+      arcs += '<path d="M' + cx + ',' + cy + ' L' + x1.toFixed(1) + ',' + y1.toFixed(1) + ' A' + r + ',' + r + ' 0 ' + large + ' 1 ' + x2.toFixed(1) + ',' + y2.toFixed(1) + ' Z" fill="' + color + '" opacity="0.88"><title>' + esc(row.label) + ': ' + esc(row.value) + '</title></path>';
+      angle = end;
+    });
+    const legend = rows.map((row, i) => {
+      const pct = total ? Math.round((Number(row.value) / total) * 100) : 0;
+      return '<div class="chart-legend-item"><span class="chart-legend-swatch" style="background:' + palette[i % palette.length] + '"></span><span>' + esc(row.label) + '</span><span class="chart-legend-value">' + esc(row.value) + ' (' + pct + '%)</span></div>';
+    }).join('');
+    el.innerHTML = '<div class="pie-wrap"><svg viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg chart-pie">' + arcs + '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text-primary)">' + esc(total) + '</text></svg><div class="chart-legend">' + legend + '</div></div>';
+  }
+
+  window.BarkCharts = { lineChart: lineChart, barChart: barChart, pieChart: pieChart, esc: esc };
 })();
