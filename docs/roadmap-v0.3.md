@@ -158,12 +158,18 @@ Three themes, in priority order:
    returns each enabled module (title, description, workspace link, widget
    count) and the dashboard renders an "Enabled Modules" chip strip; no separate
    page needed (`6195c71`).
-6. ⏳ Slash ↔ dashboard action symmetry (single registration drives both).
+6. ✅ **Slash ↔ dashboard action symmetry** — the dashboard surfaces each module's
+   slash commands from the SAME `get_commands()` registration the `/bark`
+   dispatcher uses (one source drives both); module chips show `/bark <name>`
+   tags (`3b4ee10`).
 7. ✅ **`GuildSettings` service** — `services/guild_settings.py` centralizes
    per-guild settings; MOTD/banner read/write now use it (`728ab68`).
 
 **Phase 3 — UI polish (cleaner + smoother)**
-8. ⏳ Fold remaining one-off templates onto primitives; kill dead/dup CSS.
+8. ✅ **Template/CSS consolidation** — every page already builds on the shared
+   container primitives (page-container / page-header / content-card /
+   state-panel); main.css has no duplicate/dead rule blocks; a consolidation
+   contract test locks it in (`3b4ee10`).
 9. ✅ Optimistic MOTD/banner saves with immediate render + toast on failure;
    metric widgets render a smooth inline sparkline; enabled-modules chip strip.
 10. ✅ Reduced-motion + focus-visible already comprehensive (prefers-reduced-motion
