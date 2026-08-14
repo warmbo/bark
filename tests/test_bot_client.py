@@ -39,6 +39,64 @@ async def test_voice_transition_channels_are_snapshotted_before_handlers_can_mut
 
 
 @pytest.mark.asyncio
+async def test_server_event_buffer_records_and_bounds():
+    from types import SimpleNamespace
+
+    bot = BarkBot()
+    member = SimpleNamespace(id=1, display_name="Alice", tag="Alice#0001")
+    bot.record_server_event(1, "member_join", member, "Guild A")
+    bot.record_server_event(1, "member_leave", SimpleNamespace(id=2, display_name="Bob", tag="Bob#0002"), "Guild A")
+
+    events = bot.recent_server_events(1)
+    assert len(events) == 2
+    # Newest first.
+    assert events[0]["type"] == "member_leave"
+    assert events[0]["user_name"] == "Bob"
+    assert events[1]["type"] == "member_join"
+    assert events[1]["guild_name"] == "Guild A"
+    assert events[1]["timestamp"]
+    # No events for a different guild.
+    assert bot.recent_server_events(2) == []
+
+
+@pytest.mark.asyncio
+async def test_server_event_buffer_is_bounded():
+    from types import SimpleNamespace
+
+    bot = BarkBot()
+    for i in range(80):  # > maxlen (60)
+        bot.record_server_event(7, "member_join", SimpleNamespace(id=i, display_name=f"u{i}", tag="x"), "G")
+    events = bot.recent_server_events(7, limit=100)
+    assert len(events) == 60  # deque maxlen bounds memory
+    assert events[0]["user_name"] == "u79"
+    assert events[-1]["user_name"] == "u20"
+
+
+@pytest.mark.asyncio
+async def test_message_stats_track_messages_channels_and_emojis():
+    from types import SimpleNamespace
+
+    bot = BarkBot()
+    bot.record_message(5, SimpleNamespace(id=100, name="general"))
+    bot.record_message(5, SimpleNamespace(id=100, name="general"))
+    bot.record_message(5, SimpleNamespace(id=200, name="memes"))
+    # Plain strings stand in for a custom emoji whose str() is its name.
+    bot.record_reaction(5, "laugh")
+    bot.record_reaction(5, "laugh")
+    bot.record_reaction(5, "wow")
+
+    stats = bot.message_stats(5)
+    assert stats["messages"] == 3
+    assert stats["channels"]["100"]["name"] == "general"
+    assert stats["channels"]["100"]["count"] == 2
+    assert stats["channels"]["200"]["count"] == 1
+    assert stats["emojis"]["laugh"] == 2
+    assert stats["emojis"]["wow"] == 1
+    # A different guild is tracked independently.
+    assert bot.message_stats(9)["messages"] == 0
+
+
+@pytest.mark.asyncio
 async def test_on_interaction_logs_without_dispatching():
     """The framework (ConnectionState.parse_interaction_create) dispatches
     commands to the tree — on_interaction must only log. Calling a

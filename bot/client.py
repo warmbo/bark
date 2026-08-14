@@ -10,6 +10,8 @@ See docs/architecture-overview.md#startup-flow for lifecycle documentation.
 from __future__ import annotations
 
 import logging
+from collections import defaultdict, deque
+from datetime import date
 from typing import TYPE_CHECKING
 
 import discord
@@ -62,7 +64,36 @@ class BarkBot(commands.Bot):
         from services.paginator import ReactionPaginator
 
         self.paginator = ReactionPaginator()
+        # Bounded in-memory ring of recent Discord server events (member join /
+        # leave) per guild, surfaced on the dashboard "Server Events" section.
+        # Newest first; maxlen bounds memory regardless of activity.
+        self._server_events: dict[int, deque] = defaultdict(lambda: deque(maxlen=60))
+        self._message_stats: dict[int, dict] = {}
         self._install_tree_error_handler()
+
+    def record_server_event(
+        self, guild_id: int, event_type: str, member, guild_name: str | None = None
+    ) -> None:
+        """Record a Discord server event (member join/leave) for the dashboard feed."""
+        from datetime import datetime, timezone
+
+        self._server_events[guild_id].appendleft(
+            {
+                "type": event_type,
+                "user_id": str(getattr(member, "id", "")),
+                "user_name": getattr(member, "display_name", None) or str(member),
+                "tag": str(member),
+                "avatar_url": getattr(member, "display_avatar", None).url
+                if getattr(member, "display_avatar", None)
+                else None,
+                "guild_name": guild_name,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    def recent_server_events(self, guild_id: int, limit: int = 25) -> list[dict]:
+        """Return the most recent server events for a guild (newest first)."""
+        return list(self._server_events.get(guild_id, []))[:limit]
 
     # ── Properties ────────────────────────────────────
 
@@ -311,13 +342,50 @@ class BarkBot(commands.Bot):
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
             return
+        if message.guild:
+            try:
+                self.record_message(message.guild.id, message.channel)
+            except Exception:
+                logger.debug("Could not record message stats", exc_info=True)
         await self.process_commands(message)
         bus = self.modules.event_bus
         await bus.emit("discord_message", message=message)
 
+    def _ensure_message_stats(self, guild_id: int) -> dict:
+        today = date.today().isoformat()
+        stats = self._message_stats.get(guild_id)
+        if stats is None or stats.get("date") != today:
+            stats = {"date": today, "messages": 0, "channels": {}, "emojis": {}}
+            self._message_stats[guild_id] = stats
+        return stats
+
+    def record_message(self, guild_id: int, channel) -> None:
+        """Count a non-bot message for today's server stats."""
+        stats = self._ensure_message_stats(guild_id)
+        stats["messages"] += 1
+        ch_id = str(getattr(channel, "id", "unknown"))
+        name = getattr(channel, "name", None) or ch_id
+        entry = stats["channels"].setdefault(ch_id, {"name": name, "count": 0})
+        entry["count"] += 1
+        entry["name"] = name
+
+    def record_reaction(self, guild_id: int, emoji) -> None:
+        """Count an emoji reaction for today's server stats."""
+        stats = self._ensure_message_stats(guild_id)
+        key = str(emoji)
+        if getattr(emoji, "is_unicode_emoji", lambda: False)():
+            key = emoji.name  # unicode: show the glyph name
+        stats["emojis"][key] = stats["emojis"].get(key, 0) + 1
+
+    def message_stats(self, guild_id: int) -> dict:
+        """Today's message/emoji counters for the statistics page."""
+        return dict(self._ensure_message_stats(guild_id))
+
     async def on_reaction_add(self, reaction: discord.Reaction, user) -> None:
-        """Drive ◀ ▶ navigation on paginated guidance menus."""
+        """Drive ◀ ▶ navigation on paginated guidance menus + count emoji stats."""
         try:
+            if reaction.message and reaction.message.guild and not getattr(user, "bot", False):
+                self.record_reaction(reaction.message.guild.id, reaction.emoji)
             await self.paginator.on_reaction_add(reaction, user)
         except Exception:
             logger.exception("Paginator reaction handling failed")
@@ -335,10 +403,12 @@ class BarkBot(commands.Bot):
         await bus.emit("discord_message_delete", message=message)
 
     async def on_member_join(self, member: discord.Member) -> None:
+        self.record_server_event(member.guild.id, "member_join", member, member.guild.name)
         bus = self.modules.event_bus
         await bus.emit("discord_member_join", member=member)
 
     async def on_member_remove(self, member: discord.Member) -> None:
+        self.record_server_event(member.guild.id, "member_leave", member, member.guild.name)
         bus = self.modules.event_bus
         await bus.emit("discord_member_remove", member=member)
 

@@ -102,6 +102,18 @@
       </article>
     {% endfor %}
     </div>
+    {% if module_name == 'moderation' %}
+    <article class="content-card moderation-activity-card">
+      <div class="card-header"><div><h2 class="card-title">{{ icon('activity', 16) }} Recent Activity</h2><p class="card-description">Bark's recent moderation activity across this server</p></div></div>
+      <div class="activity-feed" id="moderation-activity-feed">
+        <div class="skeleton skeleton-text"></div>
+        <div class="skeleton skeleton-text"></div>
+      </div>
+      <div class="activity-more-wrap" id="moderation-activity-more" hidden>
+        <button type="button" class="btn btn-sm btn-block" id="moderation-activity-load-more">{{ icon('chevron-down', 14) }} Load more</button>
+      </div>
+    </article>
+    {% endif %}
   </section>{% endif %}
 
   {% if module_data.show_configure_tab %}<section class="tab-panel {{ '' if has_operations else 'active' }}" id="tab-configure" role="tabpanel" aria-labelledby="workspace-tab-configure" tabindex="0" {{ 'hidden' if has_operations else '' }}>

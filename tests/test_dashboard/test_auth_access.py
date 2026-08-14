@@ -592,7 +592,14 @@ async def test_non_granted_member_gets_view_only(db, monkeypatch):
     assert status_page.status_code == 200
     assert "View only" in status_page.text
     assert manifest.status_code == 200
-    assert manifest.json()["data"]["viewer"] is True
+    data = manifest.json()["data"]
+    assert data["viewer"] is True
+    # Viewers can reach the read-only Dashboard and Statistics pages (but no
+    # module/management surfaces).
+    viewer_routes = [p["route"] for p in data["pages"]]
+    assert "/guild/100" in viewer_routes
+    assert "/guild/100/stats" in viewer_routes
+    assert data["modules"] == []
     assert denied_write.status_code == 403
 
 

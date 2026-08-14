@@ -309,12 +309,13 @@ console.log('OK');
 
 
 def test_inline_api_renderers_escape_dynamic_attributes_and_refresh_icons():
-    guild = source(TEMPLATES / "pages" / "guild.html")
+    # The moderation activity feed moved off the dashboard into the workspace JS.
+    workspace = source(JS / "moderation-workspace.js")
     members = source(TEMPLATES / "pages" / "members.html")
     detail = source(TEMPLATES / "pages" / "member_detail.html")
 
-    assert "safeClassToken(a.type" in guild
-    assert "escHtml(a.icon || '📝')" in guild
+    assert "safeClassToken(a.type" in workspace
+    assert "escHtml(a.icon || '📝')" in workspace
     assert "safeResourceUrl(m.avatar_url" in members
     assert "safeResourceUrl(m.avatar_url" in detail
     assert "safeClassToken(c.action_type" in detail
@@ -324,18 +325,20 @@ def test_inline_api_renderers_escape_dynamic_attributes_and_refresh_icons():
 
 
 def test_guild_activity_refreshes_from_server_and_ages_visible_timestamps():
-    guild = source(TEMPLATES / "pages" / "guild.html")
+    # Recent Activity now lives in the moderation workspace (relocated from the
+    # dashboard overview); its feed ages timestamps and must be self-contained.
+    workspace = source(JS / "moderation-workspace.js")
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
 
-    assert "const GUILD_DATA_REFRESH_MS = 5 * 60 * 1000" in guild
-    assert "setInterval(loadGuildOverview, GUILD_DATA_REFRESH_MS)" in guild
-    assert "data-activity-timestamp" in guild
-    assert "setInterval(refreshActivityTimes, ACTIVITY_TIME_REFRESH_MS)" in guild
-    assert "if (event.persisted) startGuildOverviewRefresh()" in guild
-    assert 'data-activity-timestamp="${escHtml(a.timestamp).replaceAll(' in guild
-    # The inline script must not depend on functions added to main.js recently:
+    assert "moderation-activity-feed" in detail
+    assert 'api(\'activity\')' in workspace or 'api(\"activity\")' in workspace
+    assert "data-activity-timestamp" in workspace
+    assert "setInterval(refreshActivityTimes" in workspace
+    assert 'data-activity-timestamp="${escHtml(a.timestamp).replaceAll(' in workspace
+    # The workspace script must not depend on functions added to main.js recently:
     # browsers cache main.js by version query, so a stale cached copy would
     # throw ReferenceError and render "Activity unavailable".
-    assert "escAttr(" not in guild
+    assert "escAttr(" not in workspace
 
 
 def test_time_ago_uses_explicit_utc_and_handles_invalid_or_future_values():
@@ -366,19 +369,21 @@ if (JSON.stringify(actual) !== JSON.stringify(expected)) {{
 
 
 def test_activity_feed_paginates_with_fade_and_load_more():
-    guild = source(TEMPLATES / "pages" / "guild.html")
+    # Recent Activity paginates inside the moderation workspace now.
+    workspace = source(JS / "moderation-workspace.js")
+    detail = source(TEMPLATES / "pages" / "module_detail.html")
 
-    assert "const ACTIVITY_PAGE_SIZE = 10" in guild
-    assert "activityItems.slice(0, (activityPage + 1) * ACTIVITY_PAGE_SIZE)" in guild
-    assert "activityPage += 1" in guild
-    assert "renderActivityPage" in guild
-    assert 'id="activity-load-more"' in guild
-    assert 'id="activity-more-wrap"' in guild
+    assert "const ACTIVITY_PAGE_SIZE = 10" in workspace
+    assert "activityItems.slice(0, (activityPage + 1) * ACTIVITY_PAGE_SIZE)" in workspace
+    assert "activityPage += 1" in workspace
+    assert "renderActivityPage" in workspace
+    assert 'id="moderation-activity-load-more"' in detail
+    assert 'id="moderation-activity-more"' in detail
     # The bottom fade is a CSS mask toggled only while more pages exist.
-    assert "classList.toggle('is-masked', hasMore)" in guild
+    assert "classList.toggle('is-masked', hasMore)" in workspace
     # Pagination must stay self-contained: no helpers from main.js that a stale
     # cached copy could lack.
-    assert "escAttr(" not in guild
+    assert "escAttr(" not in workspace
 
 
 def test_discord_toolbar_covers_discord_markdown_and_images():

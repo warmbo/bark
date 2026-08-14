@@ -594,6 +594,11 @@ textarea:focus-visible,
     gap: 6px;
 }
 
+/* Statistics page charts (dependency-free SVG). */
+.chart-wrap { position: relative; margin-top: 6px; }
+.chart-svg { width: 100%; height: auto; max-height: 300px; display: block; }
+.chart-current { position: absolute; top: 0; right: 0; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+
 .stat-value {
     font-size: 30px;
     font-weight: 700;
@@ -957,6 +962,47 @@ textarea:focus-visible,
 
 .activity-icon { flex-shrink: 0; font-size: 15px; }
 
+/* Server Events feed icons — join / leave colour cues. */
+.server-event-icon { flex-shrink: 0; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-full, 999px); }
+.server-event-join { color: var(--green, #86d9a4); background: color-mix(in srgb, var(--green, #86d9a4) 15%, transparent); }
+.server-event-leave { color: var(--red, #f87171); background: color-mix(in srgb, var(--red, #f87171) 15%, transparent); }
+
+/* Server profile header */
+.server-profile { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-lg, 12px); overflow: hidden; margin-bottom: 20px; }
+.server-banner { height: 140px; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; }
+.server-banner img { width: 100%; height: 140px; object-fit: cover; display: block; }
+.server-profile-body { padding: 16px 20px 18px; }
+.server-profile-head { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.server-avatar-lg { width: 52px; height: 52px; border-radius: var(--radius-lg, 12px); background: var(--bg-elevated); display: inline-flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
+.server-profile-name { margin: 0; }
+.server-profile-desc { margin: 2px 0 0; color: var(--text-tertiary); font-size: 13px; }
+
+.server-motd { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 8px); padding: 12px 14px; margin-bottom: 14px; }
+.server-motd-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); margin-bottom: 6px; }
+.server-motd-text { margin: 0; color: var(--text-primary); white-space: pre-wrap; }
+.server-motd-edit { display: flex; flex-direction: column; gap: 10px; }
+.motd-actions { display: flex; gap: 8px; }
+
+.server-info-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.info-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; font-size: 12px; color: var(--text-secondary); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-full, 999px); }
+.info-chip svg { color: var(--text-tertiary); }
+
+/* Discord scheduled events */
+.event-item { display: flex; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--border-subtle); align-items: flex-start; }
+.event-item:last-child { border-bottom: none; }
+.event-date { flex-shrink: 0; width: 44px; text-align: center; border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 8px); padding: 4px 2px; }
+.event-date strong { display: block; font-size: 17px; line-height: 1.1; color: var(--text-primary); }
+.event-date small { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); }
+.event-body { flex: 1; min-width: 0; }
+.event-name { font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.event-status { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 1px 7px; border-radius: var(--radius-full, 999px); }
+.event-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.event-desc { display: block; font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.event-side { flex-shrink: 0; text-align: right; font-size: 12px; color: var(--text-tertiary); display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.event-when { font-weight: 600; color: var(--text-secondary); }
+.event-interested { display: inline-flex; align-items: center; gap: 4px; color: var(--text-tertiary); }
+.event-link { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 600; }
+
 .activity-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .activity-reason {
@@ -1111,22 +1157,44 @@ textarea:focus-visible,
 
 .member-cell-joined {
     font-size: 13px;
-    color: var(--text-tertiary);
+    color: var(--text-primary);
     white-space: nowrap;
 }
+.member-cell-joined .join-ago { display: block; font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
 
-.member-role-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-subtle);
-    white-space: nowrap;
-    max-width: 140px;
+/* Sortable column headers on the members table. */
+.th-sort { display: inline-flex; align-items: center; gap: 5px; background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+.th-sort:hover { color: var(--text-primary); }
+.sort-indicator { font-size: 9px; color: var(--text-tertiary); }
+.th-sort:not(.sort-asc):not(.sort-desc) .sort-indicator::before { content: '↕'; opacity: .55; }
+.th-sort.sort-asc .sort-indicator::before { content: '▲'; color: var(--accent); }
+.th-sort.sort-desc .sort-indicator::before { content: '▼'; color: var(--accent); }
+.member-cell-age { white-space: nowrap; }
+
+/* Role chips colour-coded to the member's Discord roles (--rc = role colour). */
+.role-chip {
+    --rc: var(--border-subtle);
+    display: inline-flex;
+    align-items: center;
+    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 1px 8px;
+    margin: 1px 4px 1px 0;
+    font-size: 11px;
+    line-height: 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-full, 999px);
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
 }
+.role-chip[style] {
+    border-color: var(--rc);
+    color: var(--rc);
+    background: color-mix(in srgb, var(--rc) 13%, transparent);
+}
+.role-chip-more { opacity: .72; }
 
 .member-cell-actions { text-align: right; white-space: nowrap; }
 

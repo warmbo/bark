@@ -407,6 +407,60 @@
   }
 
   const loaders = {cases: loadCases, warnings: loadWarnings, notes: loadNotes, rulesets: loadRulesets, wordlists: loadWordlists, voice: loadVoice};
+
+  // Recent Activity feed (relocated from the dashboard overview to moderation).
+  const activityFeedEl = byId('moderation-activity-feed');
+  const activityMoreWrap = byId('moderation-activity-more');
+  const activityLoadMore = byId('moderation-activity-load-more');
+  const ACTIVITY_PAGE_SIZE = 10;
+  let activityItems = [];
+  let activityPage = 0;
+
+  function refreshActivityTimes() {
+    document.querySelectorAll('#moderation-activity-feed [data-activity-timestamp]').forEach(element => {
+      element.textContent = timeAgo(element.dataset.activityTimestamp);
+    });
+  }
+  function renderActivityItem(a) {
+    const time = a.timestamp ? timeAgo(a.timestamp) : '';
+    const timestampAttr = a.timestamp ? ` data-activity-timestamp="${escHtml(a.timestamp).replaceAll('"', '&quot;').replaceAll("'", '&#39;')}"` : '';
+    let reasonHtml = '';
+    if (a.reason) reasonHtml = `<span class="activity-reason">${escHtml(a.reason)}</span>`;
+    let metaHtml = '';
+    if (a.moderator && a.moderator !== a.target && a.moderator !== 'Unknown') {
+      metaHtml = `<span class="activity-meta">by ${escHtml(a.moderator)}</span>`;
+    }
+    const badge = a.category ? `<span class="activity-category cat-${safeClassToken(a.category, 'activity')}">${escHtml(a.category)}</span>` : '';
+    return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}${metaHtml}</span>${reasonHtml}${badge}<span class="activity-time"${timestampAttr}>${escHtml(time)}</span></div>`;
+  }
+  function renderActivityPage() {
+    const visible = activityItems.slice(0, (activityPage + 1) * ACTIVITY_PAGE_SIZE);
+    activityFeedEl.innerHTML = visible.map(renderActivityItem).join('');
+    const hasMore = visible.length !== activityItems.length;
+    activityFeedEl.classList.toggle('is-masked', hasMore);
+    if (activityMoreWrap) activityMoreWrap.hidden = !hasMore;
+    refreshIcons();
+  }
+  async function loadActivity() {
+    if (!activityFeedEl) return;
+    try {
+      const raw = await safeFetch(api('activity'), {cache: 'no-cache'});
+      activityItems = raw?.data?.activity || raw?.activity || [];
+      activityPage = 0;
+      if (activityItems.length === 0) {
+        activityFeedEl.innerHTML = `<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">${typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : ''}</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>`;
+        activityFeedEl.classList.remove('is-masked');
+        if (activityMoreWrap) activityMoreWrap.hidden = true;
+        return;
+      }
+      renderActivityPage();
+    } catch (error) {
+      activityFeedEl.innerHTML = `<div class="state-panel state-error" role="alert"><div><strong>Activity unavailable</strong><p>${escHtml(error.message || 'Activity could not be loaded.')}</p></div></div>`;
+    }
+  }
+  activityLoadMore?.addEventListener('click', () => { activityPage += 1; renderActivityPage(); });
+  if (activityFeedEl) { loadActivity(); setInterval(refreshActivityTimes, 60000); }
+
   document.addEventListener('click', (event) => {
     const target = event.target.closest('button'); if (!target || !root.contains(target) && !target.closest('.workspace-modal, .workspace-drawer-overlay')) return;
     if (target.dataset.refreshSection) loaders[target.dataset.refreshSection]?.();
