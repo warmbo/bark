@@ -123,6 +123,15 @@ def _make_dispatch(slash_leaf, check=None):
 
     async def dispatch(ctx: commands.Context, *raw_args: str) -> None:
         interaction = PrefixInteraction(ctx)
+        # Authorize the invoker — same gate the slash dispatcher applies.
+        # Prefix commands are a static fallback and are not Discord-registered,
+        # so their default_permissions are never enforced by the platform.
+        required = getattr(slash_leaf, "default_permissions", None)
+        if required is not None:
+            invoker_perms = getattr(getattr(ctx, "author", None), "guild_permissions", None)
+            if invoker_perms is None or not (invoker_perms >= required):
+                await ctx.send("❌ You don't have permission to use this command here.")
+                return
         if check is not None:
             try:
                 allowed = await check(interaction)

@@ -1220,3 +1220,85 @@ async def test_roles_api_flags_administrator_roles(db, monkeypatch):
     roles = response.json()["data"]["roles"]
     flags = {entry["name"]: entry["administrator"] for entry in roles}
     assert flags == {"Pleb": False, "Big Admin": True, "Admin+Manage": True}
+
+
+@pytest.mark.asyncio
+async def test_settings_redacts_staff_roles_for_moderator(db, monkeypatch):
+    """The staff-role security config (who can moderate/admin Bark here) must
+    be redacted from the settings dump for moderators and below — only admins
+    and owners see role IDs."""
+    import config
+    from database.models.guild import Guild, GuildSetting
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    async with session_scope() as session:
+        session.add(Guild(discord_id="100", name="Connected"))
+        session.add(GuildSetting(guild_id="100", key="dashboard_moderator_roles", value='["555"]'))
+        session.add(GuildSetting(guild_id="100", key="dashboard_admin_role", value="777"))
+        session.add(GuildSetting(guild_id="100", key="prefix", value="!"))
+        session.add(DashboardUser(discord_id="42", username="Cody", role="moderator"))
+        session.add(InstanceAccess(discord_user_id="42"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": "100", "name": "Connected", "permissions": str(0x20), "owner": False}],
+        )
+
+    bot_guild = MagicMock()
+    bot_guild.id = 100
+    bot_guild.name = "Connected"
+    bot_guild.icon = None
+    bot = MagicMock()
+    bot.guilds = [bot_guild]
+    bot.get_guild.side_effect = lambda gid: bot_guild if gid == 100 else None
+    app = _dashboard_app(bot)
+    cookie = _session_cookie({"user": {"id": "42", "username": "Cody"}, "role": "moderator"})
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies=dict(session=cookie),
+        follow_redirects=False,
+    ) as client:
+        response = await client.get("/api/v1/guilds/100/settings")
+
+    assert response.status_code == 200
+    settings = response.json()["data"]["settings"]
+    assert settings.get("prefix") == "!"  # benign settings still visible
+    assert "dashboard_moderator_roles" not in settings  # staff-role IDs redacted
+    assert "dashboard_admin_role" not in settings
+
+
+@pytest.mark.asyncio
+async def test_csrf_rejects_untrusted_origin_and_allows_trusted(db, monkeypatch):
+    """State-changing /api requests with an untrusted Origin must be rejected;
+    a trusted Origin passes the CSRF gate."""
+    import config
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    bot = MagicMock()
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {}
+    app = _dashboard_app(bot)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Untrusted Origin (an attacker's site) -> CSRF gate rejects.
+        evil = await client.post(
+            "/api/v1/guilds/100/notes", json={}, headers={"Origin": "http://evil.example"}
+        )
+        assert evil.status_code == 403
+        assert "Cross-origin" in evil.json()["error"]
+        # Trusted Origin (the Bark dashboard host) -> passes the CSRF gate.
+        trusted = await client.post(
+            "/api/v1/guilds/100/notes",
+            json={},
+            headers={"Origin": "http://10.0.0.227:8091"},
+        )
+        assert "Cross-origin" not in (trusted.text or "")

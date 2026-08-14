@@ -272,7 +272,14 @@ async def get_all_settings(request: Request, guild_id: int):
         )
         settings = {s.key: s.value for s in result.scalars().all()}
 
-        return api_success({"settings": settings})
+    # The staff-role security config (who can moderate/admin Bark here) is
+    # admin/owner-only. Redact it for moderators and below so role IDs aren't
+    # exposed to semi-trusted users.
+    if request.session.get("role") not in ("admin", "owner"):
+        for key in ("dashboard_admin_role", "dashboard_moderator_roles"):
+            settings.pop(key, None)
+
+    return api_success({"settings": settings})
 
 
 @router.put("/guilds/{guild_id}/settings/general")

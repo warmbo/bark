@@ -79,6 +79,39 @@ def test_prefix_command_dispatches_handler_with_converted_args():
     assert _captured["times"] == 3  # int converted
 
 
+def _make_restricted_command():
+    """A real app_commands Command with a ban_members default_permissions."""
+    @discord.app_commands.command(name="ban", description="Ban a member")
+    @discord.app_commands.default_permissions(ban_members=True)
+    async def ban_cmd(interaction: discord.Interaction, member: discord.Member) -> None:
+        _captured["banned"] = True
+    return ban_cmd
+
+
+def test_prefix_command_denies_invoker_without_required_permission():
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "ban", _make_restricted_command())
+    ctx = _make_ctx()
+    ctx.author.guild_permissions = discord.Permissions.none()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "@someone"))
+    assert "banned" not in _captured  # handler never ran
+    ctx.send.assert_awaited_once()
+    assert "permission" in ctx.send.await_args.args[0]
+
+
+def test_prefix_command_allows_invoker_with_required_permission():
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "ban", _make_restricted_command())
+    ctx = _make_ctx()
+    ctx.author.guild_permissions = discord.Permissions(ban_members=True)
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "@someone"))
+    assert _captured.get("banned") is True  # handler ran
+
+
 def test_prefix_response_send_message_calls_ctx_send():
     ctx = _make_ctx()
     resp = PrefixResponse(ctx)

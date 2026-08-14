@@ -51,11 +51,14 @@ _GUILD_PATH = re.compile(r"^/(?:api/v1/)?guilds?/(\d+)(?:/|$)")
 # handlers crash on int(guild_id) -> 500. Reject it at the boundary.
 _GUILD_PATH_NONDIGIT = re.compile(r"^/(?:api/v1/)?guilds?/[^\d/][^/]*(?:/|$)")
 _MANAGEMENT_PAGE_PATH = re.compile(
-    r"^/(?:api/v1/)?guilds?/\d+/(members|modules|moderation|settings)(?:/|$)"
+    r"^/(?:api/v1/)?guilds?/\d+/(members|modules|moderation|settings|notes|activity|uploads|events)(?:/|$)"
 )
 _MODULE_ACTION_PATH = re.compile(r"^/api/v1/guilds/(\d+)/modules/([a-z0-9_-]+)/(.+)$")
 _API_GUILD_MUTATION_PATH = re.compile(r"^/api/v1/guilds/\d+/(.+)$")
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+# Sliding session renewal interval: refresh the cookie Max-Age at most this
+# often per active session, instead of re-signing on every request.
+SESSION_RENEW_SECONDS = 300
 
 
 def _guild_id_from_path(path: str) -> str | None:
@@ -191,11 +194,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if user is None:
             return _auth_required_response(path)
 
-        # Sliding session renewal: write a rotating value on every
-        # authenticated request so Starlette re-signs the cookie with a fresh
-        # Max-Age. An active user stays logged in indefinitely; inactivity
-        # beyond session_ttl still expires the cookie (signer max_age).
-        request.session["_renewed"] = int(time.monotonic())
+        # Sliding session renewal: refresh the cookie Max-Age at most once per
+        # SESSION_RENEW_SECONDS instead of on every request, so an active user
+        # stays logged in indefinitely but responses don't all carry a fresh
+        # Set-Cookie. Inactivity beyond session_ttl still expires the cookie
+        # (signer max_age).
+        if int(time.monotonic()) - request.session.get("_renewed", 0) >= SESSION_RENEW_SECONDS:
+            request.session["_renewed"] = int(time.monotonic())
 
         # Bark instances admit any Discord user who is a member of a server
         # where Bark is installed — login is always required, but no dashboard
@@ -281,15 +286,25 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # dashboard/statistics/info status page, with every management
             # page and module surface blocked.
             request.state.guild_viewer = not can_manage
-            if request.state.guild_viewer and _is_management_page(path):
-                if path.startswith("/api/"):
+            if request.state.guild_viewer:
+                # Viewers are hard read-only. Block every state-changing guild
+                # API call regardless of module role overrides (a "viewer"
+                # override on a private module must not let a plain member
+                # mutate), and block reads of private/management surfaces.
+                if path.startswith("/api/v1/guilds/") and request.method not in _SAFE_METHODS:
                     return _json_error(
                         403,
-                        "View-only access: managing this server requires admin or moderator rights",
+                        "View-only access: this server is read-only for you",
                     )
-                from fastapi.responses import RedirectResponse
+                if _is_management_page(path):
+                    if path.startswith("/api/"):
+                        return _json_error(
+                            403,
+                            "View-only access: managing this server requires admin or moderator rights",
+                        )
+                    from fastapi.responses import RedirectResponse
 
-                return RedirectResponse(url=f"/guild/{guild_id}", status_code=303)
+                    return RedirectResponse(url=f"/guild/{guild_id}", status_code=303)
 
         action = mutation_capability(request.method, path)
         if action is not None:
@@ -382,7 +397,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             return RedirectResponse(url=url, status_code=301)
 
         origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
         origin_host = urlsplit(origin).hostname if origin else None
+        referer_host = urlsplit(referer).hostname if referer else None
         allowed_origins = _TRUSTED_ORIGIN_HOSTS
         public_host = urlsplit(config.dashboard.public_url).hostname
         if public_host:
@@ -390,10 +407,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if (
             (request.url.path.startswith("/api/") or request.url.path == "/auth/logout")
             and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
-            and origin
-            and origin_host not in allowed_origins
         ):
-            return _json_error(403, "Cross-origin write rejected")
+            # CSRF gate. An Origin header must be trusted when present. When it
+            # is absent, fall back to Referer and reject if that is present but
+            # untrusted. (Both-absent requests — curl/scripts — carry no victim
+            # session in a browser and the session cookie is SameSite=Lax, so
+            # they are not a browser CSRF vector.)
+            if origin_host is not None:
+                if origin_host not in allowed_origins:
+                    return _json_error(403, "Cross-origin write rejected")
+            elif referer_host is not None and referer_host not in allowed_origins:
+                return _json_error(403, "Cross-origin write rejected")
 
         module_action = _module_action_from_path(request.url.path)
         if module_action is not None:

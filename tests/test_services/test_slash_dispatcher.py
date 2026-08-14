@@ -40,6 +40,7 @@ def _make_leaf(name="warn", params=()):
     leaf.callback = callback
     leaf.parameters = list(params)
     leaf.commands = None  # a leaf has no subcommands (only Groups do)
+    leaf.default_permissions = None  # no permission gate by default
     return leaf, callback
 
 
@@ -238,4 +239,41 @@ async def test_autocomplete_filters_by_current():
     choices = await d._autocomplete(interaction, "wa")
     values = [c.value for c in choices]
     assert values == ["warn", "warnings"]
-    assert "ban" not in values
+
+
+@pytest.mark.asyncio
+async def test_dispatch_denies_invoker_without_required_permission():
+    """A plain member must not run a command whose default_permissions they lack."""
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    leaf, callback = _make_leaf("ban")
+    leaf.default_permissions = discord.Permissions(ban_members=True)
+    _register_fake_module(d, "moderation", "ban", leaf)
+
+    interaction = MagicMock()
+    interaction.guild_id = 1
+    interaction.user = SimpleNamespace(guild_permissions=discord.Permissions.none())
+    interaction.response.send_message = AsyncMock()
+
+    await d.dispatch(interaction, "ban", "@someone")
+    assert callback.await_count == 0  # never reached the handler
+    interaction.response.send_message.assert_awaited_once()
+    args, kwargs = interaction.response.send_message.await_args
+    assert "permission" in args[0]
+    assert kwargs["ephemeral"] is True
+
+
+@pytest.mark.asyncio
+async def test_dispatch_allows_invoker_with_required_permission():
+    """An invoker holding the declared permission is dispatched to the handler."""
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    leaf, callback = _make_leaf("ban")
+    leaf.default_permissions = discord.Permissions(ban_members=True)
+    _register_fake_module(d, "moderation", "ban", leaf)
+
+    interaction = MagicMock()
+    interaction.guild_id = 1
+    interaction.user = SimpleNamespace(guild_permissions=discord.Permissions(ban_members=True))
+    interaction.response = MagicMock()
+
+    await d.dispatch(interaction, "ban", "@someone")
+    assert callback.await_count == 1

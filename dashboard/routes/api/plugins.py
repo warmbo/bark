@@ -49,9 +49,9 @@ async def install_plugin(request: Request, file: UploadFile = File(...)):
         )
     except PluginValidationError as exc:
         return api_error(str(exc), status_code=400)
-    except Exception as exc:
+    except Exception:
         logger.exception("Plugin install failed")
-        return api_error(f"Plugin install failed: {exc}", status_code=500)
+        return api_error("Plugin install failed", status_code=500)
     return api_success(metadata)
 
 

@@ -174,6 +174,22 @@ class SlashDispatcher:
         await self._show_unknown(interaction, path)
 
     async def _invoke_leaf(self, interaction: discord.Interaction, leaf: Leaf, args: str) -> None:
+        # Authorize the invoker. Every command runs through this dispatcher,
+        # but the leaf app-commands are never added to the tree (only the
+        # single top-level command is), so Discord never enforces their
+        # @default_permissions. Re-apply the declared requirement here against
+        # the invoker's guild permissions — this is the ONLY server-side gate
+        # that keeps a plain member from running /bark ban @Owner.
+        required = leaf.command.default_permissions
+        if required is not None:
+            member = getattr(interaction, "user", None)
+            user_perms = getattr(member, "guild_permissions", None)
+            if user_perms is None or not (user_perms >= required):
+                await interaction.response.send_message(
+                    "❌ You don't have permission to use this command here.",
+                    ephemeral=True,
+                )
+                return
         if leaf.check is not None:
             try:
                 if not await leaf.check(interaction):
