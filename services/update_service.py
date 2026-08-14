@@ -571,5 +571,11 @@ async def apply_update_async(branch: str) -> dict:
             logger.error("Update did not apply; staying on current build: %s", result)
         set_update_phase("", done=True)
         return result
+    except Exception:
+        # A worker exception must not leave the update phase pending, or the
+        # dashboard UI hangs on "update started / restarting" forever.
+        logger.exception("Update worker raised; marking update finished")
+        set_update_phase("", done=True)
+        return {"ok": False, "error": "Update worker raised"}
     finally:
         set_update_active(False)
