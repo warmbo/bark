@@ -73,6 +73,30 @@ async def test_server_event_buffer_is_bounded():
 
 
 @pytest.mark.asyncio
+async def test_message_stats_track_messages_channels_and_emojis():
+    from types import SimpleNamespace
+
+    bot = BarkBot()
+    bot.record_message(5, SimpleNamespace(id=100, name="general"))
+    bot.record_message(5, SimpleNamespace(id=100, name="general"))
+    bot.record_message(5, SimpleNamespace(id=200, name="memes"))
+    # Plain strings stand in for a custom emoji whose str() is its name.
+    bot.record_reaction(5, "laugh")
+    bot.record_reaction(5, "laugh")
+    bot.record_reaction(5, "wow")
+
+    stats = bot.message_stats(5)
+    assert stats["messages"] == 3
+    assert stats["channels"]["100"]["name"] == "general"
+    assert stats["channels"]["100"]["count"] == 2
+    assert stats["channels"]["200"]["count"] == 1
+    assert stats["emojis"]["laugh"] == 2
+    assert stats["emojis"]["wow"] == 1
+    # A different guild is tracked independently.
+    assert bot.message_stats(9)["messages"] == 0
+
+
+@pytest.mark.asyncio
 async def test_on_interaction_logs_without_dispatching():
     """The framework (ConnectionState.parse_interaction_create) dispatches
     commands to the tree — on_interaction must only log. Calling a

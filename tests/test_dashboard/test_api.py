@@ -609,6 +609,75 @@ async def test_list_members_includes_role_colors_and_join_date(app, monkeypatch)
     assert m["joined_at"] is None
 
 
+@pytest.mark.asyncio
+async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(app, monkeypatch):
+    """get_guild returns the server profile (MOTD + Discord events) and the
+    stats endpoint surfaces today's message/emoji activity."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from database.engine import session_scope
+    from database.models.guild import Guild, GuildSetting
+
+    async with session_scope() as s:
+        from sqlalchemy import select
+
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "123456"))).scalars().first():
+            s.add(Guild(discord_id="123456", name="Profile Guild"))
+        s.add(GuildSetting(guild_id="123456", key="motd", value="Welcome everyone!"))
+        await s.commit()
+
+    ev = SimpleNamespace(
+        id=1, name="Movie Night", description="Watch a movie",
+        start_time=None, end_time=None, status=SimpleNamespace(name="scheduled"),
+        entity_type=SimpleNamespace(name="external"), url="https://discord.gg/x",
+        user_count=12, channel=None,
+    )
+    guild = SimpleNamespace(
+        id=123456, name="Profile Guild", member_count=42, owner_id=1,
+        owner=None, banner=None, icon=None, description="A nice server",
+        premium_tier=1, premium_subscription_count=3, premium_subscriber_count=3, max_members=100,
+        channels=[], roles=[], emojis=[], created_at=None,
+        verification_level=SimpleNamespace(name="moderate"), features=["ANIMATED_ICON"],
+        scheduled_events=[ev], members=[], text_channels=[], voice_channels=[],
+    )
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    bot.message_stats = lambda _gid: {
+        "date": "2026-08-14", "messages": 5,
+        "channels": {"100": {"name": "general", "count": 3}, "200": {"name": "memes", "count": 2}},
+        "emojis": {"laugh": 4},
+    }
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot), session={"role": "admin"},
+        url=SimpleNamespace(path="/api/v1/guilds/123456"),
+    )
+
+    import json
+    profile = await guilds.get_guild(request, 123456)
+    assert profile.status_code == 200
+    data = json.loads(profile.body)["data"]
+    assert data["name"] == "Profile Guild"
+    assert data["motd"] == "Welcome everyone!"
+    assert data["verification_level"] == "moderate"
+    assert data["scheduled_events"][0]["name"] == "Movie Night"
+    assert data["scheduled_events"][0]["user_count"] == 12
+
+    stats = await guilds.get_guild_stats(request, 123456)
+    assert stats.status_code == 200
+    sdata = json.loads(stats.body)["data"]
+    assert sdata["messages_today"] == 5
+    assert sdata["top_channels_today"][0]["name"] == "general"
+    assert sdata["top_channels_today"][0]["count"] == 3
+    assert sdata["top_emojis_today"][0] == {"name": "laugh", "count": 4}
+
+
 def test_module_config_validation_rejects_array_and_enum_type_drift():
     from dashboard.routes.api.modules import _validate_config
 

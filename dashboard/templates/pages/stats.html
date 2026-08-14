@@ -20,6 +20,9 @@
         <div class="stat-card"><div class="stat-label">{{ icon("headphones", 14) }} In Voice</div><div class="stat-value" id="stat-voice">—</div><div class="stat-change">Right now</div></div>
         <div class="stat-card"><div class="stat-label">{{ icon("scroll-text", 14) }} Cases</div><div class="stat-value" id="stat-cases">—</div><div class="stat-change" id="stat-cases-7d">—</div></div>
         <div class="stat-card"><div class="stat-label">{{ icon("trending-up", 14) }} Growth (30d)</div><div class="stat-value" id="stat-growth">—</div><div class="stat-change">Net member change</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("message-square", 14) }} Messages Today</div><div class="stat-value" id="stat-messages">—</div><div class="stat-change">Non-bot messages</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("hash", 14) }} Most Active Channel</div><div class="stat-value" id="stat-top-channel">—</div><div class="stat-change" id="stat-top-channel-count">—</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("smile", 14) }} Most Used Emoji</div><div class="stat-value" id="stat-top-emoji">—</div><div class="stat-change" id="stat-top-emoji-count">—</div></div>
     </div>
 
     <div class="guild-layout">
@@ -38,6 +41,24 @@
                     <div><h2 class="card-title">{{ icon("scroll-text", 16) }} Cases by Type</h2><p class="card-description">Moderation actions recorded</p></div>
                 </div>
                 <div class="chart-wrap" id="chart-cases"><div class="skeleton skeleton-row"></div></div>
+            </div>
+        </div>
+
+        <!-- Top channels today bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("hash", 16) }} Top Channels Today</h2><p class="card-description">Most messages by channel</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-channels"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Top emojis today bar chart -->
+        <div>
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("smile", 16) }} Most Used Emojis Today</h2><p class="card-description">Emoji reactions received</p></div>
+                </div>
+                <div class="chart-wrap" id="chart-emojis"><div class="skeleton skeleton-row"></div></div>
             </div>
         </div>
     </div>
@@ -74,6 +95,13 @@ async function loadStats() {
         setStat('stat-cases-7d', d.cases_7d != null ? d.cases_7d + ' last 7d' : null);
         const g = d.growth_30d;
         setStat('stat-growth', g != null ? (g > 0 ? '+' + g : g) : null);
+        setStat('stat-messages', d.messages_today);
+        const topCh = (d.top_channels_today || [])[0];
+        const topEm = (d.top_emojis_today || [])[0];
+        setStat('stat-top-channel', topCh ? '#' + topCh.name : null);
+        setStat('stat-top-channel-count', topCh && topCh.count != null ? topCh.count + ' msgs' : '—');
+        setStat('stat-top-emoji', topEm && topEm.name ? topEm.name : null);
+        setStat('stat-top-emoji-count', topEm && topEm.count != null ? topEm.count + ' uses' : '—');
 
         // Charts
         const growth = (d.growth_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.members }));
@@ -81,6 +109,10 @@ async function loadStats() {
             BarkCharts.lineChart(document.getElementById('chart-growth'), growth, {label: 'Member count', valueLabel: 'Members'});
             const cases = Object.entries(d.cases_by_type || {}).map(([k, v]) => ({label: k, value: v})).sort((a, b) => b.value - a.value);
             BarkCharts.barChart(document.getElementById('chart-cases'), cases, {label: 'Cases by type'});
+            const channels = (d.top_channels_today || []).map(c => ({label: '#' + c.name, value: c.count}));
+            BarkCharts.barChart(document.getElementById('chart-channels'), channels, {label: 'Messages by channel'});
+            const emojis = (d.top_emojis_today || []).map(e => ({label: e.name, value: e.count}));
+            BarkCharts.barChart(document.getElementById('chart-emojis'), emojis, {label: 'Emoji reactions'});
         }
     } catch (e) {
         setStat('stat-members', 'Unavailable');

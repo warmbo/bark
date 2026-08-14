@@ -43,14 +43,33 @@ class MockGuild:
         self.icon = None
         self.premium_subscription_count = 5
         self.premium_tier = 2
+        self.max_members = 200
         self.verification_level = MagicMock()
         self.verification_level.name = "Medium"
         self.created_at = datetime(2023, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        self.description = "A friendly test server for Bark's dashboard."
+        self.banner = None
+        self.features = ["ANIMATED_ICON", "NEWS"]
+
+        # Discord scheduled events for the profile page.
+        _ev_channel = MagicMock()
+        _ev_channel.name = "General"
+        self.scheduled_events = [
+            MagicMock(id=501, name="Movie Night", description="Watch a movie together",
+                      start_time=datetime(2026, 8, 20, 20, 0, tzinfo=timezone.utc), end_time=None,
+                      status=MagicMock(name="scheduled"), entity_type=MagicMock(name="voice"),
+                      url="https://discord.gg/events/501", user_count=8, channel=_ev_channel),
+            MagicMock(id=502, name="Game Night", description=None,
+                      start_time=datetime(2026, 8, 22, 19, 0, tzinfo=timezone.utc), end_time=None,
+                      status=MagicMock(name="scheduled"), entity_type=MagicMock(name="external"),
+                      url="https://discord.gg/events/502", user_count=12, channel=None),
+        ]
 
         # Owner
         self.owner = MagicMock()
         self.owner.name = "TestOwner"
         self.owner.id = 98765
+        self.owner_id = 98765
 
         # Channels
         self.text_channels = [MagicMock(spec=discord.TextChannel) for _ in range(10)]
@@ -175,6 +194,25 @@ class MockBarkBot:
     def recent_server_events(self, guild_id, limit=25):
         return self._server_events.get(guild_id, [])[:limit]
 
+    def record_message(self, guild_id, channel):
+        pass
+
+    def record_reaction(self, guild_id, emoji):
+        pass
+
+    def message_stats(self, guild_id):
+        from datetime import date
+        return {
+            "date": date.today().isoformat(),
+            "messages": 42,
+            "channels": {
+                "1000": {"name": "channel-0", "count": 20},
+                "1001": {"name": "channel-1", "count": 12},
+                "1002": {"name": "channel-2", "count": 6},
+            },
+            "emojis": {"laugh": 30, "wow": 8, "🔥": 5},
+        }
+
 
 # Also inject a mock into bot.client for any direct imports
 import bot.client
@@ -227,6 +265,10 @@ def seed_growth():
             if not (await s.execute(select(DashboardUser).where(DashboardUser.discord_id == "42"))).scalars().first():
                 s.add(DashboardUser(discord_id="42", username="Tester", role="admin"))
                 await s.flush()
+            from database.models.guild import GuildSetting
+
+            if not (await s.execute(select(GuildSetting).where(GuildSetting.guild_id == str(bot._guild.id), GuildSetting.key == "motd"))).scalars().first():
+                s.add(GuildSetting(guild_id=str(bot._guild.id), key="motd", value="Welcome to the Test Guild! 👋 Check the events below."))
             await replace_user_guild_access(
                 s,
                 "42",

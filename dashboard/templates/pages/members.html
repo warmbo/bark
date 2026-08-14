@@ -35,6 +35,7 @@
                 <option value="joined_at">Sort: Newest First</option>
                 <option value="joined_at_asc">Sort: Oldest First</option>
                 <option value="account_age">Sort: Oldest Account</option>
+                <option value="account_age_asc">Sort: Newest Account</option>
                 <option value="role">Sort: Role</option>
             </select>
         </div>
@@ -45,14 +46,15 @@
             <caption class="sr-only">Server members</caption>
             <thead>
                 <tr>
-                    <th scope="col">Member</th>
-                    <th scope="col">Date Joined</th>
-                    <th scope="col">Roles</th>
+                    <th scope="col"><button type="button" class="th-sort" data-sort="name" aria-label="Sort by member name">Member <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col"><button type="button" class="th-sort" data-sort="account_age" aria-label="Sort by account age">Account Age <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col"><button type="button" class="th-sort" data-sort="joined_at" aria-label="Sort by date joined">Date Joined <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col"><button type="button" class="th-sort" data-sort="role" aria-label="Sort by role">Roles <span class="sort-indicator" aria-hidden="true"></span></button></th>
                     <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody id="member-table-body">
-                <tr><td colspan="4"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></td></tr>
+                <tr><td colspan="5"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></td></tr>
             </tbody>
         </table>
     </div>
@@ -83,6 +85,17 @@ function formatJoinDate(iso) {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '<span class="text-tertiary">Unknown</span>';
     return d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+}
+
+function formatAccountAge(days) {
+    const n = Number(days);
+    if (!Number.isFinite(n) || n < 0) return '<span class="text-tertiary">Unknown</span>';
+    if (n >= 365) {
+        const y = Math.floor(n / 365), m = Math.floor((n % 365) / 30);
+        return `${y}y ${m}mo`;
+    }
+    if (n >= 30) return `${Math.floor(n / 30)}mo`;
+    return `${n}d`;
 }
 
 function timeAgoRel(iso) {
@@ -141,12 +154,12 @@ async function loadMembers(page = 0, append = false) {
     let sort = 'name', order = 'asc';
     if (sortVal === 'name_desc') { sort = 'name'; order = 'desc'; }
     else if (sortVal === 'joined_at' || sortVal === 'joined_at_asc') { sort = 'joined_at'; order = sortVal === 'joined_at' ? 'desc' : 'asc'; }
-    else if (sortVal === 'account_age') { sort = 'account_age'; order = 'desc'; }
+    else if (sortVal === 'account_age' || sortVal === 'account_age_asc') { sort = 'account_age'; order = sortVal === 'account_age' ? 'desc' : 'asc'; }
     else if (sortVal === 'role') { sort = 'role'; order = 'asc'; }
 
     if (loadMore) { loadMore.disabled = true; loadMore.innerHTML = 'Loading...'; }
     if (!append) {
-        tbody.innerHTML = '<tr><td colspan="4"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></td></tr>';
         count.textContent = 'Loading…';
         if (pagination) pagination.hidden = true;
     }
@@ -176,6 +189,7 @@ async function loadMembers(page = 0, append = false) {
                         ${m.is_bot?'<span class="badge-sm bot">BOT</span>':''}${m.is_timed_out?'<span class="badge-sm timeout">TIMEOUT</span>':''}
                     </a>
                 </td>
+                <td class="member-cell-age"><span>${formatAccountAge(m.account_age_days)}</span><span class="text-tertiary join-ago">Account created</span></td>
                 <td class="member-cell-joined"><span>${formatJoinDate(m.joined_at)}</span>${m.joined_at ? `<span class="text-tertiary join-ago">${timeAgoRel(m.joined_at)}</span>` : ''}</td>
                 <td class="member-cell-role">${renderMemberRoles(m.roles, m.top_role, m.top_role_color)}</td>
                 <td class="member-cell-actions">
@@ -194,11 +208,11 @@ async function loadMembers(page = 0, append = false) {
         } else {
             tbody.innerHTML = '';
             if (data.members.length === 0 && !search && !roleId) {
-                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + getIconSvg('users', 18) + '</span><div><strong>No members in this server</strong><p>Invite members or check back later.</p></div></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + getIconSvg('users', 18) + '</span><div><strong>No members in this server</strong><p>Invite members or check back later.</p></div></div></td></tr>';
                 if (pagination) pagination.hidden = true;
                 return;
             } else if (data.members.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + getIconSvg('filter', 18) + '</span><div><strong>No matching members</strong><p>Try adjusting your search or filters.</p></div></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5"><div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + getIconSvg('filter', 18) + '</span><div><strong>No matching members</strong><p>Try adjusting your search or filters.</p></div></div></td></tr>';
                 if (pagination) pagination.hidden = true;
                 return;
             }
@@ -214,7 +228,7 @@ async function loadMembers(page = 0, append = false) {
         if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; }
     } catch (e) {
         if (requestToken !== memberRequestToken) return;
-        if (!append) tbody.innerHTML = `<tr><td colspan="4"><div class="state-panel state-error" role="alert"><div><strong>Failed to load members</strong><p>${escHtml(e.message)}</p></div><button type="button" class="btn btn-sm" data-retry-members>Retry</button></div></td></tr>`;
+        if (!append) tbody.innerHTML = `<tr><td colspan="5"><div class="state-panel state-error" role="alert"><div><strong>Failed to load members</strong><p>${escHtml(e.message)}</p></div><button type="button" class="btn btn-sm" data-retry-members>Retry</button></div></td></tr>`;
         else membersPage = Math.max(0, membersPage - 1);
         count.textContent = 'Unavailable';
         if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; }
@@ -285,6 +299,45 @@ document.getElementById('member-search').addEventListener('input', (e) => {
 document.getElementById('filter-role').addEventListener('change', reloadMembers);
 document.getElementById('filter-age').addEventListener('change', reloadMembers);
 document.getElementById('filter-sort').addEventListener('change', reloadMembers);
+
+// Sortable column headers — clicking a header toggles asc/desc and reloads.
+const TH_DEFAULTS = { name: 'asc', joined_at: 'desc', account_age: 'desc', role: 'asc' };
+function thField() {
+    const v = document.getElementById('filter-sort').value;
+    for (const f of ['name', 'joined_at', 'account_age', 'role']) if (v.startsWith(f)) return f;
+    return 'name';
+}
+function thOrder() {
+    const v = document.getElementById('filter-sort').value, f = thField();
+    if (v.endsWith('_asc')) return 'asc';
+    if (v.endsWith('_desc')) return 'desc';
+    return TH_DEFAULTS[f] || 'asc';
+}
+function thSetDropdown(field, order) {
+    const map = {
+        name: order === 'desc' ? 'name_desc' : 'name',
+        joined_at: order === 'asc' ? 'joined_at_asc' : 'joined_at',
+        account_age: order === 'asc' ? 'account_age_asc' : 'account_age',
+        role: 'role',
+    };
+    document.getElementById('filter-sort').value = map[field] || 'name';
+}
+function thUpdateIndicators() {
+    const f = thField(), o = thOrder();
+    document.querySelectorAll('.th-sort').forEach(b => {
+        b.classList.toggle('sort-asc', b.dataset.sort === f && o === 'asc');
+        b.classList.toggle('sort-desc', b.dataset.sort === f && o === 'desc');
+    });
+}
+document.querySelector('.member-table thead').addEventListener('click', (e) => {
+    const btn = e.target.closest('.th-sort');
+    if (!btn) return;
+    const field = btn.dataset.sort;
+    thSetDropdown(field, thField() === field && thOrder() === 'asc' ? 'desc' : 'asc');
+    thUpdateIndicators();
+    reloadMembers();
+});
+thUpdateIndicators();
 
 loadMembers(0, false);
 

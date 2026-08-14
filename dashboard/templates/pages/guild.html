@@ -1,114 +1,63 @@
 {% extends "base.html" %}
 {% block title %}{{ guild.name }}{% endblock %}
-{% block og_description %}Server overview with activity, stats, and quick actions for Bark bot{% endblock %}
+{% block og_description %}Server profile, message of the day, and upcoming events for {{ guild.name }}{% endblock %}
 
 {% block content %}
 {% set active_page = "overview" %}
 
 <div class="page-container">
-    <!-- Standard page header (matches Members / Modules / Settings) -->
-    <div class="page-header">
-        <h1 class="page-title">{{ icon("layout-dashboard", 24) }} Overview</h1>
-        <p class="page-subtitle">Server overview with activity, stats, and quick actions</p>
-    </div>
+    <!-- Server profile header -->
+    <div class="server-profile">
+        {% if guild.banner %}
+        <div class="server-banner" role="img" aria-label="Server banner">
+            <img src="{{ guild.banner.url }}" data-fallback-src="/static/img/bark-avatar.png" alt="" loading="lazy">
+        </div>
+        {% endif %}
+        <div class="server-profile-body">
+            <div class="server-profile-head">
+                <span class="server-avatar-lg">{{ icon("shield", 22) }}</span>
+                <div class="server-profile-titles">
+                    <h1 class="page-title server-profile-name">{{ guild.name }}</h1>
+                    {% if guild.description %}<p class="server-profile-desc">{{ guild.description }}</p>{% endif %}
+                </div>
+            </div>
 
-    <!-- Health Score + Growth Row -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-label">{{ icon("users", 14) }} Members</div>
-            <div class="stat-value">{{ guild.member_count }}</div>
-            <div class="stat-change positive" id="growth-indicator">{{ icon("trending-up", 12) }} {{ guild.premium_subscription_count }} boosting</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">{{ icon("message-circle", 14) }} Channels</div>
-            <div class="stat-value">{{ guild.channels | length }}</div>
-            <div class="stat-change">{{ guild.text_channels | length }} text, {{ guild.voice_channels | length }} voice</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">{{ icon("tag", 14) }} Roles</div>
-            <div class="stat-value">{{ guild.roles | length }}</div>
-            <div class="stat-change">{{ guild.roles[1:20] | length }} assignable</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">{{ icon("zap", 14) }} Level</div>
-            <div class="stat-value">Tier {{ guild.premium_tier }}</div>
-            <div class="stat-change">Created {{ guild.created_at.strftime('%b %Y') if guild.created_at else 'Unknown' }}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">{{ icon("smile", 14) }} Emojis</div>
-            <div class="stat-value">{{ guild.emojis | length }}</div>
-            <div class="stat-change">{{ guild.emojis | selectattr('animated') | list | length }} animated</div>
-        </div>
-    </div>
+            <!-- MOTD -->
+            <div class="server-motd" id="motd-block" hidden>
+                <div class="server-motd-display" id="motd-display">
+                    <div class="server-motd-label">{{ icon("message-square", 14) }} Message of the Day</div>
+                    <p class="server-motd-text" id="motd-text">Loading…</p>
+                    <button type="button" class="btn btn-xs motd-edit-btn" id="motd-edit" hidden>{{ icon("pencil", 12) }} Edit</button>
+                </div>
+                <div class="server-motd-edit" id="motd-edit-form" hidden>
+                    <textarea class="form-textarea" id="motd-input" name="motd" rows="2" maxlength="1000" aria-label="Message of the day"></textarea>
+                    <div class="motd-actions">
+                        <button type="button" class="btn btn-sm btn-accent" id="motd-save">{{ icon("check", 14) }} Save</button>
+                        <button type="button" class="btn btn-sm" id="motd-cancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
 
-    <!-- Online / Boost / Case Mini Row -->
-    <div class="stats-grid mini-stats">
-        <div class="stat-card compact">
-            <span class="stat-label">{{ icon("activity", 12) }} Online</span>
-            <span class="stat-value-sm" id="online-count">—</span>
-        </div>
-        <div class="stat-card compact">
-            <span class="stat-label">{{ icon("zap", 12) }} Boosts</span>
-            <span class="stat-value-sm">{{ guild.premium_subscription_count }}</span>
-        </div>
-        <div class="stat-card compact">
-            <span class="stat-label">{{ icon("scroll-text", 12) }} Cases (7d)</span>
-            <span class="stat-value-sm" id="case-count-7d">—</span>
-        </div>
-        <div class="stat-card compact">
-            <span class="stat-label">{{ icon("trending-up", 12) }} Growth (30d)</span>
-            <span class="stat-value-sm" id="growth-30d">—</span>
-        </div>
-        <div class="stat-card compact">
-            <span class="stat-label">{{ icon("headphones", 12) }} In Voice</span>
-            <span class="stat-value-sm" id="voice-count">—</span>
+            <!-- Server info chips -->
+            <div class="server-info-chips" id="server-info-chips">
+                <span class="info-chip" id="info-members">{{ icon("users", 14) }} <span>—</span></span>
+                <span class="info-chip" id="info-created">{{ icon("calendar", 14) }} <span>—</span></span>
+                <span class="info-chip" id="info-boost">{{ icon("zap", 14) }} <span>—</span></span>
+                <span class="info-chip" id="info-owner">{{ icon("crown", 14) }} <span>—</span></span>
+                <span class="info-chip" id="info-verification">{{ icon("shield-check", 14) }} <span>—</span></span>
+                <span class="info-chip" id="info-channels">{{ icon("message-circle", 14) }} <span>—</span></span>
+            </div>
         </div>
     </div>
 
-    <div class="content-card server-events-card">
+    <!-- Scheduled Discord Events -->
+    <div class="content-card events-card">
         <div class="card-header">
-            <h2 class="card-title">{{ icon("users", 16) }} Server Events</h2>
-            <span class="text-tertiary" id="server-events-count">Recent member activity</span>
+            <h2 class="card-title">{{ icon("calendar-days", 16) }} Upcoming Events</h2>
+            <span class="text-tertiary" id="events-count">Discord events</span>
         </div>
-        <div class="activity-feed" id="server-events-feed">
+        <div class="event-list" id="events-feed">
             <div class="skeleton skeleton-text"></div>
-            <div class="skeleton skeleton-text"></div>
-        </div>
-    </div>
-
-    <div class="guild-layout">
-        <!-- Activity Feed -->
-        <div class="content-card">
-            <div class="card-header">
-                <h2 class="card-title">{{ icon("activity", 16) }} Recent Activity</h2>
-                <a href="/guild/{{ guild.id }}/moderation" class="card-action" aria-label="Open recent moderation activity">{{ icon("chevron-right", 14) }}</a>
-            </div>
-            <div class="activity-feed" id="activity-feed">
-                <div class="skeleton skeleton-text"></div>
-                <div class="skeleton skeleton-text"></div>
-                <div class="skeleton skeleton-text"></div>
-            </div>
-            <div class="activity-more-wrap" id="activity-more-wrap" hidden>
-                <button type="button" class="btn btn-sm" id="activity-load-more">Show more</button>
-            </div>
-        </div>
-
-        <!-- Right Column -->
-        <div>
-            <!-- Server Info -->
-            <div class="content-card">
-                <div class="card-header">
-                    <h2 class="card-title">{{ icon("info", 16) }} Server Info</h2>
-                </div>
-                <div class="module-info-body">
-                    <div class="info-row"><span class="info-label">Owner</span><span class="info-value">{{ guild.owner.name if guild.owner else 'Unknown' }}</span></div>
-                    <div class="info-row"><span class="info-label">ID</span><span class="info-value mono">{{ guild.id }}</span></div>
-                    <div class="info-row"><span class="info-label">Created</span><span class="info-value">{{ guild.created_at.strftime('%b %d, %Y') if guild.created_at else 'Unknown' }}</span></div>
-                    <div class="info-row"><span class="info-label">Boosts</span><span class="info-value">{{ guild.premium_subscription_count }} (Tier {{ guild.premium_tier }})</span></div>
-                    <div class="info-row"><span class="info-label">Verification</span><span class="info-value">{{ guild.verification_level.name }}</span></div>
-                    <div class="info-row"><span class="info-label">Members Online</span><span class="info-value" id="online-percent">—</span></div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -117,179 +66,111 @@
 {% block scripts %}
 <script>
 const GUILD_ID = '{{ guild.id }}';
-const GUILD_DATA_REFRESH_MS = 5 * 60 * 1000;
-const ACTIVITY_TIME_REFRESH_MS = 60 * 1000;
-const ACTIVITY_PAGE_SIZE = 10;
-let guildDataRefreshTimer = null;
-let activityTimeRefreshTimer = null;
-let guildOverviewRequestInFlight = false;
-let guildOverviewLoaded = false;
-let activityItems = [];
-let activityPage = 0;
+let GUID_VIEWER = true; // set from the manifest once loaded
 
-const activityFeedEl = document.getElementById('activity-feed');
-const activityMoreWrap = document.getElementById('activity-more-wrap');
-document.getElementById('activity-load-more')?.addEventListener('click', () => {
-    activityPage += 1;
-    renderActivityPage();
-});
+const motdBlock = document.getElementById('motd-block');
+const motdDisplay = document.getElementById('motd-display');
+const motdText = document.getElementById('motd-text');
+const motdEditBtn = document.getElementById('motd-edit');
+const motdEditForm = document.getElementById('motd-edit-form');
+const motdInput = document.getElementById('motd-input');
+const motdSaveBtn = document.getElementById('motd-save');
+const motdCancelBtn = document.getElementById('motd-cancel');
+const eventsFeed = document.getElementById('events-feed');
+const eventsCountEl = document.getElementById('events-count');
 
-function refreshActivityTimes() {
-    document.querySelectorAll('#activity-feed [data-activity-timestamp]').forEach(element => {
-        element.textContent = timeAgo(element.dataset.activityTimestamp);
-    });
+function fmtDate(iso) {
+    if (!iso) return 'Unknown';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return 'Unknown';
+    return d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+}
+function fmtDateTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+}
+function setChip(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
 }
 
-function renderActivity(activityData) {
-    const items = activityData?.data?.activity || activityData?.activity || [];
-    activityItems = items;
-    activityPage = 0;
-    if (items.length === 0) {
-        activityFeedEl.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : '') + '</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>';
-        activityFeedEl.classList.remove('is-masked');
-        if (activityMoreWrap) activityMoreWrap.hidden = true;
+function renderServerProfile(g) {
+    document.getElementById('info-members').innerHTML = '<span>' + getIconSvg('users', 14) + '</span> <span>' + escHtml(g.member_count ?? '—') + ' members</span>';
+    document.getElementById('info-created').innerHTML = '<span>' + getIconSvg('calendar', 14) + '</span> <span>Created ' + escHtml(fmtDate(g.created_at)) + '</span>';
+    document.getElementById('info-boost').innerHTML = '<span>' + getIconSvg('zap', 14) + '</span> <span>' + escHtml((g.premium_subscriber_count ?? 0) + ' boosts') + (g.premium_tier ? ' · Tier ' + g.premium_tier : '') + '</span>';
+    document.getElementById('info-owner').innerHTML = '<span>' + getIconSvg('crown', 14) + '</span> <span>' + escHtml(g.owner_name || 'Unknown') + '</span>';
+    document.getElementById('info-verification').innerHTML = '<span>' + getIconSvg('shield-check', 14) + '</span> <span>Verification: ' + escHtml((g.verification_level || 'None').replace(/_/g, ' ')) + '</span>';
+    document.getElementById('info-channels').innerHTML = '<span>' + getIconSvg('message-circle', 14) + '</span> <span>' + escHtml(g.channels ?? 0) + ' channels</span>';
+
+    // MOTD
+    if (motdBlock) motdBlock.hidden = false;
+    if (motdText) motdText.textContent = g.motd && g.motd.trim() ? g.motd : 'No message of the day set yet.';
+    if (motdEditBtn) motdEditBtn.hidden = GUID_VIEWER; // only managers edit
+    if (motdInput) motdInput.value = g.motd || '';
+
+    // Scheduled events
+    renderEvents(g.scheduled_events || []);
+}
+
+function renderEvents(events) {
+    if (eventsCountEl) eventsCountEl.textContent = `${events.length} upcoming`;
+    if (!eventsFeed) return;
+    if (!events.length) {
+        eventsFeed.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + getIconSvg('calendar-days', 18) + '</span><div><strong>No upcoming events</strong><p>Events created in Discord will show up here.</p></div></div>';
         return;
     }
-    renderActivityPage();
-}
-
-function renderActivityItem(a) {
-        const time = a.timestamp ? timeAgo(a.timestamp) : '';
-        const timestampAttr = a.timestamp
-            ? ` data-activity-timestamp="${escHtml(a.timestamp).replaceAll('"', '&quot;').replaceAll("'", '&#39;')}"`
-            : '';
-        let reasonHtml = '';
-        if (a.reason) reasonHtml = `<span class="activity-reason">${escHtml(a.reason)}</span>`;
-        let metaHtml = '';
-        if (a.moderator && a.moderator !== a.target && a.moderator !== 'Unknown') {
-            metaHtml = `<span class="activity-meta">by ${escHtml(a.moderator)}</span>`;
-        }
-        const badge = a.category
-            ? `<span class="activity-category cat-${safeClassToken(a.category, 'activity')}">${escHtml(a.category)}</span>`
-            : '';
-    return `<div class="activity-item type-${safeClassToken(a.type, 'activity')}"><span class="activity-icon">${escHtml(a.icon || '📝')}</span><span class="activity-desc">${escHtml(a.description)}${metaHtml}</span>${reasonHtml}${badge}<span class="activity-time"${timestampAttr}>${escHtml(time)}</span></div>`;
-}
-
-function renderActivityPage() {
-    const visible = activityItems.slice(0, (activityPage + 1) * ACTIVITY_PAGE_SIZE);
-    activityFeedEl.innerHTML = visible.map(renderActivityItem).join('');
-    const hasMore = visible.length !== activityItems.length;
-    activityFeedEl.classList.toggle('is-masked', hasMore);
-    if (activityMoreWrap) activityMoreWrap.hidden = !hasMore;
-}
-
-const serverEventsFeedEl = document.getElementById('server-events-feed');
-const serverEventsCountEl = document.getElementById('server-events-count');
-
-function renderServerEvents(events) {
-    const items = events || [];
-    if (serverEventsCountEl) serverEventsCountEl.textContent = items.length ? `${items.length} recent event${items.length === 1 ? '' : 's'}` : 'No recent activity';
-    if (!serverEventsFeedEl) return;
-    if (!items.length) {
-        serverEventsFeedEl.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('users', 18) : '') + '</span><div><strong>No recent server events</strong><p>Member joins and leaves will appear here as they happen.</p></div></div>';
-        return;
-    }
-    serverEventsFeedEl.innerHTML = items.map(ev => {
-        const time = ev.timestamp ? timeAgoRel(ev.timestamp) : '';
-        const join = ev.type === 'member_join';
-        const icon = join ? '<span class="server-event-icon server-event-join" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('user-plus', 15) : '') + '</span>'
-                          : '<span class="server-event-icon server-event-leave" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('user-minus', 15) : '') + '</span>';
-        return `<div class="activity-item type-${join ? 'join' : 'leave'}">${icon}<span class="activity-desc"><strong>${escHtml(ev.user_name || ev.tag || 'Unknown')}</strong> ${join ? 'joined the server' : 'left the server'}</span><span class="activity-time">${escHtml(time)}</span></div>`;
+    eventsFeed.innerHTML = events.map(ev => {
+        const status = escHtml((ev.status || 'scheduled').replace(/_/g, ' '));
+        const when = ev.start_time ? '<span class="event-when">' + escHtml(fmtDateTime(ev.start_time)) + '</span>' : '';
+        const meta = [ev.channel_name ? ev.channel_name : null, ev.entity_type ? ev.entity_type.replace(/_/g, ' ') : null].filter(Boolean).join(' · ');
+        const desc = ev.description ? '<span class="event-desc">' + escHtml(ev.description.length > 140 ? ev.description.slice(0, 140) + '…' : ev.description) + '</span>' : '';
+        const counts = ev.user_count ? '<span class="event-interested">' + getIconSvg('user-plus', 12) + ' ' + escHtml(ev.user_count) + ' interested</span>' : '';
+        return '<div class="event-item">'
+            + '<span class="event-date" aria-hidden="true"><strong>' + escHtml((ev.start_time ? new Date(ev.start_time) : new Date()).toLocaleDateString(undefined, {day: 'numeric'})) + '</strong><small>' + escHtml((ev.start_time ? new Date(ev.start_time) : new Date()).toLocaleDateString(undefined, {month: 'short'})) + '</small></span>'
+            + '<div class="event-body"><div class="event-name">' + escHtml(ev.name) + ' <span class="event-status">' + status + '</span></div>'
+            + (meta ? '<div class="event-meta">' + escHtml(meta) + '</div>' : '')
+            + desc + '</div>'
+            + '<div class="event-side">' + when + counts + (ev.url ? '<a class="event-link" href="' + escHtml(ev.url) + '" target="_blank" rel="noopener">' + getIconSvg('external-link', 13) + ' View</a>' : '') + '</div>'
+            + '</div>';
     }).join('');
 }
 
-function timeAgoRel(iso) {
-    if (!iso) return '';
-    const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-    if (s < 60) return 'just now';
-    const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
-    const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
-    const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
-    const mo = Math.floor(d / 30); if (mo < 12) return mo + 'mo ago';
-    return Math.floor(mo / 12) + 'y ago';
+function setMotdMode(edit) {
+    if (motdDisplay) motdDisplay.hidden = edit;
+    if (motdEditForm) motdEditForm.hidden = !edit;
 }
-
-async function loadGuildOverview() {
-    if (guildOverviewRequestInFlight || document.hidden) return;
-    guildOverviewRequestInFlight = true;
+motdEditBtn?.addEventListener('click', () => setMotdMode(true));
+motdCancelBtn?.addEventListener('click', () => { if (motdInput) motdInput.value = motdText?.textContent === 'No message of the day set yet.' ? '' : (motdText?.textContent || ''); setMotdMode(false); });
+motdSaveBtn?.addEventListener('click', async () => {
+    if (motdSaveBtn) { motdSaveBtn.disabled = true; motdSaveBtn.innerHTML = getIconSvg('loader', 14) + ' Saving…'; }
     try {
-        const [activityData, statsRaw, eventsRaw] = await Promise.all([
-            safeFetch(`/api/v1/guilds/${GUILD_ID}/activity`, {cache: 'no-cache'}),
-            safeFetch(`/api/v1/guilds/${GUILD_ID}/stats`, {cache: 'no-cache'}),
-            safeFetch(`/api/v1/guilds/${GUILD_ID}/events`, {cache: 'no-cache'}),
-        ]);
-
-        const stats = statsRaw || {};
-
-        renderActivity(activityData);
-        const eventsData = (eventsRaw && (eventsRaw.data || eventsRaw).events) || [];
-        renderServerEvents(eventsData);
-
-        // Case counts
-        const cc = document.getElementById('case-count');
-        const cc7 = document.getElementById('case-count-7d');
-        const statsData = stats.data || stats;
-        if (cc && statsData.total_cases != null) cc.textContent = String(statsData.total_cases);
-        if (cc7 && statsData.cases_7d != null) cc7.textContent = String(statsData.cases_7d);
-
-        // Online count
-        const online = document.getElementById('online-count');
-        const onlinePct = document.getElementById('online-percent');
-        const voice = document.getElementById('voice-count');
-        const growth = document.getElementById('growth-30d');
-
-        function setVal(el, val) {
-            if (el) el.textContent = val != null ? String(val) : '0';
-        }
-
-        setVal(online, statsData.members_online);
-        if (onlinePct && statsData.members) {
-            const pct = statsData.members_online != null
-                ? Math.round((statsData.members_online ?? 0) / statsData.members * 100)
-                : 0;
-            onlinePct.textContent = pct + '%';
-        }
-        setVal(voice, statsData.in_voice);
-        setVal(growth, statsData.growth_30d);
-        guildOverviewLoaded = true;
+        await safeFetch(`/api/v1/guilds/${GUILD_ID}/motd`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({motd: motdInput ? motdInput.value : ''})});
+        if (motdText) motdText.textContent = (motdInput ? motdInput.value.trim() : '') || 'No message of the day set yet.';
+        setMotdMode(false);
     } catch (e) {
-        if (!guildOverviewLoaded) {
-            ['case-count', 'case-count-7d', 'online-count', 'online-percent', 'voice-count', 'growth-30d'].forEach(id => {
-                const element = document.getElementById(id);
-                if (element) element.textContent = 'Unavailable';
-            });
-            document.getElementById('activity-feed').innerHTML = `<div class="state-panel state-error" role="alert"><div><strong>Activity unavailable</strong><p>${escHtml(e.message || 'Dashboard statistics could not be loaded.')}</p></div><button type="button" class="btn btn-sm" id="guild-stats-retry">Retry</button></div>`;
-            activityFeedEl.classList.remove('is-masked');
-            if (activityMoreWrap) activityMoreWrap.hidden = true;
-            document.getElementById('guild-stats-retry')?.addEventListener('click', loadGuildOverview);
-            showToast(e.message || 'Dashboard statistics could not be loaded', 'error');
-        }
+        if (motdText) motdText.textContent = 'Failed to save message.';
     } finally {
-        guildOverviewRequestInFlight = false;
+        if (motdSaveBtn) { motdSaveBtn.disabled = false; motdSaveBtn.innerHTML = getIconSvg('check', 14) + ' Save'; }
+    }
+});
+
+async function loadGuildProfile() {
+    try {
+        const [manifestRaw, guildRaw] = await Promise.all([
+            safeFetch(`/api/v1/guilds/${GUILD_ID}/manifest`, {cache: 'no-cache'}),
+            safeFetch(`/api/v1/guilds/${GUILD_ID}`, {cache: 'no-cache'}),
+        ]);
+        if (manifestRaw && manifestRaw.data) GUID_VIEWER = !!manifestRaw.data.viewer;
+        const g = (guildRaw && (guildRaw.data || guildRaw)) || {};
+        renderServerProfile(g);
+    } catch (e) {
+        if (eventsFeed) eventsFeed.innerHTML = '<div class="state-panel state-error" role="alert"><div><strong>Could not load server profile</strong><p>' + (typeof escHtml === 'function' ? escHtml(e.message || 'Try again.') : 'Try again.') + '</p></div></div>';
     }
 }
 
-function stopGuildOverviewRefresh() {
-    clearInterval(guildDataRefreshTimer);
-    clearInterval(activityTimeRefreshTimer);
-    guildDataRefreshTimer = null;
-    activityTimeRefreshTimer = null;
-}
-
-function startGuildOverviewRefresh() {
-    stopGuildOverviewRefresh();
-    loadGuildOverview();
-    guildDataRefreshTimer = setInterval(loadGuildOverview, GUILD_DATA_REFRESH_MS);
-    activityTimeRefreshTimer = setInterval(refreshActivityTimes, ACTIVITY_TIME_REFRESH_MS);
-}
-
-startGuildOverviewRefresh();
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) loadGuildOverview();
-});
-window.addEventListener('pagehide', stopGuildOverviewRefresh);
-window.addEventListener('pageshow', event => {
-    if (event.persisted) startGuildOverviewRefresh();
-});
+loadGuildProfile();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadGuildProfile(); });
 </script>
 {% endblock %}

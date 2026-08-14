@@ -113,6 +113,52 @@ async def get_guild(request: Request, guild_id: int):
     except Exception:
         premium_subscriber_count = 0
 
+    try:
+        verification_level = guild.verification_level.name if guild.verification_level else None
+    except Exception:
+        verification_level = None
+
+    # Server MOTD (stored per-guild in GuildSetting) + Discord scheduled events.
+    motd = ""
+    try:
+        from sqlalchemy import select
+
+        from database.engine import session_scope
+        from database.models.guild import GuildSetting
+
+        async with session_scope() as session:
+            row = (
+                await session.execute(
+                    select(GuildSetting).where(
+                        GuildSetting.guild_id == str(guild_id),
+                        GuildSetting.key == "motd",
+                    )
+                )
+            ).scalars().first()
+            motd = row.value if row else ""
+    except Exception:
+        motd = ""
+
+    scheduled_events = []
+    try:
+        for ev in getattr(guild, "scheduled_events", []) or []:
+            scheduled_events.append(
+                {
+                    "id": str(ev.id),
+                    "name": ev.name,
+                    "description": ev.description,
+                    "start_time": ev.start_time.isoformat() if ev.start_time else None,
+                    "end_time": ev.end_time.isoformat() if ev.end_time else None,
+                    "status": str(ev.status).split(".")[-1] if ev.status else None,
+                    "entity_type": str(ev.entity_type).split(".")[-1] if ev.entity_type else None,
+                    "url": ev.url,
+                    "user_count": getattr(ev, "user_count", 0),
+                    "channel_name": ev.channel.name if getattr(ev, "channel", None) else None,
+                }
+            )
+    except Exception:
+        scheduled_events = []
+
     return api_success(
         {
             "id": guild.id,
@@ -130,8 +176,45 @@ async def get_guild(request: Request, guild_id: int):
             "roles": len(guild.roles),
             "emojis": len(guild.emojis),
             "created_at": created_at,
+            "verification_level": verification_level,
+            "features": list(guild.features or []),
+            "motd": motd,
+            "scheduled_events": scheduled_events,
         }
     )
+
+
+@router.put("/guilds/{guild_id}/motd")
+async def set_guild_motd(request: Request, guild_id: int):
+    """Set the server's message-of-the-day shown on the dashboard profile."""
+    if getattr(request.state, "guild_viewer", False):
+        return api_forbidden("Insufficient permissions")
+
+    body = await request.json()
+    text = str((body or {}).get("motd") or "").strip()[:1000]
+
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.guild import GuildSetting
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(GuildSetting).where(
+                    GuildSetting.guild_id == str(guild_id),
+                    GuildSetting.key == "motd",
+                )
+            )
+        ).scalars().first()
+        if text:
+            if row:
+                row.value = text
+            else:
+                session.add(GuildSetting(guild_id=str(guild_id), key="motd", value=text))
+        elif row:
+            await session.delete(row)
+    return api_success({"motd": text})
 
 
 @router.get("/guilds/{guild_id}/stats")
@@ -154,6 +237,19 @@ async def get_guild_stats(request: Request, guild_id: int):
         growth_series = await _guild_growth_series(session, guild_id, days=30)
     online, in_voice = _online_and_voice_counts(guild)
 
+    # Today's message/emoji activity (tracked live by the bot).
+    msgs = {}
+    msg_stats_fn = getattr(bot, "message_stats", None)
+    if callable(msg_stats_fn):
+        try:
+            result = msg_stats_fn(guild_id)
+            if isinstance(result, dict):
+                msgs = result
+        except Exception:
+            msgs = {}
+    channels_today = sorted(msgs.get("channels", {}).values(), key=lambda c: c["count"], reverse=True)[:8]
+    emojis_today = sorted(msgs.get("emojis", {}).items(), key=lambda kv: kv[1], reverse=True)[:8]
+
     return api_success(
         {
             "members": guild.member_count,
@@ -172,6 +268,9 @@ async def get_guild_stats(request: Request, guild_id: int):
             "total_cases": total_cases,
             "cases_7d": cases_7d,
             "cases_by_type": cases_by_type,
+            "messages_today": msgs.get("messages", 0),
+            "top_channels_today": channels_today,
+            "top_emojis_today": [{"name": k, "count": v} for k, v in emojis_today],
         }
     )
 
