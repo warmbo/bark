@@ -653,7 +653,13 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
         "date": "2026-08-14", "messages": 5,
         "channels": {"100": {"name": "general", "count": 3}, "200": {"name": "memes", "count": 2}},
         "emojis": {"laugh": 4},
+        "emoji_total": {"laugh": 40},
+        "history": [],
     }
+    bot.top_channels = lambda _gid, days: (
+        [{"name": "general", "count": 12}] if days >= 30
+        else [{"name": "general", "count": 8}]
+    )
     request = SimpleNamespace(
         state=SimpleNamespace(bot=bot), session={"role": "admin"},
         url=SimpleNamespace(path="/api/v1/guilds/123456"),
@@ -676,6 +682,10 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     assert sdata["top_channels_today"][0]["name"] == "general"
     assert sdata["top_channels_today"][0]["count"] == 3
     assert sdata["top_emojis_today"][0] == {"name": "laugh", "count": 4}
+    # Trailing-window + all-time stats.
+    assert sdata["top_channels_7d"][0]["count"] == 8
+    assert sdata["top_channels_30d"][0]["count"] == 12
+    assert sdata["top_emojis_all_time"][0] == {"name": "laugh", "count": 40}
 
 
 @pytest.mark.asyncio

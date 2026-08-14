@@ -94,6 +94,39 @@ async def test_message_stats_track_messages_channels_and_emojis():
     assert stats["emojis"]["wow"] == 1
     # A different guild is tracked independently.
     assert bot.message_stats(9)["messages"] == 0
+    # All-time emoji accumulation persists alongside the daily window.
+    assert bot.message_stats(5)["emoji_total"]["laugh"] == 2
+
+
+@pytest.mark.asyncio
+async def test_top_channels_aggregate_trailing_windows_and_all_time_emoji():
+    from types import SimpleNamespace
+
+    bot = BarkBot()
+    # Today: general x2, memes x1
+    bot.record_message(7, SimpleNamespace(id=100, name="general"))
+    bot.record_message(7, SimpleNamespace(id=100, name="general"))
+    bot.record_message(7, SimpleNamespace(id=200, name="memes"))
+    # Seed a completed prior day into the daily history window.
+    bot._message_stats[7]["history"].append(
+        {"date": "2026-08-13", "channels": {"100": {"name": "general", "count": 5}}}
+    )
+
+    # 1-day window ignores history (today only).
+    assert bot.top_channels(7, 1)[0] == {"name": "general", "count": 2}
+    # 7-day window rolls history + today.
+    top = bot.top_channels(7, 7)
+    assert top[0] == {"name": "general", "count": 7}
+    assert {c["name"] for c in top} == {"general", "memes"}
+
+    # All-time emoji accumulates across daily resets.
+    bot.record_reaction(7, "laugh")
+    bot.record_reaction(7, "wow")
+    # Force a date rollover; emoji_total must survive.
+    bot._message_stats[7]["date"] = "2099-01-01"
+    bot.record_reaction(7, "laugh")
+    assert bot.message_stats(7)["emoji_total"]["laugh"] == 2
+    assert bot.message_stats(7)["emoji_total"]["wow"] == 1
 
 
 @pytest.mark.asyncio

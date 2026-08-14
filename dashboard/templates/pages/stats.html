@@ -10,19 +10,21 @@
         <p class="page-subtitle">Server activity, growth, and engagement for <strong>{{ guild.name }}</strong></p>
     </div>
 
-    <!-- Live metric cards -->
-    <div class="stats-grid" id="stats-metrics">
-        <div class="stat-card"><div class="stat-label">{{ icon("users", 14) }} Members</div><div class="stat-value" id="stat-members">—</div><div class="stat-change" id="stat-online">—</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("zap", 14) }} Boost Tier</div><div class="stat-value" id="stat-tier">—</div><div class="stat-change" id="stat-boosts">—</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("message-circle", 14) }} Channels</div><div class="stat-value" id="stat-channels">—</div><div class="stat-change" id="stat-channel-split">—</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("tag", 14) }} Roles</div><div class="stat-value" id="stat-roles">—</div><div class="stat-change">Server roles</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("smile", 14) }} Emojis</div><div class="stat-value" id="stat-emojis">—</div><div class="stat-change">Custom emoji</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("headphones", 14) }} In Voice</div><div class="stat-value" id="stat-voice">—</div><div class="stat-change">Right now</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("scroll-text", 14) }} Cases</div><div class="stat-value" id="stat-cases">—</div><div class="stat-change" id="stat-cases-7d">—</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("trending-up", 14) }} Growth (30d)</div><div class="stat-value" id="stat-growth">—</div><div class="stat-change">Net member change</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("message-square", 14) }} Messages Today</div><div class="stat-value" id="stat-messages">—</div><div class="stat-change">Non-bot messages</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("hash", 14) }} Most Active Channel</div><div class="stat-value" id="stat-top-channel">—</div><div class="stat-change" id="stat-top-channel-count">—</div></div>
-        <div class="stat-card"><div class="stat-label">{{ icon("smile", 14) }} Most Used Emoji</div><div class="stat-value" id="stat-top-emoji">—</div><div class="stat-change" id="stat-top-emoji-count">—</div></div>
+    <!-- Overview metrics as a compact list -->
+    <div class="content-card stats-overview">
+        <div class="card-header">
+            <div><h2 class="card-title">{{ icon("activity", 16) }} Server at a Glance</h2><p class="card-description">Live snapshot — updates every few minutes</p></div>
+        </div>
+        <div class="stats-list" id="stats-metrics">
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("users", 16) }}</span><span class="sl-label">Members</span><span class="sl-value" id="stat-members">—</span><span class="sl-sub" id="stat-online">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("trending-up", 16) }}</span><span class="sl-label">Member growth (30d)</span><span class="sl-value" id="stat-growth">—</span><span class="sl-sub">Net change</span></div>
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("message-square", 16) }}</span><span class="sl-label">Messages today</span><span class="sl-value" id="stat-messages">—</span><span class="sl-sub">Non-bot</span></div>
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("hash", 16) }}</span><span class="sl-label">Top channel today</span><span class="sl-value" id="stat-top-channel">—</span><span class="sl-sub" id="stat-top-channel-count">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("smile", 16) }}</span><span class="sl-label">Top emoji</span><span class="sl-value" id="stat-top-emoji">—</span><span class="sl-sub" id="stat-top-emoji-count">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("message-circle", 16) }}</span><span class="sl-label">Channels</span><span class="sl-value" id="stat-channels">—</span><span class="sl-sub" id="stat-channel-split">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("zap", 16) }}</span><span class="sl-label">Boosts</span><span class="sl-value" id="stat-boosts">—</span><span class="sl-sub" id="stat-tier">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon">{{ icon("headphones", 16) }}</span><span class="sl-label">In voice</span><span class="sl-value" id="stat-voice">—</span><span class="sl-sub">Right now</span></div>
+        </div>
     </div>
 
     <div class="guild-layout">
@@ -34,32 +36,44 @@
             <div class="chart-wrap" id="chart-growth"><div class="skeleton skeleton-row"></div></div>
         </div>
 
-        <!-- Cases by type bar chart -->
-        <div>
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("scroll-text", 16) }} Cases by Type</h2><p class="card-description">Moderation actions recorded</p></div>
-                </div>
-                <div class="chart-wrap" id="chart-cases"><div class="skeleton skeleton-row"></div></div>
-            </div>
-        </div>
-
         <!-- Top channels today bar chart -->
         <div class="content-card">
             <div class="card-header">
-                <div><h2 class="card-title">{{ icon("hash", 16) }} Top Channels Today</h2><p class="card-description">Most messages by channel</p></div>
+                <div><h2 class="card-title">{{ icon("hash", 16) }} Top Channels Today</h2><p class="card-description">Most messages by channel today</p></div>
             </div>
             <div class="chart-wrap" id="chart-channels"><div class="skeleton skeleton-row"></div></div>
         </div>
 
-        <!-- Top emojis today bar chart -->
-        <div>
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("smile", 16) }} Most Used Emojis Today</h2><p class="card-description">Emoji reactions received</p></div>
-                </div>
-                <div class="chart-wrap" id="chart-emojis"><div class="skeleton skeleton-row"></div></div>
+        <!-- Top channels last 7 days bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("hash", 16) }} Top Channels — 7 Days</h2><p class="card-description">Most messages by channel over the last week</p></div>
             </div>
+            <div class="chart-wrap" id="chart-channels-7d"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Top channels last 30 days bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("hash", 16) }} Top Channels — 30 Days</h2><p class="card-description">Most messages by channel over the last month</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-channels-30d"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Most used emoji (all-time) bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("smile", 16) }} Most Used Emojis</h2><p class="card-description">All-time emoji reactions received</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-emojis-all"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Most used emojis today bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("smile", 16) }} Most Used Emojis Today</h2><p class="card-description">Emoji reactions received today</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-emojis"><div class="skeleton skeleton-row"></div></div>
         </div>
     </div>
 </div>
@@ -89,10 +103,7 @@ async function loadStats() {
         setStat('stat-channels', d.channels);
         if (d.text_channels != null && d.voice_channels != null) setStat('stat-channel-split', d.text_channels + ' text · ' + d.voice_channels + ' voice');
         setStat('stat-roles', d.roles);
-        setStat('stat-emojis', d.emojis);
         setStat('stat-voice', d.in_voice);
-        setStat('stat-cases', d.total_cases);
-        setStat('stat-cases-7d', d.cases_7d != null ? d.cases_7d + ' last 7d' : null);
         const g = d.growth_30d;
         setStat('stat-growth', g != null ? (g > 0 ? '+' + g : g) : null);
         setStat('stat-messages', d.messages_today);
@@ -115,13 +126,17 @@ async function loadStats() {
             }
         }
         const growth = (d.growth_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.members }));
-        const cases = Object.entries(d.cases_by_type || {}).map(([k, v]) => ({label: k, value: v})).sort((a, b) => b.value - a.value);
         const channels = (d.top_channels_today || []).map(c => ({label: '#' + c.name, value: c.count}));
+        const channels7d = (d.top_channels_7d || []).map(c => ({label: '#' + c.name, value: c.count}));
+        const channels30d = (d.top_channels_30d || []).map(c => ({label: '#' + c.name, value: c.count}));
+        const emojisAll = (d.top_emojis_all_time || []).map(e => ({label: e.name, value: e.count}));
         const emojis = (d.top_emojis_today || []).map(e => ({label: e.name, value: e.count}));
         renderChart('lineChart', 'chart-growth', growth, {label: 'Member count', valueLabel: 'Members'});
-        renderChart('pieChart', 'chart-cases', cases, {label: 'Cases by type'});
-        renderChart('pieChart', 'chart-channels', channels, {label: 'Messages by channel'});
-        renderChart('barChart', 'chart-emojis', emojis, {label: 'Emoji reactions'});
+        renderChart('barChart', 'chart-channels', channels, {label: 'Messages today'});
+        renderChart('barChart', 'chart-channels-7d', channels7d, {label: 'Messages (7d)'});
+        renderChart('barChart', 'chart-channels-30d', channels30d, {label: 'Messages (30d)'});
+        renderChart('barChart', 'chart-emojis-all', emojisAll, {label: 'All-time reactions'});
+        renderChart('barChart', 'chart-emojis', emojis, {label: 'Reactions today'});
     } catch (e) {
         setStat('stat-members', 'Unavailable');
         const err = document.getElementById('chart-growth');

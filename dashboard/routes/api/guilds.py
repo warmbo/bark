@@ -211,10 +211,11 @@ async def set_guild_motd(request: Request, guild_id: int):
 
 @router.get("/guilds/{guild_id}/stats")
 async def get_guild_stats(request: Request, guild_id: int):
-    """Get live guild and recent moderation statistics.
+    """Get live guild + engagement statistics for the Statistics page.
 
-    Viewable by any member of a connected server (safe read) so the Statistics
-    page is available to most users, matching the Dashboard.
+    Viewable by any member of a connected server (safe read). Deliberately
+    excludes moderation data (cases, AutoMod) — that stays private to admins
+    and mods in the moderation workspace.
     """
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
@@ -224,7 +225,6 @@ async def get_guild_stats(request: Request, guild_id: int):
     from database.engine import session_scope
 
     async with session_scope() as session:
-        total_cases, cases_by_type, cases_7d = await _guild_case_counts(session, guild_id)
         growth_30d = await _guild_growth_30d(session, guild_id)
         growth_series = await _guild_growth_series(session, guild_id, days=30)
     online, in_voice = _online_and_voice_counts(guild)
@@ -242,6 +242,27 @@ async def get_guild_stats(request: Request, guild_id: int):
     channels_today = sorted(msgs.get("channels", {}).values(), key=lambda c: c["count"], reverse=True)[:8]
     emojis_today = sorted(msgs.get("emojis", {}).items(), key=lambda kv: kv[1], reverse=True)[:8]
 
+    # Trailing-window top channels (7d / 30d) + all-time emoji.
+    top_channels_7d: list[dict] = []
+    top_channels_30d: list[dict] = []
+    top_channels_fn = getattr(bot, "top_channels", None)
+    if callable(top_channels_fn):
+        try:
+            r7 = top_channels_fn(guild_id, 7)
+            r30 = top_channels_fn(guild_id, 30)
+            if isinstance(r7, list):
+                top_channels_7d = r7[:8]
+            if isinstance(r30, list):
+                top_channels_30d = r30[:8]
+        except Exception:
+            top_channels_7d = []
+            top_channels_30d = []
+    all_time_emojis = msgs.get("emoji_total", {}) or {}
+    emojis_all_time = [
+        {"name": k, "count": v}
+        for k, v in sorted(all_time_emojis.items(), key=lambda kv: kv[1], reverse=True)[:8]
+    ]
+
     return api_success(
         {
             "members": guild.member_count,
@@ -257,12 +278,12 @@ async def get_guild_stats(request: Request, guild_id: int):
             "in_voice": in_voice,
             "growth_30d": growth_30d,
             "growth_series": growth_series,
-            "total_cases": total_cases,
-            "cases_7d": cases_7d,
-            "cases_by_type": cases_by_type,
             "messages_today": msgs.get("messages", 0),
             "top_channels_today": channels_today,
+            "top_channels_7d": top_channels_7d,
+            "top_channels_30d": top_channels_30d,
             "top_emojis_today": [{"name": k, "count": v} for k, v in emojis_today],
+            "top_emojis_all_time": emojis_all_time,
         }
     )
 
@@ -360,38 +381,6 @@ async def get_guild_server_events(request: Request, guild_id: int):
         else []
     )
     return api_success({"events": events, "total": len(events)})
-
-
-async def _guild_case_counts(session, guild_id: int) -> tuple[int, dict[str, int], int]:
-    """Return (total_cases, cases_by_type, cases_last_7_days) for the guild."""
-    from datetime import datetime, timedelta, timezone
-
-    from sqlalchemy import func, select
-
-    from database.models.moderation import ModerationCase
-
-    guild_filter = ModerationCase.guild_id == str(guild_id)
-    total = (
-        await session.execute(select(func.count(ModerationCase.id)).where(guild_filter))
-    ).scalar() or 0
-    by_type = {
-        row[0]: row[1]
-        for row in await session.execute(
-            select(ModerationCase.action_type, func.count(ModerationCase.id))
-            .where(guild_filter)
-            .group_by(ModerationCase.action_type)
-        )
-    }
-    seven_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
-    last_7_days = (
-        await session.execute(
-            select(func.count(ModerationCase.id)).where(
-                guild_filter,
-                ModerationCase.created_at >= seven_days_ago,
-            )
-        )
-    ).scalar() or 0
-    return total, by_type, last_7_days
 
 
 async def _guild_growth_30d(session, guild_id: int) -> int:

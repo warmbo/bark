@@ -355,7 +355,20 @@ class BarkBot(commands.Bot):
         today = date.today().isoformat()
         stats = self._message_stats.get(guild_id)
         if stats is None or stats.get("date") != today:
-            stats = {"date": today, "messages": 0, "channels": {}, "emojis": {}}
+            prev = stats
+            if prev is not None and prev.get("date") != today:
+                # Roll yesterday's channel counts into the daily history window.
+                hist = prev.setdefault("history", deque(maxlen=31))
+                if prev.get("channels"):
+                    hist.append({"date": prev["date"], "channels": prev["channels"]})
+            stats = {
+                "date": today,
+                "messages": 0,
+                "channels": {},
+                "emojis": {},
+                "emoji_total": (prev.get("emoji_total", {}) if prev else {}),
+                "history": (prev.get("history", deque(maxlen=31)) if prev else deque(maxlen=31)),
+            }
             self._message_stats[guild_id] = stats
         return stats
 
@@ -370,16 +383,44 @@ class BarkBot(commands.Bot):
         entry["name"] = name
 
     def record_reaction(self, guild_id: int, emoji) -> None:
-        """Count an emoji reaction for today's server stats."""
+        """Count an emoji reaction for today's + all-time server stats."""
         stats = self._ensure_message_stats(guild_id)
         key = str(emoji)
         if getattr(emoji, "is_unicode_emoji", lambda: False)():
             key = emoji.name  # unicode: show the glyph name
         stats["emojis"][key] = stats["emojis"].get(key, 0) + 1
+        stats["emoji_total"][key] = stats["emoji_total"].get(key, 0) + 1
+
+    def top_channels(self, guild_id: int, days: int, limit: int = 5) -> list[dict]:
+        """Aggregate channel message counts over the trailing N days (incl today)."""
+        stats = self._ensure_message_stats(guild_id)
+        by_channel: dict[str, dict] = {}
+        # Include today's live counts.
+        for ch_id, entry in stats["channels"].items():
+            agg = by_channel.setdefault(ch_id, {"name": entry["name"], "count": 0})
+            agg["count"] += entry["count"]
+        # Include the trailing (days-1) completed days from history.
+        recent: list[dict] = []
+        if days > 1:
+            recent = list(stats.get("history", []))[-(days - 1):]
+        for day in recent:
+            for ch_id, entry in day["channels"].items():
+                agg = by_channel.setdefault(ch_id, {"name": entry["name"], "count": 0})
+                agg["count"] += entry["count"]
+                agg["name"] = entry["name"]
+        return sorted(by_channel.values(), key=lambda c: c["count"], reverse=True)[:limit]
 
     def message_stats(self, guild_id: int) -> dict:
-        """Today's message/emoji counters for the statistics page."""
-        return dict(self._ensure_message_stats(guild_id))
+        """Today's + history + all-time message/emoji counters for statistics."""
+        stats = self._ensure_message_stats(guild_id)
+        return {
+            "date": stats["date"],
+            "messages": stats["messages"],
+            "channels": stats["channels"],
+            "emojis": stats["emojis"],
+            "emoji_total": stats.get("emoji_total", {}),
+            "history": list(stats.get("history", [])),
+        }
 
     async def on_reaction_add(self, reaction: discord.Reaction, user) -> None:
         """Drive ◀ ▶ navigation on paginated guidance menus + count emoji stats."""
