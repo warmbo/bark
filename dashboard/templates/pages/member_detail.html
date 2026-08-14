@@ -80,7 +80,7 @@ function renderMember(m) {
 
         <!-- Quick Actions Bar -->
         <div class="action-bar">
-            <h3>${memberIconSvg('zap', 14)} Quick Actions</h3>
+            <h2>${memberIconSvg('zap', 14)} Quick Actions</h2>
             <div class="action-buttons">
                 <button type="button" class="btn btn-sm" data-member-action="warn" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Warn</button>
                 <button type="button" class="btn btn-sm" data-member-action="timeout" data-user-id="${memberIdAttr}" data-user-name="${escHtml(m.name)}" ${m.is_bot ? "disabled" : ""}>Timeout</button>

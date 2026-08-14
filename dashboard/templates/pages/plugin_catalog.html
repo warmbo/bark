@@ -20,6 +20,7 @@
         </div>
     </div>
 
+    <h2 id="plugin-catalog-title" class="modules-section-title" hidden>{{ icon("package", 16) }} Available plugins</h2>
     <div id="plugin-catalog-grid" class="modules-grid" hidden></div>
 </div>
 {% endblock %}
@@ -61,6 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     grid.hidden = false;
+    document.getElementById('plugin-catalog-title').hidden = false;
     grid.innerHTML = plugins.map(plugin => `
         <article class="module-card" data-plugin="${escHtml(plugin.name || '')}">
             <div class="module-card-header">
