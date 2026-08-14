@@ -91,7 +91,12 @@ async def get_guild(request: Request, guild_id: int):
     guild = bot.get_guild(guild_id)
     if guild is None:
         return api_not_found("Guild")
+    return api_success(await _serialize_guild(guild, guild_id))
 
+
+async def _serialize_guild(guild, guild_id: int) -> dict:
+    """Serialize the full server profile. Shared by GET /guilds/{id} and the
+    dashboard aggregate endpoint so the profile is built in exactly one place."""
     # Resolve owner safely — guild.owner can raise if uncached
     try:
         owner_name = str(guild.owner) if guild.owner else "Unknown"
@@ -164,30 +169,29 @@ async def get_guild(request: Request, guild_id: int):
     except Exception:
         scheduled_events = []
 
-    return api_success(
-        {
-            "id": guild.id,
-            "name": guild.name,
-            "member_count": guild.member_count,
-            "owner_id": str(guild.owner_id),
-            "owner_name": owner_name,
-            "icon_url": guild.icon.url if guild.icon else None,
-            "banner_url": banner_url,
-            "description": guild.description,
-            "premium_tier": guild.premium_tier,
-            "premium_subscriber_count": premium_subscriber_count,
-            "max_members": guild.max_members,
-            "channels": len(guild.channels),
-            "roles": len(guild.roles),
-            "emojis": len(guild.emojis),
-            "created_at": created_at,
-            "verification_level": verification_level,
-            "features": list(guild.features or []),
-            "motd": motd,
-            "custom_banner_url": custom_banner_url,
-            "scheduled_events": scheduled_events,
-        }
-    )
+    return {
+        "id": guild.id,
+        "name": guild.name,
+        "member_count": guild.member_count,
+        "owner_id": str(guild.owner_id),
+        "owner_name": owner_name,
+        "icon_url": guild.icon.url if guild.icon else None,
+        "banner_url": banner_url,
+        "description": guild.description,
+        "premium_tier": guild.premium_tier,
+        "premium_subscriber_count": premium_subscriber_count,
+        "max_members": guild.max_members,
+        "channels": len(guild.channels),
+        "roles": len(guild.roles),
+        "emojis": len(guild.emojis),
+        "created_at": created_at,
+        "verification_level": verification_level,
+        "features": list(guild.features or []),
+        "motd": motd,
+        "custom_banner_url": custom_banner_url,
+        "scheduled_events": scheduled_events,
+    }
+
 
 
 @router.put("/guilds/{guild_id}/banner")
@@ -341,18 +345,21 @@ async def _guild_growth_series(session, guild_id: int, days: int = 30) -> list[d
 
 
 @router.get("/guilds/{guild_id}/dashboard")
-async def get_guild_dashboard_cards(request: Request, guild_id: int):
-    """Collect add-on dashboard widget cards from the guild's enabled modules."""
+async def get_guild_dashboard(request: Request, guild_id: int):
+    """Aggregate endpoint for the server overview page: the profile, the
+    viewer/role flag, and add-on dashboard widget cards — one round-trip."""
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:
         return api_not_found("Guild")
+    profile = await _serialize_guild(guild, guild_id)
+    viewer = getattr(request.state, "guild_viewer", False)
     cards = []
     try:
         cards = await bot.modules.get_dashboard_cards(guild_id)
     except Exception:
         cards = []
-    return api_success({"cards": cards})
+    return api_success({"viewer": viewer, "guild": profile, "cards": cards})
 
 
 @router.get("/guilds/{guild_id}/events")

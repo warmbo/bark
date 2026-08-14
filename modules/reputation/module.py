@@ -267,6 +267,7 @@ class ReputationModule(BarkModule):
                     "icon": "trophy",
                     "description": "Highest reputation in this server",
                     "type": "list",
+                    "link": f"/guild/{guild_id}/modules/reputation",
                     "items": items,
                 }
             ]

@@ -999,6 +999,9 @@ textarea:focus-visible,
 .widget-item-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .widget-item-value { color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .widget-metric { font-size: 30px; font-weight: 700; color: var(--text-primary); }
+.widget-footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+.widget-footer a { color: var(--accent); font-weight: 600; font-size: 12px; text-decoration: none; }
+.widget-footer a:hover { text-decoration: underline; }
 
 .server-motd { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 8px); padding: 12px 14px; margin-bottom: 14px; }
 .server-motd-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); margin-bottom: 6px; }

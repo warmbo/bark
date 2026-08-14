@@ -745,7 +745,7 @@ async def test_set_guild_banner_persists_and_clears(app, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
-    """The /dashboard endpoint returns add-on widget cards from enabled modules."""
+    """GET /guilds/{id}/dashboard is a single aggregate: profile + viewer + cards."""
     from types import SimpleNamespace
 
     import config
@@ -755,21 +755,32 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
 
-    guild = SimpleNamespace(id=333333, name="Cards Guild")
+    guild = SimpleNamespace(
+        id=333333, name="Cards Guild", member_count=42, owner_id=1, owner=None,
+        banner=None, icon=None, description=None, premium_tier=0,
+        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
+        channels=[], roles=[], emojis=[], created_at=None,
+        verification_level=None, features=[], scheduled_events=[], members=[],
+        text_channels=[], voice_channels=[],
+    )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
+
     async def fake_cards(_gid):
-        return [{"id": "reputation_top", "module": "reputation", "title": "Top Members", "type": "list", "items": []}]
+        return [{"id": "reputation_top", "module": "reputation", "title": "Top Members", "type": "list", "items": [], "link": "/guild/333333/modules/reputation"}]
 
     bot.modules.get_dashboard_cards = fake_cards
-    request = SimpleNamespace(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
 
     import json
-    resp = await guilds.get_guild_dashboard_cards(request, 333333)
+    resp = await guilds.get_guild_dashboard(request, 333333)
     assert resp.status_code == 200
-    cards = json.loads(resp.body)["data"]["cards"]
-    assert cards[0]["id"] == "reputation_top"
-    assert cards[0]["module"] == "reputation"
+    data = json.loads(resp.body)["data"]
+    assert data["viewer"] is False
+    assert data["guild"]["name"] == "Cards Guild"
+    assert data["cards"][0]["id"] == "reputation_top"
+    assert data["cards"][0]["module"] == "reputation"
+    assert data["cards"][0]["link"] == "/guild/333333/modules/reputation"
 
 
 def test_module_config_validation_rejects_array_and_enum_type_drift():

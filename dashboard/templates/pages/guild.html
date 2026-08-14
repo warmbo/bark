@@ -235,7 +235,7 @@ function renderWidgets(cards) {
                 '<li class="widget-item"><span class="widget-item-label">' + (it.icon && typeof getIconSvg === 'function' ? getIconSvg(it.icon, 13) + ' ' : '') + escHtml(it.label) + '</span><span class="widget-item-value">' + escHtml(it.value ?? '') + '</span></li>'
             ).join('') + '</ul>';
         }
-        return '<div class="content-card dashboard-widget" data-widget="' + escHtml(card.id) + '"><div class="card-header"><div><h2 class="card-title">' + icon + ' ' + escHtml(card.title) + '</h2>' + desc + '</div></div>' + body + '</div>';
+        return '<div class="content-card dashboard-widget" data-widget="' + escHtml(card.id) + '"><div class="card-header"><div><h2 class="card-title">' + icon + ' ' + escHtml(card.title) + '</h2>' + desc + '</div></div>' + body + (card.link ? '<div class="widget-footer"><a href="' + escHtml(card.link) + '">View in module</a></div>' : '') + '</div>';
     }).join('');
     if (typeof refreshIcons === 'function') refreshIcons();
 }
@@ -313,18 +313,15 @@ motdSaveBtn?.addEventListener('click', async () => {
 
 async function loadGuildProfile() {
     try {
-        const [manifestRaw, guildRaw, widgetsRaw] = await Promise.all([
-            safeFetch(`/api/v1/guilds/${GUILD_ID}/manifest`, {cache: 'no-cache'}),
-            safeFetch(`/api/v1/guilds/${GUILD_ID}`, {cache: 'no-cache'}),
-            safeFetch(`/api/v1/guilds/${GUILD_ID}/dashboard`, {cache: 'no-cache'}),
-        ]);
-        if (manifestRaw && manifestRaw.data) GUID_VIEWER = !!manifestRaw.data.viewer;
-        const g = (guildRaw && (guildRaw.data || guildRaw)) || {};
+        // Single aggregate round-trip: profile + viewer flag + module widgets.
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/dashboard`, {cache: 'no-cache'});
+        const d = (raw && (raw.data || raw)) || {};
+        GUID_VIEWER = !!d.viewer;
+        const g = d.guild || {};
         hasCustomBanner = !!g.custom_banner_url;
         if (bannerSetBtn) bannerSetBtn.hidden = GUID_VIEWER;
         renderServerProfile(g);
-        const cards = (widgetsRaw && (widgetsRaw.data || widgetsRaw).cards) || [];
-        renderWidgets(cards);
+        renderWidgets(d.cards || []);
     } catch (e) {
         if (eventsFeed) eventsFeed.innerHTML = '<div class="state-panel state-error" role="alert"><div><strong>Could not load server profile</strong><p>' + (typeof escHtml === 'function' ? escHtml(e.message || 'Try again.') : 'Try again.') + '</p></div></div>';
     }
