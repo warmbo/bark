@@ -430,7 +430,7 @@ async def _check_scam_link(message, cfg, rule_id, module):
                 if line and re.search(line, content, re.IGNORECASE):
                     return True, "Custom scam pattern matched"
     except Exception:
-        pass
+        logger.debug("Invalid custom scam pattern skipped", exc_info=True)
 
     # Built-in defaults
     for domain in SCAM_DOMAINS:
@@ -488,7 +488,7 @@ async def _effect_delete(message, cfg, reason, module):
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("Could not delete moderation message", exc_info=True)
 
 
 async def _effect_warn(message, cfg, reason, module):
@@ -496,7 +496,7 @@ async def _effect_warn(message, cfg, reason, module):
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("Could not delete warned message", exc_info=True)
     from services.moderation_service import ModerationService
 
     bot_user = module.ctx.bot.user
@@ -516,7 +516,7 @@ async def _effect_warn(message, cfg, reason, module):
     try:
         await message.channel.send(f"⚠️ {message.author.mention}, {reason}", delete_after=10)
     except Exception:
-        pass
+        logger.debug("Could not send warn notification", exc_info=True)
 
 
 async def _effect_timeout(message, cfg, reason, module):
@@ -533,9 +533,9 @@ async def _effect_timeout(message, cfg, reason, module):
                 delete_after=10,
             )
         except Exception:
-            pass
+            logger.debug("Could not send timeout notification", exc_info=True)
     except Exception:
-        pass
+        logger.exception("AutoMod timeout effect failed")
 
 
 async def _effect_kick(message, cfg, reason, module):

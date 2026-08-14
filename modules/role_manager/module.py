@@ -327,12 +327,19 @@ class RoleManagerModule(BarkModule):
     # ── Tenure roles ─────────────────────────────────────
 
     async def _tenure_loop(self, interval: int) -> None:
-        try:
-            while True:
+        """Periodically apply tenure-based role promotions.
+
+        Survives transient DB/Discord errors: a single exception must not kill
+        the only task that grants tenure roles until re-enable.
+        """
+        while True:
+            try:
                 await asyncio.sleep(interval)
                 await self._check_tenure()
-        except asyncio.CancelledError:
-            pass
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._logger.exception("Tenure check failed; continuing")
 
     async def _check_tenure(self) -> None:
         now = datetime.now(timezone.utc)

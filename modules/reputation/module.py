@@ -2040,13 +2040,21 @@ class ReputationModule(BarkModule):
                     )
 
     async def _voice_tick_loop(self) -> None:
-        """Periodic tick to credit voice time for active members."""
-        try:
-            while True:
+        """Periodic tick to credit voice time for active members.
+
+        The loop must survive transient DB/config errors: a single exception in
+        the tick body would otherwise kill the task permanently (only
+        CancelledError was handled), silently stopping voice crediting — the
+        only writer of voice reputation — until the module is re-enabled.
+        """
+        while True:
+            try:
                 await asyncio.sleep(VOICE_TICK_SECONDS)
                 await self._credit_voice_tick(time.time())
-        except asyncio.CancelledError:
-            pass
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._logger.exception("Voice reputation tick failed; continuing")
 
     async def _credit_voice_tick(self, now: float) -> None:
         """Credit one voice interval without restoring members who left mid-award."""

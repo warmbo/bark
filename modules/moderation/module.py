@@ -1598,8 +1598,8 @@ class ModerationModule(BarkModule):
 
     async def _cleanup_loop(self):
         """Periodically prune stale spam/mention tracking data to prevent memory leaks."""
-        try:
-            while True:
+        while True:
+            try:
                 await asyncio.sleep(300)  # Every 5 minutes
                 now = datetime.now(timezone.utc)
                 cutoff = now - timedelta(minutes=2)
@@ -1666,8 +1666,10 @@ class ModerationModule(BarkModule):
                     self._anti_raid._mention_track.keys()
                 ):
                     self._anti_raid.prune_idle_users(int(gid), idle_seconds=600)
-        except asyncio.CancelledError:
-            pass
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._logger.exception("Cleanup loop iteration failed; continuing")
 
     # ── Existing helpers ─────────────────────────────
 

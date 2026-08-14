@@ -631,6 +631,8 @@ class AutoVoiceModule(BarkModule):
                 # Discord reports a rejoin on the next event-loop turn.
                 await asyncio.sleep(delay)
                 await self._delete_if_empty(channel)
+            except Exception:
+                self._logger.exception("Failed to delete auto-voice channel %s", channel_id)
             finally:
                 self._delete_tasks.pop(channel_id, None)
 
