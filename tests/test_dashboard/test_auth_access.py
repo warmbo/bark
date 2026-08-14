@@ -305,9 +305,9 @@ async def test_guild_routes_open_for_granted_members_of_connected_servers(db, mo
 
 
 @pytest.mark.asyncio
-async def test_plain_member_cannot_open_or_mutate_connected_guild(db, monkeypatch):
-    """A plain member of a connected server (no manage grant) is denied both
-    viewing and mutating — access itself is locked, not just the controls."""
+async def test_plain_member_gets_view_only_not_mutation(db, monkeypatch):
+    """A plain member of a connected server can open the read-only status page
+    but cannot mutate — no manage grant means view-only, not a lock."""
     import config
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
@@ -341,10 +341,11 @@ async def test_plain_member_cannot_open_or_mutate_connected_guild(db, monkeypatc
         cookies=dict(session=cookie),
         follow_redirects=False,
     ) as client:
-        denied_view = await client.get("/guild/100")
+        view = await client.get("/guild/100")
         denied_write = await client.post("/api/v1/guilds/100/notes", json={"note": "hi"})
 
-    assert denied_view.status_code == 403
+    assert view.status_code == 200
+    assert "View only" in view.text
     assert denied_write.status_code == 403
 
 
@@ -538,10 +539,10 @@ async def test_module_page_open_to_owner_with_stale_session_role(db, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_non_granted_member_is_denied_all_guild_access(db, monkeypatch):
-    """A plain member (no manage grant) is locked out of a connected server
-    entirely — no view-only tier, no management pages, no API. Only owners and
-    configured staff can open a server's dashboard."""
+async def test_non_granted_member_gets_view_only(db, monkeypatch):
+    """A plain member (no manage grant) sees only the view-only status page:
+    management pages redirect to it, the manifest strips to a single Dashboard
+    entry, and writes are denied."""
     import config
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
@@ -584,10 +585,14 @@ async def test_non_granted_member_is_denied_all_guild_access(db, monkeypatch):
             json={"user_id": "999", "content": "hi"},
         )
 
-    assert module_page.status_code == 403
-    assert members_page.status_code == 403
-    assert status_page.status_code == 403
-    assert manifest.status_code == 403
+    assert module_page.status_code == 303
+    assert module_page.headers["location"] == "/guild/100"
+    assert members_page.status_code == 303
+    assert members_page.headers["location"] == "/guild/100"
+    assert status_page.status_code == 200
+    assert "View only" in status_page.text
+    assert manifest.status_code == 200
+    assert manifest.json()["data"]["viewer"] is True
     assert denied_write.status_code == 403
 
 
@@ -1103,9 +1108,10 @@ async def test_dashboard_shows_view_only_for_connected_server_without_staff_righ
 
     assert response.status_code == 200
     assert "Connected to Bark" in response.text
-    assert "No manage access" in response.text
-    # The card must be a locked article (no Open link) for this non-granted user.
-    assert 'class="guild-card guild-card-readonly"' in response.text
+    assert "View only" in response.text
+    # The card stays openable (a connected link) — non-granted members get the
+    # view-only status page, not a lock.
+    assert 'class="guild-card guild-card-connected"' in response.text
 
 
 @pytest.mark.asyncio

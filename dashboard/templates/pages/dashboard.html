@@ -3,7 +3,7 @@
 {% block og_description %}Server selection page for Bark Discord bot management dashboard{% endblock %}
 
 {% macro server_card(guild) %}
-{% if guild.access_tier == 'connected' and guild.ready_to_manage %}
+{% if guild.access_tier == 'connected' %}
 <a href="/guild/{{ guild.id }}" class="guild-card guild-card-connected" data-server-name="{{ guild.name | lower }}">
 {% elif guild.access_tier == 'manageable' and guild.invite_url %}
 <a href="{{ guild.invite_url }}" target="_blank" rel="noopener" class="guild-card guild-card-uninstalled" data-server-name="{{ guild.name | lower }}">
@@ -20,7 +20,7 @@
             {% if guild.access_tier == 'connected' %}
             <span class="guild-state connected"><span class="status-dot online"></span>Bark connected</span>
             {% if guild.ready_to_manage %}<span class="guild-state ready">Ready to manage</span>
-            {% else %}<span class="guild-state readonly">No manage access</span>{% endif %}
+            {% else %}<span class="guild-state readonly">View only</span>{% endif %}
             {% if guild.ready_to_manage and guild.manage_reason %}<span class="guild-state manage-reason">{{ guild.manage_reason }}</span>{% endif %}
             {% if guild.member_count is not none %}<span class="guild-card-count">{{ guild.member_count }} members</span>{% endif %}
             {% elif guild.access_tier == 'manageable' %}<span>Bark is not installed</span>
@@ -28,11 +28,11 @@
         </div>
     </div>
     <div class="guild-card-action">
-        {% if guild.access_tier == 'connected' and guild.ready_to_manage %}<span>Open</span>{{ icon("arrow-right", 15) }}
+        {% if guild.access_tier == 'connected' %}<span>Open</span>{{ icon("arrow-right", 15) }}
         {% elif guild.access_tier == 'manageable' and guild.invite_url %}<span>Add Bark</span>{{ icon("external-link", 15) }}
         {% else %}{{ icon("lock", 15) }}{% endif %}
     </div>
-{% if (guild.access_tier == 'connected' and guild.ready_to_manage) or (guild.access_tier == 'manageable' and guild.invite_url) %}</a>{% else %}</article>{% endif %}
+{% if guild.access_tier == 'connected' or (guild.access_tier == 'manageable' and guild.invite_url) %}</a>{% else %}</article>{% endif %}
 {% endmacro %}
 
 {% block content %}

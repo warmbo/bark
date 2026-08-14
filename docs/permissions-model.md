@@ -115,16 +115,19 @@ Supporting pieces:
   moderator roles** (multi-select) and a **single admin role** from
   dropdowns (moderators stored as a JSON array; admin as a single role
   ID; legacy plain values still parse).
-- **Locked-out experience** — a member of a connected server with no
-  manage grant is **denied access** (403) rather than shown a read-only
-  page: the server card renders as a locked, non-openable card
-  (`guild-card-readonly`, "No manage access"), and the middleware blocks
-  every `/guild/{id}` page and API route. There is no view-only tier.
+- **View-only experience** — a member of a connected server with no manage
+  grant can still open it, but gets a **read-only status page** (`/guild/{id}`
+  renders `guild_viewer.html`: dashboard/statistics + server info). The card
+  shows **"View only"** and stays openable. The middleware blocks every
+  management page (`/members`, `/modules`, `/moderation`, `/settings`) and
+  module/management API route (redirect for web pages, 403 for API), and the
+  manifest strips to a single Dashboard nav entry (`viewer: true`).
 - **Middleware re-derivation** — `AuthMiddleware` recomputes the per-guild
   role on every guild request via `role_from_access_with_staff_roles()`
   (owner/`ADMINISTRATOR` → `admin`; `MANAGE_GUILD` or configured moderator
   role → `moderator`; configured admin role → `admin`; else `viewer`), so
   API gating matches what the dashboard cards advertise.
+  `request.state.guild_viewer` is set for the view-only branch.
 
 ## Module Permission Registration
 

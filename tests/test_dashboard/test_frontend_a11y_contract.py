@@ -151,15 +151,13 @@ def test_template_comments_and_font_url_are_html_valid():
 
 def test_server_card_open_and_close_conditions_match():
     html = source(TEMPLATES / "pages" / "dashboard.html")
-    # A connected server is only openable (link) when the user can manage it;
-    # otherwise it renders as a locked article with no Open link.
-    open_connected = "guild.access_tier == 'connected' and guild.ready_to_manage"
+    # A connected server is always openable (a link) — granted members manage,
+    # non-granted members get the view-only status page.
+    open_connected = "guild.access_tier == 'connected'"
     add_bark = "guild.access_tier == 'manageable' and guild.invite_url"
-    assert html.count(open_connected) == 3  # open-branch, action, closing tag
+    assert html.count(open_connected) == 4  # open-branch, meta, action, closing tag
     assert html.count(add_bark) == 3
     assert "guild.access_tier in ['connected', 'manageable']" not in html
-    # The connected Open-link branches all require ready_to_manage.
-    assert "guild.access_tier == 'connected' and guild.ready_to_manage" in html
 
 
 def test_base_shell_has_skip_target_context_and_accessible_dialog():

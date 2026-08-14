@@ -51,21 +51,22 @@ Roles: `viewer`, `moderator`, `admin`, `owner`.
 - Permission-denied API responses are surfaced through `safeFetch()` error messages and toast/state feedback.
 - Module access overrides are read/set/reset through `modules/{name}/role-access`.
 
-### Per-server access (no view-only tier)
+### Per-server access and the view-only experience
 
 Each server's "Ready to manage" flag (owner, `ADMINISTRATOR`/`MANAGE_GUILD`
 Discord permission, or an owner-configured staff role) drives what a user
 sees:
 
-- **Ready to manage** → the card is openable and shows the reason
-  ("You own this server" / "You manage this server on Discord" / "You have
-  this server's Admin role" / "You have this server's Moderator role").
-  Full guild pages: overview, Members, Modules, Moderation, Settings, and
-  the module workspace.
-- **No manage access** → the card renders as a locked, non-openable
-  `guild-card-readonly` card, and the middleware denies every `/guild/{id}`
-  page and API route (403). There is no read-only view-only tier — a member
-  who cannot manage the server is locked out entirely.
+- **Ready to manage** → the card shows the reason ("You own this server" /
+  "You manage this server on Discord" / "You have this server's Admin role" /
+  "You have this server's Moderator role"). Full guild pages: overview,
+  Members, Modules, Moderation, Settings, and the module workspace.
+- **View only** → the card stays openable but shows "View only"; opening it
+  renders the read-only server-status page (`guild_viewer.html`: dashboard
+  statistics + server info). `/members`, `/modules`, `/moderation`,
+  `/settings` redirect to it; the manifest carries `viewer: true` with a
+  single Dashboard nav entry, so the sidebar and command palette expose
+  nothing else. Module/management API routes return 403.
 
 Running the Bark instance grants nothing per-server: the instance owner is
 treated like any other member unless they own the server, hold Discord

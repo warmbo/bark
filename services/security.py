@@ -267,32 +267,29 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         "Bark isn't installed in this server yet",
                         "You cannot manage a server where Bark isn't installed.",
                     )
-            else:
-                # Connected server — require a real manage grant (server owner,
-                # Discord manage permission, or a configured staff role).
-                # Running this Bark instance grants nothing here: the owner is
-                # treated like any other member unless they hold a real grant.
-                if not can_manage:
-                    return _access_denied_response(
-                        path,
-                        "You don't have permission to manage this server",
-                        "Managing a server requires being its owner or holding a configured staff role.",
-                    )
-            # The cookie role is a login-time snapshot. Re-derive it for this
-            # guild from the persisted Discord snapshot every request, so
-            # changes since login (the bot joining a server, an invite
-            # redemption, a promotion) take effect without forcing a re-login.
-            # The server owner's configured staff roles (moderator list +
-            # admin role) count, so API gating matches the per-server
-            # "Ready to manage" on the server list.
+            # Connected servers are open to every member. Whether they get the
+            # full management surface depends on a real manage grant (server
+            # owner, Discord manage permission, or configured staff role).
+            # Running this Bark instance grants nothing: the owner is treated
+            # like any other member unless they hold a real grant here.
             request.session["role"] = role_from_access_with_staff_roles(
                 access,
                 guild_moderator_roles,
                 guild_admin_role,
             )
-            # Everyone past the gate can manage this server (non-granted
-            # members were denied above), so there is no view-only tier.
-            request.state.guild_viewer = False
+            # Non-granted members get a read-only view of the server: the
+            # dashboard/statistics/info status page, with every management
+            # page and module surface blocked.
+            request.state.guild_viewer = not can_manage
+            if request.state.guild_viewer and _is_management_page(path):
+                if path.startswith("/api/"):
+                    return _json_error(
+                        403,
+                        "View-only access: managing this server requires admin or moderator rights",
+                    )
+                from fastapi.responses import RedirectResponse
+
+                return RedirectResponse(url=f"/guild/{guild_id}", status_code=303)
 
         action = mutation_capability(request.method, path)
         if action is not None:
