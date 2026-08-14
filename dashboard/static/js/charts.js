@@ -1,0 +1,118 @@
+/**
+ * Bark Dashboard — lightweight dependency-free SVG charts for the Statistics page.
+ * No external chart library: renders inline <svg> so it works fully offline.
+ */
+(function () {
+  'use strict';
+
+  // Escape user-controlled strings used in HTML attribute/text positions.
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  const W = 560, H = 180, PAD = { top: 12, right: 12, bottom: 22, left: 42 };
+
+  function niceMax(v) {
+    if (!v) return 10;
+    const pow = Math.pow(10, Math.floor(Math.log10(v)));
+    const n = v / pow;
+    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+    return nice * pow;
+  }
+
+  /**
+   * Line/area chart.
+   * points: [{label, value}] (oldest -> newest). value may be null (gap).
+   */
+  function lineChart(el, points, opts) {
+    opts = opts || {};
+    if (!el || !points || points.length < 2) {
+      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>Not enough data yet</strong><p>This chart fills in as daily snapshots are collected.</p></div></div>';
+      return;
+    }
+    const iw = W - PAD.left - PAD.right;
+    const ih = H - PAD.top - PAD.bottom;
+    const vals = points.map(p => p.value).filter(v => v != null);
+    const max = niceMax(Math.max.apply(null, vals));
+    const min = 0;
+    const range = Math.max(1, max - min);
+    const stepX = iw / Math.max(1, points.length - 1);
+    const coords = points.map((p, i) => {
+      const x = PAD.left + (points.length === 1 ? 0 : i * stepX);
+      const y = p.value == null ? null : H - PAD.bottom - ((p.value - min) / range) * ih;
+      return { x: x, y: y, label: p.label, value: p.value };
+    });
+
+    let line = '';
+    let area = '';
+    let dots = '';
+    coords.forEach((c, i) => {
+      if (c.y == null) return;
+      line += (i === 0 || coords[i - 1].y == null ? 'M' : 'L') + c.x.toFixed(1) + ',' + c.y.toFixed(1) + ' ';
+      dots += '<circle cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1) + '" r="2.4" fill="var(--accent)"><title>' + esc(c.label) + ': ' + esc(c.value) + '</title></circle>';
+    });
+    const first = coords.find(c => c.y != null);
+    const last = coords.slice().reverse().find(c => c.y != null);
+    if (first && last) {
+      area = '<path d="M' + first.x.toFixed(1) + ',' + (H - PAD.bottom) + ' L' + first.x.toFixed(1) + ',' + first.y.toFixed(1) +
+        ' ' + line.replace(/^M/, '') + 'L' + last.x.toFixed(1) + ',' + (H - PAD.bottom) + ' Z" fill="var(--accent)" opacity="0.12"></path>';
+    }
+
+    // Y gridlines + labels
+    const yTicks = 4;
+    let grid = '';
+    for (let t = 0; t <= yTicks; t++) {
+      const val = min + (range * t) / yTicks;
+      const y = H - PAD.bottom - ((val - min) / range) * ih;
+      grid += '<line x1="' + PAD.left + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD.right) + '" y2="' + y.toFixed(1) + '" stroke="var(--border-subtle)" stroke-width="1"></line>';
+      grid += '<text x="' + (PAD.left - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--text-tertiary)">' + Math.round(val) + '</text>';
+    }
+    // X labels (first, middle, last)
+    const xLabels = [coords[0], coords[Math.floor((coords.length - 1) / 2)], coords[coords.length - 1]];
+    xLabels.forEach(c => {
+      grid += '<text x="' + c.x.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="9" fill="var(--text-tertiary)">' + esc(c.label) + '</text>';
+    });
+
+    el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg">' + grid + area + '<path d="' + line.trim() + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"></path>' + dots + '</svg>';
+    if (opts.valueLabel) {
+      const lastV = points[points.length - 1];
+      if (lastV && lastV.value != null) {
+        const badge = document.createElement('div');
+        badge.className = 'chart-current';
+        badge.textContent = opts.valueLabel + ': ' + lastV.value;
+        el.appendChild(badge);
+      }
+    }
+  }
+
+  /**
+   * Horizontal bar chart.
+   * data: [{label, value}]
+   */
+  function barChart(el, data, opts) {
+    opts = opts || {};
+    if (!el || !data || !data.length) {
+      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No data</strong></div></div>';
+      return;
+    }
+    const rows = data.slice(0, 10);
+    const max = Math.max.apply(null, rows.map(r => r.value).concat([1]));
+    const rowH = 22;
+    const iw = W - PAD.left - PAD.right;
+    const chartH = rows.length * rowH;
+    let html = '<svg viewBox="0 0 ' + W + ' ' + chartH + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg">';
+    rows.forEach((r, i) => {
+      const y = i * rowH;
+      const bw = (r.value / max) * iw;
+      html += '<text x="' + (PAD.left - 6) + '" y="' + (y + rowH / 2 + 3) + '" text-anchor="end" font-size="10" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
+      html += '<rect x="' + PAD.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3" fill="var(--accent)" opacity="0.85"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
+      html += '<text x="' + (PAD.left + bw + 6) + '" y="' + (y + rowH / 2 + 3) + '" font-size="10" fill="var(--text-tertiary)">' + esc(r.value) + '</text>';
+    });
+    html += '</svg>';
+    el.innerHTML = html;
+  }
+
+  window.BarkCharts = { lineChart: lineChart, barChart: barChart, esc: esc };
+})();

@@ -110,8 +110,14 @@ async def list_members(
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "created_at": member.created_at.isoformat() if member.created_at else None,
             "account_age_days": account_age_days,
-            "roles": [{"id": str(r.id), "name": r.name} for r in member.roles[1:]],
+            "roles": [
+                {"id": str(r.id), "name": r.name, "color": str(r.color) if r.color and r.color.value else None}
+                for r in member.roles[1:]
+            ],
             "top_role": member.top_role.name if member.top_role else "None",
+            "top_role_color": str(member.top_role.color)
+            if member.top_role and member.top_role.color and member.top_role.color.value
+            else None,
             "is_bot": member.bot,
             "voice_channel": member.voice.channel.name
             if member.voice and member.voice.channel
@@ -191,8 +197,14 @@ async def get_member_detail(request: Request, guild_id: str, user_id: str):
             "avatar_url": member.display_avatar.url if member.display_avatar else None,
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "created_at": member.created_at.isoformat() if member.created_at else None,
-            "roles": [{"id": str(r.id), "name": r.name} for r in member.roles[1:]],
+            "roles": [
+                {"id": str(r.id), "name": r.name, "color": str(r.color) if r.color and r.color.value else None}
+                for r in member.roles[1:]
+            ],
             "top_role": member.top_role.name if member.top_role else "None",
+            "top_role_color": str(member.top_role.color)
+            if member.top_role and member.top_role.color and member.top_role.color.value
+            else None,
             "is_bot": member.bot,
             "is_timed_out": member.is_timed_out(),
             "voice_channel": member.voice.channel.name

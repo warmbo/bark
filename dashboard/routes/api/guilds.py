@@ -136,11 +136,11 @@ async def get_guild(request: Request, guild_id: int):
 
 @router.get("/guilds/{guild_id}/stats")
 async def get_guild_stats(request: Request, guild_id: int):
-    """Get live guild and recent moderation statistics."""
-    await get_module_min_role("moderation", guild_id)
-    if not check_api_permission(request, "moderation.view", guild_id):
-        return api_forbidden("Insufficient permissions")
+    """Get live guild and recent moderation statistics.
 
+    Viewable by any member of a connected server (safe read) so the Statistics
+    page is available to most users, matching the Dashboard.
+    """
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
     if guild is None:
@@ -151,22 +151,74 @@ async def get_guild_stats(request: Request, guild_id: int):
     async with session_scope() as session:
         total_cases, cases_by_type, cases_7d = await _guild_case_counts(session, guild_id)
         growth_30d = await _guild_growth_30d(session, guild_id)
+        growth_series = await _guild_growth_series(session, guild_id, days=30)
     online, in_voice = _online_and_voice_counts(guild)
 
     return api_success(
         {
             "members": guild.member_count,
             "members_online": online,
+            "bot_count": sum(1 for m in guild.members if m.bot),
             "channels": len(guild.channels),
+            "text_channels": len(guild.text_channels),
+            "voice_channels": len(guild.voice_channels),
             "roles": len(guild.roles),
             "boosts": guild.premium_subscription_count,
+            "boost_tier": guild.premium_tier,
+            "emojis": len(guild.emojis),
             "in_voice": in_voice,
             "growth_30d": growth_30d,
+            "growth_series": growth_series,
             "total_cases": total_cases,
             "cases_7d": cases_7d,
             "cases_by_type": cases_by_type,
         }
     )
+
+
+async def _guild_growth_series(session, guild_id: int, days: int = 30) -> list[dict]:
+    """Return the guild's member count per day (oldest first) from snapshots."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import select
+
+    from database.models.analytics import ActivitySnapshot
+
+    since = date.today() - timedelta(days=days)
+    result = await session.execute(
+        select(ActivitySnapshot)
+        .where(
+            ActivitySnapshot.guild_id == str(guild_id),
+            ActivitySnapshot.snapshot_date >= since,
+        )
+        .order_by(ActivitySnapshot.snapshot_date)
+    )
+    return [
+        {
+            "date": row.snapshot_date.isoformat(),
+            "members": row.total_members,
+        }
+        for row in result.scalars().all()
+    ]
+
+
+@router.get("/guilds/{guild_id}/events")
+async def get_guild_server_events(request: Request, guild_id: int):
+    """Return recent Discord server events (member joins/leaves) for the dashboard.
+
+    Viewable by any member of a connected server (safe read). The feed is a
+    bounded in-memory ring tracked by the bot since startup.
+    """
+    bot = request.state.bot
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return api_not_found("Guild")
+    events = (
+        bot.recent_server_events(guild_id, limit=30)
+        if hasattr(bot, "recent_server_events")
+        else []
+    )
+    return api_success({"events": events, "total": len(events)})
 
 
 async def _guild_case_counts(session, guild_id: int) -> tuple[int, dict[str, int], int]:

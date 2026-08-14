@@ -594,6 +594,11 @@ textarea:focus-visible,
     gap: 6px;
 }
 
+/* Statistics page charts (dependency-free SVG). */
+.chart-wrap { position: relative; margin-top: 6px; }
+.chart-svg { width: 100%; height: auto; max-height: 300px; display: block; }
+.chart-current { position: absolute; top: 0; right: 0; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+
 .stat-value {
     font-size: 30px;
     font-weight: 700;
@@ -957,6 +962,11 @@ textarea:focus-visible,
 
 .activity-icon { flex-shrink: 0; font-size: 15px; }
 
+/* Server Events feed icons — join / leave colour cues. */
+.server-event-icon { flex-shrink: 0; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-full, 999px); }
+.server-event-join { color: var(--green, #86d9a4); background: color-mix(in srgb, var(--green, #86d9a4) 15%, transparent); }
+.server-event-leave { color: var(--red, #f87171); background: color-mix(in srgb, var(--red, #f87171) 15%, transparent); }
+
 .activity-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .activity-reason {
@@ -1111,22 +1121,35 @@ textarea:focus-visible,
 
 .member-cell-joined {
     font-size: 13px;
-    color: var(--text-tertiary);
+    color: var(--text-primary);
     white-space: nowrap;
 }
+.member-cell-joined .join-ago { display: block; font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
 
-.member-role-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-subtle);
-    white-space: nowrap;
-    max-width: 140px;
+/* Role chips colour-coded to the member's Discord roles (--rc = role colour). */
+.role-chip {
+    --rc: var(--border-subtle);
+    display: inline-flex;
+    align-items: center;
+    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 1px 8px;
+    margin: 1px 4px 1px 0;
+    font-size: 11px;
+    line-height: 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-full, 999px);
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
 }
+.role-chip[style] {
+    border-color: var(--rc);
+    color: var(--rc);
+    background: color-mix(in srgb, var(--rc) 13%, transparent);
+}
+.role-chip-more { opacity: .72; }
 
 .member-cell-actions { text-align: right; white-space: nowrap; }
 

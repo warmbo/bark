@@ -65,6 +65,17 @@
         </div>
     </div>
 
+    <div class="content-card server-events-card">
+        <div class="card-header">
+            <h2 class="card-title">{{ icon("users", 16) }} Server Events</h2>
+            <span class="text-tertiary" id="server-events-count">Recent member activity</span>
+        </div>
+        <div class="activity-feed" id="server-events-feed">
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text"></div>
+        </div>
+    </div>
+
     <div class="guild-layout">
         <!-- Activity Feed -->
         <div class="content-card">
@@ -167,18 +178,52 @@ function renderActivityPage() {
     if (activityMoreWrap) activityMoreWrap.hidden = !hasMore;
 }
 
+const serverEventsFeedEl = document.getElementById('server-events-feed');
+const serverEventsCountEl = document.getElementById('server-events-count');
+
+function renderServerEvents(events) {
+    const items = events || [];
+    if (serverEventsCountEl) serverEventsCountEl.textContent = items.length ? `${items.length} recent event${items.length === 1 ? '' : 's'}` : 'No recent activity';
+    if (!serverEventsFeedEl) return;
+    if (!items.length) {
+        serverEventsFeedEl.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('users', 18) : '') + '</span><div><strong>No recent server events</strong><p>Member joins and leaves will appear here as they happen.</p></div></div>';
+        return;
+    }
+    serverEventsFeedEl.innerHTML = items.map(ev => {
+        const time = ev.timestamp ? timeAgoRel(ev.timestamp) : '';
+        const join = ev.type === 'member_join';
+        const icon = join ? '<span class="server-event-icon server-event-join" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('user-plus', 15) : '') + '</span>'
+                          : '<span class="server-event-icon server-event-leave" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('user-minus', 15) : '') + '</span>';
+        return `<div class="activity-item type-${join ? 'join' : 'leave'}">${icon}<span class="activity-desc"><strong>${escHtml(ev.user_name || ev.tag || 'Unknown')}</strong> ${join ? 'joined the server' : 'left the server'}</span><span class="activity-time">${escHtml(time)}</span></div>`;
+    }).join('');
+}
+
+function timeAgoRel(iso) {
+    if (!iso) return '';
+    const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+    const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+    const mo = Math.floor(d / 30); if (mo < 12) return mo + 'mo ago';
+    return Math.floor(mo / 12) + 'y ago';
+}
+
 async function loadGuildOverview() {
     if (guildOverviewRequestInFlight || document.hidden) return;
     guildOverviewRequestInFlight = true;
     try {
-        const [activityData, statsRaw] = await Promise.all([
+        const [activityData, statsRaw, eventsRaw] = await Promise.all([
             safeFetch(`/api/v1/guilds/${GUILD_ID}/activity`, {cache: 'no-cache'}),
             safeFetch(`/api/v1/guilds/${GUILD_ID}/stats`, {cache: 'no-cache'}),
+            safeFetch(`/api/v1/guilds/${GUILD_ID}/events`, {cache: 'no-cache'}),
         ]);
 
         const stats = statsRaw || {};
 
         renderActivity(activityData);
+        const eventsData = (eventsRaw && (eventsRaw.data || eventsRaw).events) || [];
+        renderServerEvents(eventsData);
 
         // Case counts
         const cc = document.getElementById('case-count');

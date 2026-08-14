@@ -46,7 +46,7 @@
             <thead>
                 <tr>
                     <th scope="col">Member</th>
-                    <th scope="col">Joined</th>
+                    <th scope="col">Date Joined</th>
                     <th scope="col">Roles</th>
                     <th scope="col">Actions</th>
                 </tr>
@@ -77,6 +77,39 @@ const initialQuery = new URLSearchParams(window.location.search);
 document.getElementById('member-search').value = initialQuery.get('search') || '';
 document.getElementById('filter-age').value = initialQuery.get('age') || '0';
 document.getElementById('filter-sort').value = initialQuery.get('sort') || 'name';
+
+function formatJoinDate(iso) {
+    if (!iso) return '<span class="text-tertiary">Unknown</span>';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '<span class="text-tertiary">Unknown</span>';
+    return d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+}
+
+function timeAgoRel(iso) {
+    if (!iso) return '';
+    const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+    const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+    const mo = Math.floor(d / 30); if (mo < 12) return mo + 'mo ago';
+    return Math.floor(mo / 12) + 'y ago';
+}
+
+function roleChip(role) {
+    const c = role && role.color;
+    const style = c ? ` style="--rc:${escHtml(c)}"` : '';
+    return `<span class="role-chip"${style} title="${escHtml(role.name)}">${escHtml(role.name)}</span>`;
+}
+
+function renderMemberRoles(roles, topRole, topRoleColor) {
+    let list = Array.isArray(roles) && roles.length ? roles.slice() : [];
+    if (!list.length && topRole && topRole !== 'None') list = [{name: topRole, color: topRoleColor || null}];
+    if (!list.length) return '<span class="text-tertiary">None</span>';
+    const shown = list.slice(0, 3).map(roleChip).join('');
+    const extra = list.length - 3;
+    return shown + (extra > 0 ? `<span class="role-chip role-chip-more" title="${escHtml(list.slice(3).map(r => r.name).join(', '))}">+${extra}</span>` : '');
+}
 
 function syncMemberQuery() {
     const query = new URLSearchParams();
@@ -143,8 +176,8 @@ async function loadMembers(page = 0, append = false) {
                         ${m.is_bot?'<span class="badge-sm bot">BOT</span>':''}${m.is_timed_out?'<span class="badge-sm timeout">TIMEOUT</span>':''}
                     </a>
                 </td>
-                <td class="member-cell-joined"><span class="text-tertiary">${Number.isFinite(Number(m.account_age_days)) ? Number(m.account_age_days) + 'd old' : 'Age unavailable'}</span></td>
-                <td class="member-cell-role"><span class="member-role-badge">${escHtml(m.top_role)}</span></td>
+                <td class="member-cell-joined"><span>${formatJoinDate(m.joined_at)}</span>${m.joined_at ? `<span class="text-tertiary join-ago">${timeAgoRel(m.joined_at)}</span>` : ''}</td>
+                <td class="member-cell-role">${renderMemberRoles(m.roles, m.top_role, m.top_role_color)}</td>
                 <td class="member-cell-actions">
                     <div class="member-row-actions">
                         <button type="button" class="btn btn-xs qa-warn" data-member-action="warn" data-user-id="${escHtml(memberId)}" data-user-name="${escHtml(m.name)}" aria-label="Warn ${escHtml(m.name)}" title="Warn ${escHtml(m.name)}" ${m.is_bot ? 'disabled' : ''}>${getIconSvg('alert-triangle', 13)}</button>

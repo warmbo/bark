@@ -136,14 +136,18 @@ async def get_guild_manifest(request: Request, guild_id: int):
     # module or management surfaces are advertised.
     if getattr(request.state, "guild_viewer", False):
         dashboard_page = {**CORE_PAGES[0], "route": f"/guild/{guild_id}"}
+        # Viewers can see the read-only Dashboard and Statistics pages, but no
+        # module or management surfaces.
+        stats_page = {**CORE_PAGES[2], "route": f"/guild/{guild_id}/stats"}
+        viewer_pages = [dashboard_page, stats_page]
         return api_success(
             {
                 "guild": guild_meta,
                 "viewer": True,
                 "modules": [],
-                "pages": [dashboard_page],
+                "pages": viewer_pages,
                 "actions": [],
-                "categories": _build_navigation([dashboard_page]),
+                "categories": _build_navigation(viewer_pages),
                 "stats": {
                     "members": guild.member_count,
                     "total_cases": None,

@@ -53,7 +53,11 @@ def test_all_templates_compile():
 def test_templates_do_not_use_inline_event_handlers():
     offenders = []
     for path in ALL_TEMPLATES:
-        for match in re.finditer(r"<[^>]+\s(on[a-z]+)\s*=", source(path), re.I):
+        html = source(path)
+        # Only scan HTML tags — ignore <script> bodies, where a bare '<'
+        # (JS comparison) plus an identifier like `onlinePct =` false-positives.
+        html = re.sub(r"<script.*?</script>", "", html, flags=re.S | re.I)
+        for match in re.finditer(r"<[^>]+\s(on[a-z]+)\s*=", html, re.I):
             line = source(path)[: match.start()].count("\n") + 1
             offenders.append(f"{path.relative_to(ROOT)}:{line} ({match.group(1).lower()})")
     assert offenders == [], f"use delegated event handlers instead: {offenders}"

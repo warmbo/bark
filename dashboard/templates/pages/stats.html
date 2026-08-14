@@ -7,18 +7,90 @@
 <div class="page-container">
     <div class="page-header">
         <h1 class="page-title">{{ icon("bar-chart-3", 24) }} Statistics</h1>
-        <p class="page-subtitle">Server activity, growth, and engagement charts</p>
+        <p class="page-subtitle">Server activity, growth, and engagement for <strong>{{ guild.name }}</strong></p>
     </div>
 
-    <div class="content-card">
-        <div class="stats-placeholder">
-            <div class="stats-placeholder-icon">{{ icon("bar-chart-3", 40) }}</div>
-            <h2 class="stats-placeholder-title">Charts coming soon</h2>
-            <p class="stats-placeholder-text">
-                The statistics and charts page is under active development. Check back shortly for
-                activity, growth, and engagement visualizations for <strong>{{ guild.name }}</strong>.
-            </p>
+    <!-- Live metric cards -->
+    <div class="stats-grid" id="stats-metrics">
+        <div class="stat-card"><div class="stat-label">{{ icon("users", 14) }} Members</div><div class="stat-value" id="stat-members">—</div><div class="stat-change" id="stat-online">—</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("zap", 14) }} Boost Tier</div><div class="stat-value" id="stat-tier">—</div><div class="stat-change" id="stat-boosts">—</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("message-circle", 14) }} Channels</div><div class="stat-value" id="stat-channels">—</div><div class="stat-change" id="stat-channel-split">—</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("tag", 14) }} Roles</div><div class="stat-value" id="stat-roles">—</div><div class="stat-change">Server roles</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("smile", 14) }} Emojis</div><div class="stat-value" id="stat-emojis">—</div><div class="stat-change">Custom emoji</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("headphones", 14) }} In Voice</div><div class="stat-value" id="stat-voice">—</div><div class="stat-change">Right now</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("scroll-text", 14) }} Cases</div><div class="stat-value" id="stat-cases">—</div><div class="stat-change" id="stat-cases-7d">—</div></div>
+        <div class="stat-card"><div class="stat-label">{{ icon("trending-up", 14) }} Growth (30d)</div><div class="stat-value" id="stat-growth">—</div><div class="stat-change">Net member change</div></div>
+    </div>
+
+    <div class="guild-layout">
+        <!-- Member growth line chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("trending-up", 16) }} Member Growth</h2><p class="card-description">Daily member count from analytics snapshots (last 30 days)</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-growth"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Cases by type bar chart -->
+        <div>
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("scroll-text", 16) }} Cases by Type</h2><p class="card-description">Moderation actions recorded</p></div>
+                </div>
+                <div class="chart-wrap" id="chart-cases"><div class="skeleton skeleton-row"></div></div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/charts.js?v=1"></script>
+<script>
+const GUILD_ID = '{{ guild.id }}';
+
+function setStat(id, val, fallback) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val != null ? String(val) : (fallback || '—');
+}
+
+async function loadStats() {
+    const body = document.getElementById('stats-metrics');
+    try {
+        const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/stats`, {cache: 'no-cache'});
+        const d = (raw && (raw.data || raw)) || {};
+
+        setStat('stat-members', d.members);
+        const onlinePct = d.members && d.members_online != null ? Math.round((d.members_online / d.members) * 100) + '% online' : null;
+        setStat('stat-online', onlinePct);
+        setStat('stat-tier', d.boost_tier ? 'Tier ' + d.boost_tier : null);
+        setStat('stat-boosts', d.boosts != null ? d.boosts + ' boosting' : null);
+        setStat('stat-channels', d.channels);
+        if (d.text_channels != null && d.voice_channels != null) setStat('stat-channel-split', d.text_channels + ' text · ' + d.voice_channels + ' voice');
+        setStat('stat-roles', d.roles);
+        setStat('stat-emojis', d.emojis);
+        setStat('stat-voice', d.in_voice);
+        setStat('stat-cases', d.total_cases);
+        setStat('stat-cases-7d', d.cases_7d != null ? d.cases_7d + ' last 7d' : null);
+        const g = d.growth_30d;
+        setStat('stat-growth', g != null ? (g > 0 ? '+' + g : g) : null);
+
+        // Charts
+        const growth = (d.growth_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.members }));
+        if (window.BarkCharts) {
+            BarkCharts.lineChart(document.getElementById('chart-growth'), growth, {label: 'Member count', valueLabel: 'Members'});
+            const cases = Object.entries(d.cases_by_type || {}).map(([k, v]) => ({label: k, value: v})).sort((a, b) => b.value - a.value);
+            BarkCharts.barChart(document.getElementById('chart-cases'), cases, {label: 'Cases by type'});
+        }
+    } catch (e) {
+        setStat('stat-members', 'Unavailable');
+        const err = document.getElementById('chart-growth');
+        if (err) err.innerHTML = `<div class="state-panel state-error" role="alert"><div><strong>Statistics unavailable</strong><p>${BarkCharts ? BarkCharts.esc(e.message || 'Could not load statistics.') : 'Could not load statistics.'}</p></div><button type="button" class="btn btn-sm" id="stats-retry">Retry</button></div>`;
+        document.getElementById('stats-retry')?.addEventListener('click', loadStats);
+    }
+}
+
+loadStats();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadStats(); });
+</script>
 {% endblock %}

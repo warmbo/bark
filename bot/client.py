@@ -10,6 +10,7 @@ See docs/architecture-overview.md#startup-flow for lifecycle documentation.
 from __future__ import annotations
 
 import logging
+from collections import defaultdict, deque
 from typing import TYPE_CHECKING
 
 import discord
@@ -62,7 +63,35 @@ class BarkBot(commands.Bot):
         from services.paginator import ReactionPaginator
 
         self.paginator = ReactionPaginator()
+        # Bounded in-memory ring of recent Discord server events (member join /
+        # leave) per guild, surfaced on the dashboard "Server Events" section.
+        # Newest first; maxlen bounds memory regardless of activity.
+        self._server_events: dict[int, deque] = defaultdict(lambda: deque(maxlen=60))
         self._install_tree_error_handler()
+
+    def record_server_event(
+        self, guild_id: int, event_type: str, member, guild_name: str | None = None
+    ) -> None:
+        """Record a Discord server event (member join/leave) for the dashboard feed."""
+        from datetime import datetime, timezone
+
+        self._server_events[guild_id].appendleft(
+            {
+                "type": event_type,
+                "user_id": str(getattr(member, "id", "")),
+                "user_name": getattr(member, "display_name", None) or str(member),
+                "tag": str(member),
+                "avatar_url": getattr(member, "display_avatar", None).url
+                if getattr(member, "display_avatar", None)
+                else None,
+                "guild_name": guild_name,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    def recent_server_events(self, guild_id: int, limit: int = 25) -> list[dict]:
+        """Return the most recent server events for a guild (newest first)."""
+        return list(self._server_events.get(guild_id, []))[:limit]
 
     # ── Properties ────────────────────────────────────
 
@@ -335,10 +364,12 @@ class BarkBot(commands.Bot):
         await bus.emit("discord_message_delete", message=message)
 
     async def on_member_join(self, member: discord.Member) -> None:
+        self.record_server_event(member.guild.id, "member_join", member, member.guild.name)
         bus = self.modules.event_bus
         await bus.emit("discord_member_join", member=member)
 
     async def on_member_remove(self, member: discord.Member) -> None:
+        self.record_server_event(member.guild.id, "member_leave", member, member.guild.name)
         bus = self.modules.event_bus
         await bus.emit("discord_member_remove", member=member)
 

@@ -549,9 +549,64 @@ async def test_private_moderation_reads_require_module_access(app, monkeypatch):
     rulesets_response = await ruleset_route.endpoint(request, "1")
 
     assert cases_response.status_code == 403
-    assert stats_response.status_code == 403
+    # Statistics are intentionally viewable by most users (like the Dashboard) —
+    # they no longer require moderation.view.
+    assert stats_response.status_code == 200
     assert activity_response.status_code == 403
     assert rulesets_response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_list_members_includes_role_colors_and_join_date(app, monkeypatch):
+    """Members list returns each role's Discord color and the join date."""
+    from types import SimpleNamespace
+
+    import discord
+
+    import config
+    from dashboard.routes.api import actions
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    admin_role = SimpleNamespace(id=555, name="Admin", color=discord.Colour(0x5865F2))
+    everyone = SimpleNamespace(id=0, name="@everyone", color=discord.Colour(0))
+    member = SimpleNamespace(
+        id=1,
+        display_name="Alice",
+        tag="Alice#1",
+        display_avatar=None,
+        roles=[everyone, admin_role],
+        top_role=admin_role,
+        created_at=None,
+        joined_at=None,
+        bot=False,
+        voice=None,
+        is_timed_out=lambda: False,
+        __str__=lambda s: "Alice#1",
+    )
+    guild = SimpleNamespace(members=[member])
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/api/v1/guilds/1/members"),
+    )
+
+    resp = await actions.list_members(
+        request, "1", search="", page=0, limit=10, role_id="",
+        sort="name", order="asc", min_age_days=0, max_age_days=0,
+    )
+    assert resp.status_code == 200
+    import json
+    data = json.loads(resp.body)
+    m = data["data"]["members"][0]
+    assert m["roles"][0]["name"] == "Admin"
+    assert m["roles"][0]["color"] == "#5865f2"  # @everyone (value 0) excluded
+    assert m["top_role_color"] == "#5865f2"
+    assert m["joined_at"] is None
 
 
 def test_module_config_validation_rejects_array_and_enum_type_drift():
