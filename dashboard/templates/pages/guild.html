@@ -40,7 +40,17 @@
                     <button type="button" class="btn btn-xs motd-edit-btn" id="motd-edit" hidden>{{ icon("pencil", 12) }} Edit</button>
                 </div>
                 <div class="server-motd-edit" id="motd-edit-form" hidden>
-                    <textarea class="form-textarea" id="motd-input" name="motd" rows="2" maxlength="1000" aria-label="Message of the day"></textarea>
+                    <div class="discord-toolbar motd-toolbar" role="group" aria-label="Message of the day formatting">
+                        <button type="button" class="btn btn-xs" data-md="**" title="Bold" aria-label="Bold"><strong>B</strong></button>
+                        <button type="button" class="btn btn-xs" data-md="*" title="Italic" aria-label="Italic"><em>I</em></button>
+                        <button type="button" class="btn btn-xs" data-md="__" title="Underline" aria-label="Underline"><u>U</u></button>
+                        <button type="button" class="btn btn-xs" data-md="`" title="Inline code" aria-label="Inline code">Code</button>
+                        <span class="sep" aria-hidden="true"></span>
+                        <button type="button" class="btn btn-xs" data-md-link title="Insert link" aria-label="Insert link">Link</button>
+                        <input type="text" id="motd-link-url" name="motd_link_url" class="form-input motd-link-input" placeholder="https://…" aria-label="Link URL" hidden>
+                    </div>
+                    <textarea class="form-textarea motd-textarea" id="motd-input" name="motd" rows="3" maxlength="1000" aria-label="Message of the day"></textarea>
+                    <p class="form-hint">Supports **bold**, *italic*, __underline__, `code`, and [link](https://…)</p>
                     <div class="motd-actions">
                         <button type="button" class="btn btn-sm btn-accent" id="motd-save">{{ icon("check", 14) }} Save</button>
                         <button type="button" class="btn btn-sm" id="motd-cancel">Cancel</button>
@@ -90,6 +100,13 @@ const motdInput = document.getElementById('motd-input');
 const motdSaveBtn = document.getElementById('motd-save');
 const motdCancelBtn = document.getElementById('motd-cancel');
 const eventsFeed = document.getElementById('events-feed');
+let currentMotd = '';
+
+function renderMotdHtml(text) {
+    const t = (text || '').trim();
+    if (!t) return 'No message of the day set yet.';
+    return typeof renderMarkdown === 'function' ? renderMarkdown(t) : escHtml(t);
+}
 const eventsCountEl = document.getElementById('events-count');
 
 function fmtDate(iso) {
@@ -119,9 +136,10 @@ function renderServerProfile(g) {
 
     // MOTD
     if (motdBlock) motdBlock.hidden = false;
-    if (motdText) motdText.textContent = g.motd && g.motd.trim() ? g.motd : 'No message of the day set yet.';
+    currentMotd = g.motd || '';
+    if (motdText) motdText.innerHTML = renderMotdHtml(currentMotd);
     if (motdEditBtn) motdEditBtn.hidden = GUID_VIEWER; // only managers edit
-    if (motdInput) motdInput.value = g.motd || '';
+    if (motdInput) motdInput.value = currentMotd;
 
     // Scheduled events
     renderEvents(g.scheduled_events || []);
@@ -250,15 +268,44 @@ function setMotdMode(edit) {
     if (motdEditForm) motdEditForm.hidden = !edit;
 }
 motdEditBtn?.addEventListener('click', () => setMotdMode(true));
-motdCancelBtn?.addEventListener('click', () => { if (motdInput) motdInput.value = motdText?.textContent === 'No message of the day set yet.' ? '' : (motdText?.textContent || ''); setMotdMode(false); });
+motdCancelBtn?.addEventListener('click', () => { if (motdInput) motdInput.value = currentMotd; setMotdMode(false); });
+
+// MOTD markdown toolbar — wrap the selection in the chosen marker.
+function insertMotdMarker(marker) {
+    const ta = motdInput;
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const sel = ta.value.slice(start, end) || marker;
+    ta.value = ta.value.slice(0, start) + marker + sel + marker + ta.value.slice(end);
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = start + marker.length + sel.length;
+}
+motdEditForm?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-md]');
+    if (btn) { insertMotdMarker(btn.dataset.md); return; }
+    if (e.target.closest('button[data-md-link]')) {
+        const linkInput = document.getElementById('motd-link-url');
+        if (linkInput) { linkInput.hidden = !linkInput.hidden; if (!linkInput.hidden) linkInput.focus(); }
+    }
+});
+document.getElementById('motd-link-url')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const url = e.target.value.trim();
+    if (url && /^https?:\/\//.test(url)) { insertMotdMarker('](' + url + ')'); }
+    e.target.value = '';
+    e.target.hidden = true;
+});
+
 motdSaveBtn?.addEventListener('click', async () => {
     if (motdSaveBtn) { motdSaveBtn.disabled = true; motdSaveBtn.innerHTML = getIconSvg('loader', 14) + ' Saving…'; }
     try {
-        await safeFetch(`/api/v1/guilds/${GUILD_ID}/motd`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({motd: motdInput ? motdInput.value : ''})});
-        if (motdText) motdText.textContent = (motdInput ? motdInput.value.trim() : '') || 'No message of the day set yet.';
+        const next = (motdInput ? motdInput.value : '').trim();
+        await safeFetch(`/api/v1/guilds/${GUILD_ID}/motd`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({motd: next})});
+        currentMotd = next;
+        if (motdText) motdText.innerHTML = renderMotdHtml(next);
         setMotdMode(false);
     } catch (e) {
-        if (motdText) motdText.textContent = 'Failed to save message.';
+        if (motdText) motdText.innerHTML = '<span class="text-danger">Failed to save message.</span>';
     } finally {
         if (motdSaveBtn) { motdSaveBtn.disabled = false; motdSaveBtn.innerHTML = getIconSvg('check', 14) + ' Save'; }
     }

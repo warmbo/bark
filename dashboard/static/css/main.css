@@ -1002,7 +1002,19 @@ textarea:focus-visible,
 
 .server-motd { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 8px); padding: 12px 14px; margin-bottom: 14px; }
 .server-motd-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); margin-bottom: 6px; }
-.server-motd-text { margin: 0; color: var(--text-primary); white-space: pre-wrap; }
+.server-motd-text { margin: 0; color: var(--text-primary); font-size: 17px; line-height: 1.55; }
+.server-motd-text .discord-h2 { font-size: 20px; margin: 6px 0 2px; }
+.server-motd-text .discord-h3 { font-size: 18px; margin: 5px 0 2px; }
+.server-motd-text .discord-h4 { font-size: 16px; margin: 5px 0 2px; }
+.server-motd-text .discord-code { background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 4px; padding: 0 4px; font-size: 14px; }
+.server-motd-text .discord-codeblock { background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 6px; padding: 8px 10px; font-size: 13px; white-space: pre-wrap; }
+.server-motd-text .discord-quote { border-left: 3px solid var(--accent); padding-left: 10px; margin: 4px 0; color: var(--text-secondary); }
+.server-motd-text .discord-link { color: var(--accent); text-decoration: underline; }
+.server-motd-text .discord-spoiler { background: var(--text-primary); color: var(--text-primary); border-radius: 3px; padding: 0 3px; }
+.server-motd-text .discord-li { display: block; }
+.motd-toolbar { margin-bottom: 8px; }
+.motd-textarea { font-size: 15px; }
+.motd-link-input { width: 220px; padding: 4px 8px; font-size: 12px; margin-left: 4px; }
 .server-motd-edit { display: flex; flex-direction: column; gap: 10px; }
 .motd-actions { display: flex; gap: 8px; }
 

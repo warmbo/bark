@@ -210,6 +210,35 @@ function escHtml(t) {
     return d.innerHTML;
 }
 
+/**
+ * Render Discord-style markdown to safe HTML. The source is HTML-escaped
+ * first, so token matches can never inject markup — only the tags we generate.
+ * Supports: **bold**, *italic*, __underline__, ~~strike~~, `code`,
+ * [text](https://…), #/##/### headings, > quotes, - / 1. lists, and line breaks.
+ */
+function renderMarkdown(source, escape = escHtml) {
+    const text = escape(source == null ? '' : String(source));
+    let out = text
+        .replace(/```([\s\S]*?)```/g, '<pre class="discord-codeblock">$1</pre>')
+        .replace(/`([^`\n]+)`/g, '<code class="discord-code">$1</code>')
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+            '<a class="discord-link" href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        .replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+        .replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>')
+        .replace(/__([^_]+)__/g, '<u>$1</u>')
+        .replace(/~~([^~]+)~~/g, '<s>$1</s>')
+        .replace(/\|\|([^|]+)\|\|/g, '<span class="discord-spoiler">$1</span>')
+        .replace(/^### (.+)$/gm, '<h4 class="discord-h4">$1</h4>')
+        .replace(/^## (.+)$/gm, '<h3 class="discord-h3">$1</h3>')
+        .replace(/^# (.+)$/gm, '<h2 class="discord-h2">$1</h2>')
+        .replace(/^&gt; (.+)$/gm, '<blockquote class="discord-quote">$1</blockquote>')
+        .replace(/^- (.+)$/gm, '<span class="discord-li">• $1</span>')
+        .replace(/^\d+\. (.+)$/gm, '<span class="discord-li">$&</span>');
+    return out.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
+}
+
 function safeClassToken(value, fallback = 'item') {
     const token = String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
     return token || fallback;

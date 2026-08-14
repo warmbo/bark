@@ -368,6 +368,30 @@ if (JSON.stringify(actual) !== JSON.stringify(expected)) {{
     )
 
 
+def test_render_markdown_escapes_html_and_formats():
+    main = source(JS / "main.js")
+    match = re.search(r"function renderMarkdown\(.*?\n\}", main, re.MULTILINE | re.DOTALL)
+    assert match is not None
+    fn = match.group(0)
+
+    script = f"""
+// A standalone HTML escaper stands in for escHtml (tested separately).
+function escHtml(t) {{ return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }}
+{fn}
+const md = renderMarkdown('Hello **bold** and *it* with `code` and [link](https://x.com)\\n<script>alert(1)</script>');
+const checks = [
+  md.includes('<strong>bold</strong>'),
+  md.includes('<em>it</em>'),
+  md.includes('<code class="discord-code">code</code>'),
+  md.includes('<a class="discord-link" href="https://x.com"'),
+  !md.includes('<script>'),
+  md.includes('&lt;script&gt;'),
+];
+if (checks.some(c => !c)) throw new Error('renderMarkdown failed: ' + md);
+"""
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+
+
 def test_activity_feed_paginates_with_fade_and_load_more():
     # Recent Activity paginates inside the moderation workspace now.
     workspace = source(JS / "moderation-workspace.js")
