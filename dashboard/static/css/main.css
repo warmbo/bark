@@ -2927,10 +2927,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .status-indicator { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; }.status-success { color: var(--green); border-color: rgba(34,197,94,.21); }.status-warning { color: var(--yellow); }.status-danger { color: var(--red); }
 .form-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.field-error { color: var(--red); font-size: 12px; }.checkbox-control { min-height: var(--control-height); display: flex; align-items: center; gap: 9px; cursor: pointer; }.checkbox-control input { width: 16px; height: 16px; accent-color: var(--accent); }
 .form-actions { position: sticky; bottom: 0; z-index: 5; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 0; background: linear-gradient(transparent, var(--bg-card-solid) 25%); }
-/* Static action rows (Settings cards) sit directly in the card without a
-   padded body wrapper — give them the card's horizontal padding so the
-   buttons aren't flush against the edges. */
-.form-actions-static { position: static; padding: 12px 18px; }
 
 /* ── Live update terminal ────────────────────────────── */
 .update-terminal-dialog { width: min(700px, 100%); display: grid; gap: 10px; padding: 20px; border: 1px solid var(--border-hover); background: var(--bg-card-solid); box-shadow: var(--shadow-lg); border-radius: 12px; }

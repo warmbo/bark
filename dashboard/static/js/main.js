@@ -307,8 +307,9 @@ function renderStatePanel(kind, title, message, section) {
     </div>`;
 }
 
-function renderDataTable(headers, rows) {
-    return `<div class="table-scroll"><table class="data-table"><thead><tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+function renderDataTable(headers, rows, caption) {
+    const cap = caption ? `<caption class="sr-only">${escHtml(caption)}</caption>` : '';
+    return `<div class="table-scroll"><table class="data-table">${cap}<thead><tr>${headers.map(h => `<th scope="col">${escHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function refreshIcons() {

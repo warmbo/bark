@@ -1024,13 +1024,33 @@
         } catch (error) { showToast(error.message || 'Could not create invite', 'error'); }
         finally { button.disabled = false; }
     });
-    document.getElementById('instance-invite-copy')?.addEventListener('click', async () => { await navigator.clipboard.writeText(document.getElementById('instance-invite-url').value); showToast('Invite link copied', 'success'); });
+    document.getElementById('instance-invite-copy')?.addEventListener('click', async () => {
+        const text = document.getElementById('instance-invite-url').value;
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                document.execCommand('copy'); ta.remove();
+            }
+            showToast('Invite link copied', 'success');
+        } catch { showToast('Could not copy invite link', 'error'); }
+    });
     inviteList?.addEventListener('click', async (event) => {
         const button = event.target.closest('[data-revoke-invite], [data-revoke-access]');
         if (!button) return;
-        if (button.dataset.revokeInvite) await safeFetch(`/api/v1/instance/invites/${button.dataset.revokeInvite}`, {method: 'DELETE'});
-        if (button.dataset.revokeAccess) await safeFetch(`/api/v1/instance/access/${encodeURIComponent(button.dataset.revokeAccess)}`, {method: 'DELETE'});
-        await loadInstanceInvites();
+        const kind = button.dataset.revokeInvite ? 'invite' : 'access grant';
+        const ok = await BarkDialog.confirm({ title: `Revoke ${kind}?`, message: `This immediately removes the ${kind} and cannot be undone.`, confirmLabel: 'Revoke', danger: true });
+        if (!ok) return;
+        try {
+            if (button.dataset.revokeInvite) await safeFetch(`/api/v1/instance/invites/${button.dataset.revokeInvite}`, {method: 'DELETE'});
+            if (button.dataset.revokeAccess) await safeFetch(`/api/v1/instance/access/${encodeURIComponent(button.dataset.revokeAccess)}`, {method: 'DELETE'});
+            await loadInstanceInvites();
+            showToast(`${kind[0].toUpperCase() + kind.slice(1)} revoked`, 'success');
+        } catch (error) { showToast(error.message || `Could not revoke ${kind}`, 'error'); }
     });
     loadInstanceInvites();
 
