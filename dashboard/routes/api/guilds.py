@@ -304,11 +304,32 @@ async def get_guild_dashboard(request: Request, guild_id: int):
     profile = await _serialize_guild(guild, guild_id)
     viewer = getattr(request.state, "guild_viewer", False)
     cards = []
+    modules = []
     try:
         cards = await bot.modules.get_dashboard_cards(guild_id)
+        # Enabled modules summary (title, workspace link, widget count).
+        widgets_by_module: dict[str, int] = {}
+        for card in cards:
+            m = card.get("module")
+            if m:
+                widgets_by_module[m] = widgets_by_module.get(m, 0) + 1
+        for mname, module in bot.modules.get_all_modules().items():
+            if not bot.modules.is_enabled_for_guild(guild_id, mname):
+                continue
+            modules.append(
+                {
+                    "name": mname,
+                    "title": getattr(module, "title", "") or mname.replace("_", " ").title(),
+                    "description": getattr(module, "description", "") or "",
+                    "link": f"/guild/{guild_id}/modules/{mname}",
+                    "widgets": widgets_by_module.get(mname, 0),
+                }
+            )
+        modules.sort(key=lambda m: m["title"].lower())
     except Exception:
         cards = []
-    return api_success({"viewer": viewer, "guild": profile, "cards": cards})
+        modules = []
+    return api_success({"viewer": viewer, "guild": profile, "cards": cards, "modules": modules})
 
 
 @router.get("/guilds/{guild_id}/events")

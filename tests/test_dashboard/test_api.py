@@ -770,6 +770,10 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
         return [{"id": "reputation_top", "module": "reputation", "title": "Top Members", "type": "list", "items": [], "link": "/guild/333333/modules/reputation"}]
 
     bot.modules.get_dashboard_cards = fake_cards
+    bot.modules.get_all_modules = lambda: {
+        "reputation": SimpleNamespace(name="reputation", title="Reputation", description="Levels", link=""),
+    }
+    bot.modules.is_enabled_for_guild = lambda _gid, mname: mname == "reputation"
     request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
 
     import json
@@ -781,6 +785,7 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     assert data["cards"][0]["id"] == "reputation_top"
     assert data["cards"][0]["module"] == "reputation"
     assert data["cards"][0]["link"] == "/guild/333333/modules/reputation"
+    assert any(m["name"] == "reputation" and m["link"] for m in data["modules"])
 
 
 def test_module_config_validation_rejects_array_and_enum_type_drift():
