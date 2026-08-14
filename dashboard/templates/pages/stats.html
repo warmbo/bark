@@ -66,7 +66,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/charts.js?v=1"></script>
+<script src="/static/js/charts.js?v=2"></script>
 <script>
 const GUILD_ID = '{{ guild.id }}';
 
@@ -103,17 +103,25 @@ async function loadStats() {
         setStat('stat-top-emoji', topEm && topEm.name ? topEm.name : null);
         setStat('stat-top-emoji-count', topEm && topEm.count != null ? topEm.count + ' uses' : '—');
 
-        // Charts
-        const growth = (d.growth_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.members }));
-        if (window.BarkCharts) {
-            BarkCharts.lineChart(document.getElementById('chart-growth'), growth, {label: 'Member count', valueLabel: 'Members'});
-            const cases = Object.entries(d.cases_by_type || {}).map(([k, v]) => ({label: k, value: v})).sort((a, b) => b.value - a.value);
-            BarkCharts.pieChart(document.getElementById('chart-cases'), cases, {label: 'Cases by type'});
-            const channels = (d.top_channels_today || []).map(c => ({label: '#' + c.name, value: c.count}));
-            BarkCharts.pieChart(document.getElementById('chart-channels'), channels, {label: 'Messages by channel'});
-            const emojis = (d.top_emojis_today || []).map(e => ({label: e.name, value: e.count}));
-            BarkCharts.barChart(document.getElementById('chart-emojis'), emojis, {label: 'Emoji reactions'});
+        // Charts — each render is guarded so a stale/missing chart helper can't
+        // crash the whole statistics page.
+        function renderChart(name, id, data, opts) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (window.BarkCharts && typeof BarkCharts[name] === 'function') {
+                BarkCharts[name](el, data, opts);
+            } else {
+                el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>Chart unavailable</strong></div></div>';
+            }
         }
+        const growth = (d.growth_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.members }));
+        const cases = Object.entries(d.cases_by_type || {}).map(([k, v]) => ({label: k, value: v})).sort((a, b) => b.value - a.value);
+        const channels = (d.top_channels_today || []).map(c => ({label: '#' + c.name, value: c.count}));
+        const emojis = (d.top_emojis_today || []).map(e => ({label: e.name, value: e.count}));
+        renderChart('lineChart', 'chart-growth', growth, {label: 'Member count', valueLabel: 'Members'});
+        renderChart('pieChart', 'chart-cases', cases, {label: 'Cases by type'});
+        renderChart('pieChart', 'chart-channels', channels, {label: 'Messages by channel'});
+        renderChart('barChart', 'chart-emojis', emojis, {label: 'Emoji reactions'});
     } catch (e) {
         setStat('stat-members', 'Unavailable');
         const err = document.getElementById('chart-growth');

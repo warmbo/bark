@@ -392,6 +392,22 @@ if (checks.some(c => !c)) throw new Error('renderMarkdown failed: ' + md);
     subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
 
 
+def test_charts_exports_all_rendering_functions():
+    """charts.js must export every chart helper the stats page calls, so a
+    missing renderer (e.g. a stale cache after pieChart was added) can't break
+    the Statistics page with 'BarkCharts.X is not a function'."""
+    charts = source(JS / "charts.js")
+    for fn in ("lineChart", "barChart", "pieChart"):
+        assert f"function {fn}(" in charts, f"charts.js missing {fn}"
+    # Every exported helper is referenced by name in the window export.
+    assert "window.BarkCharts = {" in charts
+    for fn in ("lineChart", "barChart", "pieChart", "esc"):
+        assert f"{fn}:" in charts, f"charts.js does not export {fn}"
+    # And the stats page must load charts.js with a non-stale cache-buster.
+    stats = source(TEMPLATES / "pages" / "stats.html")
+    assert re.search(r"charts\.js\?v=\d+", stats), "stats.html missing charts.js cache-buster"
+
+
 def test_activity_feed_paginates_with_fade_and_load_more():
     # Recent Activity paginates inside the moderation workspace now.
     workspace = source(JS / "moderation-workspace.js")
