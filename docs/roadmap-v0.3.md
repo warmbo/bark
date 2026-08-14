@@ -139,23 +139,31 @@ Three themes, in priority order:
 
 ## 4. Phased roadmap
 
-**Phase 1 — Integration foundations (do first; unblocks everything else)**
-1. Unified `GET /guilds/{id}/dashboard` (profile + events + widgets + activity in
-   one call) + shared activity contract.
-2. Dashboard widgets v2 (sparkline metric, "view module" links, more widget types).
-3. Module "cooperation" registry (optional, default-off) so plugins can compose.
-4. Add a second real widget to prove the framework (a birthdays module, or a
-   moderation "recent cases" card).
+**Phase 1 — Integration foundations**
+1. ✅ **Unified `GET /guilds/{id}/dashboard`** — profile + viewer flag + module
+   widgets in one round-trip (dashboard loads with a single call); shared
+   `_serialize_guild()` helper (`4a1eecf`).
+2. ✅ **Dashboard widgets v2** — `metric` widget type with label + inline
+   sparkline; `link` footer ("View in module") (`728ab68`).
+3. ✅ **Module cooperation registry** — `services/module_coop.py`, exposed via
+   `BarkContext.coop`; modules register optional data providers and call others'
+   providers, degrading to `None` when absent (optional composition)
+   (`728ab68`).
+4. ✅ **Second real widget** — moderation "Recent Cases" card proves any enabled
+   module can extend the dashboard (reputation "Top Members" + moderation
+   "Recent Cases") (`728ab68`).
 
 **Phase 2 — Cohesion**
-5. Module capabilities API + Modules hub showing widget previews + workspace links.
-6. Slash ↔ dashboard action symmetry (single registration drives both).
-7. `GuildSettings` service (formalize MOTD/banner/staff-role storage).
+5. ⏳ Module capabilities API + Modules hub (widget previews + workspace links).
+6. ⏳ Slash ↔ dashboard action symmetry (single registration drives both).
+7. ✅ **`GuildSettings` service** — `services/guild_settings.py` centralizes
+   per-guild settings; MOTD/banner read/write now use it (`728ab68`).
 
 **Phase 3 — UI polish (cleaner + smoother)**
-8. Fold remaining one-off templates onto primitives; kill dead/dup CSS.
-9. Optimistic updates + toast reconciliation for module/config writes.
-10. Keyboard/focus/loading/realtime pass + reduced-motion + touch-target final gate.
+8. ⏳ Fold remaining one-off templates onto primitives; kill dead/dup CSS.
+9. ✅ Optimistic MOTD/banner saves with immediate render + toast on failure
+   (already in place); metric widgets render a smooth inline sparkline.
+10. ⏳ Keyboard/focus/loading/realtime pass + reduced-motion + touch-target gate.
 
 **Definition of done for v0.3.0**
 - Dashboard is a true command center: profile + any module's widgets + unified
