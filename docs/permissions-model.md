@@ -86,15 +86,23 @@ server has its own "who may manage Bark here" rule, computed by
 A user is **Ready to manage** a server when any of:
 
 1. they are the **guild owner** (`owner` flag on the access row), or
-2. they hold the **admin role** the server owner configured in
+2. they hold Discord's **`ADMINISTRATOR`** permission on the server
+   (mapped to the dashboard `admin` tier), or
+3. they hold Discord's **`MANAGE_GUILD`** permission (mapped to the
+   dashboard `moderator` tier), or
+4. they hold the **admin role** the server owner configured in
    Settings → Dashboard Access (stored per-guild in `GuildSetting`
    key `dashboard_admin_role`, a single role ID), or
-3. they hold a **moderator role** the server owner configured
+5. they hold a **moderator role** the server owner configured
    (`dashboard_moderator_roles`, a JSON array of role IDs).
 
-Discord's `ADMINISTRATOR` / `MANAGE_GUILD` permissions are deliberately
-**not** treated as dashboard privileges — only the configured staff roles
-and the server/instance owners count (explicit-roles model).
+Discord permissions map to dashboard tiers exactly as the global role
+does (`derive_dashboard_role`): owner/`ADMINISTRATOR` → `admin`,
+`MANAGE_GUILD` → `moderator`, and the configured staff roles add the
+server owner's explicit admin/moderator designations. **Running the Bark
+instance grants nothing per-server** — the instance owner is treated like
+any other member unless they hold a real grant in that server (so you no
+longer manage a server you only happen to be a plain member of).
 
 Supporting pieces:
 
@@ -107,19 +115,16 @@ Supporting pieces:
   moderator roles** (multi-select) and a **single admin role** from
   dropdowns (moderators stored as a JSON array; admin as a single role
   ID; legacy plain values still parse).
-- **View-only experience** — a member who is not ready to manage sees a
-  read-only **server status page** (`/guild/{id}` renders
-  `guild_viewer.html`: members, channels, roles, boosts, emojis, created,
-  server info) with no modules and no management links. The middleware
-  blocks `/members`, `/modules`, `/moderation`, `/settings` web pages for
-  viewers (redirect to the status page) and strips the manifest down to
-  the single Dashboard nav entry (`viewer: true`, empty modules/actions).
+- **Locked-out experience** — a member of a connected server with no
+  manage grant is **denied access** (403) rather than shown a read-only
+  page: the server card renders as a locked, non-openable card
+  (`guild-card-readonly`, "No manage access"), and the middleware blocks
+  every `/guild/{id}` page and API route. There is no view-only tier.
 - **Middleware re-derivation** — `AuthMiddleware` recomputes the per-guild
   role on every guild request via `role_from_access_with_staff_roles()`
-  (owner/ADMINISTRATOR → `admin`; MANAGE_GUILD or configured moderator
-  role → `moderator`; else `viewer`), so API gating matches what the
-  dashboard cards advertise. `request.state.guild_viewer` is set for the
-  view-only branch.
+  (owner/`ADMINISTRATOR` → `admin`; `MANAGE_GUILD` or configured moderator
+  role → `moderator`; configured admin role → `admin`; else `viewer`), so
+  API gating matches what the dashboard cards advertise.
 
 ## Module Permission Registration
 

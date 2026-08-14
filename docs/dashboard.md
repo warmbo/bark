@@ -51,18 +51,25 @@ Roles: `viewer`, `moderator`, `admin`, `owner`.
 - Permission-denied API responses are surfaced through `safeFetch()` error messages and toast/state feedback.
 - Module access overrides are read/set/reset through `modules/{name}/role-access`.
 
-### Per-server access and the view-only experience
+### Per-server access (no view-only tier)
 
-Each server's "Ready to manage" flag (owner, ADMINISTRATOR/MANAGE_GUILD
-permission, or an owner-configured moderator role) drives what a user sees:
+Each server's "Ready to manage" flag (owner, `ADMINISTRATOR`/`MANAGE_GUILD`
+Discord permission, or an owner-configured staff role) drives what a user
+sees:
 
-- **Ready to manage** → full guild pages: overview, Members, Modules,
-  Moderation, Settings, and the module workspace.
-- **View only** → `/guild/{id}` renders the read-only server-status page
-  (`guild_viewer.html`); `/members`, `/modules`, `/moderation`,
-  `/settings` redirect to it; the manifest carries `viewer: true` with a
-  single Dashboard nav entry, so the sidebar and command palette expose
-  nothing else. API writes still fail closed via `check_api_permission()`.
+- **Ready to manage** → the card is openable and shows the reason
+  ("You own this server" / "You manage this server on Discord" / "You have
+  this server's Admin role" / "You have this server's Moderator role").
+  Full guild pages: overview, Members, Modules, Moderation, Settings, and
+  the module workspace.
+- **No manage access** → the card renders as a locked, non-openable
+  `guild-card-readonly` card, and the middleware denies every `/guild/{id}`
+  page and API route (403). There is no read-only view-only tier — a member
+  who cannot manage the server is locked out entirely.
+
+Running the Bark instance grants nothing per-server: the instance owner is
+treated like any other member unless they own the server, hold Discord
+manage permissions on it, or hold a configured staff role there.
 
 See `docs/permissions-model.md` for the full rule set (moderator role
 snapshotting, Dashboard Access card, admin-role display).

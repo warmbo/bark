@@ -84,11 +84,11 @@ def test_dashboard_role_is_recomputed_from_current_shared_guilds():
     manage_perm = [{"id": "100", "owner": False, "permissions": str(0x20)}]
     member_only = [{"id": "100", "owner": False, "permissions": "0"}]
 
-    # Only the server owner implies admin at login; Discord permissions never
-    # imply a dashboard role (staff roles are configured per server).
+    # Global role tiering follows Discord permissions: owner/ADMINISTRATOR ->
+    # admin, MANAGE_GUILD -> moderator, plain member -> viewer.
     assert derive_dashboard_role(owner, {"100"}) == "admin"
-    assert derive_dashboard_role(admin_perm, {"100"}) == "viewer"
-    assert derive_dashboard_role(manage_perm, {"100"}) == "viewer"
+    assert derive_dashboard_role(admin_perm, {"100"}) == "admin"
+    assert derive_dashboard_role(manage_perm, {"100"}) == "moderator"
     assert derive_dashboard_role(member_only, {"100"}) == "viewer"
     assert derive_dashboard_role(manage_perm, set()) == "viewer"
 
@@ -256,9 +256,10 @@ async def test_dashboard_lists_all_discord_servers_after_login(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_guild_routes_open_for_members_of_connected_servers(db, monkeypatch):
-    """Any member of a server where Bark is installed may view its dashboard;
-    servers Bark is not in have nothing behind /guild/{id} (403)."""
+async def test_guild_routes_open_for_granted_members_of_connected_servers(db, monkeypatch):
+    """Only members with a manage grant (server owner or configured staff role)
+    can open a connected server's dashboard; others are denied. Servers Bark is
+    not in have nothing behind /guild/{id} (403)."""
     import config
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
@@ -272,8 +273,8 @@ async def test_guild_routes_open_for_members_of_connected_servers(db, monkeypatc
             session,
             "42",
             [
-                {"id": "100", "name": "Connected", "permissions": str(0x20)},
-                {"id": "300", "name": "Read Only", "permissions": "0"},
+                {"id": "100", "name": "Connected", "permissions": str(0x20), "owner": True},
+                {"id": "300", "name": "Read Only", "permissions": "0", "owner": False},
             ],
         )
 
@@ -300,13 +301,13 @@ async def test_guild_routes_open_for_members_of_connected_servers(db, monkeypatc
     assert allowed.status_code == 200
     assert denied.status_code == 403
     assert denied_api.status_code == 403
-    assert "You are not a member of this Discord server" in denied_api.json()["error"]
+    assert "Bark isn't installed" in denied_api.json()["error"]
 
 
 @pytest.mark.asyncio
-async def test_guild_mutations_require_manage_permission(db, monkeypatch):
-    """A plain member can view a connected guild, but write actions still
-    require manage access — membership opens the dashboard, not the controls."""
+async def test_plain_member_cannot_open_or_mutate_connected_guild(db, monkeypatch):
+    """A plain member of a connected server (no manage grant) is denied both
+    viewing and mutating — access itself is locked, not just the controls."""
     import config
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
@@ -320,7 +321,7 @@ async def test_guild_mutations_require_manage_permission(db, monkeypatch):
             session,
             "42",
             [
-                {"id": "100", "name": "Connected", "permissions": "0"},
+                {"id": "100", "name": "Connected", "permissions": "0", "owner": False},
             ],
         )
 
@@ -340,10 +341,10 @@ async def test_guild_mutations_require_manage_permission(db, monkeypatch):
         cookies=dict(session=cookie),
         follow_redirects=False,
     ) as client:
-        allowed = await client.get("/guild/100")
+        denied_view = await client.get("/guild/100")
         denied_write = await client.post("/api/v1/guilds/100/notes", json={"note": "hi"})
 
-    assert allowed.status_code == 200
+    assert denied_view.status_code == 403
     assert denied_write.status_code == 403
 
 
@@ -537,10 +538,10 @@ async def test_module_page_open_to_owner_with_stale_session_role(db, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_module_page_redirects_view_only_member_to_status(db, monkeypatch):
-    """A plain member (no admin/moderator rights in the server) must not see
-    modules: management pages redirect to the read-only server status page,
-    which hides management surfaces entirely."""
+async def test_non_granted_member_is_denied_all_guild_access(db, monkeypatch):
+    """A plain member (no manage grant) is locked out of a connected server
+    entirely — no view-only tier, no management pages, no API. Only owners and
+    configured staff can open a server's dashboard."""
     import config
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
@@ -583,21 +584,10 @@ async def test_module_page_redirects_view_only_member_to_status(db, monkeypatch)
             json={"user_id": "999", "content": "hi"},
         )
 
-    assert module_page.status_code == 303
-    assert module_page.headers["location"] == "/guild/100"
-    assert members_page.status_code == 303
-    assert members_page.headers["location"] == "/guild/100"
-    assert status_page.status_code == 200
-    assert "You have view-only access" in status_page.text
-    assert "Quick Actions" not in status_page.text
-    assert "Recent Activity" not in status_page.text
-    assert "View only" in status_page.text
-
-    manifest_data = manifest.json()["data"]
-    assert manifest_data["viewer"] is True
-    assert manifest_data["modules"] == []
-    assert [page["route"] for page in manifest_data["pages"]] == ["/guild/100"]
-
+    assert module_page.status_code == 403
+    assert members_page.status_code == 403
+    assert status_page.status_code == 403
+    assert manifest.status_code == 403
     assert denied_write.status_code == 403
 
 
@@ -772,7 +762,8 @@ async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
         response = await client.get("/guild/200/modules/announcements")
 
     assert response.status_code == 200
-    assert 'data-user-role="moderator"' in response.text
+    # Guild 200's user has full Discord permissions (administrator) -> admin.
+    assert 'data-user-role="admin"' in response.text
 
 
 # ── Per-server "Ready to manage" (owner-configured moderator roles) ──
@@ -857,16 +848,16 @@ async def test_get_dashboard_admin_role_loads_per_guild_setting(db):
     assert roles.get("300") is None
 
 
-def test_role_from_access_tiers_only_owner_and_configured_roles():
+def test_role_from_access_tiers_from_discord_authority_and_configured_roles():
     from services.dashboard_access import role_from_access, role_from_access_with_staff_roles
 
-    # Login-time derivation: only the server owner implies admin.
+    # Login-time derivation: owner / ADMINISTRATOR -> admin, MANAGE_GUILD -> mod.
     assert role_from_access(owner=True, permissions=0) == "admin"
-    assert role_from_access(owner=False, permissions=0x8) == "viewer"
-    assert role_from_access(owner=False, permissions=0x20) == "viewer"
+    assert role_from_access(owner=False, permissions=0x8) == "admin"
+    assert role_from_access(owner=False, permissions=0x20) == "moderator"
     assert role_from_access(owner=False, permissions=0) == "viewer"
 
-    # Per-guild middleware derivation: owner + configured admin/mod roles only.
+    # Per-guild middleware derivation: Discord authority + configured roles.
     def access(**overrides):
         base = {"guild_id": "100", "permissions": 0, "owner": False, "roles": ""}
         base.update(overrides)
@@ -876,10 +867,10 @@ def test_role_from_access_tiers_only_owner_and_configured_roles():
     assert role_from_access_with_staff_roles(access(roles="111,777"), {"555"}, "777") == "admin"
     assert role_from_access_with_staff_roles(access(roles="111,555"), {"555"}, "777") == "moderator"
     assert role_from_access_with_staff_roles(access(roles="111,666"), {"555"}, "777") == "viewer"
-    # Discord permissions alone no longer imply admin/moderator.
-    assert role_from_access_with_staff_roles(access(permissions=0x8), {"555"}, "777") == "viewer"
-    assert role_from_access_with_staff_roles(access(permissions=0x20), {"555"}, "777") == "viewer"
-    assert role_from_access_with_staff_roles(access(permissions=0x8), set(), None) == "viewer"
+    # Discord permissions map to roles too (consistent with derive_dashboard_role).
+    assert role_from_access_with_staff_roles(access(permissions=0x8), {"555"}, "777") == "admin"
+    assert role_from_access_with_staff_roles(access(permissions=0x20), {"555"}, "777") == "moderator"
+    assert role_from_access_with_staff_roles(access(permissions=0x8), set(), None) == "admin"
     # The Bark instance owner is admin for every server their bot is in, even
     # without server ownership or a configured staff role.
     assert role_from_access_with_staff_roles(
@@ -982,10 +973,10 @@ def test_catalog_marks_ready_to_manage_per_server_from_configured_roles():
     assert by_id["300"]["ready_to_manage"] is False
 
 
-def test_catalog_instance_owner_can_manage_every_connected_server():
-    """The person running the Bark instance can manage every server their own
-    bot is in, even as a plain member with no configured staff role — so two
-    owners' Bark bots can share a server without either being locked out."""
+def test_catalog_instance_owner_does_not_grant_blanket_manage():
+    """Running the Bark instance grants nothing per-server: the instance owner
+    is treated like any other member unless they own the server or hold a
+    configured staff role there."""
     from services.dashboard_access import build_guild_catalog
 
     def access(guild_id, roles=""):
@@ -1009,14 +1000,57 @@ def test_catalog_instance_owner_can_manage_every_connected_server():
         )()
     ]
 
-    # Plain member of a connected server, but the Bark instance owner -> manage.
+    # A plain member of a connected server is NOT manageable — even when they
+    # are the Bark instance owner.
     catalog = build_guild_catalog([access("100")], bot_guilds, client_id="123", is_instance_owner=True)
     assert catalog[0]["access_tier"] == "connected"
-    assert catalog[0]["ready_to_manage"] is True
+    assert catalog[0]["ready_to_manage"] is False
+    assert catalog[0]["manage_reason"] is None
 
-    # Same plain member without the instance-owner flag stays view-only.
-    catalog2 = build_guild_catalog([access("100")], bot_guilds, client_id="123")
-    assert catalog2[0]["ready_to_manage"] is False
+
+def test_catalog_manage_reason_explains_the_grant():
+    """Each manageable server carries a human-readable reason for the grant."""
+    from services.dashboard_access import build_guild_catalog
+
+    def access(guild_id, *, owner=False, roles="", permissions=0):
+        return type(
+            "Access",
+            (),
+            {
+                "guild_id": guild_id,
+                "name": f"Server {guild_id}",
+                "icon_hash": None,
+                "owner": owner,
+                "permissions": permissions,
+                "can_manage": False,
+                "roles": roles,
+            },
+        )()
+
+    bot_guilds = [
+        type(
+            "Guild", (), {"id": gid, "name": f"Server {gid}", "member_count": 5, "icon": None}
+        )()
+        for gid in (100, 200, 300, 400)
+    ]
+    catalog = build_guild_catalog(
+        [
+            access("100", owner=True),
+            access("200", roles="111"),
+            access("300", roles="222"),
+            access("400"),
+        ],
+        bot_guilds,
+        client_id="123",
+        moderator_roles_by_guild={"200": {"111"}},
+        admin_roles_by_guild={"300": "222"},
+    )
+    by_id = {e["id"]: e for e in catalog}
+    assert by_id["100"]["manage_reason"] == "You own this server"
+    assert by_id["200"]["manage_reason"] == "You have this server's Moderator role"
+    assert by_id["300"]["manage_reason"] == "You have this server's Admin role"
+    assert by_id["400"]["manage_reason"] is None
+    assert by_id["400"]["ready_to_manage"] is False
 
 
 @pytest.mark.asyncio
@@ -1069,10 +1103,9 @@ async def test_dashboard_shows_view_only_for_connected_server_without_staff_righ
 
     assert response.status_code == 200
     assert "Connected to Bark" in response.text
-    assert "View-only access" in response.text
-    assert "View only" in response.text
-    # The blanket "Ready to manage" subtitle must not render for this user.
-    assert "<p>Ready to manage</p>" not in response.text
+    assert "No manage access" in response.text
+    # The card must be a locked article (no Open link) for this non-granted user.
+    assert 'class="guild-card guild-card-readonly"' in response.text
 
 
 @pytest.mark.asyncio
@@ -1144,7 +1177,7 @@ async def test_roles_api_flags_administrator_roles(db, monkeypatch):
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "100", "name": "Connected", "permissions": str(0x20)}],
+            [{"id": "100", "name": "Connected", "permissions": str(0x20), "owner": True}],
         )
 
     def role(role_id, name, permissions):

@@ -44,7 +44,7 @@ async def test_role_manager_read_routes_enforce_module_view_permission(db, monke
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x20)}],
+            [{"id": "1", "name": "Test Guild", "permissions": "0", "owner": False}],
         )
 
     bot = MagicMock()

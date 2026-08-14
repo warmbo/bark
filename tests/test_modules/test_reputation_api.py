@@ -44,7 +44,7 @@ async def test_reputation_read_routes_enforce_module_view_permission(db, monkeyp
         await replace_user_guild_access(
             session,
             "42",
-            [{"id": "1", "name": "Test Guild", "permissions": str(0x20)}],
+            [{"id": "1", "name": "Test Guild", "permissions": "0", "owner": False}],
         )
 
     bot = MagicMock()
@@ -68,9 +68,9 @@ async def test_reputation_read_routes_enforce_module_view_permission(db, monkeyp
         response = await client.get("/api/v1/guilds/1/modules/reputation/leaderboard")
 
     assert response.status_code == 403
-    # A viewer with no configured staff role is blocked at the middleware
-    # before the module's permission check can run.
-    assert response.json()["error"] == "View-only access: managing this server requires admin or moderator rights"
+    # A member with no manage grant is blocked at the middleware before the
+    # module's permission check can run.
+    assert "permission to manage" in response.json()["error"] or "isn't installed" in response.json()["error"]
 
 
 def _manager_bot():

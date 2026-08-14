@@ -151,15 +151,19 @@ def role_from_access_with_staff_roles(
 ) -> str:
     """Map a persisted access snapshot to a dashboard role tier.
 
-    Honors the server owner's configured admin + moderator roles: admin role
-    → ``admin``, moderator roles → ``moderator``, server owner → ``admin``, and
-    the Bark instance owner → ``admin`` (they run the bot). Discord permissions
-    alone never imply a dashboard role (explicit staff roles only). Used by the
-    request middleware so API gating matches the per-server "Ready to manage"
-    shown on the server list.
+    Honors real Discord authority first (server owner / ADMINISTRATOR →
+    ``admin``, MANAGE_GUILD → ``moderator``), then the server owner's
+    configured staff roles (admin role → ``admin``, moderator roles →
+    ``moderator``). The Bark instance owner → ``admin`` only when explicitly
+    passed. Used by the request middleware so API gating matches the
+    per-server "Ready to manage" shown on the server list.
     """
     if is_instance_owner or access.owner:
         return "admin"
+    if access.permissions & DISCORD_ADMINISTRATOR:
+        return "admin"
+    if access.permissions & DISCORD_MANAGE_GUILD:
+        return "moderator"
     member_roles = _roles_from_access(access)
     if admin_role_id and admin_role_id in member_roles:
         return "admin"
@@ -173,15 +177,58 @@ def can_manage_discord_guild(*, owner: bool, permissions: int) -> bool:
     return owner or bool(permissions & (DISCORD_ADMINISTRATOR | DISCORD_MANAGE_GUILD))
 
 
+def can_manage_server(
+    access: DashboardGuildAccess,
+    moderator_role_ids: set[str],
+    admin_role_id: str | None = None,
+) -> bool:
+    """Whether the user can manage a server in the dashboard.
+
+    Grants come from real Discord authority — being the server owner, holding
+    Discord's ADMINISTRATOR or MANAGE_GUILD permission on it, or holding one of
+    the server owner's configured staff roles. Running the Bark instance grants
+    nothing here: the instance owner is treated like any other member unless
+    they hold a real grant in that server.
+    """
+    if can_manage_discord_guild(owner=access.owner, permissions=access.permissions):
+        return True
+    member_roles = _roles_from_access(access)
+    if admin_role_id and admin_role_id in member_roles:
+        return True
+    return bool(member_roles & moderator_role_ids)
+
+
+def manage_reason(
+    access: DashboardGuildAccess,
+    moderator_role_ids: set[str],
+    admin_role_id: str | None = None,
+) -> str | None:
+    """Human-readable reason a user can manage a server, else ``None``."""
+    if access.owner:
+        return "You own this server"
+    if access.permissions & DISCORD_ADMINISTRATOR:
+        return "You have Discord administrator on this server"
+    if access.permissions & DISCORD_MANAGE_GUILD:
+        return "You manage this server on Discord"
+    member_roles = _roles_from_access(access)
+    if admin_role_id and admin_role_id in member_roles:
+        return "You have this server's Admin role"
+    if member_roles & moderator_role_ids:
+        return "You have this server's Moderator role"
+    return None
+
+
 def role_from_access(*, owner: bool, permissions: int) -> str:
     """Map Discord guild permissions to the dashboard role tier for that guild.
 
-    Server owners are admins; no Discord permission implies a dashboard role
-    (staff roles are the only other grant). Mirrors the per-guild
-    ``role_from_access_with_staff_roles`` at login time.
+    Server owners and Discord ADMINISTRATOR holders are admins; MANAGE_GUILD
+    holders are moderators. Mirrors ``derive_dashboard_role`` and the per-guild
+    ``role_from_access_with_staff_roles``.
     """
-    if owner:
+    if owner or permissions & DISCORD_ADMINISTRATOR:
         return "admin"
+    if permissions & DISCORD_MANAGE_GUILD:
+        return "moderator"
     return "viewer"
 
 
@@ -411,6 +458,9 @@ def build_guild_catalog(
         )
         if guild is not None and getattr(guild, "icon", None):
             icon_url = guild.icon.url
+        guild_moderator_roles = moderator_roles_by_guild.get(access.guild_id, set())
+        guild_admin_role = admin_roles_by_guild.get(access.guild_id)
+        can_manage = can_manage_server(access, guild_moderator_roles, guild_admin_role)
         access_tier = (
             "connected" if guild is not None else "manageable" if access.can_manage else "other"
         )
@@ -422,12 +472,8 @@ def build_guild_catalog(
                 "member_count": getattr(guild, "member_count", None),
                 "connected": guild is not None,
                 "can_manage": access.can_manage,
-                "ready_to_manage": user_ready_to_manage(
-                    access,
-                    moderator_roles_by_guild.get(access.guild_id, set()),
-                    admin_roles_by_guild.get(access.guild_id),
-                    is_instance_owner=is_instance_owner,
-                ),
+                "ready_to_manage": can_manage,
+                "manage_reason": manage_reason(access, guild_moderator_roles, guild_admin_role),
                 "access_tier": access_tier,
                 "invite_url": build_bot_invite_url(client_id, access.guild_id),
             }
