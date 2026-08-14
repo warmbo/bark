@@ -84,6 +84,9 @@ class ReputationModule(BarkModule):
 
     def __init__(self, ctx) -> None:
         super().__init__(ctx)
+        # Optional cross-module provider: top-members leaderboard data.
+        if (coop := getattr(self.ctx, "coop", None)) is not None:
+            coop.register("reputation.leaderboard", self._coop_leaderboard)
         # Runtime tracking sets
         self._thanks_cooldowns: dict[tuple[int, int], float] = {}  # (actor, target) -> timestamp
         self._thanks_self_cooldowns: dict[int, float] = {}  # actor_id -> timestamp
@@ -221,8 +224,8 @@ class ReputationModule(BarkModule):
             },
         ]
 
-    async def get_dashboard_cards(self, guild_id: int) -> list[dict]:
-        """Add a 'Top Members' leaderboard widget to the server overview."""
+    async def _coop_leaderboard(self, guild_id: int) -> dict | None:
+        """Optional data provider: a 'Top Members' leaderboard card (or None)."""
         try:
             from sqlalchemy import desc, select
 
@@ -239,7 +242,7 @@ class ReputationModule(BarkModule):
                     )
                 ).scalars().all()
             if not rows:
-                return []
+                return None
 
             guild = getattr(getattr(self.ctx, "bot", None), "get_guild", lambda _g: None)(guild_id)
             items = []
@@ -260,20 +263,23 @@ class ReputationModule(BarkModule):
                         "icon": "trophy",
                     }
                 )
-            return [
-                {
-                    "id": "reputation_top",
-                    "title": "Top Members",
-                    "icon": "trophy",
-                    "description": "Highest reputation in this server",
-                    "type": "list",
-                    "link": f"/guild/{guild_id}/modules/reputation",
-                    "items": items,
-                }
-            ]
+            return {
+                "id": "reputation_top",
+                "title": "Top Members",
+                "icon": "trophy",
+                "description": "Highest reputation in this server",
+                "type": "list",
+                "link": f"/guild/{guild_id}/modules/reputation",
+                "items": items,
+            }
         except Exception:
             self.log("warning", "Could not build reputation dashboard card", exc_info=True)
-            return []
+            return None
+
+    async def get_dashboard_cards(self, guild_id: int) -> list[dict]:
+        """Add a 'Top Members' leaderboard widget to the server overview."""
+        card = await self.coop.call("reputation.leaderboard", guild_id)
+        return [card] if card else []
 
     def get_api_routes(self):
         """API endpoints for reputation dashboard data."""

@@ -219,6 +219,19 @@ async function saveBanner(url) {
 }
 bannerSaveBtn?.addEventListener('click', () => saveBanner(''));
 
+function sparklineSvg(values, w, h) {
+    if (!values || values.length < 2) return '';
+    w = w || 120; h = h || 32;
+    const max = Math.max.apply(null, values), min = Math.min.apply(null, values);
+    const span = (max - min) || 1;
+    const pts = values.map((v, i) => {
+        const x = (i / (values.length - 1)) * (w - 4) + 2;
+        const y = h - 4 - ((v - min) / span) * (h - 8);
+        return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    return '<svg class="widget-spark" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
 function renderWidgets(cards) {
     const wrap = document.getElementById('dashboard-widgets');
     if (!wrap) return;
@@ -229,7 +242,9 @@ function renderWidgets(cards) {
         const desc = card.description ? '<p class="card-description">' + escHtml(card.description) + '</p>' : '';
         let body = '';
         if (card.type === 'metric') {
-            body = '<div class="widget-metric">' + escHtml(card.value ?? '—') + '</div>';
+            const label = card.label ? '<div class="widget-metric-label">' + escHtml(card.label) + '</div>' : '';
+            const spark = sparklineSvg(card.sparkline);
+            body = '<div class="widget-metric">' + escHtml(card.value ?? '—') + '</div>' + label + spark;
         } else {
             body = '<ul class="widget-list">' + (card.items || []).map(it =>
                 '<li class="widget-item"><span class="widget-item-label">' + (it.icon && typeof getIconSvg === 'function' ? getIconSvg(it.icon, 13) + ' ' : '') + escHtml(it.label) + '</span><span class="widget-item-value">' + escHtml(it.value ?? '') + '</span></li>'

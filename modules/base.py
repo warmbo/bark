@@ -78,6 +78,11 @@ class BarkModule(abc.ABC):
         # pair so a DB outage doesn't spam logs while defaults are applied.
         self._setting_warned: set[tuple[int, str]] = set()
 
+    @property
+    def coop(self) -> "Any":
+        """Shared cross-module cooperation registry (see BarkContext.coop)."""
+        return self.ctx.coop
+
     # ── Lifecycle ─────────────────────────────────────
 
     @abc.abstractmethod
@@ -193,13 +198,19 @@ class BarkModule(abc.ABC):
           - icon: lucide icon name (optional)
           - description: short helper text (optional)
           - type: ``"list"`` (default) — items render as rows with a label/value
-            and optional icon; ``"metric"`` — a single headline number.
+            and optional icon; ``"metric"`` — a headline number with an optional
+            ``sparkline`` series.
           - items: for ``"list"``, list of {"label", "value", "subtitle"?, "icon"?}
           - value: for ``"metric"``, the headline number/string.
+          - sparkline: for ``"metric"``, a list of numbers rendered as a tiny
+            inline trend.
+          - link: optional route (e.g. ``/guild/{id}/modules/{name}``) rendered
+            as a "View in module" footer link.
 
         Modules return empty by default. This is the extension point for
         add-on dashboard sections (e.g. a birthdays module's "Upcoming
         Birthdays"). Only cards from modules enabled for the guild are shown.
+        Cross-module composition is available through ``self.coop`` providers.
         """
         return []
 

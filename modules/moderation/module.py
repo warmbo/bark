@@ -146,6 +146,9 @@ class ModerationModule(BarkModule):
 
     def __init__(self, ctx) -> None:
         super().__init__(ctx)
+        # Optional cross-module provider: recent moderation cases.
+        if (coop := getattr(self.ctx, "coop", None)) is not None:
+            coop.register("moderation.recent_cases", self._coop_recent_cases)
         # AutoMod state — per-guild, per-user message/mention tracking
         self._message_track: dict[int, dict[int, deque]] = defaultdict(
             lambda: defaultdict(lambda: deque(maxlen=200))
@@ -2166,6 +2169,52 @@ class ModerationModule(BarkModule):
                 ],
             },
         ]
+
+    async def _coop_recent_cases(self, guild_id: int) -> dict | None:
+        """Optional data provider: a 'Recent Cases' moderation card (or None)."""
+        try:
+            from sqlalchemy import select
+
+            from database.engine import session_scope
+            from database.models.moderation import ModerationCase
+
+            async with session_scope() as session:
+                rows = (
+                    await session.execute(
+                        select(ModerationCase)
+                        .where(ModerationCase.guild_id == str(guild_id))
+                        .order_by(ModerationCase.created_at.desc())
+                        .limit(5)
+                    )
+                ).scalars().all()
+            if not rows:
+                return None
+            items = [
+                {
+                    "label": f"#{row.case_number} {row.target_tag or 'Unknown'}",
+                    "value": row.action_type.title(),
+                    "subtitle": f"by {row.moderator_tag or 'Unknown'}",
+                    "icon": "shield",
+                }
+                for row in rows
+            ]
+            return {
+                "id": "moderation_recent_cases",
+                "title": "Recent Cases",
+                "icon": "shield",
+                "description": "Latest moderation actions in this server",
+                "type": "list",
+                "link": f"/guild/{guild_id}/modules/moderation",
+                "items": items,
+            }
+        except Exception:
+            self.log("warning", "Could not build moderation dashboard card", exc_info=True)
+            return None
+
+    async def get_dashboard_cards(self, guild_id: int) -> list[dict]:
+        """Add a 'Recent Cases' widget to the server overview."""
+        card = await self.coop.call("moderation.recent_cases", guild_id)
+        return [card] if card else []
 
     # ── API Routes (module dashboard actions) ─────────
 

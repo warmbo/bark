@@ -14,6 +14,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from services.moderation_service import ModerationService
+from services.module_coop import ModuleCoop
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -59,7 +60,15 @@ class BarkContext:
     def __init__(self, bot: BarkBot, event_bus: EventBus) -> None:
         self._bot = bot
         self._event_bus = event_bus
+        self._coop = ModuleCoop()
         self._module_config_cache: dict[tuple[str, int], tuple[float, dict]] = {}
+
+    # ── Cross-module cooperation registry ───────────────
+
+    @property
+    def coop(self) -> ModuleCoop:
+        """Shared optional-provider registry modules use to cooperate."""
+        return self._coop
 
     # ── Bot access (read-only) ──────────────────────────
 

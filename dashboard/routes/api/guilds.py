@@ -124,30 +124,15 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
         verification_level = None
 
     # Server MOTD + custom banner (stored per-guild in GuildSetting).
-    motd = ""
-    custom_banner_url = ""
     try:
-        from sqlalchemy import select
+        from services.guild_settings import get_settings
 
-        from database.engine import session_scope
-        from database.models.guild import GuildSetting
-
-        async with session_scope() as session:
-            settings = (
-                await session.execute(
-                    select(GuildSetting).where(
-                        GuildSetting.guild_id == str(guild_id),
-                        GuildSetting.key.in_(["motd", "banner_url"]),
-                    )
-                )
-            ).scalars().all()
-            for row in settings:
-                if row.key == "motd":
-                    motd = row.value
-                elif row.key == "banner_url":
-                    custom_banner_url = row.value
+        settings = await get_settings(guild_id, "motd", "banner_url")
+        motd = settings.get("motd", "")
+        custom_banner_url = settings.get("banner_url", "")
     except Exception:
-        pass
+        motd = ""
+        custom_banner_url = ""
 
     scheduled_events = []
     try:
@@ -203,27 +188,9 @@ async def set_guild_banner(request: Request, guild_id: int):
     body = await request.json()
     url = str((body or {}).get("banner_url") or "").strip()[:2000]
 
-    from sqlalchemy import select
+    from services.guild_settings import set_setting
 
-    from database.engine import session_scope
-    from database.models.guild import GuildSetting
-
-    async with session_scope() as session:
-        row = (
-            await session.execute(
-                select(GuildSetting).where(
-                    GuildSetting.guild_id == str(guild_id),
-                    GuildSetting.key == "banner_url",
-                )
-            )
-        ).scalars().first()
-        if url:
-            if row:
-                row.value = url
-            else:
-                session.add(GuildSetting(guild_id=str(guild_id), key="banner_url", value=url))
-        elif row:
-            await session.delete(row)
+    await set_setting(guild_id, "banner_url", url)
     return api_success({"banner_url": url})
 
 
@@ -236,27 +203,9 @@ async def set_guild_motd(request: Request, guild_id: int):
     body = await request.json()
     text = str((body or {}).get("motd") or "").strip()[:1000]
 
-    from sqlalchemy import select
+    from services.guild_settings import set_setting
 
-    from database.engine import session_scope
-    from database.models.guild import GuildSetting
-
-    async with session_scope() as session:
-        row = (
-            await session.execute(
-                select(GuildSetting).where(
-                    GuildSetting.guild_id == str(guild_id),
-                    GuildSetting.key == "motd",
-                )
-            )
-        ).scalars().first()
-        if text:
-            if row:
-                row.value = text
-            else:
-                session.add(GuildSetting(guild_id=str(guild_id), key="motd", value=text))
-        elif row:
-            await session.delete(row)
+    await set_setting(guild_id, "motd", text)
     return api_success({"motd": text})
 
 
