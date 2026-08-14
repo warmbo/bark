@@ -253,7 +253,10 @@ function renderModules(modules) {
     strip.innerHTML = list.map(m => {
         const w = m.widgets ? '<span class="module-chip-meta">' + escHtml(m.widgets) + ' widget' + (m.widgets === 1 ? '' : 's') + '</span>' : '';
         const desc = m.description ? '<span class="module-chip-desc">' + escHtml(m.description.length > 90 ? m.description.slice(0, 90) + '…' : m.description) + '</span>' : '';
-        return '<a class="module-chip" href="' + escHtml(m.link) + '"><span class="module-chip-name">' + escHtml(m.title) + '</span>' + desc + w + '</a>';
+        const cmds = (m.commands || []).filter(c => c.slash !== false).map(c =>
+            '<span class="module-chip-cmd" title="' + escHtml(c.description || '') + '">/bark ' + escHtml(c.name) + '</span>'
+        ).join('');
+        return '<a class="module-chip" href="' + escHtml(m.link) + '"><span class="module-chip-name">' + escHtml(m.title) + '</span>' + desc + w + (cmds ? '<span class="module-chip-cmds">' + cmds + '</span>' : '') + '</a>';
     }).join('');
 }
 

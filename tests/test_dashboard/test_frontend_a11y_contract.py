@@ -451,3 +451,26 @@ def test_mobile_drawer_contract():
         "preventScroll",
     ):
         assert key in js, f"main.js missing drawer behaviour: {key}"
+
+
+def test_pages_use_shared_container_primitives():
+    """Every page (except the bespoke landing/marketing page and the invite
+    utility) is built on the shared container primitives — page-container /
+    page-header / content-card / state-panel / modules-grid / settings-grid — so
+    no page drifts into a fully bespoke wrapper (tighter, uniform UI)."""
+    allowed = (
+        "page-container",
+        "page-header",
+        "content-card",
+        "state-panel",
+        "modules-grid",
+        "settings-grid",
+    )
+    exempt = {"landing.html", "invite.html"}  # intentionally bespoke/utility
+    for page in PAGES:
+        if page.name in exempt:
+            continue
+        html = source(page)
+        assert any(cls in html for cls in allowed), (
+            f"{page.name} does not use any shared container primitive"
+        )

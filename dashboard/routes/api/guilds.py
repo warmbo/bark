@@ -316,6 +316,16 @@ async def get_guild_dashboard(request: Request, guild_id: int):
         for mname, module in bot.modules.get_all_modules().items():
             if not bot.modules.is_enabled_for_guild(guild_id, mname):
                 continue
+            # Slash commands come from the SAME get_commands() registration the
+            # /bark dispatcher uses — one source drives both surfaces.
+            commands = []
+            try:
+                commands = [
+                    {"name": c.name, "description": c.description, "slash": bool(c.slash)}
+                    for c in module.get_commands()
+                ]
+            except Exception:
+                commands = []
             modules.append(
                 {
                     "name": mname,
@@ -323,6 +333,7 @@ async def get_guild_dashboard(request: Request, guild_id: int):
                     "description": getattr(module, "description", "") or "",
                     "link": f"/guild/{guild_id}/modules/{mname}",
                     "widgets": widgets_by_module.get(mname, 0),
+                    "commands": commands,
                 }
             )
         modules.sort(key=lambda m: m["title"].lower())
