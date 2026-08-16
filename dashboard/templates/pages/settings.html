@@ -11,8 +11,76 @@
     </div>
 
     <div class="settings-grid">
-        <!-- Main column: Dashboard Config, Bot Customization -->
+        <!-- Main column: Server + Instance settings -->
         <div class="settings-main">
+
+            <!-- Server Settings -->
+            <h2 class="settings-section-heading" id="server-settings">{{ icon("server", 18) }} Server</h2>
+            <p class="settings-section-desc">Per-server configuration — applies only to {{ guild.name }}.</p>
+
+            <!-- Custom Link (URL slug) -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("link", 16) }} Custom Link</h2><p class="card-description">A short, human-friendly URL to this server instead of its numeric ID.</p></div>
+                </div>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label class="form-label" for="slug-input">Server link</label>
+                        <div class="slug-input-row">
+                            <span class="slug-prefix" id="slug-prefix">/g/</span>
+                            <input class="form-input slug-input" id="slug-input" name="slug" type="text" maxlength="32" placeholder="my-server" aria-describedby="slug-hint">
+                        </div>
+                        <p class="form-hint" id="slug-hint">Letters, numbers and hyphens (3–32 chars). Anyone can open this server at <code id="slug-preview">/g/…</code>.</p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary" id="slug-save">{{ icon("save", 14) }} Save</button>
+                        <button type="button" class="btn" id="slug-clear" hidden>{{ icon("trash-2", 14) }} Remove link</button>
+                        <span class="form-hint" id="slug-status" role="status"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Access -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div><h2 class="card-title">{{ icon("shield", 16) }} Dashboard Access</h2><p class="card-description">Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.</p></div>
+                </div>
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Moderator roles</span>
+                        <span class="info-value">
+                            <details class="role-access-menu checkbox-role-dropdown" id="mod-roles-dropdown">
+                                <summary class="form-select checkbox-role-toggle" id="mod-roles-toggle" aria-haspopup="true" aria-expanded="false">
+                                    <span id="mod-roles-summary">No moderator roles…</span>
+                                    <span class="checkbox-role-caret" aria-hidden="true">{{ icon("chevron-down", 14) }}</span>
+                                </summary>
+                                <div class="role-access-popover checkbox-role-panel" id="mod-roles-panel">
+                                    <div class="checkbox-role-list" id="mod-roles-list"></div>
+                                    <p class="form-hint" id="dashboard-mod-roles-hint">Check the roles that can moderate this server in the dashboard.</p>
+                                </div>
+                            </details>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Admin role</span>
+                        <span class="info-value">
+                            <select id="dashboard-admin-role" name="dashboard_admin_role" class="form-select" aria-label="Admin role" aria-describedby="dashboard-admin-role-hint" style="width:100%">
+                                <option value="">No admin role…</option>
+                            </select>
+                            <p class="form-hint" id="dashboard-admin-role-hint">Members holding this role get full dashboard access, equal to the server owner. This is the only role that grants admin.</p>
+                        </span>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" id="dashboard-mod-roles-save">{{ icon("save", 14) }} Save</button>
+                    <span class="form-hint" id="dashboard-mod-roles-status" role="status"></span>
+                </div>
+            </div>
+
+            <!-- Instance Settings -->
+            <h2 class="settings-section-heading" id="instance-settings">{{ icon("cpu", 18) }} Instance</h2>
+            <p class="settings-section-desc">Applies to the whole Bark instance across every server.</p>
+
             <!-- Dashboard Configuration -->
             <div class="content-card">
                 <div class="card-header">
@@ -62,43 +130,6 @@
                         <span class="info-label">Version</span>
                         <span class="info-value">Bark {{ request.app.state.version }}</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- Dashboard Access -->
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("shield", 16) }} Dashboard Access</h2><p class="card-description">Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.</p></div>
-                </div>
-                <div class="module-info-body">
-                    <div class="info-row">
-                        <span class="info-label">Moderator roles</span>
-                        <span class="info-value">
-                            <details class="role-access-menu checkbox-role-dropdown" id="mod-roles-dropdown">
-                                <summary class="form-select checkbox-role-toggle" id="mod-roles-toggle" aria-haspopup="true" aria-expanded="false">
-                                    <span id="mod-roles-summary">No moderator roles…</span>
-                                    <span class="checkbox-role-caret" aria-hidden="true">{{ icon("chevron-down", 14) }}</span>
-                                </summary>
-                                <div class="role-access-popover checkbox-role-panel" id="mod-roles-panel">
-                                    <div class="checkbox-role-list" id="mod-roles-list"></div>
-                                    <p class="form-hint" id="dashboard-mod-roles-hint">Check the roles that can moderate this server in the dashboard.</p>
-                                </div>
-                            </details>
-                        </span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Admin role</span>
-                        <span class="info-value">
-                            <select id="dashboard-admin-role" name="dashboard_admin_role" class="form-select" aria-label="Admin role" aria-describedby="dashboard-admin-role-hint" style="width:100%">
-                                <option value="">No admin role…</option>
-                            </select>
-                            <p class="form-hint" id="dashboard-admin-role-hint">Members holding this role get full dashboard access, equal to the server owner. This is the only role that grants admin.</p>
-                        </span>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary" id="dashboard-mod-roles-save">{{ icon("save", 14) }} Save</button>
-                    <span class="form-hint" id="dashboard-mod-roles-status" role="status"></span>
                 </div>
             </div>
 
@@ -310,6 +341,15 @@
 
     loadSettingsHealth();
 
+    // Scroll to the requested settings section (?section=server / ?section=instance)
+    const section = new URLSearchParams(location.search).get('section');
+    if (section) {
+        const target = document.getElementById(section === 'instance' ? 'instance-settings' : 'server-settings');
+        if (target) {
+            setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+        }
+    }
+
     // ── Dashboard Access (moderator roles) ────────────
 
     const modRolesList = document.getElementById('mod-roles-list');
@@ -379,6 +419,18 @@
                       ).join('')
                     : '<option value="">No roles in this server</option>';
             }
+
+            // Custom link (URL slug).
+            const slugInput = document.getElementById('slug-input');
+            const slugClear = document.getElementById('slug-clear');
+            const slugPreview = document.getElementById('slug-preview');
+            const slugPrefix = document.getElementById('slug-prefix');
+            if (slugPrefix) slugPrefix.textContent = location.origin.replace(/\/$/, '') + '/g/';
+            if (slugInput) {
+                slugInput.value = settings['slug'] || '';
+                if (slugPreview) slugPreview.textContent = '/g/' + (settings['slug'] || '…');
+                if (slugClear) slugClear.hidden = !settings['slug'];
+            }
         } catch {
             modRolesList.innerHTML = '<p class="text-tertiary" style="padding:6px 8px;">Roles unavailable</p>';
             refreshModRolesSummary();
@@ -426,6 +478,48 @@
             modRolesSave.disabled = false;
         }
     });
+
+    // ── Custom Link (URL slug) ────────────────────────
+    const slugInput = document.getElementById('slug-input');
+    const slugSaveBtn = document.getElementById('slug-save');
+    const slugClearBtn = document.getElementById('slug-clear');
+    const slugStatusEl = document.getElementById('slug-status');
+    const slugPreviewEl = document.getElementById('slug-preview');
+
+    if (slugInput) {
+        slugInput.addEventListener('input', () => {
+            if (slugPreviewEl) slugPreviewEl.textContent = '/g/' + (slugInput.value.trim() || '…');
+        });
+    }
+
+    async function saveSlug(value) {
+        if (!slugSaveBtn) return;
+        const raw = value != null ? value : (slugInput ? slugInput.value.trim() : '');
+        slugSaveBtn.disabled = true;
+        if (slugStatusEl) { slugStatusEl.textContent = 'Saving…'; slugStatusEl.style.color = ''; }
+        try {
+            const res = await safeFetch(`/api/v1/guilds/${GUILD_ID}/slug`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug: raw }),
+            });
+            const d = (res && (res.data || res)) || {};
+            if (slugInput) slugInput.value = d.slug || '';
+            if (slugPreviewEl) slugPreviewEl.textContent = '/g/' + (d.slug || '…');
+            if (slugClearBtn) slugClearBtn.hidden = !d.slug;
+            if (slugStatusEl) {
+                slugStatusEl.textContent = d.slug ? `Saved — ${location.origin}/g/${d.slug}` : 'Removed — no custom link.';
+                slugStatusEl.style.color = 'var(--green)';
+            }
+        } catch (error) {
+            if (slugStatusEl) { slugStatusEl.textContent = error.message || 'Save failed'; slugStatusEl.style.color = 'var(--red)'; }
+        } finally {
+            slugSaveBtn.disabled = false;
+        }
+    }
+
+    slugSaveBtn?.addEventListener('click', () => saveSlug());
+    slugClearBtn?.addEventListener('click', () => saveSlug(''));
 
     loadDashboardModRoles();
 
