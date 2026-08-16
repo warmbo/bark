@@ -1027,6 +1027,18 @@ textarea:focus-visible,
 .widget-footer a:hover { text-decoration: underline; }
 
 .server-motd { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 8px); padding: 12px 14px; margin-bottom: 14px; }
+.server-slug { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 8px); padding: 12px 14px; margin-bottom: 14px; }
+.server-slug-display { display: flex; align-items: center; gap: 12px; }
+.server-slug-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); }
+.server-slug-value { margin: 0 0 0 auto; color: var(--text-primary); }
+.server-slug-value a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.server-slug-value a:hover { text-decoration: underline; }
+.slug-edit-btn { margin-left: 8px; }
+.server-slug-edit { margin-top: 4px; }
+.slug-input-row { display: flex; align-items: center; gap: 4px; }
+.slug-prefix { font-size: 15px; color: var(--text-tertiary); font-family: var(--font-mono, monospace); }
+.slug-input { font-family: var(--font-mono, monospace); }
+.slug-actions { display: flex; gap: 8px; margin-top: 10px; }
 .server-motd-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); margin-bottom: 6px; }
 .server-motd-text { margin: 0; color: var(--text-primary); font-size: 17px; line-height: 1.55; }
 .server-motd-text .discord-h2 { font-size: 20px; margin: 6px 0 2px; }

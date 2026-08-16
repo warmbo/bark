@@ -804,6 +804,122 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     assert rep["commands"][0]["slash"] is True
 
 
+@pytest.mark.asyncio
+async def test_set_guild_slug_validates_persists_and_clears(app, monkeypatch):
+    """PUT /guilds/{id}/slug sets a validated, unique slug; invalid -> 400."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+
+    async with session_scope() as s:
+        from sqlalchemy import select
+
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "555555"))).scalars().first():
+            s.add(Guild(discord_id="555555", name="Slug Guild"))
+            await s.commit()
+
+    guild = SimpleNamespace(
+        id=555555, name="Slug Guild", member_count=10, owner_id=1, owner=None,
+        banner=None, icon=None, description=None, premium_tier=0,
+        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
+        channels=[], roles=[], emojis=[], created_at=None,
+        verification_level=None, features=[], scheduled_events=[], members=[],
+        text_channels=[], voice_channels=[],
+    )
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+
+    import json
+
+    class _Req(SimpleNamespace):
+        _body = {}
+
+        async def json(self):
+            return self._body
+
+    # Valid slug.
+    r = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r._body = {"slug": "my-server"}
+    resp = await guilds.set_guild_slug(r, 555555)
+    assert resp.status_code == 200
+    assert json.loads(resp.body)["data"]["slug"] == "my-server"
+    # get_guild returns it.
+    profile = await guilds.get_guild(request, 555555)
+    assert json.loads(profile.body)["data"]["slug"] == "my-server"
+
+    # Invalid slug -> 400.
+    bad = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    bad._body = {"slug": "bad slug!!"}
+    resp_bad = await guilds.set_guild_slug(bad, 555555)
+    assert resp_bad.status_code == 400
+
+    # Empty clears it.
+    clear = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    clear._body = {"slug": ""}
+    await guilds.set_guild_slug(clear, 555555)
+    profile2 = await guilds.get_guild(request, 555555)
+    assert json.loads(profile2.body)["data"]["slug"] == ""
+
+
+@pytest.mark.asyncio
+async def test_guild_slug_redirect_resolves_to_numeric_guild(app, monkeypatch):
+    """GET /g/{slug} redirects to the numeric guild page; unknown -> 404."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+    from dashboard.routes.web.home import guild_slug_redirect
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+
+    async with session_scope() as s:
+        from sqlalchemy import select
+
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "555555"))).scalars().first():
+            s.add(Guild(discord_id="555555", name="Slug Guild"))
+            await s.commit()
+
+    bot = app.state.bot
+    request = SimpleNamespace(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+
+    class _Req(SimpleNamespace):
+        _body = {}
+
+        async def json(self):
+            return self._body
+
+    set_req = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    set_req._body = {"slug": "my-server"}
+    await guilds.set_guild_slug(set_req, 555555)
+
+    # Known slug -> 302 redirect to /guild/{id}.
+    resp = await guild_slug_redirect(request, "my-server")
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/guild/555555"
+
+    # Slug matching is case-insensitive.
+    resp2 = await guild_slug_redirect(request, "MY-SERVER")
+    assert resp2.status_code == 302
+
+    # Unknown slug -> 404.
+    resp3 = await guild_slug_redirect(request, "does-not-exist")
+    assert resp3.status_code == 404
+
+
 def test_module_config_validation_rejects_array_and_enum_type_drift():
     from dashboard.routes.api.modules import _validate_config
 

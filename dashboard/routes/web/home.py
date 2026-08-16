@@ -5,13 +5,35 @@ Home web routes.
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter(tags=["web-home"])
+
+
+@router.get("/g/{slug}", include_in_schema=False)
+async def guild_slug_redirect(request: Request, slug: str):
+    """Resolve a custom URL slug to the numeric guild page (e.g. /g/my-server)."""
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.guild import GuildSetting
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(GuildSetting).where(
+                    GuildSetting.key == "slug",
+                    GuildSetting.value == slug.lower(),
+                )
+            )
+        ).scalars().first()
+    if row is None:
+        return HTMLResponse("Server not found", status_code=404)
+    return RedirectResponse(url=f"/guild/{row.guild_id}", status_code=302)
 
 
 @router.get("/guild/{guild_id}", response_class=HTMLResponse)

@@ -58,6 +58,27 @@
                 </div>
             </div>
 
+            <!-- Custom URL slug -->
+            <div class="server-slug" id="slug-block" hidden>
+                <div class="server-slug-display" id="slug-display">
+                    <div class="server-slug-label">{{ icon("link", 14) }} Custom Link</div>
+                    <p class="server-slug-value" id="slug-value">—</p>
+                    <button type="button" class="btn btn-xs slug-edit-btn" id="slug-edit" hidden>{{ icon("pencil", 12) }} Edit</button>
+                </div>
+                <div class="server-slug-edit" id="slug-edit-form" hidden>
+                    <div class="slug-input-row">
+                        <span class="slug-prefix">/g/</span>
+                        <input type="text" id="slug-input" name="slug" class="form-input slug-input" placeholder="my-server" maxlength="32" aria-label="Custom URL slug">
+                    </div>
+                    <p class="form-hint">Letters, numbers and hyphens (3–32 chars). This becomes a short link to this server: <code>/g/my-server</code></p>
+                    <div class="slug-actions">
+                        <button type="button" class="btn btn-sm btn-accent" id="slug-save">{{ icon("check", 14) }} Save</button>
+                        <button type="button" class="btn btn-sm" id="slug-remove" hidden>{{ icon("trash-2", 13) }} Remove</button>
+                        <button type="button" class="btn btn-sm" id="slug-cancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Server info chips -->
             <div class="server-info-chips" id="server-info-chips">
                 <span class="info-chip" id="info-members">{{ icon("users", 14) }} <span>—</span></span>
@@ -101,6 +122,65 @@ const motdSaveBtn = document.getElementById('motd-save');
 const motdCancelBtn = document.getElementById('motd-cancel');
 const eventsFeed = document.getElementById('events-feed');
 let currentMotd = '';
+
+const slugBlock = document.getElementById('slug-block');
+const slugDisplay = document.getElementById('slug-display');
+const slugValue = document.getElementById('slug-value');
+const slugEditBtn = document.getElementById('slug-edit');
+const slugEditForm = document.getElementById('slug-edit-form');
+const slugInput = document.getElementById('slug-input');
+const slugSaveBtn = document.getElementById('slug-save');
+const slugRemoveBtn = document.getElementById('slug-remove');
+const slugCancelBtn = document.getElementById('slug-cancel');
+let currentSlug = '';
+
+function renderSlug(slug) {
+    currentSlug = slug || '';
+    if (!slugBlock) return;
+    slugBlock.hidden = false;
+    if (slugDisplay) slugDisplay.hidden = false;
+    if (slugEditForm) slugEditForm.hidden = true;
+    if (slugValue) {
+        slugValue.textContent = '';
+        if (slug) {
+            const link = document.createElement('a');
+            link.href = '/g/' + encodeURIComponent(slug);
+            link.textContent = '/g/' + slug;
+            slugValue.appendChild(link);
+        } else {
+            slugValue.textContent = 'No custom link set.';
+        }
+    }
+    if (slugEditBtn) slugEditBtn.hidden = GUID_VIEWER; // managers only
+    if (slugInput) slugInput.value = slug || '';
+}
+function setSlugMode(edit) {
+    if (slugDisplay) slugDisplay.hidden = edit;
+    if (slugEditForm) slugEditForm.hidden = !edit;
+    if (slugRemoveBtn) slugRemoveBtn.hidden = !currentSlug;
+}
+slugEditBtn?.addEventListener('click', () => setSlugMode(true));
+slugCancelBtn?.addEventListener('click', () => setSlugMode(false));
+slugRemoveBtn?.addEventListener('click', async () => { if (slugInput) slugInput.value = ''; await saveSlug(''); });
+async function saveSlug(value) {
+    if (slugSaveBtn) { slugSaveBtn.disabled = true; slugSaveBtn.innerHTML = getIconSvg('loader', 14) + ' Saving…'; }
+    try {
+        const raw = value != null ? value : (slugInput ? slugInput.value : '');
+        const res = await safeFetch(`/api/v1/guilds/${GUILD_ID}/slug`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({slug: raw})});
+        const d = (res && (res.data || res)) || {};
+        if (d.error) {
+            showToast ? showToast(d.error, 'error') : null;
+            return;
+        }
+        renderSlug(d.slug || '');
+        setSlugMode(false);
+    } catch (e) {
+        showToast ? showToast('Could not save slug', 'error') : null;
+    } finally {
+        if (slugSaveBtn) { slugSaveBtn.disabled = false; slugSaveBtn.innerHTML = getIconSvg('check', 14) + ' Save'; }
+    }
+}
+slugSaveBtn?.addEventListener('click', () => saveSlug());
 
 function renderMotdHtml(text) {
     const t = (text || '').trim();
@@ -146,6 +226,9 @@ function renderServerProfile(g) {
 
     // Custom banner
     renderBanner(g.custom_banner_url || g.banner_url);
+
+    // Custom URL slug
+    renderSlug(g.slug || '');
 }
 
 const bannerEl = document.getElementById('server-banner');

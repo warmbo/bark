@@ -123,16 +123,18 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
     except Exception:
         verification_level = None
 
-    # Server MOTD + custom banner (stored per-guild in GuildSetting).
+    # Server MOTD + custom banner + URL slug (stored per-guild in GuildSetting).
     try:
         from services.guild_settings import get_settings
 
-        settings = await get_settings(guild_id, "motd", "banner_url")
+        settings = await get_settings(guild_id, "motd", "banner_url", "slug")
         motd = settings.get("motd", "")
         custom_banner_url = settings.get("banner_url", "")
+        slug = settings.get("slug", "")
     except Exception:
         motd = ""
         custom_banner_url = ""
+        slug = ""
 
     scheduled_events = []
     try:
@@ -174,6 +176,7 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
         "features": list(guild.features or []),
         "motd": motd,
         "custom_banner_url": custom_banner_url,
+        "slug": slug,
         "scheduled_events": scheduled_events,
     }
 
@@ -192,6 +195,48 @@ async def set_guild_banner(request: Request, guild_id: int):
 
     await set_setting(guild_id, "banner_url", url)
     return api_success({"banner_url": url})
+
+
+@router.put("/guilds/{guild_id}/slug")
+async def set_guild_slug(request: Request, guild_id: int):
+    """Set a custom URL slug (e.g. /g/my-server) that links to this server."""
+    if getattr(request.state, "guild_viewer", False):
+        return api_forbidden("Insufficient permissions")
+
+    body = await request.json()
+    slug = str((body or {}).get("slug") or "").strip().lower()
+
+    import re
+
+    from sqlalchemy import select
+
+    from database.engine import session_scope
+    from database.models.guild import GuildSetting
+    from services.guild_settings import set_setting
+
+    if slug:
+        # Friendly URL slug: lowercase letters, digits, hyphens. 3-32 chars.
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,31}", slug):
+            return api_error(
+                "Slug must be 3-32 characters (lowercase letters, digits, hyphens).",
+                status_code=400,
+            )
+        # Slug must be unique across guilds.
+        async with session_scope() as session:
+            clash = (
+                await session.execute(
+                    select(GuildSetting).where(
+                        GuildSetting.key == "slug",
+                        GuildSetting.value == slug,
+                        GuildSetting.guild_id != str(guild_id),
+                    )
+                )
+            ).scalars().first()
+        if clash is not None:
+            return api_error("That slug is already in use by another server.", status_code=409)
+
+    await set_setting(guild_id, "slug", slug)
+    return api_success({"slug": slug, "url": f"/g/{slug}" if slug else None})
 
 
 @router.put("/guilds/{guild_id}/motd")
