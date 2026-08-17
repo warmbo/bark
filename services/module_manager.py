@@ -24,6 +24,7 @@ from services.event_bus import EventBus
 from services.guild_module_state import GuildModuleState
 from services.module_discovery import ModuleDiscovery
 from services.module_registry import ModuleRegistry
+from services.plugin_operations import PluginOperations
 from services.slash_dispatcher import SlashDispatcher
 
 if TYPE_CHECKING:
@@ -59,6 +60,21 @@ class ModuleManager:
         # Runtime-installed single-file plugins: module name -> file path.
         self._plugin_files: dict[str, Path] = {}
         self._discovery = ModuleDiscovery(self._context, self._registry, self._plugin_files)
+        # Plugin-file lifecycle (install/uninstall/reload) is delegated to a
+        # dedicated collaborator so this manager stays focused on module
+        # discovery + registration (T4 of the clean-architecture refactor).
+        self._plugin_ops = PluginOperations(
+            manager=self,
+            context=self._context,
+            registry=self._registry,
+            guild_state=self._guild_state,
+            plugin_files=self._plugin_files,
+            enable_module=self.enable_module,
+            disable_module=self.disable_module,
+            register_module=self._register_module,
+            register_module_api_routes=self._register_module_api_routes,
+            registered_api_modules=self._registered_api_modules,
+        )
         # The single /bark group that hosts every module command. Created
         # lazily on first module enable so all commands share one namespace
         # (e.g. /bark trivia start instead of /trivia start).
@@ -245,197 +261,31 @@ class ModuleManager:
         self._registry.register(module)
         logger.debug("Loaded module: %s v%s", module.name, module.version)
 
+    # ── Plugin operations (delegated to PluginOperations) ─
+
     def is_plugin(self, name: str) -> bool:
         """Return True when ``name`` is a runtime-installed single-file plugin."""
-        return name in self._plugin_files
+        return self._plugin_ops.is_plugin(name)
 
     def plugin_names(self) -> set[str]:
         """Return the names of all installed plugins."""
-        return set(self._plugin_files)
+        return self._plugin_ops.names()
 
     def list_plugins(self) -> list[dict]:
         """Return metadata for every installed plugin, sorted by name."""
-        return [self._plugin_metadata(name) for name in sorted(self._plugin_files)]
-
-    def _plugin_metadata(self, name: str) -> dict:
-        module = self._registry.get(name)
-        return {
-            "name": name,
-            "version": module.version if module else "",
-            "description": module.description if module else "",
-            "author": module.author if module else "",
-            # Instance-level availability only: whether the plugin is loaded
-            # on this instance. Enablement is decided per Discord server via
-            # the modules page toggle, never here.
-            "loaded": bool(module is not None),
-            "file": self._plugin_files[name].name if name in self._plugin_files else None,
-        }
+        return self._plugin_ops.list_metadata()
 
     async def install_plugin(self, source: bytes, filename: str) -> dict:
-        """Install a single-file plugin from uploaded bytes.
-
-        Validates the upload against a staging file, then atomically moves it
-        into the plugins directory, registers the module, and enables it.
-        Raises PluginValidationError on any validation failure.
-        """
-        import uuid
-
-        from services.plugin_manager import (
-            MAX_PLUGIN_BYTES,
-            PluginValidationError,
-            load_plugin_class,
-            plugins_directory,
-            validate_plugin_name,
-        )
-
-        if not filename.endswith(".py"):
-            raise PluginValidationError("Plugin must be a single .py file.")
-        if not source:
-            raise PluginValidationError("Uploaded file is empty.")
-        if len(source) > MAX_PLUGIN_BYTES:
-            raise PluginValidationError("Plugin exceeds the 512 KB size limit.")
-
-        directory = plugins_directory()
-        staging = directory / f".staging-{uuid.uuid4().hex}.py"
-        try:
-            staging.write_bytes(source)
-            module_class = load_plugin_class(staging)
-            name = validate_plugin_name(module_class.name)
-        except Exception:
-            staging.unlink(missing_ok=True)
-            raise
-
-        if self._registry.has(name) and name not in self._plugin_files:
-            staging.unlink(missing_ok=True)
-            raise PluginValidationError(
-                f"'{name}' is a built-in module and cannot be replaced by a plugin."
-            )
-
-        # Replacing an existing plugin: unload the old instance first.
-        if name in self._plugin_files:
-            await self.uninstall_plugin(name)
-
-        destination = directory / f"{name}.py"
-        staging.replace(destination)
-
-        try:
-            instance = module_class(self._context)
-            self._register_module(instance)
-            self._plugin_files[name] = destination
-            self._register_module_api_routes(name)
-            if not await self.enable_module(name):
-                raise PluginValidationError("Plugin failed to enable; check its enable() method.")
-        except Exception:
-            # Roll back the registries so the failed plugin is fully inert.
-            self._registry.drop(name)
-            self._plugin_files.pop(name, None)
-            self._registered_api_modules.discard(name)
-            destination.unlink(missing_ok=True)
-            raise
-
-        # Refresh discovered permissions so plugin actions are enforced now.
-        from services.response import get_permission_service
-
-        get_permission_service().discover_module_permissions(self._registry.all())
-
-        # Surface slash commands in Discord immediately; failure is non-fatal
-        # (they reappear on the next startup sync).
-        if (
-            getattr(self.bot, "tree", None) is not None
-            and getattr(self.bot, "is_ready", lambda: False)()
-        ):
-            try:
-                await self.bot.tree.sync()
-            except Exception:
-                logger.exception("Plugin '%s' installed but slash command sync failed", name)
-
-        logger.info("Plugin '%s' installed (v%s)", name, instance.version)
-        return self._plugin_metadata(name)
+        """Install a single-file plugin from uploaded bytes (see ``PluginOperations``)."""
+        return await self._plugin_ops.install(source, filename)
 
     async def uninstall_plugin(self, name: str) -> bool:
-        """Disable, deregister, clean up, and delete a plugin. Safe to call on
-        any registered plugin; returns False when ``name`` is not a plugin."""
-        if name not in self._plugin_files:
-            return False
-        path = self._plugin_files[name]
-
-        # 1. Disable: unsubscribes events and removes commands from the tree.
-        try:
-            await self.disable_module(name)
-        except Exception:
-            logger.exception("Plugin '%s' disable() raised during uninstall", name)
-
-        # 2. Deregister from every in-memory registry.
-        self._registry.drop(name)
-        self._registered_commands.pop(name, None)
-        self._registered_events.pop(name, None)
-        self._registered_api_modules.discard(name)
-        self._plugin_files.pop(name, None)
-        self._guild_state.remove_module(name)
-
-        # 3. Drop permission + role caches so no stale checks reference it.
-        from services.response import clear_module_role_cache, get_permission_service
-
-        clear_module_role_cache(name)
-        get_permission_service().discover_module_permissions(self._registry.all())
-
-        # 4. Remove per-guild rows so the module cannot resurface after restart.
-        from sqlalchemy import delete
-
-        from database.engine import session_scope
-        from database.models.module import ModuleConfig
-        from database.models.permissions import ModuleRoleAccess
-
-        async with session_scope() as session:
-            await session.execute(delete(ModuleConfig).where(ModuleConfig.module_name == name))
-            await session.execute(
-                delete(ModuleRoleAccess).where(ModuleRoleAccess.module_name == name)
-            )
-            await session.commit()
-
-        # 5. Delete the file last so a crash leaves a recoverable state.
-        try:
-            path.unlink(missing_ok=True)
-        except OSError:
-            logger.exception("Plugin '%s' file could not be deleted", name)
-
-        # Re-sync the command tree so the removed plugin's /bark commands stop
-        # appearing in Discord (install syncs; uninstall must mirror it, or
-        # ghost commands linger in the global tree until a restart).
-        if (
-            getattr(self.bot, "tree", None) is not None
-            and getattr(self.bot, "is_ready", lambda: False)()
-        ):
-            try:
-                await self.bot.tree.sync()
-            except Exception:
-                logger.exception("Plugin '%s' uninstalled but slash command sync failed", name)
-
-        logger.info("Plugin '%s' uninstalled", name)
-        return True
+        """Disable, deregister, clean up, and delete a plugin (see ``PluginOperations``)."""
+        return await self._plugin_ops.uninstall(name)
 
     async def _reload_plugin(self, name: str) -> bool:
-        """Reload one plugin's code from its file without touching other state."""
-        path = self._plugin_files.get(name)
-        if path is None:
-            return False
-        module = self._registry.get(name)
-        was_enabled = bool(module and module.enabled)
-        if was_enabled and not await self.disable_module(name):
-            return False
-        try:
-            from services.plugin_manager import load_plugin_class
-
-            module_class = load_plugin_class(path)
-            instance = module_class(self._context)
-            self._register_module(instance)
-            from services.response import get_permission_service
-
-            get_permission_service().discover_module_permissions(self._registry.all())
-        except Exception:
-            logger.exception("Failed to reload plugin code for '%s'", name)
-            return False
-        return not was_enabled or await self.enable_module(name)
+        """Reload one plugin's code from its file (see ``PluginOperations``)."""
+        return await self._plugin_ops.reload(name)
 
     # ── Lifecycle ─────────────────────────────────────
 
