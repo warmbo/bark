@@ -6,29 +6,29 @@
 .dark,
 [data-theme="dark"] {
   --radius: 0px;
-  --background: oklch(0.105 0.018 262);
-  --foreground: oklch(0.965 0.006 260);
-  --card: oklch(0.145 0.022 262 / 0.96);
-  --card-foreground: oklch(0.965 0.006 260);
-  --popover: oklch(0.135 0.025 264);
-  --popover-foreground: oklch(0.965 0.006 260);
-  --primary: oklch(0.625 0.205 255);
-  --primary-foreground: oklch(0.985 0.003 260);
-  --secondary: oklch(0.205 0.03 262);
-  --secondary-foreground: oklch(0.93 0.008 260);
-  --muted: oklch(0.19 0.025 262);
-  --muted-foreground: oklch(0.69 0.025 260);
-  --accent: oklch(0.625 0.205 255);
-  --accent-foreground: oklch(0.985 0.003 260);
-  --destructive: oklch(0.58 0.22 27);
-  --destructive-foreground: oklch(0.985 0.003 260);
-  --border: oklch(0.31 0.035 260 / 0.58);
-  --input: oklch(0.245 0.03 262 / 0.8);
-  --ring: oklch(0.65 0.19 253);
-  --sidebar: oklch(0.085 0.018 262 / 0.985);
-  --sidebar-foreground: oklch(0.94 0.008 260);
-  --sidebar-accent: oklch(0.22 0.065 257);
-  --sidebar-border: oklch(0.28 0.035 260 / 0.55);
+  --background: oklch(0.115 0.045 272);
+  --foreground: oklch(0.97 0.012 265);
+  --card: oklch(0.165 0.055 272 / 0.94);
+  --card-foreground: oklch(0.97 0.012 265);
+  --popover: oklch(0.15 0.06 274);
+  --popover-foreground: oklch(0.97 0.012 265);
+  --primary: oklch(0.62 0.245 258);
+  --primary-foreground: oklch(0.99 0.01 260);
+  --secondary: oklch(0.22 0.055 272);
+  --secondary-foreground: oklch(0.94 0.02 265);
+  --muted: oklch(0.21 0.05 272);
+  --muted-foreground: oklch(0.71 0.04 265);
+  --accent: oklch(0.66 0.24 266);
+  --accent-foreground: oklch(0.99 0.01 260);
+  --destructive: oklch(0.62 0.25 26);
+  --destructive-foreground: oklch(0.99 0.01 260);
+  --border: oklch(0.34 0.06 265 / 0.58);
+  --input: oklch(0.27 0.055 272 / 0.8);
+  --ring: oklch(0.68 0.24 258);
+  --sidebar: oklch(0.10 0.045 272 / 0.985);
+  --sidebar-foreground: oklch(0.95 0.015 265);
+  --sidebar-accent: oklch(0.26 0.10 260);
+  --sidebar-border: oklch(0.3 0.06 265 / 0.55);
 
   /* Compatibility aliases while templates are migrated onto macros. */
   --bg-base: var(--background);
@@ -37,14 +37,14 @@
   --bg-sidebar: var(--sidebar);
   --bg-hover: color-mix(in oklab, var(--foreground) 5%, transparent);
   --bg-active: color-mix(in oklab, var(--primary) 16%, transparent);
-  --accent-hover: oklch(0.7 0.17 252);
+  --accent-hover: oklch(0.74 0.2 260);
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
-  --text-tertiary: oklch(0.57 0.025 260);
-  --green: oklch(0.72 0.17 150);
-  --yellow: oklch(0.8 0.16 85);
+  --text-tertiary: oklch(0.6 0.05 265);
+  --green: oklch(0.8 0.2 152);
+  --yellow: oklch(0.88 0.19 92);
   --red: var(--destructive);
-  --orange: oklch(0.72 0.17 55);
+  --orange: oklch(0.8 0.21 58);
   --border-subtle: color-mix(in oklab, var(--border) 72%, transparent);
   --border-card: var(--border);
   --border-input: var(--input);
@@ -91,12 +91,12 @@
 html, body { background: var(--background); color: var(--foreground); }
 body { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.005em; }
 body::before {
-  width: min(54vw, 720px);
-  height: min(54vw, 720px);
-  inset: auto 4vw -18vw auto;
-  background: url("/static/img/bark-avatar.png") center / contain no-repeat;
-  opacity: .018;
-  filter: grayscale(1) contrast(1.4);
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 8, 14, 0.62) 0%, rgba(7, 8, 14, 0.16) 32%, rgba(7, 8, 14, 0.28) 68%, rgba(7, 8, 14, 0.66) 100%),
+    url("/static/img/bark-wallpaper.png") center / cover no-repeat;
+  opacity: 1;
+  filter: saturate(.82) contrast(1.12);
   animation: none;
 }
 body::after {
