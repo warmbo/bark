@@ -1,4 +1,35 @@
 {% from "components/icons.html" import icon %}
+{# Bark v0.3 shadcn/Jinja primitives. These own visual markup while IDs and
+   data attributes remain stable for the existing behavior layer. #}
+{% macro button(label='', variant='default', size='default', type='button', icon_name='', id='', classes='', disabled=false) -%}
+<button type="{{ type }}"{% if id %} id="{{ id }}"{% endif %} class="btn{% if variant == 'primary' %} btn-primary{% elif variant == 'destructive' %} btn-danger{% endif %}{% if size == 'sm' %} btn-sm{% elif size == 'xs' %} btn-xs{% endif %}{% if classes %} {{ classes }}{% endif %}"{% if disabled %} disabled{% endif %}>{% if icon_name %}{{ icon(icon_name, 14 if size in ['sm', 'xs'] else 16) }}{% endif %}{{ label }}{% if caller is defined %}{{ caller() }}{% endif %}</button>
+{%- endmacro %}
+
+{% macro card(title='', description='', classes='', id='') -%}
+<article{% if id %} id="{{ id }}"{% endif %} class="content-card{% if classes %} {{ classes }}{% endif %}">
+  {% if title or description %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{{ title }}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div></header>{% endif %}
+  <div class="config-body">{% if caller is defined %}{{ caller() }}{% endif %}</div>
+</article>
+{%- endmacro %}
+
+{% macro badge(label, variant='neutral', classes='') -%}<span class="status-badge status-{{ variant }}{% if classes %} {{ classes }}{% endif %}"><span class="status-indicator" aria-hidden="true"></span>{{ label }}</span>{%- endmacro %}
+
+{% macro input_field(name, label='', value='', type='text', id='', placeholder='', description='') -%}
+{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<input class="form-input" id="{{ control_id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
+{%- endmacro %}
+
+{% macro select_field(name, label='', id='', description='') -%}
+{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<select class="form-select" id="{{ control_id }}" name="{{ name }}"{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{% if caller is defined %}{{ caller() }}{% endif %}</select>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
+{%- endmacro %}
+
+{% macro textarea_field(name, label='', value='', id='', rows=4, placeholder='', description='') -%}
+{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<textarea class="form-textarea" id="{{ control_id }}" name="{{ name }}" rows="{{ rows }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{{ value }}</textarea>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
+{%- endmacro %}
+
+{% macro separator(classes='') -%}<div class="separator{% if classes %} {{ classes }}{% endif %}" role="separator"></div>{%- endmacro %}
+
+{% macro avatar(src='', alt='', fallback='B', classes='') -%}<span class="avatar{% if classes %} {{ classes }}{% endif %}">{% if src %}<img src="{{ src }}" alt="{{ alt }}" data-fallback-src="/static/img/bark-avatar.png">{% else %}<span aria-hidden="true">{{ fallback }}</span><span class="sr-only">{{ alt }}</span>{% endif %}</span>{%- endmacro %}
+
 {% macro page_header(title, description='', icon_name='', eyebrow='') -%}
 <header class="page-header page-header-standard">
   <div>

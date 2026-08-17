@@ -2944,6 +2944,13 @@ async def test_settings_import_rejects_non_backup_files(client, app, db):
     )
     assert response.status_code == 400
 
+    response = await client.post(
+        "/api/v1/guilds/1/settings/import",
+        json={"backup": {"format": "bark-backup", "version": None}},
+    )
+    assert response.status_code == 400
+    assert "Unsupported backup version" in response.json()["error"]
+
 
 @pytest.mark.asyncio
 async def test_settings_import_persists_config_for_missing_module(client, app, db):

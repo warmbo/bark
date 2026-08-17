@@ -1,0 +1,76 @@
+"""Contracts for the locally-pinned Bark v0.3 shadcn visual system."""
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+BASE = ROOT / "dashboard/templates/base.html"
+CSS = ROOT / "dashboard/static/css/main.css"
+PRIMITIVES = ROOT / "dashboard/templates/components/primitives.html"
+PACKAGE = ROOT / "frontend/package.json"
+PIN = ROOT / "frontend/shadcn-pin.md"
+
+
+def test_v030_uses_local_assets_only():
+    base = BASE.read_text()
+    assert "fonts.googleapis.com" not in base
+    assert "fonts.gstatic.com" not in base
+    assert "unpkg.com" not in base
+    assert '/static/fonts/inter-latin.woff2' in base or "fonts.css" in base
+    assert '/static/js/lucide.min.js' in base
+
+
+def test_v030_shadcn_tokens_are_present_and_sharp():
+    css = CSS.read_text()
+    for token in (
+        "--background:",
+        "--foreground:",
+        "--card:",
+        "--card-foreground:",
+        "--primary:",
+        "--primary-foreground:",
+        "--secondary:",
+        "--muted:",
+        "--accent:",
+        "--destructive:",
+        "--border:",
+        "--input:",
+        "--ring:",
+    ):
+        assert token in css
+    assert "--radius: 0px" in css
+    assert "Bark v0.3 shadcn visual system" in css
+
+
+def test_v030_frontend_dependencies_are_exact_pinned():
+    import json
+
+    package = json.loads(PACKAGE.read_text())
+    dependencies = package["devDependencies"]
+    assert dependencies == {
+        "@fontsource/inter": "5.3.0",
+        "@fontsource/jetbrains-mono": "5.3.0",
+        "@tailwindcss/cli": "4.3.3",
+        "lucide": "1.31.0",
+        "tailwindcss": "4.3.3",
+    }
+    assert PIN.is_file()
+    assert "deliberate upgrade" in PIN.read_text().lower()
+
+
+def test_v030_has_shadcn_jinja_primitives():
+    primitives = PRIMITIVES.read_text()
+    for macro in (
+        "button",
+        "card",
+        "badge",
+        "input_field",
+        "select_field",
+        "textarea_field",
+        "separator",
+        "avatar",
+    ):
+        assert f"macro {macro}(" in primitives
+
+
+def test_python_release_line_is_v030():
+    assert 'version = "0.3.0"' in (ROOT / "pyproject.toml").read_text()

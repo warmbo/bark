@@ -3,7 +3,7 @@
 The displayed version is X.X.X style, derived from the base version in
 pyproject.toml plus the git commit count as the patch component — so every
 change to the repo produces a distinct, monotonic version on the web UI
-(e.g. ``0.2.0`` -> ``0.2.1`` -> ``0.2.2`` ... ``0.2.166``). When git is
+(e.g. ``0.3.0`` -> ``0.3.1`` -> ``0.3.2`` ...). When git is
 unavailable (e.g. an sdist without VCS metadata), it falls back to the
 installed package version from importlib.metadata.
 """

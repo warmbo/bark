@@ -1,0 +1,267 @@
+/* Bark v0.3 shadcn visual system — component adaptation.
+ * This layer deliberately maps the existing behavior-stable Bark selectors to
+ * shadcn's locally-vendored tokens. Markup IDs/data attributes stay unchanged.
+ */
+:root,
+.dark,
+[data-theme="dark"] {
+  --radius: 0px;
+  --background: oklch(0.105 0.018 262);
+  --foreground: oklch(0.965 0.006 260);
+  --card: oklch(0.145 0.022 262 / 0.96);
+  --card-foreground: oklch(0.965 0.006 260);
+  --popover: oklch(0.135 0.025 264);
+  --popover-foreground: oklch(0.965 0.006 260);
+  --primary: oklch(0.625 0.205 255);
+  --primary-foreground: oklch(0.985 0.003 260);
+  --secondary: oklch(0.205 0.03 262);
+  --secondary-foreground: oklch(0.93 0.008 260);
+  --muted: oklch(0.19 0.025 262);
+  --muted-foreground: oklch(0.69 0.025 260);
+  --accent: oklch(0.625 0.205 255);
+  --accent-foreground: oklch(0.985 0.003 260);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.985 0.003 260);
+  --border: oklch(0.31 0.035 260 / 0.58);
+  --input: oklch(0.245 0.03 262 / 0.8);
+  --ring: oklch(0.65 0.19 253);
+  --sidebar: oklch(0.085 0.018 262 / 0.985);
+  --sidebar-foreground: oklch(0.94 0.008 260);
+  --sidebar-accent: oklch(0.22 0.065 257);
+  --sidebar-border: oklch(0.28 0.035 260 / 0.55);
+
+  /* Compatibility aliases while templates are migrated onto macros. */
+  --bg-base: var(--background);
+  --bg-elevated: var(--secondary);
+  --bg-card: var(--card);
+  --bg-sidebar: var(--sidebar);
+  --bg-hover: color-mix(in oklab, var(--foreground) 5%, transparent);
+  --bg-active: color-mix(in oklab, var(--primary) 16%, transparent);
+  --accent-hover: oklch(0.7 0.17 252);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-tertiary: oklch(0.57 0.025 260);
+  --green: oklch(0.72 0.17 150);
+  --yellow: oklch(0.8 0.16 85);
+  --red: var(--destructive);
+  --orange: oklch(0.72 0.17 55);
+  --border-subtle: color-mix(in oklab, var(--border) 72%, transparent);
+  --border-card: var(--border);
+  --border-input: var(--input);
+  --border-hover: color-mix(in oklab, var(--primary) 48%, var(--border));
+  --glass-border: var(--border);
+  --glass-blur: none;
+  --glass-blur-heavy: none;
+  --shadow-card: none;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/static/fonts/inter-latin.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/static/fonts/inter-latin-600.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/static/fonts/inter-latin-700.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/static/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 100 800;
+}
+
+html, body { background: var(--background); color: var(--foreground); }
+body { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.005em; }
+body::before {
+  width: min(54vw, 720px);
+  height: min(54vw, 720px);
+  inset: auto 4vw -18vw auto;
+  background: url("/static/img/bark-avatar.png") center / contain no-repeat;
+  opacity: .018;
+  filter: grayscale(1) contrast(1.4);
+  animation: none;
+}
+body::after {
+  width: 48vw;
+  height: 48vw;
+  inset: -22vw -12vw auto auto;
+  background: radial-gradient(circle, color-mix(in oklab, var(--primary) 15%, transparent), transparent 68%);
+  filter: none;
+  opacity: 1;
+  animation: none;
+}
+
+/* shadcn Card */
+.content-card,
+.guild-card,
+.module-card,
+.dashboard-widget,
+.action-card,
+.workspace-data-card,
+.stat-card,
+.qa-card,
+.server-profile,
+.discord-preview,
+.update-terminal-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.content-card:hover,
+.guild-card:hover,
+.module-card:hover,
+.dashboard-widget:hover { border-color: color-mix(in oklab, var(--primary) 34%, var(--border)); box-shadow: none; }
+.card-header { border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--secondary) 48%, transparent); }
+.card-title, .page-title, .module-heading { letter-spacing: -.025em; font-weight: 650; }
+.card-description, .page-subtitle, .form-hint { color: var(--muted-foreground); }
+
+/* shadcn Button */
+.btn,
+.context-palette-button,
+.sidebar-logout,
+.pagination-btn {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: none;
+  font-weight: 550;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.btn:hover,
+.context-palette-button:hover,
+.pagination-btn:hover { background: var(--accent); color: var(--accent-foreground); border-color: var(--accent); transform: none; box-shadow: none; }
+.btn-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--primary-foreground); }
+.btn-danger { background: var(--destructive); color: var(--destructive-foreground); border-color: var(--destructive); }
+.btn-sm { min-height: 32px; }
+.btn-xs { min-height: 28px; }
+.btn:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* shadcn Field / Input / Select / Textarea */
+.form-input,
+.form-select,
+.form-textarea,
+.palette-input,
+.search-bar input,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--background) 80%, var(--secondary));
+  color: var(--foreground);
+  box-shadow: none;
+}
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus,
+input:focus,
+select:focus,
+textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in oklab, var(--ring) 32%, transparent); outline-offset: -1px; box-shadow: none; }
+.form-label { color: var(--foreground); font-size: .875rem; font-weight: 550; }
+.toggle-slider { border-radius: 999px; background: var(--input); border: 1px solid var(--border); }
+.toggle-switch input:checked + .toggle-slider { background: var(--primary); }
+
+/* shadcn Badge */
+.badge,
+.status-badge,
+.module-badge,
+.info-chip,
+.role-chip,
+.cmd-badge,
+.version-pill,
+.priority-pill {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  box-shadow: none;
+  font-weight: 550;
+}
+.status-success, .badge-ok { background: color-mix(in oklab, var(--green) 13%, var(--secondary)); color: var(--green); border-color: color-mix(in oklab, var(--green) 42%, var(--border)); }
+.status-danger, .badge-ban { background: color-mix(in oklab, var(--destructive) 13%, var(--secondary)); color: oklch(0.74 0.16 25); border-color: color-mix(in oklab, var(--destructive) 48%, var(--border)); }
+
+/* shadcn Table */
+.table-scroll { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.data-table { background: transparent; }
+.data-table th { background: var(--muted); color: var(--muted-foreground); border-bottom: 1px solid var(--border); font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
+.data-table td { border-bottom: 1px solid var(--border); }
+.data-table tbody tr:hover { background: color-mix(in oklab, var(--accent) 8%, transparent); }
+
+/* shadcn Tabs */
+.tabs, .workspace-tabs { border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); padding: 3px; gap: 2px; }
+.tab { border: 1px solid transparent; border-radius: var(--radius); color: var(--muted-foreground); }
+.tab:hover { color: var(--foreground); background: color-mix(in oklab, var(--foreground) 5%, transparent); }
+.tab.active, .tab[aria-selected="true"] { background: var(--background); border-color: var(--border); color: var(--foreground); box-shadow: none; }
+
+/* shadcn Dialog / Popover / Command */
+.dialog-overlay,
+.palette-overlay,
+.workspace-drawer-backdrop,
+.workspace-modal { background: oklch(0.02 0.01 262 / .76); backdrop-filter: blur(3px); }
+.app-dialog,
+.palette,
+.role-access-popover,
+.checkbox-role-panel,
+.workspace-drawer,
+.workspace-modal > div {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 24px 64px oklch(0.02 0.01 262 / .55);
+}
+.palette-input-wrapper { border-bottom: 1px solid var(--border); }
+.palette-item { border-radius: var(--radius); }
+.palette-item.active, .palette-item:hover { background: var(--accent); color: var(--accent-foreground); }
+
+/* shadcn Sidebar */
+.sidebar { background: var(--sidebar); border-right: 1px solid var(--sidebar-border); backdrop-filter: none; box-shadow: none; }
+.sidebar-header, .sidebar-footer { border-color: var(--sidebar-border); }
+.logo-icon { border-radius: var(--radius); border: 1px solid var(--sidebar-border); }
+.nav-item { border-radius: var(--radius); color: var(--muted-foreground); border: 1px solid transparent; }
+.nav-item:hover { background: color-mix(in oklab, var(--sidebar-accent) 62%, transparent); color: var(--foreground); }
+.nav-item.active { background: var(--sidebar-accent); color: var(--foreground); border-color: color-mix(in oklab, var(--primary) 35%, var(--sidebar-border)); box-shadow: inset 2px 0 0 var(--primary); }
+.context-bar { border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--background) 94%, transparent); backdrop-filter: blur(10px); }
+
+/* shadcn Empty / Alert / Skeleton / Toast */
+.state-panel, .alert { border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); color: var(--muted-foreground); }
+.state-error, .alert-danger { border-color: color-mix(in oklab, var(--destructive) 52%, var(--border)); background: color-mix(in oklab, var(--destructive) 10%, var(--muted)); }
+.skeleton { border-radius: var(--radius); background: linear-gradient(90deg, var(--muted), color-mix(in oklab, var(--muted) 76%, var(--foreground)), var(--muted)); }
+.toast { border: 1px solid var(--border); border-radius: var(--radius); background: var(--popover); color: var(--popover-foreground); box-shadow: 0 16px 48px oklch(0.02 0.01 262 / .5); }
+
+/* Deliberately square shadcn layout rhythm. */
+:where(button, input, select, textarea, [class*="card"], [class*="panel"], [class*="dialog"], [class*="modal"], [class*="popover"], [class*="dropdown"], [class*="avatar"], [class*="badge"], [class*="chip"]) {
+  border-radius: 0 !important;
+}
+.page-container { max-width: 1500px; }
+.page-header-standard { border-bottom: 1px solid var(--border); padding-bottom: 18px; }
+.separator { height: 1px; width: 100%; background: var(--border); }
+.server-banner, .banner-preview-img, .discord-embed, img { border-radius: var(--radius); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

@@ -17,6 +17,11 @@ from bot.client import BarkBot
 from config import config
 from dashboard import create_app
 from database.engine import close_db, init_db
+from services.backup_service import (
+    apply_pending_restore_sync,
+    rollback_applied_restore_sync,
+    validate_live_database_foreign_keys,
+)
 
 # Seconds the bot may take to reach Discord "ready" before the process exits
 # for a systemd restart. A hung gateway handshake (no error, no timeout)
@@ -61,8 +66,28 @@ async def main() -> None:
 
     config.validate_startup()
 
-    # Initialize database
-    await init_db()
+    # A validated v0.2/v0.3 .db restore is swapped in before SQLAlchemy opens
+    # the live file. init_db then applies every ordered schema migration.
+    restore = apply_pending_restore_sync()
+    if restore:
+        logger.warning(
+            "Applied pending database restore from %s (rollback: %s)",
+            restore.get("source_name", "backup.db"),
+            restore.get("rollback_path", "none"),
+        )
+
+    # Initialize database (including upgrades for restored older schemas). If a
+    # legacy schema defeats migration, put the previous live DB back before the
+    # supervisor restarts this process.
+    try:
+        await init_db()
+        if restore:
+            await asyncio.to_thread(validate_live_database_foreign_keys)
+    except Exception as exc:
+        if restore:
+            await close_db()
+            rollback_applied_restore_sync(restore, reason=str(exc))
+        raise
     logger.info("Database initialized")
 
     # Start bot and dashboard concurrently

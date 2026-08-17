@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import sqlite3
 from unittest.mock import MagicMock
 
 import pytest
@@ -122,3 +123,79 @@ async def test_download_rejects_invalid_filenames(app):
             "/api/v1/instance/backup/bark-backup-20200101-000000-000000.db"
         )
         assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_owner_can_apply_staged_restore_and_request_restart(app, tmp_path, monkeypatch):
+    import config
+
+    restart = MagicMock()
+    app.app.state.request_process_restart = restart
+    monkeypatch.setattr(config.config, "data_dir", tmp_path)
+    restore_dir = tmp_path / "restore"
+    restore_dir.mkdir()
+    (restore_dir / "restore-pending.db").write_bytes(b"pending")
+    (restore_dir / "restore-pending.json").write_text("{}")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        response = await client.post("/api/v1/instance/backup/restore/apply")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["restarting"] is True
+    restart.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_owner_can_stage_legacy_database_restore(app, tmp_path):
+    legacy = tmp_path / "bark-v0.2.db"
+    connection = sqlite3.connect(legacy)
+    connection.execute(
+        "CREATE TABLE guilds (id INTEGER PRIMARY KEY, discord_id TEXT, name TEXT)"
+    )
+    connection.execute("INSERT INTO guilds VALUES (1, '123', 'Legacy')")
+    connection.commit()
+    connection.close()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/instance/backup/restore",
+            files={"file": ("bark-v0.2.db", legacy.read_bytes(), "application/octet-stream")},
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["staged"] is True
+    assert data["restart_required"] is True
+    assert data["source_name"] == "bark-v0.2.db"
+
+
+@pytest.mark.asyncio
+async def test_database_restore_rejects_non_owner_and_non_sqlite(app):
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("43")),
+    ) as client:
+        denied = await client.post(
+            "/api/v1/instance/backup/restore",
+            files={"file": ("old.db", b"SQLite format 3\x00junk", "application/octet-stream")},
+        )
+    assert denied.status_code == 403
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie("42")),
+    ) as client:
+        invalid = await client.post(
+            "/api/v1/instance/backup/restore",
+            files={"file": ("old.db", b"not sqlite", "application/octet-stream")},
+        )
+    assert invalid.status_code == 400

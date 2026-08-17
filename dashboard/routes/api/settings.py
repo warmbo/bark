@@ -100,7 +100,11 @@ async def import_settings(request: Request, guild_id: int):
     backup = body.get("backup") or body
     if backup.get("format") != BACKUP_FORMAT:
         return api_error("Not a bark backup file (missing 'bark-backup' format marker)")
-    if int(backup.get("version", 0)) != BACKUP_VERSION:
+    try:
+        backup_version = int(backup.get("version", 0))
+    except (TypeError, ValueError):
+        backup_version = 0
+    if backup_version != BACKUP_VERSION:
         return api_error(f"Unsupported backup version: {backup.get('version')}")
 
     report: list[str] = []

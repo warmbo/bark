@@ -150,7 +150,8 @@ def test_template_comments_and_font_url_are_html_valid():
     assert invalid_comments == []
     base = source(TEMPLATES / "base.html")
     assert "&family=" not in base and "&display=" not in base
-    assert "&amp;family=" in base and "&amp;display=" in base
+    assert "fonts.googleapis.com" not in base
+    assert "/static/fonts/inter-latin.woff2" in base
 
 
 def test_server_card_open_and_close_conditions_match():

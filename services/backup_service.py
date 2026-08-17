@@ -8,8 +8,12 @@ can be snapshotted safely while the bot holds it open. Snapshots land in
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
+import os
 import re
+import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +24,12 @@ logger = logging.getLogger("bark.backup")
 
 # bark-backup-YYYYMMDD-HHMMSS-ffffff.db
 BACKUP_RE = re.compile(r"^bark-backup-\d{8}-\d{6}-\d{6}\.db$")
+RESTORE_DB_NAME = "restore-pending.db"
+RESTORE_MARKER_NAME = "restore-pending.json"
+
+
+class InvalidBackupError(ValueError):
+    """Raised when an uploaded file is not a usable Bark SQLite backup."""
 
 
 def _backup_dir() -> Path:
@@ -45,6 +55,211 @@ def _source_db_path() -> Path:
     if path.is_absolute():
         return path
     return Path(config.data_dir) / path
+
+
+def _restore_dir() -> Path:
+    directory = Path(config.data_dir) / "restore"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_database_backup(path: Path) -> dict:
+    """Validate SQLite structure and Bark identity without modifying the file."""
+    if not path.is_file() or path.stat().st_size < 16:
+        raise InvalidBackupError("Backup is not a SQLite database")
+    with path.open("rb") as handle:
+        if handle.read(16) != b"SQLite format 3\x00":
+            raise InvalidBackupError("Backup is not a SQLite database")
+    try:
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            integrity = connection.execute("PRAGMA integrity_check").fetchone()
+            if not integrity or integrity[0] != "ok":
+                raise InvalidBackupError(f"SQLite integrity check failed: {integrity}")
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                ).fetchall()
+            }
+            migrations: list[str] = []
+            if "schema_migrations" in tables:
+                migrations = [
+                    str(row[0])
+                    for row in connection.execute(
+                        "SELECT version FROM schema_migrations ORDER BY version"
+                    ).fetchall()
+                ]
+                # Import lazily so the ordinary backup path stays lightweight.
+                from database.migrations import MIGRATIONS
+
+                known = {version for version, _action in MIGRATIONS}
+                unknown = sorted(set(migrations) - known)
+                if unknown:
+                    raise InvalidBackupError(
+                        "Database backup was created by a newer or incompatible "
+                        f"Bark release (unknown migration: {unknown[-1]})"
+                    )
+        finally:
+            connection.close()
+    except sqlite3.DatabaseError as exc:
+        raise InvalidBackupError(f"Backup is not a valid SQLite database: {exc}") from exc
+    if "guilds" not in tables:
+        raise InvalidBackupError("SQLite file is not a Bark backup (guilds table missing)")
+    return {
+        "tables": sorted(tables),
+        "size": path.stat().st_size,
+        "sha256": _sha256(path),
+        "schema_version": migrations[-1] if migrations else "legacy",
+    }
+
+
+def validate_live_database_foreign_keys() -> None:
+    """Reject a migrated restore if it still contains dangling references."""
+    path = _source_db_path()
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        violations = connection.execute("PRAGMA foreign_key_check").fetchmany(10)
+        if violations:
+            sample = ", ".join(f"{row[0]}:{row[1]}" for row in violations[:3])
+            raise InvalidBackupError(
+                f"Restored database failed foreign-key validation ({sample})"
+            )
+    finally:
+        connection.close()
+
+
+def stage_database_restore_sync(source: Path, *, source_name: str) -> dict:
+    """Validate and atomically stage a v0.2/v0.3 database for next startup.
+
+    The live database is never touched by the upload request. Startup applies
+    the staged file before opening SQLAlchemy, then normal ordered migrations
+    bring older schemas forward.
+    """
+    metadata = validate_database_backup(source)
+    directory = _restore_dir()
+    staged_tmp = directory / f"{RESTORE_DB_NAME}.tmp"
+    staged = directory / RESTORE_DB_NAME
+    shutil.copyfile(source, staged_tmp)
+    os.replace(staged_tmp, staged)
+    # Validate the staged bytes again: this also catches a short/failed copy.
+    metadata = validate_database_backup(staged)
+    payload = {
+        **metadata,
+        "source_name": Path(source_name).name,
+        "staged_at": datetime.now(timezone.utc).isoformat(),
+        "restart_required": True,
+    }
+    marker_tmp = directory / f"{RESTORE_MARKER_NAME}.tmp"
+    marker = directory / RESTORE_MARKER_NAME
+    marker_tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    os.replace(marker_tmp, marker)
+    logger.warning("Staged database restore from %s for next restart", payload["source_name"])
+    return payload
+
+
+async def stage_database_restore(source: Path, *, source_name: str) -> dict:
+    return await asyncio.to_thread(
+        stage_database_restore_sync, source, source_name=source_name
+    )
+
+
+def has_pending_database_restore() -> bool:
+    directory = _restore_dir()
+    return (directory / RESTORE_DB_NAME).is_file() and (
+        directory / RESTORE_MARKER_NAME
+    ).is_file()
+
+
+def apply_pending_restore_sync() -> dict | None:
+    """Apply a validated staged database before SQLAlchemy opens the live DB.
+
+    A consistent copy of the previous live database is retained in backups as
+    an explicit rollback artifact. Ordered migrations run immediately after
+    this function from ``app.main``.
+    """
+    directory = _restore_dir()
+    marker = directory / RESTORE_MARKER_NAME
+    staged = directory / RESTORE_DB_NAME
+    if not marker.is_file() and not staged.is_file():
+        return None
+    if not marker.is_file() or not staged.is_file():
+        raise InvalidBackupError("Incomplete pending database restore")
+    try:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InvalidBackupError("Pending restore marker is invalid") from exc
+    metadata = validate_database_backup(staged)
+    if payload.get("sha256") != metadata["sha256"]:
+        raise InvalidBackupError("Pending database restore checksum mismatch")
+
+    live = _source_db_path()
+    live.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    rollback: Path | None = _backup_dir() / f"bark-backup-{timestamp}.db"
+    if live.is_file():
+        _snapshot_sync(live, rollback)
+    else:
+        rollback = None
+
+    # WAL sidecars belong to the old file and must never be replayed over the
+    # replacement. At this point startup has not created the SQLAlchemy engine.
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(f"{live}{suffix}")
+        sidecar.unlink(missing_ok=True)
+    os.replace(staged, live)
+    applied = directory / f"restore-applied-{timestamp}.json"
+    payload.update(
+        {
+            "applied_at": datetime.now(timezone.utc).isoformat(),
+            "rollback_path": str(rollback) if rollback is not None else "",
+            "applied_marker": str(applied),
+        }
+    )
+    applied.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    marker.unlink(missing_ok=True)
+    logger.warning("Applied staged database restore; rollback=%s", rollback)
+    return payload
+
+
+def rollback_applied_restore_sync(applied: dict, *, reason: str) -> bool:
+    """Restore the pre-import snapshot when migrations reject an uploaded DB."""
+    live = _source_db_path()
+    rollback_value = str(applied.get("rollback_path") or "")
+    rollback = Path(rollback_value) if rollback_value else None
+    if rollback is not None:
+        validate_database_backup(rollback)
+        replacement = _restore_dir() / "restore-rollback.tmp"
+        shutil.copy2(rollback, replacement)
+        validate_database_backup(replacement)
+        for suffix in ("-wal", "-shm"):
+            Path(f"{live}{suffix}").unlink(missing_ok=True)
+        os.replace(replacement, live)
+    else:
+        # First-install restores have no previous database to recover.
+        live.unlink(missing_ok=True)
+
+    status = dict(applied)
+    status.update(
+        {
+            "status": "rolled_back",
+            "rollback_reason": reason,
+            "rolled_back_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    marker_value = str(applied.get("applied_marker") or "")
+    marker = Path(marker_value) if marker_value else _restore_dir() / "restore-rolled-back.json"
+    marker.write_text(json.dumps(status, indent=2), encoding="utf-8")
+    logger.critical("Database restore rolled back after startup failure: %s", reason)
+    return True
 
 
 def _snapshot_sync(src: Path, dst: Path) -> None:

@@ -46,6 +46,7 @@ Thumbs.db
 dist/
 build/
 *.egg
+node_modules/
 
 # Runtime plugin/uploads state (installed/uploaded at runtime, not source)
 data/plugins/

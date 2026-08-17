@@ -1,0 +1,16 @@
+{
+  "name": "bark-v030-ui",
+  "private": true,
+  "version": "0.3.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "npm run build && git -C .. diff --exit-code -- dashboard/static/css/main.css dashboard/static/fonts dashboard/static/js/lucide.min.js"
+  },
+  "devDependencies": {
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@tailwindcss/cli": "4.3.3",
+    "lucide": "1.31.0",
+    "tailwindcss": "4.3.3"
+  }
+}

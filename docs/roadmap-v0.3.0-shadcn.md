@@ -36,8 +36,8 @@ site" is delivered by **vendoring source + committing build output + pinning
 versions**. Nothing resolves from the internet at render time or at deploy time.
 
 1. **`frontend/` directory** (new) holds the vendored build:
-   - `package.json` + `package-lock.json` with **exact pinned versions** of
-     `tailwindcss@^4`, `@tailwindcss/cli`, and `lucide` (icon source).
+   - `package.json` + `package-lock.json` with **exact pinned versions**:
+     Tailwind/CLI `4.3.3`, Lucide `1.31.0`, and Fontsource `5.3.0`.
    - `frontend/src/theme.css` — shadcn `@theme` design tokens, mapped onto Bark's
      existing dark palette (`--accent #3b82f6`, sharp `0px` radius stays on-brand).
    - `frontend/src/components/*.css` — shadcn component style layer.
@@ -179,3 +179,33 @@ supersedes the old v0.3 naming). Flag for Cody's confirmation before shipping.
   Bark's palette, not the default white "new-york" theme.
 - **No React debt**: we implement the *visual system*, not React components; if Cody
   later needs React itself, that is Path B and a separate project.
+
+---
+
+## 9. Implementation record
+
+The implementation uses a behavior-preserving visual adapter rather than replacing
+all endpoint/DOM hooks at once. `frontend/src/legacy.css` is the frozen pre-v0.3
+layout contract; Tailwind v4 emits utilities/tokens and `frontend/src/v3.css`
+overrides every shared component family with shadcn recipes. This is intentional:
+the 17 mature workspace scripts depend on stable IDs, `data-*` attributes and state
+classes. Rebuilding those hooks simultaneously would increase feature-loss risk
+without changing what users see.
+
+Completed implementation scope:
+
+- exact frontend pins + lockfile + reproducible build script;
+- committed generated CSS, local Inter/JetBrains Mono, and local Lucide bundle;
+- black/navy shadcn semantic tokens, electric-blue actions/rings, universal sharp
+  component corners, Bark wallpaper/avatar imagery;
+- Jinja primitives for button/card/badge/input/select/textarea/separator/avatar;
+- base shell, landing, invite, setup and all existing page component selectors on
+  the v0.3 visual system; behavior hooks preserved;
+- owner-only v0.2/v0.3 SQLite upload, double validation, SHA-256 marker, startup
+  atomic restore, pre-restore rollback snapshot, and ordered migrations;
+- existing bare/wrapped v1 JSON settings import retained;
+- frontend/a11y/CSS contracts migrated to local assets and Tailwind internals.
+
+This adapter is Bark-owned source, not a transition CDN or runtime compatibility
+dependency. Future template cleanup can replace repeated markup with the macros
+incrementally while preserving byte-stable production assets and tested behaviors.

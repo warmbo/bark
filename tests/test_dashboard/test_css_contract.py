@@ -23,7 +23,15 @@ def test_css_references_only_defined_custom_properties():
     css = css_source()
     defined = set(re.findall(r"(?<![\w-])(--[\w-]+)\s*:", css))
     referenced = set(re.findall(r"var\(\s*(--[\w-]+)", css))
-    assert referenced - defined == set()
+    # Tailwind v4 intentionally emits internal --tw-* and --default-* references
+    # with standards-based fallbacks. Bark-owned semantic variables must still
+    # be declared in the committed bundle.
+    bark_references = {
+        name
+        for name in referenced
+        if not name.startswith(("--tw-", "--default-"))
+    }
+    assert bark_references - defined == set()
 
 
 def test_css_preserves_sharp_16px_design_contract():
