@@ -557,6 +557,41 @@ async def test_private_moderation_reads_require_module_access(app, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_moderation_export_returns_json_archive(app, monkeypatch):
+    """GET .../moderation/export streams cases + warnings as a JSON file."""
+    from types import SimpleNamespace
+
+    import config
+    from modules.moderation.module import ModerationModule
+    from services.bark_context import BarkContext
+    from services.response import set_cached_module_min_role
+
+    module = ModerationModule(BarkContext(app.state.bot, app.state.bot.modules.event_bus))
+    app.state.bot.modules.get_all_modules.return_value = {"moderation": module}
+    set_cached_module_min_role("moderation", 1, None)
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    request = SimpleNamespace(
+        session={"role": "admin"},
+        state=SimpleNamespace(bot=app.state.bot),
+        url=SimpleNamespace(path="/api/v1/guilds/1/modules/moderation/export"),
+    )
+    export_route = next(
+        r for r in module.get_api_routes().routes if r.path.endswith("/export")
+    )
+    resp = await export_route.endpoint(request, "1")
+    import json as _json
+
+    data = _json.loads(resp.body)
+    assert data["guild_id"] == 1
+    assert "cases" in data and "warnings" in data
+    hdrs = {k.lower(): v for k, v in dict(resp.headers).items()}
+    assert "content-disposition" in hdrs
+    assert "attachment" in hdrs["content-disposition"]
+
+
+@pytest.mark.asyncio
 async def test_list_members_includes_role_colors_and_join_date(app, monkeypatch):
     """Members list returns each role's Discord color and the join date."""
     from types import SimpleNamespace

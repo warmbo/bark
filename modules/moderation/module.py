@@ -2232,7 +2232,7 @@ class ModerationModule(BarkModule):
 
     def get_api_routes(self):
         """Register API endpoints for the Moderation module's dashboard actions."""
-        from fastapi import APIRouter
+        from fastapi import APIRouter, Response
 
         from services.moderation_service import ModerationService
         from services.response import (
@@ -2262,6 +2262,35 @@ class ModerationModule(BarkModule):
         async def can_view(request: Request, guild_id: str) -> bool:
             await get_module_min_role("moderation", guild_id)
             return check_api_permission(request, "moderation.view", guild_id)
+
+        @router.get("/guilds/{guild_id}/modules/moderation/export")
+        async def export_moderation(request: Request, guild_id: str):
+            """Download the guild's moderation cases + warnings as JSON.
+
+            View-gated (moderation.view). Returns a pretty-printed JSON
+            document suitable for archival or import into another instance.
+            """
+            if not await can_view(request, guild_id):
+                return api_forbidden("Insufficient permissions")
+            gid = int(guild_id)
+            cases = await svc.get_cases(gid, limit=10000)
+            warnings = await svc.get_warnings(gid)
+            payload = {
+                "guild_id": gid,
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "case_count": len(cases),
+                "warning_count": len(warnings),
+                "cases": cases,
+                "warnings": warnings,
+            }
+            body = json.dumps(payload, indent=2, default=str).encode("utf-8")
+            return Response(
+                content=body,
+                media_type="application/json",
+                headers={
+                    "Content-Disposition": f'attachment; filename="moderation-{guild_id}.json"'
+                },
+            )
 
         @router.post("/guilds/{guild_id}/modules/moderation/quick-warn")
         async def quick_warn(request: Request, guild_id: str):

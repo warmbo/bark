@@ -214,6 +214,17 @@
     if (roleMenu?.open && !roleMenu.contains(event.target)) roleMenu.open = false;
   });
 
+  // Export moderation cases + warnings as a downloadable JSON archive.
+  root.querySelector('[data-export-moderation]')?.addEventListener('click', () => {
+    const url = `/api/v1/guilds/${guildId}/modules/${moduleName}/export`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `moderation-${guildId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+
   function escapeCell(value) {
     return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
