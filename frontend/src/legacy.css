@@ -1017,15 +1017,19 @@ textarea:focus-visible,
 /* Add-on module dashboard widgets */
 .dashboard-widgets { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 4px; }
 .dashboard-widget .card-header { margin-bottom: 10px; }
-.widget-list { list-style: none; margin: 0; padding: 0; }
+.widget-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 var(--card-padding-x) var(--space-3);
+}
 .widget-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px solid var(--border-subtle); font-size: 13px; }
 .widget-item:last-child { border-bottom: none; }
 .widget-item-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .widget-item-value { color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.widget-metric { font-size: 30px; font-weight: 700; color: var(--text-primary); }
-.widget-metric-label { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.widget-metric { font-size: 30px; font-weight: 700; color: var(--text-primary); padding: 0 var(--card-padding-x); }
+.widget-metric-label { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; padding: 0 var(--card-padding-x); }
 .widget-spark { width: 100%; height: 32px; margin-top: 8px; display: block; }
-.widget-footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+.widget-footer { margin: 10px var(--card-padding-x) 0; padding: var(--space-2) 0 var(--space-3); border-top: 1px solid var(--border-subtle); }
 .widget-footer a { color: var(--accent); font-weight: 600; font-size: 12px; text-decoration: none; }
 .widget-footer a:hover { text-decoration: underline; }
 

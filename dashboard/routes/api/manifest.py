@@ -284,7 +284,9 @@ def _module_pages(
             {
                 "route": page.route.replace("{guild_id}", str(guild_id)),
                 "label": page.label,
-                "icon": page.icon or "puzzle",
+                # Add-on (plugin) modules all share the puzzle-piece icon so a
+                # single plugin's custom icon can't break nav consistency.
+                "icon": "puzzle" if is_plugin else (page.icon or "puzzle"),
                 "category": page.category or "",
                 "module": name,
                 "is_plugin": is_plugin,
