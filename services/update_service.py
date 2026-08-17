@@ -533,10 +533,14 @@ def apply_update(channel: str) -> dict:
         pip = str(repo_root() / ".venv" / "bin" / "pip")
         if Path(pip).exists():
             set_update_phase("deps")
-            log_line("Dependency changes detected — installing requirements…", "dim")
+            log_line("Project dependency or metadata changes detected — reinstalling Bark…", "dim")
             try:
-                _run_u([pip, "install", "-r", "requirements.txt"], timeout=600, check=True)
-                log_line("✓ Dependencies up to date", "ok")
+                # Install from pyproject.toml, the authoritative dependency and
+                # package-metadata source. Installing requirements.txt alone
+                # leaves importlib.metadata (and therefore Bark's displayed
+                # major/minor version) stale after a release bump.
+                _run_u([pip, "install", "."], timeout=600, check=True)
+                log_line("✓ Bark package and dependencies are up to date", "ok")
             except Exception as exc:
                 logger.warning("pip install failed after update: %s", exc)
                 log_line(f"pip install failed (continuing): {exc}", "warn")
