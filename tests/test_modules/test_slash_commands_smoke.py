@@ -374,7 +374,7 @@ async def tree(db, tmp_path, request):
     bot = FakeBot()
     manager = ModuleManager(bot)
     manager.discover()
-    for name in list(manager._modules):
+    for name in list(manager.get_all_modules()):
         assert await manager.enable_module(name), f"failed to enable {name}"
     return bot, manager
 

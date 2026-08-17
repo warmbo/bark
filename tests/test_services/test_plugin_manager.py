@@ -15,7 +15,7 @@ from services.plugin_manager import (
     validate_plugin_name,
 )
 
-VALID_PLUGIN = '''
+VALID_PLUGIN = """
 from modules.base import BarkModule, CommandRegistration, EventRegistration
 
 class PingPlugin(BarkModule):
@@ -37,14 +37,14 @@ class PingPlugin(BarkModule):
 
     async def disable(self):
         pass
-'''
+"""
 
 NO_SUBCLASS_PLUGIN = """
 # This file has no BarkModule subclass.
 ANSWER = 42
 """
 
-TWO_CLASSES_PLUGIN = '''
+TWO_CLASSES_PLUGIN = """
 from modules.base import BarkModule
 
 class FirstPlugin(BarkModule):
@@ -56,7 +56,7 @@ class SecondPlugin(BarkModule):
     name = "second_plugin"
     async def enable(self): pass
     async def disable(self): pass
-'''
+"""
 
 BROKEN_PLUGIN = """
 this is not valid python !!!
@@ -283,9 +283,7 @@ async def test_uninstall_plugin_cleans_everything(db, manager):
     async with session_scope() as session:
         session.add(Guild(discord_id="1", name="Test Guild"))
         session.add(ModuleConfig(guild_id="1", module_name="ping_plugin", enabled=True))
-        session.add(
-            ModuleRoleAccess(guild_id="1", module_name="ping_plugin", min_role="viewer")
-        )
+        session.add(ModuleRoleAccess(guild_id="1", module_name="ping_plugin", min_role="viewer"))
         await session.commit()
 
     await manager.install_plugin(VALID_PLUGIN.encode(), "p.py")
@@ -311,9 +309,7 @@ async def test_uninstall_plugin_cleans_everything(db, manager):
         roles = (
             (
                 await session.execute(
-                    select(ModuleRoleAccess).where(
-                        ModuleRoleAccess.module_name == "ping_plugin"
-                    )
+                    select(ModuleRoleAccess).where(ModuleRoleAccess.module_name == "ping_plugin")
                 )
             )
             .scalars()
@@ -430,7 +426,7 @@ async def test_module_commands_nest_under_single_bark_group(tmp_path):
             return []
 
     manager = ModuleManager(bot)
-    manager._modules["fake"] = FakeModule(BarkContext(bot, bot._event_bus))
+    manager._register_module(FakeModule(BarkContext(bot, bot._event_bus)))
     assert await manager.enable_module("fake") is True
 
     # The prefix command is registered on the bot's text-command table.
@@ -500,7 +496,7 @@ async def test_multi_command_module_gets_subgroup(tmp_path):
             return []
 
     manager = ModuleManager(bot)
-    manager._modules["mod"] = MultiModule(BarkContext(bot, bot._event_bus))
+    manager._register_module(MultiModule(BarkContext(bot, bot._event_bus)))
     assert await manager.enable_module("mod") is True
 
     # Multi-command modules register as a bark!<module> group (bark!mod alpha).
@@ -542,9 +538,7 @@ async def test_namespaced_group_command_hangs_directly_off_bark(tmp_path):
         def get_commands(self):
             from modules.base import CommandRegistration
 
-            return [
-                CommandRegistration(name="trivia", description="Trivia game", slash=True)
-            ]
+            return [CommandRegistration(name="trivia", description="Trivia game", slash=True)]
 
         def get_events(self):
             return []
@@ -567,7 +561,7 @@ async def test_namespaced_group_command_hangs_directly_off_bark(tmp_path):
             return []
 
     manager = ModuleManager(bot)
-    manager._modules["trivia"] = GroupModule(BarkContext(bot, bot._event_bus))
+    manager._register_module(GroupModule(BarkContext(bot, bot._event_bus)))
     assert await manager.enable_module("trivia") is True
 
     # The group factory registers as a commands.Group (bark!trivia start).

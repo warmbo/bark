@@ -25,6 +25,7 @@ from modules.base import BarkModule, PageRegistration
 from services.bark_context import BarkContext
 from services.event_bus import EventBus
 from services.guild_module_state import GuildModuleState
+from services.module_registry import ModuleRegistry
 from services.slash_dispatcher import SlashDispatcher
 
 if TYPE_CHECKING:
@@ -46,8 +47,7 @@ class ModuleManager:
         self.bot = bot
         self._event_bus = EventBus()
         self._context = BarkContext(self.bot, self._event_bus)
-        self._modules: dict[str, BarkModule] = {}
-        self._page_registry: dict[str, list[PageRegistration]] = {}
+        self._registry = ModuleRegistry()
         self._registered_commands: dict[str, set[str]] = {}  # module -> {command names}
         self._registered_events: dict[
             str, list[tuple[str, Callable]]
@@ -56,7 +56,7 @@ class ModuleManager:
         self._guild_state = GuildModuleState(
             self.bot,
             plugin_names=lambda: set(self._plugin_files),
-            has_module=lambda name: name in self._modules,
+            has_module=self._registry.has,
         )
         # Runtime-installed single-file plugins: module name -> file path.
         self._plugin_files: dict[str, Path] = {}
@@ -233,7 +233,7 @@ class ModuleManager:
         """Scan the modules package for BarkModule subclasses."""
         import modules
 
-        if self._modules:
+        if self._registry.names():
             logger.debug("Module discovery already completed; keeping live instances")
             return
 
@@ -245,12 +245,12 @@ class ModuleManager:
 
         from services.response import get_permission_service
 
-        get_permission_service().discover_module_permissions(self._modules)
+        get_permission_service().discover_module_permissions(self._registry.all())
 
         logger.info(
             "Discovered %d modules: %s",
-            len(self._modules),
-            ", ".join(self._modules.keys()),
+            len(self._registry.names()),
+            ", ".join(self._registry.names()),
         )
 
     def _load_module_package(self, package_name: str) -> None:
@@ -305,8 +305,7 @@ class ModuleManager:
 
     def _register_module(self, module: BarkModule) -> None:
         """Store module and its page registrations."""
-        self._modules[module.name] = module
-        self._page_registry[module.name] = module.get_dashboard_pages()
+        self._registry.register(module)
         logger.debug("Loaded module: %s v%s", module.name, module.version)
 
     # ── Plugins (single-file modules) ─────────────────
@@ -326,7 +325,7 @@ class ModuleManager:
             except Exception as exc:
                 logger.warning("Skipping plugin file '%s': %s", path.name, exc)
                 continue
-            if name in self._modules or name in self._plugin_files:
+            if self._registry.has(name) or name in self._plugin_files:
                 logger.warning("Skipping plugin '%s': module name already taken", name)
                 continue
             try:
@@ -350,7 +349,7 @@ class ModuleManager:
         return [self._plugin_metadata(name) for name in sorted(self._plugin_files)]
 
     def _plugin_metadata(self, name: str) -> dict:
-        module = self._modules.get(name)
+        module = self._registry.get(name)
         return {
             "name": name,
             "version": module.version if module else "",
@@ -397,7 +396,7 @@ class ModuleManager:
             staging.unlink(missing_ok=True)
             raise
 
-        if name in self._modules and name not in self._plugin_files:
+        if self._registry.has(name) and name not in self._plugin_files:
             staging.unlink(missing_ok=True)
             raise PluginValidationError(
                 f"'{name}' is a built-in module and cannot be replaced by a plugin."
@@ -419,8 +418,7 @@ class ModuleManager:
                 raise PluginValidationError("Plugin failed to enable; check its enable() method.")
         except Exception:
             # Roll back the registries so the failed plugin is fully inert.
-            self._modules.pop(name, None)
-            self._page_registry.pop(name, None)
+            self._registry.drop(name)
             self._plugin_files.pop(name, None)
             self._registered_api_modules.discard(name)
             destination.unlink(missing_ok=True)
@@ -429,7 +427,7 @@ class ModuleManager:
         # Refresh discovered permissions so plugin actions are enforced now.
         from services.response import get_permission_service
 
-        get_permission_service().discover_module_permissions(self._modules)
+        get_permission_service().discover_module_permissions(self._registry.all())
 
         # Surface slash commands in Discord immediately; failure is non-fatal
         # (they reappear on the next startup sync).
@@ -459,8 +457,7 @@ class ModuleManager:
             logger.exception("Plugin '%s' disable() raised during uninstall", name)
 
         # 2. Deregister from every in-memory registry.
-        self._modules.pop(name, None)
-        self._page_registry.pop(name, None)
+        self._registry.drop(name)
         self._registered_commands.pop(name, None)
         self._registered_events.pop(name, None)
         self._registered_api_modules.discard(name)
@@ -471,7 +468,7 @@ class ModuleManager:
         from services.response import clear_module_role_cache, get_permission_service
 
         clear_module_role_cache(name)
-        get_permission_service().discover_module_permissions(self._modules)
+        get_permission_service().discover_module_permissions(self._registry.all())
 
         # 4. Remove per-guild rows so the module cannot resurface after restart.
         from sqlalchemy import delete
@@ -513,7 +510,7 @@ class ModuleManager:
         path = self._plugin_files.get(name)
         if path is None:
             return False
-        module = self._modules.get(name)
+        module = self._registry.get(name)
         was_enabled = bool(module and module.enabled)
         if was_enabled and not await self.disable_module(name):
             return False
@@ -525,7 +522,7 @@ class ModuleManager:
             self._register_module(instance)
             from services.response import get_permission_service
 
-            get_permission_service().discover_module_permissions(self._modules)
+            get_permission_service().discover_module_permissions(self._registry.all())
         except Exception:
             logger.exception("Failed to reload plugin code for '%s'", name)
             return False
@@ -535,7 +532,7 @@ class ModuleManager:
 
     async def enable_module(self, name: str) -> bool:
         """Enable a module: registers its commands and subscribes its events."""
-        module = self._modules.get(name)
+        module = self._registry.get(name)
         if module is None:
             return False
         if module.enabled:
@@ -603,7 +600,7 @@ class ModuleManager:
 
     async def disable_module(self, name: str) -> bool:
         """Disable a module: unregisters commands and unsubscribes events."""
-        module = self._modules.get(name)
+        module = self._registry.get(name)
         if module is None or not module.enabled:
             return True
 
@@ -641,7 +638,7 @@ class ModuleManager:
         """Reload one module without disturbing any other live plugin."""
         if name in self._plugin_files:
             return await self._reload_plugin(name)
-        original = self._modules.get(name)
+        original = self._registry.get(name)
         if original is None:
             return False
         was_enabled = original.enabled
@@ -670,7 +667,7 @@ class ModuleManager:
 
     async def disable_all(self) -> None:
         """Disable all modules."""
-        for name in list(self._modules.keys()):
+        for name in self._registry.names():
             await self.disable_module(name)
 
     def load_guild_states(self, states) -> None:
@@ -740,13 +737,13 @@ class ModuleManager:
     # ── Queries ───────────────────────────────────────
 
     def get_module(self, name: str) -> BarkModule | None:
-        return self._modules.get(name)
+        return self._registry.get(name)
 
     def get_all_modules(self) -> dict[str, BarkModule]:
-        return dict(self._modules)
+        return self._registry.all()
 
     def get_enabled_modules(self) -> dict[str, BarkModule]:
-        return {n: m for n, m in self._modules.items() if m.enabled}
+        return self._registry.enabled()
 
     async def get_dashboard_cards(self, guild_id: int) -> list[dict]:
         """Collect dashboard widget cards from modules enabled for the guild.
@@ -756,7 +753,7 @@ class ModuleManager:
         widget). Only enabled modules contribute cards.
         """
         cards: list[dict] = []
-        for name, module in self._modules.items():
+        for name, module in self._registry.all().items():
             try:
                 if not self.is_enabled_for_guild(guild_id, name):
                     continue
@@ -774,7 +771,7 @@ class ModuleManager:
         return cards
 
     def get_dashboard_pages(self) -> dict[str, list[PageRegistration]]:
-        return dict(self._page_registry)
+        return self._registry.get_dashboard_pages()
 
     @property
     def event_bus(self) -> EventBus:
@@ -784,7 +781,7 @@ class ModuleManager:
 
     def register_api_routes(self, app) -> None:
         """Register each module's API routes with the FastAPI app."""
-        for name in list(self._modules.keys()):
+        for name in self._registry.names():
             self._register_module_api_routes(name)
 
     def _register_module_api_routes(self, name: str) -> None:
@@ -797,7 +794,7 @@ class ModuleManager:
         app = getattr(self.bot, "app", None)
         if app is None or name in self._registered_api_modules:
             return
-        module = self._modules.get(name)
+        module = self._registry.get(name)
         if module is None:
             return
         router = module.get_api_routes()
