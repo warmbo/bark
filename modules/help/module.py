@@ -9,6 +9,7 @@ in-channel copy when the user has DMs disabled.
 from __future__ import annotations
 
 import logging
+from datetime import timezone
 
 import discord
 
@@ -52,7 +53,11 @@ class HelpModule(BarkModule):
             CommandRegistration(
                 name="help",
                 description="Send a DM with every text command and dashboard info",
-            )
+            ),
+            CommandRegistration(
+                name="info",
+                description="Show server stats: members, channels, roles, boosts, age",
+            ),
         ]
 
     def _make_help_command(self):
@@ -202,6 +207,70 @@ class HelpModule(BarkModule):
             )
 
         return help_cmd
+
+    def _make_info_command(self):
+        @discord.app_commands.command(
+            name="info",
+            description="Show server stats: members, channels, roles, boosts, age",
+        )
+        async def info_cmd(interaction: discord.Interaction):
+            guild = interaction.guild
+            if guild is None:
+                await interaction.response.send_message(
+                    "This command only works inside a server.", ephemeral=True
+                )
+                return
+            await interaction.response.defer(ephemeral=True)
+            bot = self.ctx.bot
+            online = sum(
+                1 for m in guild.members if getattr(m, "status", None) is not None and m.status != discord.Status.offline
+            )
+            bots = sum(1 for m in guild.members if m.bot)
+            humans = guild.member_count - bots
+            # guild.created_at is timezone-aware in discord.py, but guard
+            # against naive datetimes (e.g. test fakes) before subtracting.
+            now = discord.utils.utcnow()
+            created = guild.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            age_days = (now - created).days
+            # Guard every optional guild attribute so the command never 500s
+            # on a partial guild object (e.g. a cached/partial fetch).
+            owner = getattr(guild, "owner", None)
+            premium_tier = getattr(guild, "premium_tier", 0) or 0
+            premium_subs = getattr(guild, "premium_subscription_count", 0) or 0
+            icon_url = getattr(getattr(guild, "icon", None), "url", None)
+            embed = discord.Embed(
+                title=f"ℹ️ {guild.name}",
+                color=discord.Color.blurple(),
+            )
+            if icon_url:
+                embed.set_thumbnail(url=icon_url)
+            embed.add_field(name="Members", value=f"{guild.member_count:,}\n{humans:,} human · {bots:,} bot", inline=True)
+            embed.add_field(name="Online", value=f"{online:,} right now", inline=True)
+            embed.add_field(
+                name="Channels",
+                value=f"{len(guild.channels):,}\n{len(guild.text_channels):,} text · {len(guild.voice_channels):,} voice",
+                inline=True,
+            )
+            embed.add_field(name="Roles", value=f"{len(guild.roles):,}", inline=True)
+            embed.add_field(
+                name="Boosts",
+                value=f"{premium_subs:,} (Tier {premium_tier})",
+                inline=True,
+            )
+            embed.add_field(name="Server age", value=f"{age_days:,} days", inline=True)
+            if owner is not None:
+                embed.add_field(name="Owner", value=f"{owner.mention}", inline=True)
+            embed.add_field(
+                name="Bark",
+                value=f"v{getattr(bot, 'version', '?')} · {self.ctx.command_group}",
+                inline=True,
+            )
+            embed.set_footer(text=f"Server ID {guild.id}")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        return info_cmd
 
     async def enable(self) -> None:
         pass

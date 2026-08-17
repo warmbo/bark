@@ -406,7 +406,8 @@ async def test_every_bark_slash_command_responds(tree):
     # bark-plugins sibling repo is present on the machine — a fresh checkout
     # has no plugins, so those are asserted conditionally below.
     for required in (
-        "help",  # bark!help
+        "help help",  # bark!help help (help module's own subcommand)
+        "help info",  # bark!help info (server stats)
         "moderation warn",  # bark!moderation warn
         "reputation leaderboard",  # bark!reputation leaderboard
     ):
