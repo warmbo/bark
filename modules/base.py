@@ -244,9 +244,9 @@ class BarkModule(abc.ABC):
         manager = getattr(getattr(self.ctx, "bot", None), "modules", None)
         if manager is not None and hasattr(manager, "command_group_name"):
             return manager.command_group_name()
-        from config import config, sanitize_command_group
-
-        return sanitize_command_group(config.bot.command_group or "bark")
+        # Fallback when no manager is wired: resolve through BarkContext, which
+        # is the only sanctioned path for modules to read runtime config.
+        return self.ctx.command_group
 
     async def _get_setting(self, guild_id: int, section: str, key: str, default=None):
         """Read a value from this module's stored config, with dot-path traversal.

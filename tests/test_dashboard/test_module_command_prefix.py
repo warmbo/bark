@@ -48,20 +48,17 @@ def test_module_command_group_name_uses_manager():
 def test_module_command_group_name_falls_back_to_bark():
     module = _module_with_ctx(MagicMock())
     module.ctx.bot = None
-    import config as config_module
-
-    config_module.config.bot.command_group = ""
+    # With no manager wired, the group resolves through BarkContext, which is
+    # the only sanctioned path for modules to read runtime config.
+    module.ctx.command_group = "bark"
     assert module.command_group_name() == "bark"
 
 
 def test_module_command_group_name_respects_config_override():
     module = _module_with_ctx(MagicMock())
     module.ctx.bot = None
-    import config as config_module
-
-    config_module.config.bot.command_group = "fido"
+    module.ctx.command_group = "fido"
     assert module.command_group_name() == "fido"
-    config_module.config.bot.command_group = ""
 
 
 # ── Module pages render the configured prefix (not hardcoded /bark) ─

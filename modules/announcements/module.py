@@ -40,7 +40,7 @@ async def _send_with_timeout(channel, *, content=None, embed=None) -> None:
     await asyncio.wait_for(channel.send(content=content, embed=embed), timeout=_SEND_TIMEOUT_SECONDS)
 
 
-def _full_width_spacer_url() -> str:
+def _full_width_spacer_url(ctx) -> str:
     """Public URL of an invisible wide spacer that forces Discord to render embeds full width.
 
     Discord sizes an embed by its widest intrinsic content. A transparent PNG with
@@ -49,9 +49,7 @@ def _full_width_spacer_url() -> str:
     invisible. Served from our own static directory so it is always fetchable by
     Discord.
     """
-    from config import config
-
-    base = config.dashboard.public_url.rstrip("/")
+    base = ctx.public_url
     return f"{base}/static/img/spacer-wide.png"
 
 
@@ -341,7 +339,7 @@ class AnnouncementsModule(BarkModule):
                     if image_url:
                         emb.set_image(url=image_url)
                     else:
-                        emb.set_image(url=_full_width_spacer_url())
+                        emb.set_image(url=_full_width_spacer_url(self.ctx))
                     await _send_with_timeout(channel, embed=emb)
                 else:
                     if image_url:
@@ -421,7 +419,7 @@ class AnnouncementsModule(BarkModule):
                     if image_url:
                         announcement_embed.set_image(url=image_url)
                     else:
-                        announcement_embed.set_image(url=_full_width_spacer_url())
+                        announcement_embed.set_image(url=_full_width_spacer_url(self.ctx))
                     if video_url:
                         vid = video_url.strip().rstrip("/")
                         link = f"[Watch Video]({vid})"

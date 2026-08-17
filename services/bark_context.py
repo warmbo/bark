@@ -75,6 +75,30 @@ class BarkContext:
         return self._bot
 
     @property
+    def command_group(self) -> str:
+        """Resolved slash-command group name for this instance.
+
+        Delegates to the shared ``config`` singleton so modules never import
+        ``config`` themselves (keeps the dependency rule: modules reach the
+        runtime only through ``BarkContext``). Returns the sanitized group or
+        the ``bark`` default when unset.
+        """
+        from config import config, sanitize_command_group
+
+        return sanitize_command_group(config.bot.command_group or "bark")
+
+    @property
+    def public_url(self) -> str:
+        """Public base URL of the dashboard (no trailing slash).
+
+        Modules expose assets (e.g. embed spacers) through this instead of
+        importing ``config`` directly.
+        """
+        from config import config
+
+        return config.dashboard.public_url.rstrip("/")
+
+    @property
     def guilds(self) -> list:
         return list(self._bot.guilds)
 
