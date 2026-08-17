@@ -66,3 +66,46 @@ Tabs have `role=tab`, `aria-controls`, `aria-selected`, and keyboard navigation.
 ## Exceptions
 
 Modules with no actions have no Operate tab. This is intentional and is not a missing feature. Module-specific extra tabs are permitted only where a complete backend workflow exists.
+
+## Module template layout (colocation)
+
+Every module's bespoke dashboard UI lives **inside the module package**, not in
+the shared dashboard template tree:
+
+- Extra-tab partials returned by `get_extra_tabs()` live at
+  `modules/<name>/templates/<name>_<tab>.html` and are referenced by their
+  repo-relative path (`modules/<name>/templates/...`). The dashboard Jinja
+  loader searches the project root, so `{% include tab.template %}` resolves
+  them.
+- Shared primitives that every module composes from (`schema_field`,
+  `state_panel`, `status_badge`, `icons`, `primitives`, `discord_toolbar`) stay
+  in `dashboard/templates/components/` and are reused, not copied.
+- `speak_phrases.html` is the one remaining module-owned partial still in
+  `components/` (used only by the speak Configure tab); it is scheduled to
+  colocate during the shadcn roadmap Batch C/D. Until then it is the sole
+  exception to the rule below.
+
+The shared `dashboard/templates/module_tabs/` directory was removed. New module
+UI must NOT be added there; colocate it under the module's own `templates/`
+directory. The UI-rules test (`tests/test_modules/test_module_ui_rules.py`)
+enforces this with an allowlist.
+
+## Runtime config access (dependency rule)
+
+Modules must reach runtime configuration **only through `BarkContext`**, never
+by importing `config` directly:
+
+- `self.ctx.command_group` → the resolved slash-command group name.
+- `self.ctx.public_url` → the dashboard public base URL (no trailing slash).
+- Other per-guild settings are read via `self.ctx.get_module_config(...)`.
+
+`from config import config` inside a module's functions or methods is a leak
+and breaks the architecture boundary. The only sanctioned module-level config
+import is `modules/help/module.py` (top-level, read-only constants); all
+runtime reads go through `BarkContext`.
+
+## Circular-import guard
+
+`services.module_manager` and `bot.client` reference each other's types only
+under `if TYPE_CHECKING:`; the runtime import graph stays acyclic. Keep any new
+cross-reference between those two modules behind `TYPE_CHECKING` to preserve it.
