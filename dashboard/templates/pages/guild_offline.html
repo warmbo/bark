@@ -2,11 +2,11 @@
 {% block title %}Server unavailable — Bark{% endblock %}
 
 {% block content %}
-<div class="state-panel state-empty" role="status" style="max-width: 560px; margin: 10vh auto;">
+<div class="state-panel state-empty guild-offline-state" role="status">
     <div>
         <h1 class="card-title">{{ icon("wifi-off", 18) }} This server isn't available right now</h1>
         <p>Bark hasn't connected to Discord yet, so this server's data can't be loaded. This usually clears on its own within a minute — if it persists, check the service logs or restart the service (<code>systemctl restart bark</code>).</p>
-        <p style="margin-top: 4px;">You can still manage Bark's own instance settings from the dashboard.</p>
+        <p class="guild-offline-followup">You can still manage Bark's own instance settings from the dashboard.</p>
     </div>
     <div class="form-actions form-actions-static">
         <a class="btn" href="/dashboard">Back to dashboard</a>

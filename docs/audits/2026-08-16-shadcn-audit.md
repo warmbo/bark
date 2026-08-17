@@ -111,6 +111,27 @@ which the `shadcn` CLI resolves. Two layers of pinning:
    generated CSS as a build artifact so the deploy stays a plain `StaticFiles`
    mount — preferred, zero new runtime deps).
 
+### Layout and spacing are part of the migration, not a cosmetic follow-up
+
+Replacing colors and borders with shadcn tokens is insufficient. Bark's legacy CSS
+contains hundreds of independent `padding`, `margin`, and `gap` declarations, plus
+page-specific inline overrides. A complete v0.3 conversion therefore owns one
+4px-based spacing scale (`4/8/12/16/20/24/32/40/48`) and applies it across:
+
+- page gutters, context chrome, page headers, section headings, and section gaps;
+- card headers/bodies/footers, empty/error/loading states, and action bars;
+- label-to-control, control-to-hint, form-row, form-grid, and save-action spacing;
+- tables, list rows, pagination, tab strips, module health strips, and dialogs;
+- dashboard, settings, module catalog/workspaces, members, statistics, setup,
+  invite, offline, plugin, and add-on surfaces;
+- desktop, tablet, and mobile breakpoints, including horizontal tab/table overflow.
+
+Acceptance is visual and measurable: no document-level horizontal overflow at
+375/768/1280px; controls do not collide or truncate; narrow description rows stack;
+tablet grids use available width; sticky headings account for the context bar; chart
+labels and values remain inside their SVG; and repeated component families have the
+same internal padding regardless of route.
+
 ---
 
 ## 4. Risks / guardrails

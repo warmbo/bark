@@ -133,16 +133,25 @@ Convert in lockstep with the redesign (never left red against a stale contract):
     per-module tab panels; all `module_tabs/*` remaining.
 12. Remove dead/duplicate CSS as pages land (539 classes → only what shadcn macros emit).
 
+**Phase 2.5 — Whole-project layout rhythm**
+13. Define one Bark-owned 4px spacing scale and shared page/card/form/table/tab/
+    dialog composition tokens in `frontend/src/v3.css`.
+14. Remove page-specific inline spacing overrides; normalize setup, offline, settings,
+    module catalog/workspaces, members, statistics, plugin and add-on surfaces.
+15. Exercise 375px mobile, 768px tablet, 1280px desktop, and wide desktop layouts;
+    fix document overflow, cramped description rows, wasted tablet columns, sticky
+    anchor offsets, chart clipping, and horizontal tab/table behavior.
+
 **Phase 3 — Behavior shims + de-CDN**
-13. Wire `frontend/behaviors.js` shims into `base.html`; port dialog/palette/toast/
+16. Wire `frontend/behaviors.js` shims into `base.html`; port dialog/palette/toast/
     dropdown logic; drop `main.js` legacy blocks.
-14. Remove lucide CDN (`unpkg`) → local vendored icons.
-15. Remove Google Fonts CDN → local vendored woff2.
+17. Remove lucide CDN (`unpkg`) → local vendored icons.
+18. Remove Google Fonts CDN → local vendored woff2.
 
 **Phase 4 — Verify + ship (dev-only)**
-16. Full pytest green, ruff clean, 4 contract tests green.
-17. Desktop + mobile visual/overflow/console/reduced-motion verification.
-18. Deploy to bark-dev (:8091), live-verify. **Await Cody's explicit promotion
+19. Full pytest green, ruff clean, 4 contract tests green.
+20. Desktop + tablet + mobile visual/overflow/console/reduced-motion verification.
+21. Deploy to bark-dev (:8091), live-verify. **Await Cody's explicit promotion
     instruction to stable** (dev-only discipline).
 
 ---
@@ -166,7 +175,8 @@ supersedes the old v0.3 naming). Flag for Cody's confirmation before shipping.
   external CDNs; site renders identically regardless of upstream changes.
 - All 4 frontend contract tests + full suite green; a11y contract preserved.
 - Deployment unchanged (StaticFiles mount + committed CSS); live on bark-dev.
-- Pilot signed off; full conversion visually verified desktop + mobile.
+- Pilot signed off; full conversion visually verified at 375/768/1280px and wide
+  desktop, with no document-level overflow and a consistent spacing scale.
 
 ---
 
@@ -205,6 +215,8 @@ Completed implementation scope:
   atomic restore, pre-restore rollback snapshot, and ordered migrations;
 - existing bare/wrapped v1 JSON settings import retained;
 - frontend/a11y/CSS contracts migrated to local assets and Tailwind internals.
+- whole-project 4px spacing rhythm, responsive card/grid/form/table/tab composition,
+  settings container behavior, chart gutters, and setup/offline spacing refinements.
 
 This adapter is Bark-owned source, not a transition CDN or runtime compatibility
 dependency. Future template cleanup can replace repeated markup with the macros

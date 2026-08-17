@@ -100,15 +100,22 @@
     const rows = data.slice(0, 10);
     const max = Math.max.apply(null, rows.map(r => r.value).concat([1]));
     const rowH = 22;
-    const iw = W - PAD.left - PAD.right;
+    // Reserve enough room for real Discord channel/emoji names and for the
+    // value after a full-width bar. The former fixed 42px gutter clipped both.
+    const longestLabel = rows.reduce((n, row) => Math.max(n, String(row.label || '').length), 0);
+    const barPad = {
+      left: Math.min(140, Math.max(58, longestLabel * 6 + 10)),
+      right: 32,
+    };
+    const iw = W - barPad.left - barPad.right;
     const chartH = rows.length * rowH;
     let html = '<svg viewBox="0 0 ' + W + ' ' + chartH + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg">';
     rows.forEach((r, i) => {
       const y = i * rowH;
       const bw = (r.value / max) * iw;
-      html += '<text x="' + (PAD.left - 6) + '" y="' + (y + rowH / 2 + 3) + '" text-anchor="end" font-size="10" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
-      html += '<rect x="' + PAD.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3" fill="var(--accent)" opacity="0.85"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
-      html += '<text x="' + (PAD.left + bw + 6) + '" y="' + (y + rowH / 2 + 3) + '" font-size="10" fill="var(--text-tertiary)">' + esc(r.value) + '</text>';
+      html += '<text x="' + (barPad.left - 6) + '" y="' + (y + rowH / 2 + 3) + '" text-anchor="end" font-size="10" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
+      html += '<rect x="' + barPad.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3" fill="var(--accent)" opacity="0.85"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
+      html += '<text x="' + (barPad.left + bw + 6) + '" y="' + (y + rowH / 2 + 3) + '" font-size="10" fill="var(--text-tertiary)">' + esc(r.value) + '</text>';
     });
     html += '</svg>';
     el.innerHTML = html;

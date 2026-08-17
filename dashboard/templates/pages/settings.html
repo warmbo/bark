@@ -143,13 +143,13 @@
                     <div class="info-row">
                         <span class="info-label">Database snapshots</span>
                         <span class="info-value">
-                            <ul class="backup-list" id="backup-list" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;">
+                            <ul class="backup-list" id="backup-list">
                                 <li class="text-tertiary">Loading…</li>
                             </ul>
                         </span>
                     </div>
                 </div>
-                <div class="form-actions form-actions-static" style="display:flex;gap:8px;flex-wrap:wrap;">
+                <div class="form-actions form-actions-static backup-actions">
                     <button type="button" class="btn btn-primary" id="backup-create-btn">{{ icon("download", 14) }} Backup Now</button>
                     <button type="button" class="btn" id="backup-export-btn">{{ icon("download", 14) }} Export settings (.json)</button>
                     <input type="file" id="backup-file-input" name="backup_file" accept=".json,.db,application/json,application/octet-stream" hidden>

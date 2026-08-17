@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / "dashboard/templates/base.html"
 CSS = ROOT / "dashboard/static/css/main.css"
+V3_SOURCE = ROOT / "frontend/src/v3.css"
 PRIMITIVES = ROOT / "dashboard/templates/components/primitives.html"
 PACKAGE = ROOT / "frontend/package.json"
 PIN = ROOT / "frontend/shadcn-pin.md"
@@ -70,6 +71,39 @@ def test_v030_has_shadcn_jinja_primitives():
         "avatar",
     ):
         assert f"macro {macro}(" in primitives
+
+
+def test_v030_owns_a_responsive_whole_project_spacing_system():
+    source = V3_SOURCE.read_text()
+
+    for step, value in {
+        1: 4,
+        2: 8,
+        3: 12,
+        4: 16,
+        5: 20,
+        6: 24,
+        8: 32,
+        10: 40,
+        12: 48,
+    }.items():
+        assert f"--space-{step}: {value}px" in source
+
+    for contract in (
+        ".page-container {",
+        ".content-card {",
+        ".form-group {",
+        ".data-table th,",
+        ".workspace-tabs {",
+        ".settings-grid {",
+        ".stats-charts {",
+        "@media (max-width: 768px)",
+        "@media (max-width: 480px)",
+        "@media (min-width: 640px) and (max-width: 1024px)",
+        "grid-template-columns: minmax(0, 1fr)",
+        "flex-direction: column",
+    ):
+        assert contract in source
 
 
 def test_python_release_line_is_v030():
