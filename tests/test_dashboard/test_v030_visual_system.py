@@ -16,8 +16,8 @@ def test_v030_uses_local_assets_only():
     assert "fonts.googleapis.com" not in base
     assert "fonts.gstatic.com" not in base
     assert "unpkg.com" not in base
-    assert '/static/fonts/inter-latin.woff2' in base or "fonts.css" in base
-    assert '/static/js/lucide.min.js' in base
+    assert "/static/fonts/inter-latin.woff2" in base or "fonts.css" in base
+    assert "/static/js/lucide.min.js" in base
 
 
 def test_v030_shadcn_tokens_are_present_and_sharp():

@@ -305,7 +305,6 @@ def _all_leaf_commands(command, path=None):
         yield tuple(path), command
 
 
-
 @pytest.fixture(params=["bark", "Bob"])
 async def tree(db, tmp_path, request):
     """A real ModuleManager with every module (core + plugins) enabled.
@@ -403,7 +402,7 @@ async def test_every_bark_slash_command_responds(tree):
     assert not failures, "failing commands:\n" + "\n".join(failures)
     assert len(tested) >= 20, f"expected a full command table, got {len(tested)}: {tested}"
     # Core module commands must always be deployed. The plugin commands
-    # (fun, info, poll, trivia, birthdays, giveaway) only exist when the
+    # (fun, server info, poll, trivia, profiles) only exist when the
     # bark-plugins sibling repo is present on the machine — a fresh checkout
     # has no plugins, so those are asserted conditionally below.
     for required in (
@@ -413,13 +412,12 @@ async def test_every_bark_slash_command_responds(tree):
     ):
         assert required in tested, f"missing command from table: {required} in {tested}"
     if PLUGINS_DIR.exists():
-        for plugin_cmd in (
-            "fun roll",  # bark!fun roll
-            "info serverinfo",  # bark!info serverinfo
-            "poll",  # single-command plugin -> flat
-            "trivia start",  # group-factory plugin
+        for plugin_commands in (
+            ("fun roll", "dice_roller roll"),
+            ("info serverinfo", "serverinfo"),
+            ("poll",),
+            ("trivia start",),
         ):
-            assert plugin_cmd in tested, (
-                f"missing plugin command from table: {plugin_cmd} in {tested}"
+            assert any(command in tested for command in plugin_commands), (
+                f"missing plugin command from table: one of {plugin_commands} in {tested}"
             )
-
