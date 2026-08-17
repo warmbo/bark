@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("bark.context")
 
-_SERVICE = ModerationService()
-
 
 async def emit_moderation_case_created(
     event_bus: EventBus,
@@ -222,7 +220,7 @@ class BarkContext:
         target_tag: str = "",
         details: dict | None = None,
     ) -> None:
-        await _SERVICE.log_audit(
+        await ModerationService.log_audit(
             guild_id, action, actor_id, actor_tag, target_id, target_tag, details
         )
 
@@ -237,7 +235,7 @@ class BarkContext:
         reason: str,
         duration: int | None = None,
     ) -> int:
-        case_number = await _SERVICE.create_case(
+        case_number = await ModerationService.create_case(
             guild_id,
             action_type,
             target_id,
@@ -259,4 +257,4 @@ class BarkContext:
         return case_number
 
     async def add_warning(self, guild_id: int, user_id: str, moderator_id: str, reason: str) -> int:
-        return await _SERVICE.add_warning(guild_id, user_id, moderator_id, reason)
+        return await ModerationService.add_warning(guild_id, user_id, moderator_id, reason)

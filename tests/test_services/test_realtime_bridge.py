@@ -42,11 +42,9 @@ async def test_event_bus_bridge_delivers_supported_events_to_only_the_target_gui
 
 @pytest.mark.asyncio
 async def test_create_case_producer_reaches_realtime_bridge(monkeypatch):
-    import services.bark_context as context_module
+    from services.moderation_service import ModerationService
 
-    service = MagicMock()
-    service.create_case = AsyncMock(return_value=12)
-    monkeypatch.setattr(context_module, "_SERVICE", service)
+    monkeypatch.setattr(ModerationService, "create_case", AsyncMock(return_value=12))
 
     bus = EventBus()
     bridge = RealtimeBridge(bus)
