@@ -24,6 +24,7 @@ from config import config
 from modules.base import BarkModule, PageRegistration
 from services.bark_context import BarkContext
 from services.event_bus import EventBus
+from services.guild_module_state import GuildModuleState
 from services.slash_dispatcher import SlashDispatcher
 
 if TYPE_CHECKING:
@@ -52,7 +53,11 @@ class ModuleManager:
             str, list[tuple[str, Callable]]
         ] = {}  # module -> [(event_type, handler)]
         self._registered_api_modules: set[str] = set()
-        self._guild_states: dict[tuple[int, str], bool] = {}
+        self._guild_state = GuildModuleState(
+            self.bot,
+            plugin_names=lambda: set(self._plugin_files),
+            has_module=lambda name: name in self._modules,
+        )
         # Runtime-installed single-file plugins: module name -> file path.
         self._plugin_files: dict[str, Path] = {}
         # The single /bark group that hosts every module command. Created
@@ -204,7 +209,9 @@ class ModuleManager:
             _add_top(build_prefix_command(module, app_cmds[0].name, app_cmds[0], check=check))
         else:
             # Multiple leaf commands: namespace them under a bark!<module> group.
-            shim = SimpleNamespace(commands=app_cmds, description=getattr(module, "description", ""))
+            shim = SimpleNamespace(
+                commands=app_cmds, description=getattr(module, "description", "")
+            )
             _add_top(build_prefix_command(module, module_name, shim, check=check))
 
         self._prefix_commands[module_name] = registered
@@ -458,9 +465,7 @@ class ModuleManager:
         self._registered_events.pop(name, None)
         self._registered_api_modules.discard(name)
         self._plugin_files.pop(name, None)
-        self._guild_states = {
-            key: value for key, value in self._guild_states.items() if key[1] != name
-        }
+        self._guild_state.remove_module(name)
 
         # 3. Drop permission + role caches so no stale checks reference it.
         from services.response import clear_module_role_cache, get_permission_service
@@ -670,42 +675,19 @@ class ModuleManager:
 
     def load_guild_states(self, states) -> None:
         """Replace cached per-guild module policy from persisted rows."""
-        self._guild_states = {
-            (int(guild_id), str(module_name)): bool(enabled)
-            for guild_id, module_name, enabled in states
-        }
+        self._guild_state.load(states)
 
     def is_enabled_for_guild(self, guild_id: int, module_name: str) -> bool:
-        """Return persisted guild policy.
-
-        Core modules default enabled; ADD-ON (plugin) modules default
-        disabled — installing a plugin only makes it AVAILABLE to server
-        owners/admins, each server opts in explicitly.
-        """
-        if (int(guild_id), module_name) in self._guild_states:
-            return self._guild_states[(int(guild_id), module_name)]
-        return module_name not in self._plugin_files
+        """Return persisted guild policy (delegated to GuildModuleState)."""
+        return self._guild_state.is_enabled_for_guild(guild_id, module_name)
 
     def should_run_globally(self, module_name: str) -> bool:
         """Keep shared resources alive while at least one connected guild uses them."""
-        return any(
-            self.is_enabled_for_guild(guild.id, module_name)
-            for guild in getattr(self.bot, "guilds", [])
-        )
+        return self._guild_state.should_run_globally(module_name)
 
     async def set_guild_enabled(self, guild_id: int, module_name: str, enabled: bool) -> bool:
-        """Set whether a module is enabled for one guild.
-
-        Commands are registered globally once a module is installed/enabled,
-        so toggling here only flips the per-guild execution gate — instant,
-        with no Discord command re-sync (and no global-command propagation
-        lag). ``_command_enabled_check`` / ``_guard_event_handler`` read this
-        state on every interaction/event.
-        """
-        if module_name not in self._modules:
-            return False
-        self._guild_states[(int(guild_id), module_name)] = bool(enabled)
-        return True
+        """Set whether a module is enabled for one guild (delegated)."""
+        return self._guild_state.set_guild_enabled(guild_id, module_name, enabled)
 
     def _guard_event_handler(self, module_name: str, handler: Callable) -> Callable:
         @wraps(handler)
