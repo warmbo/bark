@@ -6,9 +6,7 @@
 .dark,
 [data-theme="dark"] {
   --radius: 0px;
-  /* Rottweiler-with-teeth-bared: cold steel-grey blues, black, rottweiler
-     brown, and ivory "tooth" highlights. */
-  --background: oklch(0.155 0.015 250);
+  /* Cold steel-grey blues with near-black surfaces and ivory highlights. */
   --foreground: oklch(0.955 0.012 82);
   --card: oklch(0.195 0.018 250 / 0.96);
   --card-foreground: oklch(0.955 0.012 82);
@@ -16,11 +14,11 @@
   --popover-foreground: oklch(0.955 0.012 82);
   --primary: oklch(0.60 0.07 250);
   --primary-foreground: oklch(0.98 0.01 82);
-  --secondary: oklch(0.38 0.05 45);
+  --secondary: oklch(0.24 0.015 250);
   --secondary-foreground: oklch(0.955 0.012 82);
   --muted: oklch(0.22 0.016 250);
   --muted-foreground: oklch(0.64 0.02 250);
-  --accent: oklch(0.45 0.07 50);
+  --accent: oklch(0.30 0.025 250);
   --accent-foreground: oklch(0.955 0.012 82);
   --destructive: oklch(0.56 0.15 25);
   --destructive-foreground: oklch(0.98 0.01 82);
@@ -29,7 +27,7 @@
   --ring: oklch(0.62 0.08 250);
   --sidebar: oklch(0.115 0.012 250 / 0.985);
   --sidebar-foreground: oklch(0.95 0.012 82);
-  --sidebar-accent: oklch(0.30 0.05 45);
+  --sidebar-accent: oklch(0.22 0.015 250);
   --sidebar-border: oklch(0.3 0.02 250 / 0.55);
 
   /* Compatibility aliases while templates are migrated onto macros. */
@@ -39,7 +37,7 @@
   --bg-sidebar: var(--sidebar);
   --bg-hover: color-mix(in oklab, var(--foreground) 5%, transparent);
   --bg-active: color-mix(in oklab, var(--primary) 16%, transparent);
-  --accent-hover: oklch(0.52 0.075 50);
+  --accent-hover: oklch(0.36 0.03 250);
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
   --text-tertiary: oklch(0.58 0.02 250);
