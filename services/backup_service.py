@@ -15,6 +15,8 @@ import os
 import re
 import shutil
 import sqlite3
+import threading
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +28,7 @@ logger = logging.getLogger("bark.backup")
 BACKUP_RE = re.compile(r"^bark-backup-\d{8}-\d{6}-\d{6}\.db$")
 RESTORE_DB_NAME = "restore-pending.db"
 RESTORE_MARKER_NAME = "restore-pending.json"
+_RESTORE_STAGE_LOCK = threading.Lock()
 
 
 class InvalidBackupError(ValueError):
@@ -144,24 +147,32 @@ def stage_database_restore_sync(source: Path, *, source_name: str) -> dict:
     the staged file before opening SQLAlchemy, then normal ordered migrations
     bring older schemas forward.
     """
+    _source_db_path()
     metadata = validate_database_backup(source)
     directory = _restore_dir()
-    staged_tmp = directory / f"{RESTORE_DB_NAME}.tmp"
+    token = uuid.uuid4().hex
+    staged_tmp = directory / f"{RESTORE_DB_NAME}.{token}.tmp"
+    marker_tmp = directory / f"{RESTORE_MARKER_NAME}.{token}.tmp"
     staged = directory / RESTORE_DB_NAME
-    shutil.copyfile(source, staged_tmp)
-    os.replace(staged_tmp, staged)
-    # Validate the staged bytes again: this also catches a short/failed copy.
-    metadata = validate_database_backup(staged)
-    payload = {
-        **metadata,
-        "source_name": Path(source_name).name,
-        "staged_at": datetime.now(timezone.utc).isoformat(),
-        "restart_required": True,
-    }
-    marker_tmp = directory / f"{RESTORE_MARKER_NAME}.tmp"
     marker = directory / RESTORE_MARKER_NAME
-    marker_tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    os.replace(marker_tmp, marker)
+    try:
+        shutil.copyfile(source, staged_tmp)
+        # Validate the candidate before it can replace a previously valid pair.
+        metadata = validate_database_backup(staged_tmp)
+        payload = {
+            **metadata,
+            "source_name": Path(source_name).name,
+            "staged_at": datetime.now(timezone.utc).isoformat(),
+            "restart_required": True,
+        }
+        marker_tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        # Prevent simultaneous owner uploads from crossing DB and marker pairs.
+        with _RESTORE_STAGE_LOCK:
+            os.replace(staged_tmp, staged)
+            os.replace(marker_tmp, marker)
+    finally:
+        staged_tmp.unlink(missing_ok=True)
+        marker_tmp.unlink(missing_ok=True)
     logger.warning("Staged database restore from %s for next restart", payload["source_name"])
     return payload
 
@@ -179,6 +190,22 @@ def has_pending_database_restore() -> bool:
     ).is_file()
 
 
+def _quarantine_pending_restore(*paths: Path, reason: str) -> None:
+    """Move inconsistent restore artifacts aside so Bark can still boot."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    moved: list[str] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        quarantine = path.parent / f"restore-quarantine-{timestamp}-{path.name}"
+        try:
+            os.replace(path, quarantine)
+            moved.append(str(quarantine))
+        except OSError:
+            logger.exception("Could not quarantine pending restore artifact %s", path)
+    logger.error("Ignored invalid pending database restore: %s; quarantined=%s", reason, moved)
+
+
 def apply_pending_restore_sync() -> dict | None:
     """Apply a validated staged database before SQLAlchemy opens the live DB.
 
@@ -192,21 +219,39 @@ def apply_pending_restore_sync() -> dict | None:
     if not marker.is_file() and not staged.is_file():
         return None
     if not marker.is_file() or not staged.is_file():
-        raise InvalidBackupError("Incomplete pending database restore")
+        _quarantine_pending_restore(marker, staged, reason="incomplete artifact pair")
+        return None
     try:
         payload = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise InvalidBackupError("Pending restore marker is invalid") from exc
-    metadata = validate_database_backup(staged)
+        _quarantine_pending_restore(marker, staged, reason=f"invalid marker: {exc}")
+        return None
+    try:
+        metadata = validate_database_backup(staged)
+    except (InvalidBackupError, OSError) as exc:
+        _quarantine_pending_restore(marker, staged, reason=f"invalid database: {exc}")
+        return None
     if payload.get("sha256") != metadata["sha256"]:
-        raise InvalidBackupError("Pending database restore checksum mismatch")
+        _quarantine_pending_restore(marker, staged, reason="checksum mismatch")
+        return None
 
-    live = _source_db_path()
+    try:
+        live = _source_db_path()
+    except ValueError as exc:
+        _quarantine_pending_restore(marker, staged, reason=str(exc))
+        return None
     live.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     rollback: Path | None = _backup_dir() / f"bark-backup-{timestamp}.db"
     if live.is_file():
-        _snapshot_sync(live, rollback)
+        try:
+            _snapshot_sync(live, rollback)
+        except sqlite3.DatabaseError:
+            # A corrupt live DB is a primary reason an owner may need restore.
+            # Keep its raw bytes for forensics without blocking recovery.
+            rollback.unlink(missing_ok=True)
+            shutil.copy2(live, rollback)
+            logger.exception("Live database was corrupt; retained a raw rollback copy")
     else:
         rollback = None
 
@@ -224,8 +269,14 @@ def apply_pending_restore_sync() -> dict | None:
             "applied_marker": str(applied),
         }
     )
-    applied.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    marker.unlink(missing_ok=True)
+    try:
+        applied.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except OSError:
+        # The swap succeeded; an audit-marker failure must not block migrations
+        # or leave startup retrying the same restore indefinitely.
+        logger.exception("Could not write applied database restore marker")
+    finally:
+        marker.unlink(missing_ok=True)
     logger.warning("Applied staged database restore; rollback=%s", rollback)
     return payload
 

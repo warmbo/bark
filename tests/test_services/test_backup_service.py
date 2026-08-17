@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -220,3 +222,69 @@ def test_failed_migration_can_roll_back_applied_restore(monkeypatch, tmp_path):
     status = json.loads(Path(applied["applied_marker"]).read_text())
     assert status["status"] == "rolled_back"
     assert status["rollback_reason"] == "migration failed"
+
+
+def test_incomplete_pending_restore_is_quarantined_without_blocking_startup(
+    monkeypatch, tmp_path
+):
+    import config
+    from services.backup_service import apply_pending_restore_sync
+
+    monkeypatch.setattr(config.config, "data_dir", tmp_path)
+    restore = tmp_path / "restore"
+    restore.mkdir()
+    orphan = restore / "restore-pending.db"
+    orphan.write_bytes(b"interrupted upload")
+
+    assert apply_pending_restore_sync() is None
+    assert not orphan.exists()
+    assert list(restore.glob("restore-quarantine-*-restore-pending.db"))
+
+
+def test_checksum_mismatch_is_quarantined_without_blocking_startup(monkeypatch, tmp_path):
+    import config
+    from services.backup_service import apply_pending_restore_sync
+
+    monkeypatch.setattr(config.config, "data_dir", tmp_path)
+    restore = tmp_path / "restore"
+    restore.mkdir()
+    staged = restore / "restore-pending.db"
+    with sqlite3.connect(staged) as connection:
+        connection.execute("CREATE TABLE guilds (id INTEGER PRIMARY KEY)")
+    (restore / "restore-pending.json").write_text(json.dumps({"sha256": "wrong"}))
+
+    assert apply_pending_restore_sync() is None
+    assert not staged.exists()
+    assert not (restore / "restore-pending.json").exists()
+    assert len(list(restore.glob("restore-quarantine-*"))) == 2
+
+
+def test_concurrent_restore_staging_keeps_database_and_marker_matched(monkeypatch, tmp_path):
+    import config
+    from services.backup_service import stage_database_restore_sync
+
+    monkeypatch.setattr(config.config, "data_dir", tmp_path)
+    monkeypatch.setattr(config.config.database, "url", "sqlite+aiosqlite:///bark.db")
+    sources = []
+    for index in range(2):
+        source = tmp_path / f"incoming-{index}.db"
+        with sqlite3.connect(source) as connection:
+            connection.execute("CREATE TABLE guilds (id INTEGER PRIMARY KEY, name TEXT)")
+            connection.execute("INSERT INTO guilds VALUES (1, ?)", (f"Guild {index}",))
+        sources.append(source)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda item: stage_database_restore_sync(
+                    item, source_name=f"{item.stem}.db"
+                ),
+                sources,
+            )
+        )
+
+    restore = tmp_path / "restore"
+    marker = json.loads((restore / "restore-pending.json").read_text())
+    staged_hash = hashlib.sha256((restore / "restore-pending.db").read_bytes()).hexdigest()
+    assert marker["sha256"] == staged_hash
+    assert marker["sha256"] in {result["sha256"] for result in results}
