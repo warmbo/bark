@@ -2717,7 +2717,7 @@ async def test_logging_workspace_has_logs_tab(client, app):
         {"id": "test_log", "label": "Test Log", "endpoint": "test", "fields": []}
     ]
     module.get_extra_tabs.return_value = [
-        {"id": "logs", "label": "Logs", "template": "module_tabs/logging_logs.html"}
+        {"id": "logs", "label": "Logs", "template": "modules/logging/templates/logging_logs.html"}
     ]
     module.load_dashboard_config = AsyncMock(return_value={})
     app.state.bot.modules.get_module.return_value = module

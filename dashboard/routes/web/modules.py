@@ -19,6 +19,29 @@ TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(tags=["web-modules"])
 
+# Module-specific tab templates now live in each module's own ``templates/``
+# directory (e.g. ``moderation/templates/moderation_cases.html``) rather than
+# the shared ``dashboard/templates/module_tabs/`` tree. The dashboard Jinja
+# loader searches the project root, so a tab path of
+# ``<module>/templates/<file>.html`` resolves directly; this helper mirrors
+# that resolution for the on-disk existence check below.
+REPO_ROOT = Path(__file__).parent.parent.parent.parent
+
+
+def _resolve_module_template(template: str) -> Path:
+    """Resolve a module tab template to an on-disk path.
+
+    ``template`` is already a repo-relative path such as
+    ``modules/moderation/templates/moderation_cases.html``; return it joined
+    to the repo root so the existence gate matches what Jinja will ``include``.
+    """
+    return REPO_ROOT / template
+
+# Mirror the dashboard app loader: module tab templates are colocated under
+# each module's own ``templates/`` directory, so the project root must be a
+# search path for ``{% include %}`` to resolve them.
+templates.env.loader.searchpath.append(str(REPO_ROOT))
+
 
 @router.get("/modules", response_class=HTMLResponse)
 async def modules_page(request: Request, guild_id: int):
@@ -131,13 +154,15 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
 
     # Extra tabs render via ``{% include tab.template %}`` — a plugin may
     # declare a tab whose template file is missing, which would 500 the page.
-    # Only keep tabs whose template exists on disk.
+    # Module tabs now resolve from the module's own ``templates/`` directory
+    # (self-contained per-module UI) with no shared ``module_tabs/`` coupling;
+    # only keep tabs whose template exists on disk.
     extra_tabs = []
     for tab in module.get_extra_tabs():
         template = (tab or {}).get("template")
         if not template:
             continue
-        if (TEMPLATES_DIR / template).is_file():
+        if _resolve_module_template(template).is_file():
             extra_tabs.append(tab)
 
     module_data = {

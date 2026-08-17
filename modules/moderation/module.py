@@ -514,24 +514,24 @@ class ModerationModule(BarkModule):
 
     def get_extra_tabs(self) -> list[dict]:
         return [
-            {"id": "cases", "label": "Cases", "template": "module_tabs/moderation_cases.html"},
+            {"id": "cases", "label": "Cases", "template": "modules/moderation/templates/moderation_cases.html"},
             {
                 "id": "warnings",
                 "label": "Warnings",
-                "template": "module_tabs/moderation_warnings.html",
+                "template": "modules/moderation/templates/moderation_warnings.html",
             },
-            {"id": "notes", "label": "Notes", "template": "module_tabs/moderation_notes.html"},
+            {"id": "notes", "label": "Notes", "template": "modules/moderation/templates/moderation_notes.html"},
             {
                 "id": "rulesets",
                 "label": "Rulesets",
-                "template": "module_tabs/moderation_rulesets.html",
+                "template": "modules/moderation/templates/moderation_rulesets.html",
             },
             {
                 "id": "wordlists",
                 "label": "Word Lists",
-                "template": "module_tabs/moderation_wordlists.html",
+                "template": "modules/moderation/templates/moderation_wordlists.html",
             },
-            {"id": "voice", "label": "Voice", "template": "module_tabs/moderation_voice.html"},
+            {"id": "voice", "label": "Voice", "template": "modules/moderation/templates/moderation_voice.html"},
         ]
 
     # ── Lifecycle ─────────────────────────────────────

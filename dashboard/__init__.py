@@ -75,8 +75,14 @@ def create_app(bot: BarkBot) -> DashboardApp:
         name="media-uploads",
     )
 
-    # Templates
+    # Templates. The primary search path is the shared dashboard templates
+    # tree, but module-specific UI now lives in each module's own
+    # ``templates/`` directory (e.g. ``moderation/templates/...``). Adding the
+    # project root as a secondary loader lets ``{% include %}`` resolve those
+    # colocated templates without re-coupling them into the shared tree.
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    repo_root = TEMPLATES_DIR.parent.parent
+    templates.env.loader.searchpath.append(str(repo_root))
     templates.env.globals.setdefault("config", config)
 
     # Every API error goes through the standard envelope. FastAPI's default

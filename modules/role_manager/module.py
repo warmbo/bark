@@ -594,11 +594,11 @@ class RoleManagerModule(BarkModule):
 
     def get_extra_tabs(self) -> list[dict]:
         return [
-            {"id": "rules", "label": "Rules", "template": "module_tabs/role_manager_rules.html"},
+            {"id": "rules", "label": "Rules", "template": "modules/role_manager/templates/role_manager_rules.html"},
             {
                 "id": "assignments",
                 "label": "Assignment Log",
-                "template": "module_tabs/role_manager_assignments.html",
+                "template": "modules/role_manager/templates/role_manager_assignments.html",
             },
         ]
 

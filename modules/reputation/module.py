@@ -210,17 +210,17 @@ class ReputationModule(BarkModule):
             {
                 "id": "tiers",
                 "label": "Tiers",
-                "template": "module_tabs/reputation_tiers.html",
+                "template": "modules/reputation/templates/reputation_tiers.html",
             },
             {
                 "id": "leaderboard",
                 "label": "Leaderboard",
-                "template": "module_tabs/reputation_leaderboard.html",
+                "template": "modules/reputation/templates/reputation_leaderboard.html",
             },
             {
                 "id": "thanks",
                 "label": "Thanks Log",
-                "template": "module_tabs/reputation_thanks.html",
+                "template": "modules/reputation/templates/reputation_thanks.html",
             },
         ]
 

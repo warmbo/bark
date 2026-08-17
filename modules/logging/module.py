@@ -162,7 +162,7 @@ class LoggingModule(BarkModule):
             {
                 "id": "logs",
                 "label": "Logs",
-                "template": "module_tabs/logging_logs.html",
+                "template": "modules/logging/templates/logging_logs.html",
             },
         ]
 

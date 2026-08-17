@@ -120,8 +120,13 @@ def test_rendered_page_literal_ids_are_unique_and_aria_references_resolve():
             if partial.is_file():
                 html += "\n" + source(partial)
         if page.name == "module_detail.html":
+            # Module-specific tab templates are now colocated under each
+            # module's own ``templates/`` directory.
             html += "\n" + "\n".join(
-                source(path) for path in (TEMPLATES / "module_tabs").glob("*.html")
+                source(path)
+                for mod_dir in (ROOT / "modules").iterdir()
+                if (mod_dir / "templates").is_dir()
+                for path in (mod_dir / "templates").glob("*.html")
             )
         ids = re.findall(r'\bid\s*=\s*["\']([A-Za-z][\w:.-]*)["\']', html)
         duplicates = sorted(item for item in set(ids) if ids.count(item) > 1)
@@ -213,7 +218,7 @@ def test_workspace_omits_empty_operate_tab_and_updates_toggle_in_place():
 
 def test_moderation_danger_zones_are_contextual_to_their_tabs():
     workspace = source(TEMPLATES / "pages" / "module_detail.html")
-    voice = source(TEMPLATES / "module_tabs" / "moderation_voice.html")
+    voice = source(ROOT / "modules" / "moderation" / "templates" / "moderation_voice.html")
     assert "moderation-retention-danger-zone" in workspace
     assert 'data-purge="audit-logs"' in workspace
     assert 'data-purge="attachments"' in workspace
@@ -390,7 +395,7 @@ def test_destructive_operations_use_barkdialog_confirm():
 def test_danger_zones_are_tab_specific():
     """Danger zone purge buttons must only appear in their correct tab context."""
     workspace = source(TEMPLATES / "pages" / "module_detail.html")
-    voice = source(TEMPLATES / "module_tabs" / "moderation_voice.html")
+    voice = source(ROOT / "modules" / "moderation" / "templates" / "moderation_voice.html")
 
     # Configure tab (module_detail.html) has audit and attachment purge
     assert 'data-purge="audit-logs"' in workspace, "Configure tab needs audit-logs purge"

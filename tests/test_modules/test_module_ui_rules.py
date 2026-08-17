@@ -57,21 +57,21 @@ ALLOWED_SCHEMA_FORMATS = {
     "voice_channel_select",
 }
 
-# The existing shared bespoke module-UI partials. This allowlist must NOT grow:
-# new module UI belongs in the module's own directory.
+# The existing colocated bespoke module-UI partials. This allowlist must NOT
+# grow: new module UI belongs in the module's own directory.
 ALLOWED_SHARED_MODULE_TEMPLATES = {
-    "module_tabs/logging_logs.html",
-    "module_tabs/moderation_cases.html",
-    "module_tabs/moderation_notes.html",
-    "module_tabs/moderation_rulesets.html",
-    "module_tabs/moderation_voice.html",
-    "module_tabs/moderation_warnings.html",
-    "module_tabs/moderation_wordlists.html",
-    "module_tabs/reputation_leaderboard.html",
-    "module_tabs/reputation_thanks.html",
-    "module_tabs/reputation_tiers.html",
-    "module_tabs/role_manager_assignments.html",
-    "module_tabs/role_manager_rules.html",
+    "modules/logging/templates/logging_logs.html",
+    "modules/moderation/templates/moderation_cases.html",
+    "modules/moderation/templates/moderation_notes.html",
+    "modules/moderation/templates/moderation_rulesets.html",
+    "modules/moderation/templates/moderation_voice.html",
+    "modules/moderation/templates/moderation_warnings.html",
+    "modules/moderation/templates/moderation_wordlists.html",
+    "modules/reputation/templates/reputation_leaderboard.html",
+    "modules/reputation/templates/reputation_thanks.html",
+    "modules/reputation/templates/reputation_tiers.html",
+    "modules/role_manager/templates/role_manager_assignments.html",
+    "modules/role_manager/templates/role_manager_rules.html",
     "components/speak_phrases.html",
     "components/bot_customization.html",
     "components/discord_toolbar.html",
