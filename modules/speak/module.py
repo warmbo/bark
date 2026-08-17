@@ -5,12 +5,17 @@ Phrases tab); any member of the server can then trigger them with
 `/bark speak <key>`. The phrase is posted to the channel as a normal
 message, so only admins (or whoever the owner grants via this module's
 Role Access) can add content.
+
+Settings:
+
+- ``delete_delay_seconds`` — optional auto-delete delay for triggered
 """
 
 from __future__ import annotations
 
 import logging
 import re
+from typing import Any
 
 import discord
 from fastapi import Request
@@ -94,6 +99,22 @@ class SpeakModule(BarkModule):
             )
         ]
 
+    def get_settings_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "description": "Optional runtime settings for the Speak module.",
+            "properties": {
+                "delete_delay_seconds": {
+                    "type": "integer",
+                    "title": "Auto-delete delay (seconds)",
+                    "description": "Delete the triggered phrase message after this many seconds. 0 = never delete.",
+                    "default": 0,
+                    "minimum": 0,
+                    "maximum": 3600,
+                }
+            },
+        }
+
     def get_about(self) -> list[dict]:
         return [
             {
@@ -163,6 +184,17 @@ class SpeakModule(BarkModule):
                 return
 
             await interaction.response.send_message(str(text))
+            try:
+                cfg = await self._load_phrases(interaction.guild_id)
+            except Exception:
+                cfg = {}
+            delay = int((cfg or {}).get("delete_delay_seconds") or 0)
+            if delay > 0 and interaction.response.is_done():
+                message = await interaction.original_response()
+                if message:
+                    self.ctx.bot.loop.call_later(
+                        delay, lambda m=message: self.ctx.bot.loop.create_task(m.delete())
+                    )
 
         return speak_cmd
 

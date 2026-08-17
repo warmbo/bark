@@ -170,6 +170,13 @@ class AnnouncementsModule(BarkModule):
                     "description": "Optional default channel for announcements. You can still choose a channel when posting.",
                     "placeholder": "Select a channel…",
                 },
+                "default_embed_color": {
+                    "type": "color",
+                    "title": "Default Embed Color",
+                    "description": "Accent color used for announcement embeds when no color is chosen at post time.",
+                    "placeholder": "Accent color for the embed sidebar",
+                    "default": "#5865F2",
+                },
             },
         }
 
@@ -266,6 +273,9 @@ class AnnouncementsModule(BarkModule):
             message = str(data.get("message", "") or "")
             as_embed = bool(data.get("as_embed", False))
             embed_color = str(data.get("embed_color", "") or "").strip()
+            if not embed_color:
+                cfg = await self.load_dashboard_config(int(guild_id))
+                embed_color = str((cfg or {}).get("default_embed_color", "") or "").strip()
             image_url = str(data.get("image_url", "") or "").strip()
             video_url = str(data.get("video_url", "") or "").strip()
 

@@ -198,6 +198,14 @@ class RoleManagerModule(BarkModule):
                     "default": 5,
                     "minimum": 1,
                 },
+                "max_reaction_claims": {
+                    "type": "integer",
+                    "title": "Max Reaction Roles per Member",
+                    "description": "How many reaction roles one member may claim at once (0 = unlimited).",
+                    "default": 0,
+                    "minimum": 0,
+                    "maximum": 50,
+                },
             },
         }
 
@@ -496,6 +504,17 @@ class RoleManagerModule(BarkModule):
         member = guild.get_member(payload.user_id)
         if member is None or member.bot:
             return
+
+        if adding:
+            cfg = await self.load_dashboard_config(guild_id)
+            max_claims = int((cfg or {}).get("max_reaction_claims") or 0)
+            if max_claims > 0:
+                claimed_role_ids = {int(rule.role_id) for rule in matched}
+                already_held = claimed_role_ids.intersection(
+                    {int(r.id) for r in getattr(member, "roles", [])}
+                )
+                if len(already_held) >= max_claims:
+                    return
 
         action = "add" if adding else "remove"
         for rule in matched:

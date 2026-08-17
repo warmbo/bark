@@ -299,13 +299,16 @@ class ReputationModule(BarkModule):
         async def reputation_leaderboard(
             request: Request,
             guild_id: str,
-            limit: int = Query(25, ge=1, le=100),
+            limit: int | None = Query(None, ge=1, le=100),
         ):
             """Return the leaderboard for guild_id."""
             await get_module_min_role("reputation", guild_id)
             if not check_api_permission(request, "reputation.view", guild_id):
                 return api_error("Insufficient permissions", status_code=403)
             gid = int(guild_id)
+            if limit is None:
+                cfg = await self.load_dashboard_config(gid)
+                limit = int((cfg or {}).get("leaderboard_size") or 10)
             bot: "BarkBot" = request.state.bot
             guild = bot.get_guild(gid)
             if guild is None:
@@ -853,6 +856,14 @@ class ReputationModule(BarkModule):
             "type": "object",
             "description": "Configure how reputation is earned, capped, displayed, and rewarded.",
             "properties": {
+                "leaderboard_size": {
+                    "type": "integer",
+                    "title": "Leaderboard Size",
+                    "description": "How many members appear in the /reputation leaderboard (default 10).",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": 10,
+                },
                 "enabled_sources": {
                     "type": "object",
                     "title": "Enabled Sources",

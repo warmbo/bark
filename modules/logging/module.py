@@ -41,6 +41,7 @@ EVENT_TYPES = {
     "member_join": "Member Joins",
     "member_leave": "Member Leaves",
     "voice_state": "Voice State Changes",
+    "message_reaction": "Message Reactions",
     "automod": "AutoMod Alerts",
 }
 
@@ -73,6 +74,7 @@ class LoggingModule(BarkModule):
             EventRegistration("discord_message", handler="_on_message"),
             EventRegistration("discord_message_edit", handler="_on_message_edit"),
             EventRegistration("discord_message_delete", handler="_on_message_delete"),
+            EventRegistration("raw_reaction_add", handler="_on_message_reaction"),
             EventRegistration("discord_member_join", handler="_on_member_join"),
             EventRegistration("discord_member_remove", handler="_on_member_remove"),
             EventRegistration("discord_voice_state", handler="_on_voice_state"),
@@ -485,6 +487,28 @@ class LoggingModule(BarkModule):
                 "attachments": [a.filename for a in msg.attachments][:5],
             },
         )
+
+    async def _on_message_reaction(self, event_type: str, **data):
+        payload = data.get("payload")
+        if not payload or getattr(payload, "guild_id", None) is None:
+            return
+        guild_id = int(payload.guild_id)
+        ch = await self._get_channel(guild_id, "message_reaction")
+        if not ch:
+            return
+        member = self.ctx.get_member(guild_id, payload.user_id)
+        user_label = str(member) if member else f"<@{payload.user_id}>"
+        fields = [
+            ("Reaction", str(getattr(payload, "emoji", "?")), True),
+            ("User", user_label, True),
+            ("Channel", f"<#{payload.channel_id}>", True),
+            (
+                "Message",
+                f"[jump](https://discord.com/channels/{guild_id}/{payload.channel_id}/{payload.message_id})",
+                False,
+            ),
+        ]
+        await self._send(ch, "👍 Reaction added", f"in <#{payload.channel_id}>", discord.Color.gold(), fields)
 
     async def _on_member_join(self, event_type: str, **data):
         member = data.get("member")

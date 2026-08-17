@@ -37,7 +37,7 @@ class ManagedChannel:
 CONFIG_GROUPS: dict[str, list[str]] = {
     "channel": ["primary_channel_id", "channel_name_template", "fallback_name"],
     "naming": ["name_uppercase", "name_lowercase", "name_titlecase"],
-    "limits": ["user_limit", "bitrate_kbps"],
+    "limits": ["user_limit", "bitrate_kbps", "max_channels_per_user"],
     "access": [
         "inherit_permissions",
         "private_by_default",
@@ -255,6 +255,14 @@ class AutoVoiceModule(BarkModule):
                             "minimum": 8,
                             "maximum": 384,
                             "default": 64,
+                        },
+                        "max_channels_per_user": {
+                            "type": "integer",
+                            "title": "Max Channels per User",
+                            "description": "How many temporary channels one member may open at once (0 = unlimited).",
+                            "minimum": 0,
+                            "maximum": 50,
+                            "default": 0,
                         },
                     },
                 },
@@ -570,6 +578,17 @@ class AutoVoiceModule(BarkModule):
             return
         if not self._has_required_role(member, self._cfg(config, "required_role_id")):
             return
+        max_channels = self._config_int(
+            config, "max_channels_per_user", default=0, minimum=0, maximum=50
+        )
+        if max_channels > 0:
+            owned = sum(
+                1
+                for ch in self._managed_channels.values()
+                if ch.owner_id == member_id and ch.guild_id == int(member.guild.id)
+            )
+            if owned >= max_channels:
+                return
 
         self._joins_in_progress.add(member_id)
         created = None

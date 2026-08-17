@@ -252,6 +252,14 @@ class ModerationModule(BarkModule):
                             "description": "Template for warn DMs. Use {server}, {reason}, {case} as placeholders.",
                             "placeholder": "You were warned in {server}. Reason: {reason} | Case #{case}",
                         },
+                        "default_timeout_minutes": {
+                            "type": "integer",
+                            "title": "Default Timeout (minutes)",
+                            "description": "Used when /moderation timeout is run without specifying a duration. Must be ≤ 40320 (4 weeks).",
+                            "default": 10,
+                            "minimum": 1,
+                            "maximum": 40320,
+                        },
                     },
                 },
                 "anti_raid": {
@@ -580,10 +588,14 @@ class ModerationModule(BarkModule):
         async def timeout(
             interaction: discord.Interaction,
             member: discord.Member,
-            duration: int,
+            duration: int | None = None,
             unit: str = "minutes",
             reason: str = "No reason",
         ):
+            guild_id = int(interaction.guild.id)
+            cfg = await self.load_dashboard_config(guild_id)
+            if duration is None or duration <= 0:
+                duration = int((cfg or {}).get("default_timeout_minutes") or 10)
             await self._cmd_timeout(interaction, member, duration, unit, reason)
 
         return timeout

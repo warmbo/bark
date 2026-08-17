@@ -137,6 +137,23 @@ class WelcomeModule(BarkModule):
                     "description": "Post the goodbye message as a Discord embed instead of plain text.",
                     "default": False,
                 },
+                "goodbye_dm_enabled": {
+                    "type": "boolean",
+                    "title": "Send Goodbye DM",
+                    "description": "Send a direct message to members when they leave.",
+                    "default": False,
+                },
+                "goodbye_dm_message": {
+                    "type": "string",
+                    "format": "textarea",
+                    "format_toolbar": True,
+                    "title": "Goodbye DM Template",
+                    "description": "DM sent when a member leaves. Supports {user}, {server}, and {member_count}. `**bold**`, *italic*, `code`, ||spoiler||, ---",
+                    "placeholder": "Sorry to see you go, {user}. We hope to see you again in {server}.",
+                    "default": "Goodbye {user}, thanks for being part of {server}!",
+                    "rows": 10,
+                    "maxLength": 2000,
+                },
                 "dm_enabled": {
                     "type": "boolean",
                     "title": "Send Welcome DM",
@@ -269,6 +286,17 @@ class WelcomeModule(BarkModule):
             "Goodbye!",
         )
         await self._send(channel, message)
+
+        dm_enabled = bool(config.get("goodbye_dm_enabled"))
+        if dm_enabled:
+            dm_text = self._format(
+                config.get("goodbye_dm_message", "Goodbye {user}, we will miss you."), member
+            )
+            if dm_text.strip():
+                try:
+                    await member.send(dm_text[:2000])
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
 
     # ── Slash command ───────────────────────────────────
 
