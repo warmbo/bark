@@ -289,6 +289,18 @@ class AutoVoiceModule(BarkModule):
                             "description": "Optional role required to create a temporary channel.",
                             "placeholder": "No role required",
                         },
+                        "auto_join_role_id": {
+                            "type": "string",
+                            "format": "role_select",
+                            "title": "Auto-Join Role",
+                            "description": (
+                                "When set, members with this role are automatically "
+                                "granted access to every new temporary channel (connect "
+                                "and view). Useful for a 'voice' role that should always "
+                                "be able to hop into any temp channel."
+                            ),
+                            "placeholder": "No auto-join role",
+                        },
                         "owner_can_rename": {
                             "type": "boolean",
                             "title": "Owner Can Rename",
@@ -613,6 +625,23 @@ class AutoVoiceModule(BarkModule):
             )
             await member.move_to(created, reason="Bark Auto Voice: temporary channel created")
             await self._persist_managed_channel(created, member, primary)
+            # Auto-Join Role: grant the configured role connect + view on the
+            # new channel so its holders can always hop in.
+            auto_join_role_id = self._cfg(config, "auto_join_role_id")
+            if auto_join_role_id:
+                role = member.guild.get_role(int(auto_join_role_id))
+                if role is not None:
+                    try:
+                        await created.set_permissions(
+                            role,
+                            view_channel=True,
+                            connect=True,
+                            reason="Bark Auto Voice: auto-join role access",
+                        )
+                    except (discord.Forbidden, discord.HTTPException):
+                        self._logger.warning(
+                            "Could not grant auto-join role %s on temp channel", role.id
+                        )
         except (discord.Forbidden, discord.HTTPException, TypeError, ValueError):
             self._logger.exception("Failed to create temporary voice channel")
             if created is not None:
