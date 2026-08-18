@@ -1,0 +1,185 @@
+/* Bark design tokens — single source of truth (migrated from legacy.css). */
+:root {
+    /* ── Base Colors ── (aliased onto shadcn semantic tokens — single source of truth) */
+    --bg-base: var(--background);
+    --bg-elevated: var(--card);
+    --bg-card: var(--card);
+    --bg-card-hover: var(--accent);
+    --bg-card-solid: var(--card);
+    --bg-input: var(--input);
+    --bg-sidebar: var(--sidebar);
+    --bg-surface: var(--secondary);
+    --bg-overlay: color-mix(in oklab, var(--background) 40%, transparent);
+
+    /* ── Frosted Glass ── */
+    --glass-tint: rgba(255, 255, 255, 0.04);
+    --glass-tint-strong: rgba(255, 255, 255, 0.07);
+    --glass-border: var(--border);
+    --glass-border-hover: color-mix(in oklab, var(--foreground) 14%, transparent);
+    --glass-accent-border: color-mix(in oklab, var(--primary) 22%, transparent);
+    --glass-blur: blur(16px);
+    --glass-blur-light: blur(8px);
+    --glass-blur-heavy: blur(24px);
+
+    /* ── Borders ── (shadcn tokens) */
+    --border-subtle: var(--border);
+    --border-card: var(--border);
+    --border-input: var(--input);
+    --border-hover: var(--ring);
+
+    /* ── Accent (single steel-blue, via shadcn primary) ── */
+    --accent: var(--primary);
+    --accent-hover: var(--ring);
+    --accent-muted: color-mix(in oklab, var(--primary) 10%, transparent);
+    --accent-border: color-mix(in oklab, var(--primary) 21%, transparent);
+
+    /* ── Text ── (shadcn tokens) */
+    --text-primary: var(--foreground);
+    --text-secondary: var(--muted-foreground);
+    --text-tertiary: var(--muted-foreground);
+    --text-inverse: var(--background);
+
+    /* ── Semantic (distinct status hues retained — no shadcn equivalents) ── */
+    --green: #22c55e;
+    --green-muted: rgba(34, 197, 94, 0.1);
+    --red: var(--destructive);
+    --red-muted: color-mix(in oklab, var(--destructive) 10%, transparent);
+    --yellow: #eab308;
+    --yellow-muted: rgba(234, 179, 8, 0.1);
+    --orange: #f97316;
+    --orange-muted: rgba(249, 115, 22, 0.1);
+    --blue-semantic: var(--primary);
+    --blue-semantic-muted: color-mix(in oklab, var(--primary) 10%, transparent);
+    --pink: #d946ef;
+    --pink-muted: rgba(217, 70, 239, 0.1);
+
+    /* ── Plugin / browse accent (distinct violet) ── */
+    --plugin: #8b5cf6;
+    --plugin-hover: #7c3aed;
+    --plugin-muted: rgba(139, 92, 246, 0.14);
+
+    /* ── Radius & control sizing (radius-* inherited from shadcn theme.css) ── */
+    --radius-full: 999px;  /* pills, avatars, scrollbar thumbs — not a control corner */
+    --control-height-sm: 34px;
+    --control-height: 44px;
+    --font-size-caption: 14px;
+    --font-size-body: 16px;
+    --font-size-title: clamp(28px, 2.5vw, 36px);
+    --ease-out: cubic-bezier(.16, 1, .3, 1);
+    --z-overlay: 1800;
+    --z-dialog: 1900;
+
+    /* ── Typography (font-sans/mono come from theme.css) ── */
+    --bg-avatar: none;
+
+    /* ── Discord message preview (rendered embeds/messages) ── */
+    --discord-chat-bg: #313338;
+    --discord-blurple: #5865f2;
+    --discord-text: #dbdee1;
+    --discord-heading: #f2f3f5;
+    --discord-subtext: #949ba4;
+    --discord-code-bg: #1e1f22;
+    --discord-code-border: #26272b;
+    --discord-quote-border: #4e5058;
+
+    /* ── Layout ── */
+    --sidebar-width: 256px;
+    --sidebar-collapsed-width: 64px;
+    --content-max-width: 1440px;
+    --content-padding: clamp(24px, 3vw, 38px);
+
+    /* ── Adaptive Spacing ── */
+    --space-xs: clamp(6px, 0.4vw, 10px);
+    --space-sm: clamp(8px, 0.6vw, 14px);
+    --space-md: clamp(14px, 1.2vw, 26px);
+    --space-lg: clamp(17px, 1.45vw, 29px);
+    --space-xl: clamp(23px, 2.3vw, 41px);
+
+    /* ── Transitions ── */
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+    --transition-slow: 400ms ease;
+
+    /* ── Shadows ── */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.08);
+}
+
+/* Component color tokens (values preserved verbatim from original literals). */
+:root {
+    --c-0: rgba(239, 68, 68, .28);
+    --c-1: rgba(255, 255, 255, 0.02);
+    --c-black: #000;
+    --c-blue: #3b82f6;
+    --c-blue-bright: #00a8fc;
+    --c-blue-glow: rgba(59, 130, 246, 0.08);
+    --c-cat-messaging: #93c5fd;
+    --c-cat-messaging-bg: rgba(96, 165, 250, 0.14);
+    --c-cat-messaging-border: rgba(96, 165, 250, 0.45);
+    --c-cat-moderation: #fca5a5;
+    --c-cat-moderation-border: rgba(248, 113, 113, 0.45);
+    --c-cat-notes-bg: rgba(251, 146, 60, 0.14);
+    --c-cat-notes-border: rgba(251, 146, 60, 0.45);
+    --c-cat-reputation-bg: rgba(251, 191, 36, 0.14);
+    --c-cat-reputation-border: rgba(251, 191, 36, 0.45);
+    --c-cat-roles-bg: rgba(192, 132, 252, 0.14);
+    --c-cat-roles-border: rgba(192, 132, 252, 0.45);
+    --c-cat-system: #cbd5e1;
+    --c-cat-system-bg: rgba(148, 163, 184, 0.14);
+    --c-cat-system-border: rgba(148, 163, 184, 0.45);
+    --c-cat-voice: #6ee7b7;
+    --c-cat-voice-bg: rgba(52, 211, 153, 0.14);
+    --c-cat-voice-border: rgba(52, 211, 153, 0.45);
+    --c-discord-embed: #2b2d31;
+    --c-discord-warn-alpha: rgba(251, 191, 36, .35);
+    --c-discord-warn-bg: #3b2f0d;
+    --c-discord-warn-text: #fde68a;
+    --c-glass-05: rgba(255, 255, 255, 0.05);
+    --c-glass-08: rgba(255,255,255,.08);
+    --c-glass-faint: rgba(255,255,255,.03);
+    --c-glass-faint17: rgba(255, 255, 255, 0.0175);
+    --c-gray100: #e2e8f0;
+    --c-gray300: #ccc;
+    --c-gray400: #94a3b8;
+    --c-gray500: #8a8f98;
+    --c-gray550: #6d7178;
+    --c-green: #86d9a4;
+    --c-green-bright: #4ade80;
+    --c-green-glow: rgba(34, 197, 94, 0.35);
+    --c-green-glow21: rgba(34,197,94,.21);
+    --c-green-pale: #86efac;
+    --c-ink: #0b0e14;
+    --c-orange-pale: #fdba74;
+    --c-red: #f87171;
+    --c-red-bg14: rgba(248, 113, 113, 0.14);
+    --c-red-border18: rgba(239, 68, 68, .18);
+    --c-red-border28: rgba(239,68,68,.28);
+    --c-red-deep: #dc2626;
+    --c-red-deep90: rgba(220,38,38,.9);
+    --c-red-soft: #f38ba8;
+    --c-red-soft-bg10: rgba(243, 139, 168, 0.1);
+    --c-scrim-06: rgba(10, 10, 14, 0.06);
+    --c-scrim-20: rgba(10, 10, 14, 0.2);
+    --c-scrim-30: rgba(0,0,0,.3);
+    --c-scrim-32: rgba(10, 10, 14, 0.32);
+    --c-scrim-38: rgba(10, 10, 14, 0.38);
+    --c-scrim-65: rgba(0, 0, 0, 0.65);
+    --c-scrim-68: rgba(12, 12, 16, 0.68);
+    --c-scrim-72: rgba(0, 0, 0, .72);
+    --c-scrim-74: rgba(0,0,0,.74);
+    --c-scrim-90: rgba(10,10,13,.9);
+    --c-scrim-96: rgba(10,10,13,.96);
+    --c-shadow-35: rgba(0, 0, 0, 0.35);
+    --c-shadow-35b: rgba(0,0,0,.35);
+    --c-shadow-40: rgba(0, 0, 0, 0.4);
+    --c-shadow-45: rgba(0,0,0,.45);
+    --c-shadow-50: rgba(0, 0, 0, 0.5);
+    --c-surface-solid: #1e1e2e;
+    --c-term-cmd: #7dd3fc;
+    --c-violet-pale: #d8b4fe;
+    --c-white: #fff;
+    --c-yellow-bright: #fbbf24;
+    --c-yellow-pale: #fcd34d;
+}

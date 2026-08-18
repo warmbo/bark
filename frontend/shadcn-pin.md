@@ -26,8 +26,10 @@ npm ci
 npm run build
 ```
 
-Edit only `frontend/src/theme.css`, `frontend/src/legacy.css`, or
-`frontend/src/v3.css`; `dashboard/static/css/main.css` is generated.
+Edit only `frontend/src/theme.css` (shadcn tokens), `frontend/src/tokens.css`
+(Bark component tokens), `frontend/src/components.css` (migrated component styles),
+or `frontend/src/v3.css` (REMAKER shadcn-utility overrides);
+`dashboard/static/css/main.css` is generated.
 
 ## Deliberate upgrade procedure
 

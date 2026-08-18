@@ -618,7 +618,7 @@ textarea.form-input { min-height: 96px; }
    REMAKER — flat shadcn surfaces.
    Strips the legacy glassmorphism (frosted backdrop, glows, gradients,
    heavy shadows) across the full shell and turns every surface into a
-   flat, bordered shadcn surface. Loads last, so it wins over legacy.css.
+   flat, bordered shadcn surface. Loads last, so it wins over components.css.
    ════════════════════════════════════════════════════════════════════ */
 
 /* Body: solid token background, no wallpaper-scaling over the shell.

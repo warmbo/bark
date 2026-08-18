@@ -195,8 +195,8 @@ supersedes the old v0.3 naming). Flag for Cody's confirmation before shipping.
 ## 9. Implementation record
 
 The implementation uses a behavior-preserving visual adapter rather than replacing
-all endpoint/DOM hooks at once. `frontend/src/legacy.css` is the frozen pre-v0.3
-layout contract; Tailwind v4 emits utilities/tokens and `frontend/src/v3.css`
+all endpoint/DOM hooks at once. `frontend/src/components.css` (formerly `legacy.css`)
+is the pre-v0.3 layout contract; Tailwind v4 emits utilities/tokens and `frontend/src/v3.css`
 overrides every shared component family with shadcn recipes. This is intentional:
 the 17 mature workspace scripts depend on stable IDs, `data-*` attributes and state
 classes. Rebuilding those hooks simultaneously would increase feature-loss risk
