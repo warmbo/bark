@@ -514,6 +514,20 @@ class LoggingModule(BarkModule):
         member = data.get("member")
         if not member:
             return
+        # Persist to the shared audit-log store so joins surface in the
+        # dashboard Recent Activity feed and the Logging module's own log view
+        # (item 7: Logging / Moderation / Recent Activity share one record).
+        try:
+            await self.ctx.log_audit(
+                member.guild.id,
+                "member_join",
+                str(member.id),
+                str(member),
+                target_id=str(member.id),
+                target_tag=str(member),
+            )
+        except Exception:
+            self._logger.exception("Error logging member join to audit store")
         ch = await self._get_channel(member.guild.id, "member_join")
         if not ch:
             return
@@ -535,6 +549,18 @@ class LoggingModule(BarkModule):
         member = data.get("member")
         if not member:
             return
+        # Same shared-store persistence as member_join.
+        try:
+            await self.ctx.log_audit(
+                member.guild.id,
+                "member_leave",
+                str(member.id),
+                str(member),
+                target_id=str(member.id),
+                target_tag=str(member),
+            )
+        except Exception:
+            self._logger.exception("Error logging member leave to audit store")
         ch = await self._get_channel(member.guild.id, "member_leave")
         if not ch:
             return
@@ -561,6 +587,28 @@ class LoggingModule(BarkModule):
         )
         if before_channel is None and after_channel is None:
             return
+        # Persist voice transitions to the shared audit-log store (item 7).
+        if before_channel is None and after_channel is not None:
+            action = "voice_join"
+            label = self._voice_channel_label(after_channel)
+        elif before_channel is not None and after_channel is None:
+            action = "voice_leave"
+            label = self._voice_channel_label(before_channel)
+        else:
+            action = "voice_move"
+            label = f"{self._voice_channel_label(before_channel)} → {self._voice_channel_label(after_channel)}"
+        try:
+            await self.ctx.log_audit(
+                member.guild.id,
+                action,
+                str(member.id),
+                str(member),
+                target_id=str(member.id),
+                target_tag=str(member),
+                details={"channel": label},
+            )
+        except Exception:
+            self._logger.exception("Error logging voice transition to audit store")
         ch = await self._get_channel(member.guild.id, "voice_state")
         if not ch:
             return

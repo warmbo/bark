@@ -125,3 +125,52 @@ async def test_logging_uses_original_channel_snapshot_when_voice_state_is_mutate
     )
 
     module._send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_member_and_voice_events_persist_to_shared_audit_store():
+    """Item 7: member join/leave and voice transitions must be written to the
+    shared audit-log store (not just posted as embeds) so they surface in the
+    dashboard Recent Activity feed and the Logging module's own log view."""
+    guild = SimpleNamespace(id=221627370375872512, member_count=100)
+    member = SimpleNamespace(
+        id=42,
+        guild=guild,
+        mention="<@42>",
+        display_avatar=SimpleNamespace(url="https://x/a.png"),
+        created_at=MagicMock(),
+        __str__=lambda self: "cody#0000",
+    )
+    channel = SimpleNamespace(id=100, name="hangout", mention="<#100>")
+
+    ctx = BarkContext(SimpleNamespace(), EventBus())
+    ctx.log_audit = AsyncMock()
+    ctx.normalize_voice_transition = AsyncMock(
+        side_effect=lambda _gid, before_ch, after_ch: (before_ch, after_ch)
+    )
+    module = LoggingModule(ctx)
+    module._get_channel = AsyncMock(return_value=SimpleNamespace())
+    module._send = AsyncMock()
+
+    # Member join
+    await module._on_member_join("discord_member_join", member=member)
+    # Member leave
+    await module._on_member_remove("discord_member_remove", member=member)
+    # Voice join
+    await module._on_voice_state(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=None),
+        after=SimpleNamespace(channel=channel),
+        before_channel=None,
+        after_channel=channel,
+    )
+
+    calls = [c for c in ctx.log_audit.await_args_list]
+    actions = [c.args[1] for c in calls]
+    assert "member_join" in actions
+    assert "member_leave" in actions
+    assert "voice_join" in actions
+    # Voice join carries the channel name in details for the log view.
+    voice_call = next(c for c in calls if c.args[1] == "voice_join")
+    assert voice_call.kwargs.get("details") == {"channel": "#hangout"}

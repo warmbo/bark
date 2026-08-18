@@ -18,7 +18,8 @@
 
   const ACTION_ICONS = {
     message_edit: '✏️', message_delete: '🗑️', link_posted: '🔗',
-    member_join: '👋', member_leave: '🚪', voice_state: '🎙️',
+    member_join: '📥', member_leave: '📤', voice_join: '🔊',
+    voice_leave: '🔇', voice_move: '🔄',
     file_upload: '📎', warn: '⚠️', kick: '👢', ban: '🔨', timeout: '⏱',
   };
 
@@ -43,8 +44,12 @@
           extra = `<small>${escHtml(detail.before)}</small>`;
         } else if (e.action === 'link_posted' && Array.isArray(detail.links)) {
           extra = `<small>${escHtml(detail.links.slice(0, 3).join(' · '))}</small>`;
-        } else if (e.action === 'voice_state' && detail.before_channel) {
-          extra = `<small>${escHtml(detail.before_channel)} → ${escHtml(detail.after_channel || 'left')}</small>`;
+        } else if (e.action === 'voice_join' && e.channel) {
+          extra = `<small>${escHtml(e.channel)}</small>`;
+        } else if (e.action === 'voice_leave' && e.channel) {
+          extra = `<small>${escHtml(e.channel)}</small>`;
+        } else if (e.action === 'voice_move' && e.channel) {
+          extra = `<small>${escHtml(e.channel)}</small>`;
         } else if (e.channel) {
           extra = `<small>${escHtml(e.channel)}</small>`;
         }

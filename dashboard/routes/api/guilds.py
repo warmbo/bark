@@ -614,6 +614,11 @@ async def _load_audit_items(session, guild_id: int, guild) -> list[dict]:
         "vc_kick": "Kicked from voice",
         "member_update": "Member updated",
         "member_role_update": "Role changed",
+        "member_join": "Member joined",
+        "member_leave": "Member left",
+        "voice_join": "Joined voice",
+        "voice_leave": "Left voice",
+        "voice_move": "Moved voice",
         "message_edit": "Message edited",
         "message_delete": "Message deleted",
         "link_posted": "Link posted",
@@ -626,6 +631,11 @@ async def _load_audit_items(session, guild_id: int, guild) -> list[dict]:
         "unban": "🔓",
         "member_update": "✏️",
         "member_role_update": "🎭",
+        "member_join": "📥",
+        "member_leave": "📤",
+        "voice_join": "🔊",
+        "voice_leave": "🔇",
+        "voice_move": "🔄",
         "message_edit": "✏️",
         "message_delete": "🗑️",
         "link_posted": "🔗",
@@ -633,6 +643,7 @@ async def _load_audit_items(session, guild_id: int, guild) -> list[dict]:
         "backup_created": "💾",
     }
     moderation_actions = {"warn", "timeout", "kick", "ban", "unban", "vc_kick", "automod_triggered"}
+    voice_actions = {"voice_join", "voice_leave", "voice_move"}
     result = await session.execute(
         select(AuditLog)
         .where(AuditLog.guild_id == str(guild_id))
@@ -668,6 +679,8 @@ async def _load_audit_items(session, guild_id: int, guild) -> list[dict]:
             if entry.action in moderation_actions
             else "messaging"
             if messaging
+            else "voice"
+            if entry.action in voice_actions
             else "system"
         )
         items.append(
