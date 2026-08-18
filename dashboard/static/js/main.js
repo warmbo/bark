@@ -289,6 +289,45 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
+// Copy arbitrary text to the clipboard, with a graceful fallback for browsers
+// without the async Clipboard API. Shows a toast on success/failure.
+async function copyText(text, label = 'Copied') {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            ta.remove();
+            if (!ok) throw new Error('copy command failed');
+        }
+        showToast(label, 'success');
+    } catch (err) {
+        showToast('Copy failed', 'error');
+    }
+}
+
+// Wire every [data-copy] button: copy the text in its data-copy attribute
+// (or the trimmed textContent of data-copy-target selector).
+function initCopyButtons() {
+    document.querySelectorAll('[data-copy]').forEach((btn) => {
+        if (btn.dataset.copyBound) return;
+        btn.dataset.copyBound = '1';
+        btn.addEventListener('click', () => {
+            const target = btn.dataset.copyTarget;
+            const text = target
+                ? (document.querySelector(target)?.textContent || '').trim()
+                : (btn.dataset.copy || '');
+            if (text) copyText(text, btn.dataset.copyLabel || 'Copied');
+        });
+    });
+}
+
 function showSkeleton(container, count = 3, type = 'card') {
     let html = '';
     for (let i = 0; i < count; i++) {
@@ -441,6 +480,9 @@ async function loadSection(url, container, renderFn, opts = {}) {
 document.addEventListener('DOMContentLoaded', () => {
     // ── Mobile navigation drawer (slide/gesture menu) ──
     initMobileDrawer();
+
+    // ── Copy-to-clipboard buttons (public/invite URL rows, etc.) ──
+    initCopyButtons();
 
     // ── Bot connection watchdog ───────────────────────
     // Poll health; show the offline banner while the bot process is up but

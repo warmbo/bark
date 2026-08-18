@@ -2322,6 +2322,42 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .info-value.mono { font-family: var(--font-mono); font-size: 13px; }
 .event-list { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; overflow: visible; }
 
+/* URL rows with a copy button: keep the link left-aligned and the copy
+   icon pinned to the right, overriding the default right-aligned info-value. */
+.url-copy-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-align: left;
+    max-width: 100%;
+    width: 100%;
+}
+.url-copy-row .code-sm { overflow: hidden; text-overflow: ellipsis; }
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    flex-shrink: 0;
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+}
+.btn-icon:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: var(--glass-tint);
+}
+.btn-icon:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 /* ── Event Tags ──────────────────────────────────────── */
 
 .event-tag {

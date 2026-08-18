@@ -93,7 +93,10 @@
                     </div>
                     <div class="info-row">
                         <span class="info-label">Public URL</span>
-                        <span class="info-value"><a href="{{ config.dashboard.public_url }}" rel="noopener"><code class="code-sm">{{ config.dashboard.public_url }}</code></a></span>
+                        <span class="info-value url-copy-row">
+                            <a href="{{ config.dashboard.public_url }}" rel="noopener"><code class="code-sm" id="public-url-value">{{ config.dashboard.public_url }}</code></a>
+                            <button type="button" class="btn btn-icon" data-copy-target="#public-url-value" data-copy-label="Public URL copied" aria-label="Copy public URL" title="Copy public URL">{{ icon("copy", 14) }}</button>
+                        </span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">OAuth Callback</span>
@@ -101,9 +104,10 @@
                     </div>
                     <div class="info-row">
                         <span class="info-label">Invite URL</span>
-                        <span class="info-value">
+                        <span class="info-value url-copy-row">
                             {% if config.dashboard.invite_url %}
-                            <code class="code-sm">{{ config.dashboard.invite_url }}</code>
+                            <code class="code-sm" id="invite-url-value">{{ config.dashboard.invite_url }}</code>
+                            <button type="button" class="btn btn-icon" data-copy-target="#invite-url-value" data-copy-label="Invite URL copied" aria-label="Copy invite URL" title="Copy invite URL">{{ icon("copy", 14) }}</button>
                             {% else %}
                             <span class="text-tertiary">Not configured</span>
                             {% endif %}

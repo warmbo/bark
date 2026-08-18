@@ -495,6 +495,20 @@ def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listen
     assert "bannerUpload.disabled = false" in banner_handler
 
 
+def test_public_and_invite_url_rows_have_copy_buttons():
+    html = source(TEMPLATES / "pages" / "settings.html")
+    # Public URL row exposes a copy button targeting its value.
+    assert 'id="public-url-value"' in html
+    assert 'data-copy-target="#public-url-value"' in html
+    # Invite URL row exposes a copy button targeting its value.
+    assert 'id="invite-url-value"' in html
+    assert 'data-copy-target="#invite-url-value"' in html
+    # The copy handler is wired globally via main.js initCopyButtons.
+    main_js = source(JS / "main.js")
+    assert "function initCopyButtons" in main_js
+    assert "function copyText" in main_js
+
+
 def test_member_action_payload_matches_backend_minutes_and_supported_ban_fields():
     html = source(TEMPLATES / "pages" / "member_detail.html")
     assert "const durationMultipliers = {minutes: 1, hours: 60}" in html
