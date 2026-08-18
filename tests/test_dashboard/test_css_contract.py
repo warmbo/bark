@@ -37,8 +37,11 @@ def test_css_references_only_defined_custom_properties():
 def test_css_preserves_sharp_16px_design_contract():
     css = css_source()
     assert "--font-size-body: 16px;" in css
-    for token in ("sm", "md", "lg", "xl", "full"):
+    # Sharp-corner contract: control radii are 0px; --radius-full is the pill/avatar
+    # radius (round avatars, status chips, scrollbar thumbs) and stays 999px.
+    for token in ("sm", "md", "lg", "xl"):
         assert f"--radius-{token}: 0px;" in css
+    assert "--radius-full: 999px" in css
 
 
 def test_css_keyboard_and_reduced_motion_contracts():

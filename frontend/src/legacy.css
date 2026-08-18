@@ -5,56 +5,56 @@
  */
 
 :root {
-    /* ── Base Colors ── */
-    --bg-base: #14141a;
-    --bg-elevated: #1b1b23;
-    --bg-card: rgba(35, 35, 45, 0.62);
-    --bg-card-hover: rgba(44, 44, 56, 0.68);
-    --bg-card-solid: #23232d;
-    --bg-input: rgba(40, 40, 52, 0.70);
-    --bg-sidebar: rgba(18, 18, 24, 0.68);
-    --bg-surface: rgba(28, 28, 36, 0.66);
-    --bg-overlay: rgba(0, 0, 0, 0.6);
+    /* ── Base Colors ── (aliased onto shadcn semantic tokens — single source of truth) */
+    --bg-base: var(--background);
+    --bg-elevated: var(--card);
+    --bg-card: var(--card);
+    --bg-card-hover: var(--accent);
+    --bg-card-solid: var(--card);
+    --bg-input: var(--input);
+    --bg-sidebar: var(--sidebar);
+    --bg-surface: var(--secondary);
+    --bg-overlay: color-mix(in oklab, var(--background) 40%, transparent);
 
     /* ── Frosted Glass ── */
     --glass-tint: rgba(255, 255, 255, 0.04);
     --glass-tint-strong: rgba(255, 255, 255, 0.07);
-    --glass-border: rgba(255, 255, 255, 0.09);
-    --glass-border-hover: rgba(255, 255, 255, 0.14);
-    --glass-accent-border: rgba(59, 130, 246, 0.22);
+    --glass-border: var(--border);
+    --glass-border-hover: color-mix(in oklab, var(--foreground) 14%, transparent);
+    --glass-accent-border: color-mix(in oklab, var(--primary) 22%, transparent);
     --glass-blur: blur(16px);
     --glass-blur-light: blur(8px);
     --glass-blur-heavy: blur(24px);
 
-    /* ── Borders ── */
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-card: rgba(255, 255, 255, 0.10);
-    --border-input: rgba(255, 255, 255, 0.15);
-    --border-hover: rgba(255, 255, 255, 0.2);
+    /* ── Borders ── (shadcn tokens) */
+    --border-subtle: var(--border);
+    --border-card: var(--border);
+    --border-input: var(--input);
+    --border-hover: var(--ring);
 
-    /* ── Accent (single blue) ── */
-    --accent: #3b82f6;
-    --accent-hover: #60a5fa;
-    --accent-muted: rgba(59, 130, 246, 0.1);
-    --accent-border: rgba(59, 130, 246, 0.21);
+    /* ── Accent (single steel-blue, via shadcn primary) ── */
+    --accent: var(--primary);
+    --accent-hover: var(--ring);
+    --accent-muted: color-mix(in oklab, var(--primary) 10%, transparent);
+    --accent-border: color-mix(in oklab, var(--primary) 21%, transparent);
 
-    /* ── Text ── */
-    --text-primary: #ffffff;
-    --text-secondary: #d6d6dd;
-    --text-tertiary: #a8a8b3;
-    --text-inverse: #0f0f11;
+    /* ── Text ── (shadcn tokens) */
+    --text-primary: var(--foreground);
+    --text-secondary: var(--muted-foreground);
+    --text-tertiary: var(--muted-foreground);
+    --text-inverse: var(--background);
 
-    /* ── Semantic ── */
+    /* ── Semantic (distinct status hues retained — no shadcn equivalents) ── */
     --green: #22c55e;
     --green-muted: rgba(34, 197, 94, 0.1);
-    --red: #ef4444;
-    --red-muted: rgba(239, 68, 68, 0.1);
+    --red: var(--destructive);
+    --red-muted: color-mix(in oklab, var(--destructive) 10%, transparent);
     --yellow: #eab308;
     --yellow-muted: rgba(234, 179, 8, 0.1);
     --orange: #f97316;
     --orange-muted: rgba(249, 115, 22, 0.1);
-    --blue-semantic: var(--accent);
-    --blue-semantic-muted: var(--accent-muted);
+    --blue-semantic: var(--primary);
+    --blue-semantic-muted: color-mix(in oklab, var(--primary) 10%, transparent);
     --pink: #d946ef;
     --pink-muted: rgba(217, 70, 239, 0.1);
 
@@ -63,12 +63,8 @@
     --plugin-hover: #7c3aed;
     --plugin-muted: rgba(139, 92, 246, 0.14);
 
-    /* ── Radius (sharp corners) ── */
-    --radius-sm: 0px;
-    --radius-md: 0px;
-    --radius-lg: 0px;
-    --radius-xl: 0px;
-    --radius-full: 0px;
+    /* ── Radius & control sizing (radius-* inherited from shadcn theme.css) ── */
+    --radius-full: 999px;  /* pills, avatars, scrollbar thumbs — not a control corner */
     --control-height-sm: 34px;
     --control-height: 44px;
     --font-size-caption: 14px;
@@ -78,9 +74,7 @@
     --z-overlay: 1800;
     --z-dialog: 1900;
 
-    /* ── Typography ── */
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    /* ── Typography (font-sans/mono come from theme.css) ── */
     --bg-avatar: none;
 
     /* ── Discord message preview (rendered embeds/messages) ── */
