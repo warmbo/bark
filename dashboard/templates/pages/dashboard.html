@@ -109,7 +109,7 @@
         {% set ready_count = connected | selectattr('ready_to_manage', 'equalto', true) | list | length %}
         <section class="server-group" data-server-group>
             <header class="server-group-header">
-                <div><h2>Connected to Bark {{ role_pill('server_user') }}</h2>
+                <div><h2>Connected to Bark</h2>
                     {% if ready_count == 0 %}<p>View-only access</p>
                     {% elif ready_count == connected | length %}<p>Ready to manage</p>
                     {% else %}<p>{{ ready_count }} ready to manage · {{ connected | length - ready_count }} view only</p>{% endif %}

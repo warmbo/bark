@@ -39,15 +39,15 @@
    see/use the surrounding card, section, or page. Roles:
    instance_owner · server_owner · server_admin · server_mod · server_user. #}
 {% macro role_pill(role='server_user') -%}
-{% set _meta = {
-    'instance_owner': ('key-round', 'Instance owner'),
-    'server_owner': ('crown', 'Server owner'),
-    'server_admin': ('shield', 'Server admin'),
-    'server_mod': ('shield-half', 'Server mod'),
-    'server_user': ('users', 'Members'),
+{% set _labels = {
+    'instance_owner': 'Instance owner',
+    'server_owner': 'Server owner',
+    'server_admin': 'Server admin',
+    'server_mod': 'Server mod',
+    'server_user': 'Members',
 } %}
-{% set _entry = _meta.get(role, ('users', role | replace('_', ' ') | title)) %}
-<span class="role-pill role-{{ role }}" title="Viewable by {{ _entry[1] }}"><span class="role-pill-icon" aria-hidden="true">{{ icon(_entry[0], 12) }}</span><span>{{ _entry[1] }}</span></span>
+{% set _label = _labels.get(role, role | replace('_', ' ') | title) %}
+<span class="role-pill role-{{ role }}" title="Viewable by {{ _label }}"><span class="role-dot" aria-hidden="true"></span><span>{{ _label }}</span></span>
 {%- endmacro %}
 
 {% macro input_field(name, label='', value='', type='text', id='', placeholder='', description='', classes='', required=false, autocomplete='') -%}
