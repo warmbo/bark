@@ -80,8 +80,8 @@
       const channels = (d.top_channels_today || []).map(c => ({ label: '#' + c.name, value: c.count }));
       const channels7d = (d.top_channels_7d || []).map(c => ({ label: '#' + c.name, value: c.count }));
       const channels30d = (d.top_channels_30d || []).map(c => ({ label: '#' + c.name, value: c.count }));
-      const emojisAll = (d.top_emojis_all_time || []).map(e => ({ label: e.name, value: e.count }));
-      const emojis = (d.top_emojis_today || []).map(e => ({ label: e.name, value: e.count }));
+      const emojisAll = (d.top_emojis_all_time || []).map(e => ({ label: e.name, value: e.count, emoji: e.emoji_url }));
+      const emojis = (d.top_emojis_today || []).map(e => ({ label: e.name, value: e.count, emoji: e.emoji_url }));
       // New engagement/activity series (data that accumulates over time).
       const newMembers = (d.new_members_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.count }));
       const reputation = (d.reputation_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.count }));

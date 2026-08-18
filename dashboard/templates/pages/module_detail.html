@@ -15,6 +15,7 @@
       <p class="page-subtitle">{{ module_data.description }}</p>
     </div>
     <div class="page-actions">
+      {{ role_pill('server_mod') }}
       <span id="module-status-badge">{{ status_badge('Enabled' if module_data.enabled else 'Disabled', 'success' if module_data.enabled else 'neutral') }}</span>
       <label class="module-toggle-control" for="module-enabled">
         <span class="sr-only">Enable {{ module_name | replace('_', ' ') | title }}</span>

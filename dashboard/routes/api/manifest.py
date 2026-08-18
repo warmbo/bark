@@ -72,30 +72,35 @@ CORE_PAGES = [
         "label": "Dashboard",
         "icon": "layout-dashboard",
         "category": "",
+        "role": "server_user",
     },
     {
         "route": "/guild/{guild_id}/members",
         "label": "Members",
         "icon": "users",
         "category": "community",
+        "role": "server_mod",
     },
     {
         "route": "/guild/{guild_id}/stats",
         "label": "Statistics",
         "icon": "bar-chart-3",
         "category": "community",
+        "role": "server_user",
     },
     {
         "route": "/guild/{guild_id}/modules",
         "label": "Modules",
         "icon": "puzzle",
         "category": "settings",
+        "role": "server_admin",
     },
     {
         "route": "/guild/{guild_id}/settings",
         "label": "Settings",
         "icon": "settings",
         "category": "settings",
+        "role": "server_admin",
     },
 ]
 
@@ -285,6 +290,7 @@ def _module_pages(
                 "module": name,
                 "is_plugin": is_plugin,
                 "enabled": enabled_by_module.get(name, True),
+                "role": "server_mod",
             }
         )
     # Plugins without custom dashboard pages still need a nav entry so they
@@ -299,6 +305,7 @@ def _module_pages(
                 "module": name,
                 "is_plugin": True,
                 "enabled": enabled_by_module.get(name, True),
+                "role": "server_mod",
             }
         )
     return rendered

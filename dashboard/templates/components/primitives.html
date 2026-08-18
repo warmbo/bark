@@ -21,19 +21,34 @@
 </article>
 {%- endmacro %}
 
-{% macro settings_section(title, description='', icon_name='', id='') -%}
-<h2 class="settings-section-heading"{% if id %} id="{{ id }}"{% endif %}>{% if icon_name %}{{ icon(icon_name, 18) }} {% endif %}{{ title }}</h2>
+{% macro settings_section(title, description='', icon_name='', id='', role='') -%}
+<h2 class="settings-section-heading"{% if id %} id="{{ id }}"{% endif %}>{% if icon_name %}{{ icon(icon_name, 18) }} {% endif %}{{ title }}{% if role %} {{ role_pill(role) }}{% endif %}</h2>
 {% if description %}<p class="settings-section-desc">{{ description }}</p>{% endif %}
 {%- endmacro %}
 
-{% macro settings_card(title='', description='', icon_name='', classes='', id='', attrs='', header_actions='') -%}
+{% macro settings_card(title='', description='', icon_name='', classes='', id='', attrs='', header_actions='', role='') -%}
 <article{% if id %} id="{{ id }}"{% endif %} class="content-card{% if classes %} {{ classes }}{% endif %}"{% if attrs %} {{ attrs }}{% endif %}>
-  {% if title or description or header_actions %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{% if icon_name %}{{ icon(icon_name, 16) }} {% endif %}{{ title }}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div>{% if header_actions %}<div class="card-header-actions">{{ header_actions }}</div>{% endif %}</header>{% endif %}
+  {% if title or description or header_actions or role %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{% if icon_name %}{{ icon(icon_name, 16) }} {% endif %}{{ title }}{% if role %} {{ role_pill(role) }}{% endif %}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div>{% if header_actions %}<div class="card-header-actions">{{ header_actions }}</div>{% endif %}</header>{% endif %}
   {% if caller is defined %}{{ caller() }}{% endif %}
 </article>
 {%- endmacro %}
 
 {% macro badge(label, variant='neutral', classes='') -%}<span class="status-badge status-{{ variant }}{% if classes %} {{ classes }}{% endif %}"><span class="status-indicator" aria-hidden="true"></span>{{ label }}</span>{%- endmacro %}
+
+{# role_pill(role) — small pill identifying the minimum dashboard role that can
+   see/use the surrounding card, section, or page. Roles:
+   instance_owner · server_owner · server_admin · server_mod · server_user. #}
+{% macro role_pill(role='server_user') -%}
+{% set _meta = {
+    'instance_owner': ('key-round', 'Instance owner'),
+    'server_owner': ('crown', 'Server owner'),
+    'server_admin': ('shield', 'Server admin'),
+    'server_mod': ('shield-half', 'Server mod'),
+    'server_user': ('users', 'Members'),
+} %}
+{% set _entry = _meta.get(role, ('users', role | replace('_', ' ') | title)) %}
+<span class="role-pill role-{{ role }}" title="Viewable by {{ _entry[1] }}"><span class="role-pill-icon" aria-hidden="true">{{ icon(_entry[0], 12) }}</span><span>{{ _entry[1] }}</span></span>
+{%- endmacro %}
 
 {% macro input_field(name, label='', value='', type='text', id='', placeholder='', description='', classes='', required=false, autocomplete='') -%}
 {% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<input class="form-input{% if classes %} {{ classes }}{% endif %}" id="{{ control_id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if required %} required{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
@@ -51,14 +66,14 @@
 
 {% macro avatar(src='', alt='', fallback='B', classes='') -%}<span class="avatar{% if classes %} {{ classes }}{% endif %}">{% if src %}<img src="{{ src }}" alt="{{ alt }}" data-fallback-src="/static/img/bark-avatar.png">{% else %}<span aria-hidden="true">{{ fallback }}</span><span class="sr-only">{{ alt }}</span>{% endif %}</span>{%- endmacro %}
 
-{% macro page_header(title, description='', icon_name='', eyebrow='') -%}
+{% macro page_header(title, description='', icon_name='', eyebrow='', role='') -%}
 <header class="page-header page-header-standard">
   <div>
     {% if eyebrow %}<p class="page-eyebrow">{{ eyebrow }}</p>{% endif %}
     <h1 class="page-title">{% if icon_name %}{{ icon(icon_name, 24) }}{% endif %} {{ title }}</h1>
     {% if description %}<p class="page-subtitle">{{ description }}</p>{% endif %}
   </div>
-  {% if caller is defined %}<div class="page-actions">{{ caller() }}</div>{% endif %}
+  {% if role or caller is defined %}<div class="page-actions">{% if role %}{{ role_pill(role) }}{% endif %}{% if caller is defined %}{{ caller() }}{% endif %}</div>{% endif %}
 </header>
 {%- endmacro %}
 

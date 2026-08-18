@@ -756,19 +756,19 @@ async function loadSidebarManifest(container) {
         container.innerHTML = `
             <a href="/guild/${guildId}" class="nav-item ${activePage === 'overview' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('layout-dashboard', 16)}</span>
-                <span>Dashboard</span>
+                <span class="nav-item-main"><span>Dashboard</span>${rolePillHtml('server_user')}</span>
             </a>
             <a href="/guild/${guildId}/members" class="nav-item ${activePage === 'members' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('users', 16)}</span>
-                <span>Members</span>
+                <span class="nav-item-main"><span>Members</span>${rolePillHtml('server_mod')}</span>
             </a>
             <a href="/guild/${guildId}/modules" class="nav-item ${activePage === 'modules' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('puzzle', 16)}</span>
-                <span>Modules</span>
+                <span class="nav-item-main"><span>Modules</span>${rolePillHtml('server_admin')}</span>
             </a>
             <a href="/guild/${guildId}/settings" class="nav-item ${activePage === 'settings' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('settings', 16)}</span>
-                <span>Settings</span>
+                <span class="nav-item-main"><span>Settings</span>${rolePillHtml('server_admin')}</span>
             </a>`;
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
@@ -833,8 +833,21 @@ function renderNavItem(page, activePage) {
 
     return `<a href="${pageRoute}" class="${itemClass} ${isActive ? 'active' : ''}"${isActive ? ' aria-current="page"' : ''}${dataModule}>
         <span class="nav-icon">${getIconSvg(page.icon || 'puzzle', iconSize)}</span>
-        <span class="${isModule ? 'nav-module-name' : ''}">${escHtml(page.label)}</span>
+        <span class="nav-item-main"><span class="${isModule ? 'nav-module-name' : ''}">${escHtml(page.label)}</span>${rolePillHtml(page.role || 'server_user')}</span>
     </a>`;
+}
+
+// Role metadata + pill for nav items (mirrors role_pill in primitives.html).
+const ROLE_META = {
+    instance_owner: {label: 'Instance owner', icon: 'key-round'},
+    server_owner: {label: 'Server owner', icon: 'crown'},
+    server_admin: {label: 'Server admin', icon: 'shield'},
+    server_mod: {label: 'Server mod', icon: 'shield-half'},
+    server_user: {label: 'Members', icon: 'users'},
+};
+function rolePillHtml(role) {
+    const m = ROLE_META[role] || ROLE_META.server_user;
+    return `<span class="nav-role role-pill role-${role}" title="Viewable by ${m.label}"><span class="role-pill-icon" aria-hidden="true">${getIconSvg(m.icon, 10)}</span><span>${m.label}</span></span>`;
 }
 
 function getActivePageName() {

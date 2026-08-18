@@ -325,6 +325,13 @@ def seed_growth():
                     stat_date=date.today() - timedelta(days=13 - d),
                     emoji_name="🔥", count=5,
                 ))
+                # Custom guild emoji (stored as <:name:id>) so the dashboard can
+                # be visually verified rendering the actual emoji image.
+                s.add(DailyEmojiStat(
+                    guild_id=str(bot._guild.id),
+                    stat_date=date.today() - timedelta(days=13 - d),
+                    emoji_name="<:bark:123456789012345678>", count=25,
+                ))
             # Grant user 42 manage access so the guild gate lets the browser in.
             from database.models.permissions import DashboardUser
             from services.dashboard_access import replace_user_guild_access

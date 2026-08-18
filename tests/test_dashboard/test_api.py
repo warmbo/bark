@@ -729,6 +729,27 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     assert sdata["top_emojis_all_time"][0] == {"name": "laugh", "count": 44}
 
 
+def test_resolve_custom_emoji_to_cdn_url():
+    """Custom server emoji (stored as ``<:name:id>`` / ``<a:name:id>``) resolve
+    to their Discord CDN image URL so the dashboard renders the emoji instead of
+    the raw id string. Unicode glyphs / plain names stay as-is (no URL)."""
+    from dashboard.routes.api.guilds import _resolve_emoji
+
+    # Static custom emoji.
+    assert _resolve_emoji("<:pepega:123456789012345678>") == (
+        "pepega",
+        "https://cdn.discordapp.com/emojis/123456789012345678.png",
+    )
+    # Animated custom emoji (a: prefix) → .gif.
+    assert _resolve_emoji("<a:pepegaSpin:987654321098765432>") == (
+        "pepegaSpin",
+        "https://cdn.discordapp.com/emojis/987654321098765432.gif",
+    )
+    # Unicode glyph and plain names carry no CDN URL (rendered as text).
+    assert _resolve_emoji("😀") == ("😀", None)
+    assert _resolve_emoji("laugh") == ("laugh", None)
+
+
 @pytest.mark.asyncio
 async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeypatch):
     """The Statistics page reads entirely from the persisted daily stats tables
@@ -767,6 +788,8 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today() - timedelta(days=1), emoji_name="wow", count=1))
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="laugh", count=4))
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="wow", count=1))
+        # Custom guild emoji stored as <:name:id> — resolves to its CDN image URL.
+        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="<:game:123456789012345678>", count=3))
         # Reputation / voice / game data backing the newer charts.
         from datetime import datetime, timezone
 
@@ -831,6 +854,13 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     assert data["top_channels_30d"][0]["name"] == "general"
     assert data["top_emojis_today"][0] == {"name": "laugh", "count": 4}
     assert data["top_emojis_all_time"][0] == {"name": "laugh", "count": 8}
+    # Custom server emoji renders as its name + a CDN image URL (not the raw
+    # <:name:id> string), so the dashboard can show the actual emoji.
+    assert data["top_emojis_today"][1] == {
+        "name": "game",
+        "count": 3,
+        "emoji_url": "https://cdn.discordapp.com/emojis/123456789012345678.png",
+    }
     # Newer charts backed by accumulating data.
     assert len(data["reputation_series"]) == 30
     assert sum(p["count"] for p in data["reputation_series"]) == 2

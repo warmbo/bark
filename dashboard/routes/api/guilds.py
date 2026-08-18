@@ -3,6 +3,7 @@ Guilds API routes.
 """
 
 from datetime import datetime, timezone
+import re
 
 import discord
 from fastapi import APIRouter, Request
@@ -33,6 +34,26 @@ def _utc_iso(value: datetime | None) -> str | None:
     else:
         value = value.astimezone(timezone.utc)
     return value.isoformat()
+
+
+_CUSTOM_EMOJI_RE = re.compile(r"^<(a?):([^:]+):(\d+)>$")
+
+
+def _resolve_emoji(key: str) -> tuple[str, str | None]:
+    """Turn a stored emoji key into (display label, CDN image URL).
+
+    Custom emoji are persisted as ``<:name:id>`` (static) or ``<a:name:id>``
+    (animated) from ``str(PartialEmoji)``. Resolve those to the emoji's name
+    plus a Discord CDN image URL so the dashboard can render the actual emoji
+    instead of showing the raw ``<:name:id>`` string. Unicode emoji are stored
+    as their glyph character and return no URL (the glyph renders directly).
+    """
+    match = _CUSTOM_EMOJI_RE.match(key)
+    if match:
+        animated, name, emoji_id = match.group(1) == "a", match.group(2), match.group(3)
+        ext = "gif" if animated else "png"
+        return name, f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}"
+    return key, None
 
 
 @router.get("/guilds")
@@ -324,11 +345,14 @@ async def get_guild_stats(request: Request, guild_id: int):
     online, in_voice = _online_and_voice_counts(guild)
 
     def _top(d: dict) -> list[dict]:
-        return sorted(
-            ({"name": k, "count": v} for k, v in d.items()),
-            key=lambda x: x["count"],
-            reverse=True,
-        )[:8]
+        rows = []
+        for k, v in d.items():
+            label, url = _resolve_emoji(k)
+            row = {"name": label, "count": v}
+            if url:
+                row["emoji_url"] = url
+            rows.append(row)
+        return sorted(rows, key=lambda x: x["count"], reverse=True)[:8]
 
     channels_today = sorted(db_ch_today.values(), key=lambda c: c["count"], reverse=True)[:8]
     emojis_today = _top(today_emoji_rows)

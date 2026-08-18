@@ -30,7 +30,7 @@
                         {{ icon("shield", 30) }}
                     </span>
                     <div class="server-profile-titles">
-                        <h1 class="page-title server-profile-name">{{ guild.name }}</h1>
+                        <h1 class="page-title server-profile-name">{{ guild.name }} {{ role_pill('server_user') }}</h1>
                         {% if guild.description %}<p class="server-profile-desc">{{ guild.description }}</p>{% endif %}
                     </div>
                 </div>
@@ -77,7 +77,7 @@
     <!-- Scheduled Discord Events -->
     <div class="content-card events-card">
         <div class="card-header">
-            <h2 class="card-title">{{ icon("calendar-days", 16) }} Upcoming Events</h2>
+            <h2 class="card-title">{{ icon("calendar-days", 16) }} Upcoming Events {{ role_pill('server_user') }}</h2>
             <span class="text-tertiary" id="events-count">Discord events</span>
         </div>
         <div class="event-list" id="events-feed">
@@ -261,7 +261,7 @@ function renderWidgets(cards) {
                 '<li class="widget-item"><span class="widget-item-label">' + (it.icon && typeof getIconSvg === 'function' ? getIconSvg(it.icon, 13) + ' ' : '') + escHtml(it.label) + '</span><span class="widget-item-value">' + escHtml(it.value ?? '') + '</span></li>'
             ).join('') + '</ul>';
         }
-        return '<div class="content-card dashboard-widget" data-widget="' + escHtml(card.id) + '"><div class="card-header"><div><h2 class="card-title">' + icon + ' ' + escHtml(card.title) + '</h2>' + desc + '</div></div>' + body + (card.link ? '<div class="widget-footer"><a href="' + escHtml(card.link) + '">View in module</a></div>' : '') + '</div>';
+        return '<div class="content-card dashboard-widget" data-widget="' + escHtml(card.id) + '"><div class="card-header"><div><h2 class="card-title">' + icon + ' ' + escHtml(card.title) + (typeof rolePillHtml === 'function' ? ' ' + rolePillHtml('server_user') : '') + '</h2>' + desc + '</div></div>' + body + (card.link ? '<div class="widget-footer"><a href="' + escHtml(card.link) + '">View in module</a></div>' : '') + '</div>';
     }).join('');
     if (typeof refreshIcons === 'function') refreshIcons();
 }

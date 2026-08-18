@@ -6,16 +6,16 @@
 {% set active_page = "settings" %}
 
 <div class="page-container">
-    {{ page_header("Settings", "Server and instance configuration for " ~ guild.name, icon_name="settings") }}
+    {{ page_header("Settings", "Server and instance configuration for " ~ guild.name, icon_name="settings", role="server_admin") }}
 
     <div class="settings-grid">
         <!-- Main column: Server + Instance settings -->
         <div class="settings-main">
 
-            {{ settings_section("Server", "Per-server configuration — applies only to " ~ guild.name, icon_name="server", id="server-settings") }}
+            {{ settings_section("Server", "Per-server configuration — applies only to " ~ guild.name, icon_name="server", id="server-settings", role="server_admin") }}
 
             <!-- Custom Link (URL slug) -->
-            {% call settings_card("Custom Link", "A short, human-friendly URL to this server instead of its numeric ID.", icon_name="link") %}
+            {% call settings_card("Custom Link", "A short, human-friendly URL to this server instead of its numeric ID.", icon_name="link", role="server_admin") %}
                 <div class="settings-form">
                     <div class="form-group">
                         <label class="form-label" for="slug-input">Server link</label>
@@ -34,7 +34,7 @@
             {% endcall %}
 
             <!-- Dashboard Access -->
-            {% call settings_card("Dashboard Access", "Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.", icon_name="shield") %}
+            {% call settings_card("Dashboard Access", "Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.", icon_name="shield", role="server_owner") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Moderator roles</span>
@@ -67,10 +67,10 @@
                 </div>
             {% endcall %}
 
-            {{ settings_section("Instance", "Applies to the whole Bark instance across every server.", icon_name="cpu", id="instance-settings") }}
+            {{ settings_section("Instance", "Applies to the whole Bark instance across every server.", icon_name="cpu", id="instance-settings", role="instance_owner") }}
 
             <!-- Dashboard Configuration -->
-            {% call settings_card("Dashboard Configuration", "Connection and identity information.", icon_name="radio") %}
+            {% call settings_card("Dashboard Configuration", "Connection and identity information.", icon_name="radio", role="instance_owner") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Server ID</span>
@@ -124,7 +124,7 @@
 
             <!-- Backups (database snapshot + module settings export/import) -->
             {% if is_owner %}
-            {% call settings_card("Backups", "Snapshot the full database, or export and restore every module's settings as one JSON file.", icon_name="database") %}
+            {% call settings_card("Backups", "Snapshot the full database, or export and restore every module's settings as one JSON file.", icon_name="database", role="instance_owner") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Database snapshots</span>
@@ -160,7 +160,7 @@
         <div class="settings-side">
 
             <!-- Config Health -->
-            {% call settings_card("Config Health", "Configuration issues across every module in this server.", icon_name="activity") %}
+            {% call settings_card("Config Health", "Configuration issues across every module in this server.", icon_name="activity", role="server_admin") %}
                 <div class="config-health" id="settings-health">
                     <span class="config-health-label">{{ icon("activity", 14) }} Config health</span>
                     <span class="config-health-status" id="settings-health-status">Loading...</span>
@@ -170,7 +170,7 @@
 
             <!-- Updates (from GitHub, by release version) -->
             {% if is_owner %}
-            {% call settings_card("Updates", "Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.", icon_name="refresh-cw") %}
+            {% call settings_card("Updates", "Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.", icon_name="refresh-cw", role="instance_owner") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Channel</span>
@@ -206,7 +206,7 @@
             {% endcall %}
 
             <!-- Diagnostics (download a redacted report for support) -->
-            {% call settings_card("Diagnostics", "Download a redacted report of this instance's version, environment, git/remote state and recent logs. Paste it back to us when diagnosing an issue.", icon_name="file-text", id="diagnostics-card") %}
+            {% call settings_card("Diagnostics", "Download a redacted report of this instance's version, environment, git/remote state and recent logs. Paste it back to us when diagnosing an issue.", icon_name="file-text", id="diagnostics-card", role="instance_owner") %}
                 <div class="form-actions form-actions-static">
                     <button type="button" class="btn" id="diagnostics-download-btn" aria-label="Download diagnostic report">{{ icon("download", 14) }} Download diagnostic report</button>
                 </div>
@@ -218,7 +218,7 @@
     </div>
 
     {% if is_owner %}
-    {% call settings_card("Hosted Instance Access", "Create one-time share links for people allowed to add and manage Bark in servers they administer.", icon_name="share-2", id="instance-invites") %}
+    {% call settings_card("Hosted Instance Access", "Create one-time share links for people allowed to add and manage Bark in servers they administer.", icon_name="share-2", id="instance-invites", role="instance_owner") %}
         <form class="settings-form" id="instance-invite-form">
             <div class="form-grid form-grid-2">
                 <div class="form-group">

@@ -102,11 +102,14 @@
     const max = Math.max.apply(null, rows.map(r => r.value).concat([1]));
     const rowH = 26;
     const hasAvatars = rows.some(r => r.avatar);
+    const hasEmoji = rows.some(r => r.emoji);
     // Reserve enough room for real Discord channel/emoji names and for the
     // value after a full-width bar. The former fixed 42px gutter clipped both.
     const longestLabel = rows.reduce((n, row) => Math.max(n, String(row.label || '').length), 0);
+    const gutterBase = hasAvatars ? 76 : (hasEmoji ? 66 : 64);
+    const gutterExtra = hasAvatars ? 12 : (hasEmoji ? 22 : 0);
     const barPad = {
-      left: Math.min(160, Math.max(hasAvatars ? 76 : 64, longestLabel * 6.5 + 12 + (hasAvatars ? 12 : 0))),
+      left: Math.min(160, Math.max(gutterBase, longestLabel * 6.5 + 12 + gutterExtra)),
       right: 36,
     };
     const iw = W - barPad.left - barPad.right;
@@ -121,16 +124,24 @@
     rows.forEach((r, i) => {
       const y = i * rowH;
       const bw = (r.value / max) * iw;
-      // Avatar (circular clip) when present; the label then shifts right.
-      if (r.avatar) {
+      let textX = barPad.left - 7;
+      if (r.emoji) {
+        // Custom guild emoji: render the actual emoji image in the label gutter
+        // (square, from the Discord CDN) instead of showing the raw id string.
+        const emX = barPad.left - 20;
+        const emY = y + (rowH - 16) / 2;
+        html += '<image x="' + emX + '" y="' + emY + '" width="16" height="16" preserveAspectRatio="xMidYMid meet" href="' + esc(r.emoji) + '"></image>';
+        textX = barPad.left - 1;
+      } else if (r.avatar) {
+        // Avatar (circular clip) when present; the label then shifts right.
         const clipId = 'clip-' + i + '-' + (r.id || i);
         const avX = barPad.left - 17;
         const avY = y + rowH / 2;
         html += '<circle cx="' + avX + '" cy="' + avY + '" r="7.5" fill="var(--bg-card-solid)" stroke="' + baseColor + '" stroke-width="1"></circle>';
         html += '<defs><clipPath id="' + esc(clipId) + '"><circle cx="' + avX + '" cy="' + avY + '" r="6.6"></circle></clipPath></defs>';
         html += '<image x="' + (avX - 6.6) + '" y="' + (avY - 6.6) + '" width="13.2" height="13.2" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + esc(clipId) + ')" href="' + esc(r.avatar) + '"></image>';
+        textX = barPad.left - 11;
       }
-      const textX = r.avatar ? barPad.left - 11 : barPad.left - 7;
       html += '<text x="' + textX + '" y="' + (y + rowH / 2 + 3.5) + '" text-anchor="end" font-size="12" font-weight="500" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
       html += '<rect x="' + barPad.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3.5" fill="url(#' + gradId + ')" opacity="0.92"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
       html += '<text x="' + (barPad.left + bw + 7) + '" y="' + (y + rowH / 2 + 3.5) + '" font-size="12" font-weight="700" fill="var(--text-primary)">' + esc(r.value) + '</text>';
