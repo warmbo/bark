@@ -538,25 +538,6 @@ async def get_guild_dashboard(request: Request, guild_id: int):
     return api_success({"viewer": viewer, "guild": profile, "cards": cards, "modules": modules})
 
 
-@router.get("/guilds/{guild_id}/events")
-async def get_guild_server_events(request: Request, guild_id: int):
-    """Return recent Discord server events (member joins/leaves) for the dashboard.
-
-    Viewable by any member of a connected server (safe read). The feed is a
-    bounded in-memory ring tracked by the bot since startup.
-    """
-    bot = request.state.bot
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        return api_not_found("Guild")
-    events = (
-        bot.recent_server_events(guild_id, limit=30)
-        if hasattr(bot, "recent_server_events")
-        else []
-    )
-    return api_success({"events": events, "total": len(events)})
-
-
 async def _guild_growth_30d(session, guild_id: int) -> int:
     """Sum new members recorded by activity snapshots over the last 30 days."""
     from datetime import date, timedelta

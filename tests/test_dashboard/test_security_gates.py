@@ -164,6 +164,38 @@ async def test_sse_events_allow_owner(app, monkeypatch):
     assert isinstance(resp, StreamingResponse)
 
 
+@pytest.mark.asyncio
+async def test_sse_events_route_serves_event_stream_not_json(app, monkeypatch):
+    """The /guilds/{id}/events route must resolve to the SSE handler, not a
+    JSON endpoint. A duplicate JSON route on the same path shadowed the SSE
+    stream (registration order), so EventSource aborted with
+    'MIME type application/json is not text/event-stream' and reconnected
+    endlessly. Regression: the route must live only on the realtime router
+    (media_type text/event-stream), not on the guilds router."""
+    from dashboard.routes.api import guilds, realtime
+
+    sse_routes = [
+        r for r in realtime.router.routes
+        if getattr(r, "path", "") == "/guilds/{guild_id}/events"
+        and "GET" in getattr(r, "methods", set())
+    ]
+    # Exactly one SSE route on the realtime router, handled by the streaming
+    # endpoint (media_type text/event-stream is set at call time).
+    assert len(sse_routes) == 1
+    assert sse_routes[0].endpoint.__name__ == "guild_events_sse"
+
+    # The guilds router must NOT also declare the same path — that duplicate
+    # is what shadowed the SSE handler and made EventSource abort.
+    guild_events = [
+        r for r in guilds.router.routes
+        if getattr(r, "path", "") == "/guilds/{guild_id}/events"
+    ]
+    assert guild_events == [], (
+        "duplicate /guilds/{guild_id}/events route on the guilds router "
+        "shadows the realtime SSE stream"
+    )
+
+
 # ── Non-numeric guild id: 404 at the boundary ───────────
 
 
