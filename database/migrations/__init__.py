@@ -708,6 +708,22 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX IF NOT EXISTS ix_daily_emoji_stats_stat_date ON daily_emoji_stats (stat_date)",
         ),
     ),
+    (
+        "0015_voice_game_stats",
+        (
+            """
+            CREATE TABLE IF NOT EXISTS voice_game_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id VARCHAR(32) NOT NULL,
+                game_name VARCHAR(120) NOT NULL,
+                recorded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(guild_id) REFERENCES guilds (discord_id)
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_voice_game_stats_guild_id ON voice_game_stats (guild_id)",
+            "CREATE INDEX IF NOT EXISTS ix_voice_game_stats_recorded_at ON voice_game_stats (recorded_at)",
+        ),
+    ),
 )
 
 

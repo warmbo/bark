@@ -15,7 +15,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 
 from database.engine import session_scope
-from database.models.analytics import DailyChannelStat, DailyEmojiStat
+from database.models.analytics import DailyChannelStat, DailyEmojiStat, VoiceGameStat
 
 logger = logging.getLogger("bark.services.stats_recorder")
 
@@ -89,4 +89,26 @@ async def record_reaction(guild_id: int, emoji) -> None:
                 row.count += 1
     except Exception:
         logger.exception("Failed to persist emoji stat for guild %s", guild_id)
+
+
+async def record_game(guild_id: int, game_name: str) -> None:
+    """Record a detected game on a managed voice channel. Never raises.
+
+    Called when a temporary voice channel is created (or renamed) with a
+    detected activity so the Statistics page can show the most popular games.
+    """
+    try:
+        name = str(game_name or "").strip()
+        if not name:
+            return
+        async with session_scope() as session:
+            session.add(
+                VoiceGameStat(
+                    guild_id=str(guild_id),
+                    game_name=name[:120],
+                    recorded_at=datetime.now(timezone.utc),
+                )
+            )
+    except Exception:
+        logger.exception("Failed to persist game stat for guild %s", guild_id)
 

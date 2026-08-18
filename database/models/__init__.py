@@ -4,6 +4,7 @@ from database.models.analytics import (
     ActivitySnapshot,
     DailyChannelStat,
     DailyEmojiStat,
+    VoiceGameStat,
 )
 from database.models.attachments import FileAttachment
 from database.models.auto_voice import AutoVoiceChannel
@@ -58,6 +59,7 @@ __all__ = [
     "Rule",
     "RuleSet",
     "UserNote",
+    "VoiceGameStat",
     "VoiceSession",
     "Warning",
     "WordList",

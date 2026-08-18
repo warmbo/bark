@@ -94,7 +94,7 @@
   function barChart(el, data, opts) {
     opts = opts || {};
     if (!el || !data || !data.length) {
-      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No data</strong></div></div>';
+      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>' + esc(opts.emptyTitle || 'No data yet') + '</strong>' + (opts.emptyHint ? '<p>' + esc(opts.emptyHint) + '</p>' : '') + '</div></div>';
       return;
     }
     const rows = data.slice(0, 10);
@@ -127,14 +127,15 @@
    */
   function pieChart(el, data, opts) {
     opts = opts || {};
+    const emptyHtml = '<div class="state-panel state-empty" role="status"><div><strong>' + esc(opts.emptyTitle || 'No data yet') + '</strong>' + (opts.emptyHint ? '<p>' + esc(opts.emptyHint) + '</p>' : '') + '</div></div>';
     if (!el || !data || !data.length) {
-      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No data</strong></div></div>';
+      el.innerHTML = emptyHtml;
       return;
     }
     const rows = data.filter(d => Number(d.value) > 0);
     const total = rows.reduce((s, r) => s + Number(r.value), 0);
     if (!total) {
-      if (el) el.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No data</strong></div></div>';
+      el.innerHTML = emptyHtml;
       return;
     }
     const size = 180, cx = size / 2, cy = size / 2, r = 72;

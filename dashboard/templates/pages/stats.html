@@ -34,6 +34,70 @@
             <div class="chart-wrap" id="chart-growth"><div class="skeleton skeleton-row"></div></div>
         </div>
 
+        <!-- New members per day line chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("user-plus", 16) }} New Members</h2><p class="card-description">Members joined per day (last 30 days)</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-new-members"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Reputation activity line chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("star", 16) }} Reputation Activity</h2><p class="card-description">Credit events per day (last 30 days)</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-reputation"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Reputation by type pie chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("pie-chart", 16) }} Reputation Sources</h2><p class="card-description">How reputation points are earned</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-reputation-types"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Voice activity line chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("mic", 16) }} Voice Activity</h2><p class="card-description">Voice sessions per day (last 30 days)</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-voice"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Top voice users bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("users", 16) }} Top Voice Users</h2><p class="card-description">Most voice time in minutes (last 30 days)</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-voice-users"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Moderation activity line chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("shield", 16) }} Moderation Activity</h2><p class="card-description">Audit-log events per day (last 30 days)</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-audit"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Most popular games bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("gamepad-2", 16) }} Most Popular Games</h2><p class="card-description">Games detected on voice channels (last 30 days)</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-games"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
+        <!-- Top reputation bar chart -->
+        <div class="content-card">
+            <div class="card-header">
+                <div><h2 class="card-title">{{ icon("trophy", 16) }} Top Reputation</h2><p class="card-description">Highest reputation scores</p></div>
+            </div>
+            <div class="chart-wrap" id="chart-reputation-top"><div class="skeleton skeleton-row"></div></div>
+        </div>
+
         <!-- Top channels today bar chart -->
         <div class="content-card">
             <div class="card-header">
@@ -79,6 +143,6 @@
 
 {% block scripts %}
 <script>window.BARK_GUILD_ID = '{{ guild.id }}';</script>
-<script src="/static/js/charts.js?v=4"></script>
-<script src="/static/js/stats.js?v=4"></script>
+<script src="/static/js/charts.js?v=5"></script>
+<script src="/static/js/stats.js?v=5"></script>
 {% endblock %}

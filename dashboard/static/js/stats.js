@@ -63,13 +63,30 @@
       const channels30d = (d.top_channels_30d || []).map(c => ({ label: '#' + c.name, value: c.count }));
       const emojisAll = (d.top_emojis_all_time || []).map(e => ({ label: e.name, value: e.count }));
       const emojis = (d.top_emojis_today || []).map(e => ({ label: e.name, value: e.count }));
+      // New engagement/activity series (data that accumulates over time).
+      const newMembers = (d.new_members_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.count }));
+      const reputation = (d.reputation_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.count }));
+      const audit = (d.audit_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.count }));
+      const voice = (d.voice_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.count }));
+      const reputationTypes = (d.reputation_by_type || []).map(e => ({ label: e.name, value: e.count }));
+      const games = (d.popular_games || []).map(g => ({ label: g.name, value: g.count }));
+      const voiceUsers = (d.top_voice_users || []).map(u => ({ label: u.name, value: u.count, sub: u.sessions }));
+      const topReputation = (d.top_reputation || []).map(r => ({ label: r.name, value: r.count }));
 
       renderChart('lineChart', 'chart-growth', growth, { label: 'Member count', valueLabel: 'Members' });
-      renderChart('barChart', 'chart-channels', channels, { label: 'Messages today' });
-      renderChart('barChart', 'chart-channels-7d', channels7d, { label: 'Messages (7d)' });
-      renderChart('barChart', 'chart-channels-30d', channels30d, { label: 'Messages (30d)' });
-      renderChart('barChart', 'chart-emojis-all', emojisAll, { label: 'All-time reactions' });
-      renderChart('barChart', 'chart-emojis', emojis, { label: 'Reactions today' });
+      renderChart('lineChart', 'chart-new-members', newMembers, { label: 'New members', valueLabel: 'Members' });
+      renderChart('lineChart', 'chart-reputation', reputation, { label: 'Reputation events', valueLabel: 'Events' });
+      renderChart('pieChart', 'chart-reputation-types', reputationTypes, { label: 'Reputation' });
+      renderChart('lineChart', 'chart-voice', voice, { label: 'Voice sessions', valueLabel: 'Sessions' });
+      renderChart('barChart', 'chart-voice-users', voiceUsers, { label: 'Voice minutes', emptyTitle: 'No voice time yet', emptyHint: 'Appears once members spend time in voice channels.' });
+      renderChart('lineChart', 'chart-audit', audit, { label: 'Moderation events', valueLabel: 'Events' });
+      renderChart('barChart', 'chart-games', games, { label: 'Games', emptyTitle: 'No games detected yet', emptyHint: 'Appears when members play games in temporary voice channels.' });
+      renderChart('barChart', 'chart-reputation-top', topReputation, { label: 'Reputation', emptyTitle: 'No reputation yet', emptyHint: 'Appears as members earn reputation points.' });
+      renderChart('barChart', 'chart-channels', channels, { label: 'Messages today', emptyTitle: 'No messages today', emptyHint: 'Appears once members post in channels.' });
+      renderChart('barChart', 'chart-channels-7d', channels7d, { label: 'Messages (7d)', emptyTitle: 'No messages in 7 days', emptyHint: 'Appears once members post in channels.' });
+      renderChart('barChart', 'chart-channels-30d', channels30d, { label: 'Messages (30d)', emptyTitle: 'No messages in 30 days', emptyHint: 'Appears once members post in channels.' });
+      renderChart('barChart', 'chart-emojis-all', emojisAll, { label: 'All-time reactions', emptyTitle: 'No reactions yet', emptyHint: 'Appears once members react to messages.' });
+      renderChart('barChart', 'chart-emojis', emojis, { label: 'Reactions today', emptyTitle: 'No reactions today', emptyHint: 'Appears once members react to messages.' });
     } catch (e) {
       if (requestToken !== statsRequestToken) return; // a newer reload started
       setStat('stat-members', 'Unavailable');

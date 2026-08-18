@@ -401,6 +401,57 @@ def seed_moderation():
 
 seed_moderation()
 
+
+def seed_stats():
+    """Seed reputation events, voice sessions, and voice game stats over several
+    days so the new Statistics charts render real content during verification."""
+
+    async def _run():
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import select
+
+        from database.models.analytics import VoiceGameStat
+        from database.models.reputation import ReputationEvent
+        from database.models.voice import VoiceSession
+
+        async with session_scope() as s:
+            if (await s.execute(select(ReputationEvent).where(ReputationEvent.guild_id == str(bot._guild.id)))).scalars().first():
+                return
+            now = datetime.now(timezone.utc)
+            for d in range(14):
+                day = now - timedelta(days=13 - d)
+                for _ in range(4):
+                    s.add(ReputationEvent(
+                        guild_id=str(bot._guild.id), actor_id="42", target_id="90001",
+                        event_type="message", points=1, channel_id="1000",
+                        created_at=day + timedelta(hours=12),
+                    ))
+                s.add(ReputationEvent(
+                    guild_id=str(bot._guild.id), actor_id="42", target_id="90002",
+                    event_type="thanks", points=3, created_at=day + timedelta(hours=13),
+                ))
+                s.add(VoiceGameStat(
+                    guild_id=str(bot._guild.id), game_name="Valorant",
+                    recorded_at=day + timedelta(hours=15),
+                ))
+                if d % 2 == 0:
+                    s.add(VoiceGameStat(
+                        guild_id=str(bot._guild.id), game_name="Minecraft",
+                        recorded_at=day + timedelta(hours=16),
+                    ))
+                s.add(VoiceSession(
+                    guild_id=str(bot._guild.id), user_id="90001", user_tag="User0#0000",
+                    channel_id="1000", channel_name="Gaming", joined_at=day + timedelta(hours=15),
+                    left_at=day + timedelta(hours=16, minutes=30), duration_seconds=5400,
+                ))
+            await s.commit()
+
+    loop.run_until_complete(_run())
+
+
+seed_stats()
+
 dashboard_app = create_app(bot)  # type: ignore
 app = dashboard_app.app
 

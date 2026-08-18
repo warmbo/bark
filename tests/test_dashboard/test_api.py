@@ -767,6 +767,30 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today() - timedelta(days=1), emoji_name="wow", count=1))
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="laugh", count=4))
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="wow", count=1))
+        # Reputation / voice / game data backing the newer charts.
+        from datetime import datetime, timezone
+
+        from database.models.analytics import VoiceGameStat
+        from database.models.reputation import ReputationEvent
+        from database.models.voice import VoiceSession
+
+        s.add(ReputationEvent(
+            guild_id="999", actor_id="42", target_id="90001", event_type="message", points=1,
+            created_at=datetime.now(timezone.utc) - timedelta(days=1),
+        ))
+        s.add(ReputationEvent(
+            guild_id="999", actor_id="42", target_id="90001", event_type="thanks", points=3,
+            created_at=datetime.now(timezone.utc),
+        ))
+        s.add(VoiceSession(
+            guild_id="999", user_id="90001", user_tag="User0#0000", channel_id="1000",
+            channel_name="Gaming", joined_at=datetime.now(timezone.utc) - timedelta(days=1),
+            left_at=datetime.now(timezone.utc), duration_seconds=3600,
+        ))
+        s.add(VoiceGameStat(
+            guild_id="999", game_name="Valorant",
+            recorded_at=datetime.now(timezone.utc) - timedelta(days=1),
+        ))
         await s.commit()
 
     guild = SimpleNamespace(
@@ -795,6 +819,16 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     assert data["top_channels_30d"][0]["name"] == "general"
     assert data["top_emojis_today"][0] == {"name": "laugh", "count": 4}
     assert data["top_emojis_all_time"][0] == {"name": "laugh", "count": 8}
+    # Newer charts backed by accumulating data.
+    assert len(data["reputation_series"]) == 30
+    assert sum(p["count"] for p in data["reputation_series"]) == 2
+    assert data["reputation_by_type"] and {"name": "Messages", "count": 1} in data["reputation_by_type"]
+    assert data["voice_series"] and sum(p["count"] for p in data["voice_series"]) == 1
+    assert data["top_voice_users"][0]["name"] == "User0#0000"
+    assert data["top_voice_users"][0]["count"] == 60  # 3600s = 60 min
+    assert data["popular_games"] == [{"name": "Valorant", "count": 1}]
+    assert len(data["new_members_series"]) == 30
+    assert len(data["audit_series"]) == 30
 
 
 @pytest.mark.asyncio

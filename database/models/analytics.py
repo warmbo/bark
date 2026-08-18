@@ -120,3 +120,27 @@ class DailyEmojiStat(Base):
             f"{self.emoji_name} {self.count}>"
         )
 
+
+class VoiceGameStat(Base):
+    """One row per detected game on a managed voice channel.
+
+    Written when a temporary voice channel is created or renamed with a
+    detected activity (game) so the Statistics page can show the most popular
+    game this month.
+    """
+
+    __tablename__ = "voice_game_stats"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("guilds.discord_id"), nullable=False, index=True
+    )
+    game_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<VoiceGameStat guild={self.guild_id} game={self.game_name!r}>"
+
+

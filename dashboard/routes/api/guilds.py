@@ -304,6 +304,23 @@ async def get_guild_stats(request: Request, guild_id: int):
         db_ch_today = await _daily_channel_for_day(session, guild_id, today)
         # Today's per-emoji counts.
         today_emoji_rows = await _daily_emoji_for_day(session, guild_id, today)
+        # Engagement / activity time-series from data that accumulates over time.
+        reputation_series = _zero_fill_series(
+            await _reputation_daily_counts(session, guild_id, 30), 30
+        )
+        audit_series = _zero_fill_series(
+            await _audit_daily_counts(session, guild_id, 30), 30
+        )
+        voice_series = _zero_fill_series(
+            await _voice_daily_counts(session, guild_id, 30), 30
+        )
+        new_members_series = _zero_fill_series(
+            await _new_members_daily(session, guild_id, 30), 30
+        )
+        popular_games = await _popular_games(session, guild_id, days=30)
+        top_voice_users = await _top_voice_users(session, guild_id, days=30)
+        reputation_by_type = await _reputation_by_type(session, guild_id)
+        top_reputation = await _top_reputation(session, guild_id)
     online, in_voice = _online_and_voice_counts(guild)
 
     def _top(d: dict) -> list[dict]:
@@ -341,6 +358,14 @@ async def get_guild_stats(request: Request, guild_id: int):
             "top_channels_30d": top_channels_30d,
             "top_emojis_today": emojis_today,
             "top_emojis_all_time": emojis_all_time,
+            "reputation_series": reputation_series,
+            "audit_series": audit_series,
+            "voice_series": voice_series,
+            "new_members_series": new_members_series,
+            "popular_games": popular_games,
+            "top_voice_users": top_voice_users,
+            "reputation_by_type": reputation_by_type,
+            "top_reputation": top_reputation,
         }
     )
 
@@ -449,6 +474,206 @@ async def _daily_emoji_for_day(session, guild_id: int, day) -> dict[str, int]:
         )
     )
     return {row.emoji_name: row.count for row in result.scalars().all() if row.count > 0}
+
+
+def _zero_fill_series(
+    counts: dict[str, int], days: int
+) -> list[dict]:
+    """Expand a {date_iso: count} map into a continuous N-day series with zeros
+    so charts always draw a full axis instead of sparse points."""
+    from datetime import date, timedelta
+
+    out: list[dict] = []
+    for i in range(days - 1, -1, -1):
+        d = date.today() - timedelta(days=i)
+        out.append({"date": d.isoformat(), "count": counts.get(d.isoformat(), 0)})
+    return out
+
+
+async def _reputation_daily_counts(session, guild_id: int, days: int) -> dict[str, int]:
+    """Reputation credit events per day over the trailing window."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import func, select
+
+    from database.models.reputation import ReputationEvent
+
+    since = date.today() - timedelta(days=days)
+    result = await session.execute(
+        select(
+            func.date(ReputationEvent.created_at).label("day"),
+            func.count(ReputationEvent.id),
+        )
+        .where(
+            ReputationEvent.guild_id == str(guild_id),
+            ReputationEvent.created_at >= since,
+        )
+        .group_by(func.date(ReputationEvent.created_at))
+    )
+    return {day: count for day, count in result.all()}
+
+
+async def _reputation_by_type(session, guild_id: int) -> list[dict]:
+    """Reputation credit totals broken down by event type (pie chart)."""
+    from sqlalchemy import func, select
+
+    from database.models.reputation import ReputationEvent
+
+    result = await session.execute(
+        select(
+            ReputationEvent.event_type,
+            func.sum(ReputationEvent.points).label("points"),
+        )
+        .where(ReputationEvent.guild_id == str(guild_id))
+        .group_by(ReputationEvent.event_type)
+    )
+    labels = {
+        "message": "Messages",
+        "reaction": "Reactions",
+        "emoji": "Emojis",
+        "thanks": "Thanks",
+        "voice_minute": "Voice",
+    }
+    return [
+        {"name": labels.get(et, et), "count": int(points or 0)}
+        for et, points in result.all()
+        if points
+    ]
+
+
+async def _audit_daily_counts(session, guild_id: int, days: int) -> dict[str, int]:
+    """Audit-log (moderation/system) events per day over the trailing window."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import func, select
+
+    from database.models.moderation import AuditLog
+
+    since = date.today() - timedelta(days=days)
+    result = await session.execute(
+        select(func.date(AuditLog.created_at).label("day"), func.count(AuditLog.id))
+        .where(
+            AuditLog.guild_id == str(guild_id),
+            AuditLog.created_at >= since,
+        )
+        .group_by(func.date(AuditLog.created_at))
+    )
+    return {day: count for day, count in result.all()}
+
+
+async def _voice_daily_counts(session, guild_id: int, days: int) -> dict[str, int]:
+    """Voice session joins per day over the trailing window."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import func, select
+
+    from database.models.voice import VoiceSession
+
+    since = date.today() - timedelta(days=days)
+    result = await session.execute(
+        select(func.date(VoiceSession.joined_at).label("day"), func.count(VoiceSession.id))
+        .where(
+            VoiceSession.guild_id == str(guild_id),
+            VoiceSession.joined_at >= since,
+        )
+        .group_by(func.date(VoiceSession.joined_at))
+    )
+    return {day: count for day, count in result.all()}
+
+
+async def _new_members_daily(session, guild_id: int, days: int) -> dict[str, int]:
+    """New members joined per day from member snapshots."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import select
+
+    from database.models.analytics import ActivitySnapshot
+
+    since = date.today() - timedelta(days=days)
+    result = await session.execute(
+        select(ActivitySnapshot.snapshot_date, ActivitySnapshot.new_members).where(
+            ActivitySnapshot.guild_id == str(guild_id),
+            ActivitySnapshot.snapshot_date >= since,
+        )
+    )
+    return {d.isoformat(): int(n or 0) for d, n in result.all() if n}
+
+
+async def _popular_games(session, guild_id: int, days: int = 30, limit: int = 8) -> list[dict]:
+    """Most-recorded games on managed voice channels over the trailing window."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import func, select
+
+    from database.models.analytics import VoiceGameStat
+
+    since = date.today() - timedelta(days=days)
+    result = await session.execute(
+        select(
+            VoiceGameStat.game_name,
+            func.count(VoiceGameStat.id).label("count"),
+        )
+        .where(
+            VoiceGameStat.guild_id == str(guild_id),
+            VoiceGameStat.recorded_at >= since,
+        )
+        .group_by(VoiceGameStat.game_name)
+        .order_by(func.count(VoiceGameStat.id).desc())
+        .limit(limit)
+    )
+    return [{"name": name, "count": count} for name, count in result.all() if count]
+
+
+async def _top_voice_users(session, guild_id: int, days: int = 30, limit: int = 8) -> list[dict]:
+    """Members with the most voice time (in minutes) over the trailing window."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import func, select
+
+    from database.models.voice import VoiceSession
+
+    since = date.today() - timedelta(days=days)
+    result = await session.execute(
+        select(
+            VoiceSession.user_tag,
+            func.sum(VoiceSession.duration_seconds).label("seconds"),
+            func.count(VoiceSession.id).label("sessions"),
+        )
+        .where(
+            VoiceSession.guild_id == str(guild_id),
+            VoiceSession.duration_seconds.is_not(None),
+            VoiceSession.joined_at >= since,
+        )
+        .group_by(VoiceSession.user_tag)
+        .order_by(func.sum(VoiceSession.duration_seconds).desc())
+        .limit(limit)
+    )
+    out = []
+    for tag, seconds, sessions in result.all():
+        minutes = int((seconds or 0) // 60)
+        if minutes > 0:
+            out.append({"name": tag, "count": minutes, "sessions": int(sessions or 0)})
+    return out
+
+
+async def _top_reputation(session, guild_id: int, limit: int = 8) -> list[dict]:
+    """Top reputation profiles by total score (leaderboard snapshot)."""
+    from sqlalchemy import select
+
+    from database.models.reputation import ReputationProfile
+
+    result = await session.execute(
+        select(
+            ReputationProfile.user_id,
+            ReputationProfile.total_score,
+        )
+        .where(ReputationProfile.guild_id == str(guild_id))
+        .order_by(ReputationProfile.total_score.desc())
+        .limit(limit)
+    )
+    return [{"name": uid, "count": int(score or 0)} for uid, score in result.all() if score]
+
+
 
 
 @router.get("/guilds/{guild_id}/dashboard")

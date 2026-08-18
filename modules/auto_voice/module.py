@@ -645,6 +645,13 @@ class AutoVoiceModule(BarkModule):
             )
             await member.move_to(created, reason="Bark Auto Voice: temporary channel created")
             await self._persist_managed_channel(created, member, primary)
+            # Record the detected game (if any) so Statistics can show popular games.
+            try:
+                from services.stats_recorder import record_game
+
+                await record_game(int(member.guild.id), self._member_game(member) or "")
+            except Exception:
+                self._logger.debug("Could not record game stat", exc_info=True)
             # Auto-Join Role: grant the configured role connect + view on the
             # new channel so its holders can always hop in.
             auto_join_role_id = self._cfg(config, "auto_join_role_id")
@@ -806,6 +813,15 @@ class AutoVoiceModule(BarkModule):
             owner = get_member(int(state.owner_id))
         owner = owner or members[0]
         game = self._majority_game(members) or str(self._cfg(config, "fallback_name") or "General")
+        # Record the detected game so Statistics can surface popular games.
+        try:
+            from services.stats_recorder import record_game
+
+            detected = self._majority_game(members)
+            if detected:
+                await record_game(int(channel.guild.id), detected)
+        except Exception:
+            self._logger.debug("Could not record game stat", exc_info=True)
         desired_name = self._render_name(
             owner,
             config,
