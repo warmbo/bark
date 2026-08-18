@@ -24,36 +24,40 @@
             </div>
         </div>
         <div class="server-profile-body">
-            <div class="server-profile-head">
-                <span class="server-avatar-lg">{{ icon("shield", 30) }}</span>
-                <div class="server-profile-titles">
-                    <h1 class="page-title server-profile-name">{{ guild.name }}</h1>
-                    {% if guild.description %}<p class="server-profile-desc">{{ guild.description }}</p>{% endif %}
-                </div>
-            </div>
-
-            <!-- MOTD -->
-            <div class="server-motd" id="motd-block" hidden>
-                <div class="server-motd-display" id="motd-display">
-                    <div class="server-motd-label">{{ icon("message-square", 14) }} Message of the Day</div>
-                    <p class="server-motd-text" id="motd-text">Loading…</p>
-                    <button type="button" class="btn btn-xs motd-edit-btn" id="motd-edit" hidden>{{ icon("pencil", 12) }} Edit</button>
-                </div>
-                <div class="server-motd-edit" id="motd-edit-form" hidden>
-                    <div class="discord-toolbar motd-toolbar" role="group" aria-label="Message of the day formatting">
-                        <button type="button" class="btn btn-xs" data-md="**" title="Bold" aria-label="Bold"><strong>B</strong></button>
-                        <button type="button" class="btn btn-xs" data-md="*" title="Italic" aria-label="Italic"><em>I</em></button>
-                        <button type="button" class="btn btn-xs" data-md="__" title="Underline" aria-label="Underline"><u>U</u></button>
-                        <button type="button" class="btn btn-xs" data-md="`" title="Inline code" aria-label="Inline code">Code</button>
-                        <span class="sep" aria-hidden="true"></span>
-                        <button type="button" class="btn btn-xs" data-md-link title="Insert link" aria-label="Insert link">Link</button>
-                        <input type="text" id="motd-link-url" name="motd_link_url" class="form-input motd-link-input" placeholder="https://…" aria-label="Link URL" hidden>
+            <div class="server-profile-columns">
+                <div class="server-profile-head">
+                    <span class="server-avatar-lg" id="server-avatar">
+                        {{ icon("shield", 30) }}
+                    </span>
+                    <div class="server-profile-titles">
+                        <h1 class="page-title server-profile-name">{{ guild.name }}</h1>
+                        {% if guild.description %}<p class="server-profile-desc">{{ guild.description }}</p>{% endif %}
                     </div>
-                    <textarea class="form-textarea motd-textarea" id="motd-input" name="motd" rows="3" maxlength="1000" aria-label="Message of the day"></textarea>
-                    <p class="form-hint">Supports **bold**, *italic*, __underline__, `code`, and [link](https://…)</p>
-                    <div class="motd-actions">
-                        <button type="button" class="btn btn-sm btn-accent" id="motd-save">{{ icon("check", 14) }} Save</button>
-                        <button type="button" class="btn btn-sm" id="motd-cancel">Cancel</button>
+                </div>
+
+                <!-- MOTD -->
+                <div class="server-motd" id="motd-block" hidden>
+                    <div class="server-motd-display" id="motd-display">
+                        <div class="server-motd-label">{{ icon("message-square", 14) }} Message of the Day</div>
+                        <p class="server-motd-text" id="motd-text">Loading…</p>
+                        <button type="button" class="btn btn-xs motd-edit-btn" id="motd-edit" hidden>{{ icon("pencil", 12) }} Edit</button>
+                    </div>
+                    <div class="server-motd-edit" id="motd-edit-form" hidden>
+                        <div class="discord-toolbar motd-toolbar" role="group" aria-label="Message of the day formatting">
+                            <button type="button" class="btn btn-xs" data-md="**" title="Bold" aria-label="Bold"><strong>B</strong></button>
+                            <button type="button" class="btn btn-xs" data-md="*" title="Italic" aria-label="Italic"><em>I</em></button>
+                            <button type="button" class="btn btn-xs" data-md="__" title="Underline" aria-label="Underline"><u>U</u></button>
+                            <button type="button" class="btn btn-xs" data-md="`" title="Inline code" aria-label="Inline code">Code</button>
+                            <span class="sep" aria-hidden="true"></span>
+                            <button type="button" class="btn btn-xs" data-md-link title="Insert link" aria-label="Insert link">Link</button>
+                            <input type="text" id="motd-link-url" name="motd_link_url" class="form-input motd-link-input" placeholder="https://…" aria-label="Link URL" hidden>
+                        </div>
+                        <textarea class="form-textarea motd-textarea" id="motd-input" name="motd" rows="3" maxlength="1000" aria-label="Message of the day"></textarea>
+                        <p class="form-hint">Supports **bold**, *italic*, __underline__, `code`, and [link](https://…)</p>
+                        <div class="motd-actions">
+                            <button type="button" class="btn btn-sm btn-accent" id="motd-save">{{ icon("check", 14) }} Save</button>
+                            <button type="button" class="btn btn-sm" id="motd-cancel">Cancel</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -133,6 +137,13 @@ function renderServerProfile(g) {
     document.getElementById('info-owner').innerHTML = '<span>' + getIconSvg('crown', 14) + '</span> <span>' + escHtml(g.owner_name || 'Unknown') + '</span>';
     document.getElementById('info-verification').innerHTML = '<span>' + getIconSvg('shield-check', 14) + '</span> <span>Verification: ' + escHtml((g.verification_level || 'None').replace(/_/g, ' ')) + '</span>';
     document.getElementById('info-channels').innerHTML = '<span>' + getIconSvg('message-circle', 14) + '</span> <span>' + escHtml(g.channels ?? 0) + ' channels</span>';
+
+    // Server avatar (item 1): show the guild's real icon; keep the shield as
+    // fallback when the guild has no icon (Discord servers with no icon).
+    const avatar = document.getElementById('server-avatar');
+    if (avatar && g.icon_url) {
+        avatar.innerHTML = '<img src="' + escHtml(g.icon_url) + '" alt="' + escHtml(g.name) + ' icon" loading="lazy">';
+    }
 
     // MOTD
     if (motdBlock) motdBlock.hidden = false;
@@ -268,7 +279,10 @@ function renderEvents(events) {
         const meta = [ev.channel_name ? ev.channel_name : null, ev.entity_type ? ev.entity_type.replace(/_/g, ' ') : null].filter(Boolean).join(' · ');
         const desc = ev.description ? '<span class="event-desc">' + escHtml(ev.description.length > 140 ? ev.description.slice(0, 140) + '…' : ev.description) + '</span>' : '';
         const counts = ev.user_count ? '<span class="event-interested">' + getIconSvg('user-plus', 12) + ' ' + escHtml(ev.user_count) + ' interested</span>' : '';
+        // Discord event cover image, if one exists.
+        const cover = ev.cover_url ? '<img class="event-cover" src="' + escHtml(ev.cover_url) + '" alt="" loading="lazy">' : '';
         return '<div class="event-item">'
+            + cover
             + '<span class="event-date" aria-hidden="true"><strong>' + escHtml((ev.start_time ? new Date(ev.start_time) : new Date()).toLocaleDateString(undefined, {day: 'numeric'})) + '</strong><small>' + escHtml((ev.start_time ? new Date(ev.start_time) : new Date()).toLocaleDateString(undefined, {month: 'short'})) + '</small></span>'
             + '<div class="event-body"><div class="event-name">' + escHtml(ev.name) + ' <span class="event-status">' + status + '</span></div>'
             + (meta ? '<div class="event-meta">' + escHtml(meta) + '</div>' : '')

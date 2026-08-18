@@ -680,7 +680,10 @@ body::before, body::after { opacity: 0; }
 }
 
 /* Tables: flat rows, zebra from token, no glass. */
-.data-table, .member-table, .audit-table { background: transparent; }
+/* Item 4: the members list is exempt from the transparent table treatment —
+   a near-opaque card fill keeps member rows readable over the backdrop. */
+.data-table, .audit-table { background: transparent; }
+.member-table { background: var(--bg-card-solid); }
 .data-table thead th,
 .member-table thead th,
 .audit-table thead th { background: var(--secondary); border-bottom: 1px solid var(--border); }

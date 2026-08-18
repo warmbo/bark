@@ -140,11 +140,28 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
     scheduled_events = []
     try:
         for ev in getattr(guild, "scheduled_events", []) or []:
+            # ScheduledEvent cover image (Discord event banner) — ``Asset`` or
+            # None. Exposed as cover_url so the dashboard can show it. Guard
+            # against non-str Asset.url so a malformed/None cover never crashes
+            # the whole dashboard payload (JSON-serialization safety).
+            cover_url = None
+            try:
+                _cover = getattr(ev, "cover_image", None)
+                if _cover and getattr(_cover, "url", None):
+                    _url = _cover.url
+                    if isinstance(_url, str):
+                        cover_url = _url
+            except Exception:
+                cover_url = None
             scheduled_events.append(
                 {
                     "id": str(ev.id),
-                    "name": ev.name,
-                    "description": ev.description,
+                    # Coerce to str defensively: ScheduledEvent.name/status are
+                    # plain strings in production, but a malformed event or a
+                    # test double can expose a non-str — never let a single bad
+                    # event break the whole dashboard JSON payload.
+                    "name": str(ev.name) if ev.name else "",
+                    "description": str(ev.description) if ev.description else None,
                     "start_time": ev.start_time.isoformat() if ev.start_time else None,
                     "end_time": ev.end_time.isoformat() if ev.end_time else None,
                     "status": str(ev.status).split(".")[-1] if ev.status else None,
@@ -152,6 +169,7 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
                     "url": ev.url,
                     "user_count": getattr(ev, "user_count", 0),
                     "channel_name": ev.channel.name if getattr(ev, "channel", None) else None,
+                    "cover_url": cover_url,
                 }
             )
     except Exception:

@@ -40,7 +40,10 @@ class MockGuild:
         self.id = id
         self.name = name
         self.member_count = 142
-        self.icon = None
+        # Give the guild a real icon so the server-avatar-lg <img> path is
+        # exercised (item 1). Use a real Discord CDN-style URL.
+        self.icon = MagicMock()
+        self.icon.url = "https://cdn.discordapp.com/icons/123456789/test_hash.png"
         self.premium_subscription_count = 5
         self.premium_tier = 2
         self.max_members = 200
@@ -51,18 +54,23 @@ class MockGuild:
         self.banner = None
         self.features = ["ANIMATED_ICON", "NEWS"]
 
-        # Discord scheduled events for the profile page.
+        # Discord scheduled events for the profile page. First event carries a
+        # cover_image (Discord event banner) so the event-cover <img> renders.
         _ev_channel = MagicMock()
         _ev_channel.name = "General"
+        _ev_cover = MagicMock()
+        _ev_cover.url = "https://cdn.discordapp.com/events/501/test_cover.png"
         self.scheduled_events = [
-            MagicMock(id=501, name="Movie Night", description="Watch a movie together",
-                      start_time=datetime(2026, 8, 20, 20, 0, tzinfo=timezone.utc), end_time=None,
-                      status=MagicMock(name="scheduled"), entity_type=MagicMock(name="voice"),
-                      url="https://discord.gg/events/501", user_count=8, channel=_ev_channel),
-            MagicMock(id=502, name="Game Night", description=None,
-                      start_time=datetime(2026, 8, 22, 19, 0, tzinfo=timezone.utc), end_time=None,
-                      status=MagicMock(name="scheduled"), entity_type=MagicMock(name="external"),
-                      url="https://discord.gg/events/502", user_count=12, channel=None),
+            _mk_ev(id=501, name="Movie Night", description="Watch a movie together",
+                   start_time=datetime(2026, 8, 20, 20, 0, tzinfo=timezone.utc), end_time=None,
+                   status_name="scheduled", entity_name="voice",
+                   url="https://discord.gg/events/501", user_count=8, channel=_ev_channel,
+                   cover_image=_ev_cover),
+            _mk_ev(id=502, name="Game Night", description=None,
+                   start_time=datetime(2026, 8, 22, 19, 0, tzinfo=timezone.utc), end_time=None,
+                   status_name="scheduled", entity_name="external",
+                   url="https://discord.gg/events/502", user_count=12, channel=None,
+                   cover_image=None),
         ]
 
         # Owner
@@ -135,6 +143,29 @@ class MockGuild:
 
     def get_member(self, member_id):
         return self._member_dict.get(member_id)
+
+
+def _mk_ev(**kwargs):
+    """Build a mock ScheduledEvent. ``MagicMock(name=...)`` would set the
+    reserved repr-name child mock instead of ``.name``, so set attributes
+    explicitly after construction."""
+    ev = MagicMock()
+    ev.id = kwargs["id"]
+    ev.name = kwargs["name"]
+    ev.description = kwargs.get("description")
+    ev.start_time = kwargs.get("start_time")
+    ev.end_time = kwargs.get("end_time")
+    _st = MagicMock()
+    _st.name = kwargs.get("status_name", "scheduled")
+    ev.status = _st
+    _et = MagicMock()
+    _et.name = kwargs.get("entity_name", "external")
+    ev.entity_type = _et
+    ev.url = kwargs.get("url")
+    ev.user_count = kwargs.get("user_count", 0)
+    ev.channel = kwargs.get("channel")
+    ev.cover_image = kwargs.get("cover_image")
+    return ev
 
 
 class MockBarkBot:
