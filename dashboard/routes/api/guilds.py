@@ -318,9 +318,9 @@ async def get_guild_stats(request: Request, guild_id: int):
             await _new_members_daily(session, guild_id, 30), 30
         )
         popular_games = await _popular_games(session, guild_id, days=30)
-        top_voice_users = await _top_voice_users(session, guild_id, days=30)
+        top_voice_users = await _top_voice_users(session, guild, days=30)
         reputation_by_type = await _reputation_by_type(session, guild_id)
-        top_reputation = await _top_reputation(session, guild_id)
+        top_reputation = await _top_reputation(session, guild)
     online, in_voice = _online_and_voice_counts(guild)
 
     def _top(d: dict) -> list[dict]:
@@ -336,6 +336,29 @@ async def get_guild_stats(request: Request, guild_id: int):
     top_channels_30d = sorted(db_ch_30d.values(), key=lambda c: c["count"], reverse=True)[:8]
     emojis_all_time = _top(db_emoji_all)
     messages_today = sum(c["count"] for c in db_ch_today.values())
+
+    # Resolve live channel names for rows backfilled without one (the migration
+    # has no Discord context, so names come from the guild now).
+    def _with_channel_names(channels: list[dict]) -> list[dict]:
+        id_to_name = {}
+        try:
+            for ch in getattr(guild, "channels", []) or []:
+                if getattr(ch, "id", None):
+                    id_to_name[str(ch.id)] = getattr(ch, "name", None) or ""
+        except Exception:
+            id_to_name = {}
+        out = []
+        for c in channels:
+            cid = str(c.get("channel_id") or c.get("id") or "")
+            name = c.get("name") or id_to_name.get(cid, "")
+            if not name:
+                continue  # skip unresolved (deleted) channels
+            out.append({"name": name, "count": c["count"]})
+        return out
+
+    channels_today = _with_channel_names(channels_today)
+    top_channels_7d = _with_channel_names(top_channels_7d)
+    top_channels_30d = _with_channel_names(top_channels_30d)
 
     return api_success(
         {
@@ -425,7 +448,7 @@ async def _snapshot_channel_emoji_totals(
     for row in ch_result.scalars().all():
         if row.message_count <= 0:
             continue
-        agg = channels.setdefault(row.channel_id, {"name": "", "count": 0})
+        agg = channels.setdefault(row.channel_id, {"channel_id": row.channel_id, "name": "", "count": 0})
         agg["count"] += row.message_count
         agg["name"] = row.channel_name or agg["name"]
 
@@ -457,7 +480,7 @@ async def _daily_channel_for_day(session, guild_id: int, day) -> dict[str, dict]
     channels: dict[str, dict] = {}
     for row in result.scalars().all():
         if row.message_count > 0:
-            channels[row.channel_id] = {"name": row.channel_name, "count": row.message_count}
+            channels[row.channel_id] = {"channel_id": row.channel_id, "name": row.channel_name, "count": row.message_count}
     return channels
 
 
@@ -624,7 +647,7 @@ async def _popular_games(session, guild_id: int, days: int = 30, limit: int = 8)
     return [{"name": name, "count": count} for name, count in result.all() if count]
 
 
-async def _top_voice_users(session, guild_id: int, days: int = 30, limit: int = 8) -> list[dict]:
+async def _top_voice_users(session, guild, days: int = 30, limit: int = 8) -> list[dict]:
     """Members with the most voice time (in minutes) over the trailing window."""
     from datetime import date, timedelta
 
@@ -632,9 +655,11 @@ async def _top_voice_users(session, guild_id: int, days: int = 30, limit: int = 
 
     from database.models.voice import VoiceSession
 
+    guild_id = int(guild.id)
     since = date.today() - timedelta(days=days)
     result = await session.execute(
         select(
+            VoiceSession.user_id,
             VoiceSession.user_tag,
             func.sum(VoiceSession.duration_seconds).label("seconds"),
             func.count(VoiceSession.id).label("sessions"),
@@ -644,24 +669,35 @@ async def _top_voice_users(session, guild_id: int, days: int = 30, limit: int = 
             VoiceSession.duration_seconds.is_not(None),
             VoiceSession.joined_at >= since,
         )
-        .group_by(VoiceSession.user_tag)
+        .group_by(VoiceSession.user_id, VoiceSession.user_tag)
         .order_by(func.sum(VoiceSession.duration_seconds).desc())
         .limit(limit)
     )
     out = []
-    for tag, seconds, sessions in result.all():
+    for uid, tag, seconds, sessions in result.all():
         minutes = int((seconds or 0) // 60)
         if minutes > 0:
-            out.append({"name": tag, "count": minutes, "sessions": int(sessions or 0)})
+            member = None
+            if guild:
+                try:
+                    member = guild.get_member(int(uid)) if hasattr(guild, "get_member") else None
+                except (ValueError, TypeError):
+                    member = None
+            display = str(getattr(member, "display_name", None) or tag or uid)
+            avatar = None
+            if member is not None and getattr(member, "display_avatar", None):
+                avatar = member.display_avatar.url
+            out.append({"name": display, "id": str(uid), "avatar_url": avatar, "count": minutes, "sessions": int(sessions or 0)})
     return out
 
 
-async def _top_reputation(session, guild_id: int, limit: int = 8) -> list[dict]:
+async def _top_reputation(session, guild, limit: int = 8) -> list[dict]:
     """Top reputation profiles by total score (leaderboard snapshot)."""
     from sqlalchemy import select
 
     from database.models.reputation import ReputationProfile
 
+    guild_id = int(guild.id)
     result = await session.execute(
         select(
             ReputationProfile.user_id,
@@ -671,7 +707,22 @@ async def _top_reputation(session, guild_id: int, limit: int = 8) -> list[dict]:
         .order_by(ReputationProfile.total_score.desc())
         .limit(limit)
     )
-    return [{"name": uid, "count": int(score or 0)} for uid, score in result.all() if score]
+    out = []
+    for uid, score in result.all():
+        if not score:
+            continue
+        member = None
+        if guild:
+            try:
+                member = guild.get_member(int(uid)) if hasattr(guild, "get_member") else None
+            except (ValueError, TypeError):
+                member = None
+        display = str(getattr(member, "display_name", None) or uid)
+        avatar = None
+        if member is not None and getattr(member, "display_avatar", None):
+            avatar = member.display_avatar.url
+        out.append({"name": display, "id": str(uid), "avatar_url": avatar, "count": int(score or 0)})
+    return out
 
 
 

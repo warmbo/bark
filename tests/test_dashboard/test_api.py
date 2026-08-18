@@ -791,6 +791,12 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
             guild_id="999", game_name="Valorant",
             recorded_at=datetime.now(timezone.utc) - timedelta(days=1),
         ))
+        from database.models.reputation import ReputationProfile
+
+        s.add(ReputationProfile(
+            guild_id="999", user_id="90001", total_score=42.0, level=5,
+            week_start=date.today(), month_start=date.today(),
+        ))
         await s.commit()
 
     guild = SimpleNamespace(
@@ -800,6 +806,12 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         channels=[], roles=[], emojis=[], created_at=None, verification_level=None,
         features=[], scheduled_events=[], members=[], text_channels=[], voice_channels=[],
     )
+    # A member with a display name + avatar for Top Reputation resolution.
+    member = SimpleNamespace(
+        id=90001, display_name="CoolUser", name="cooluser",
+        display_avatar=SimpleNamespace(url="https://cdn.discordapp.com/avatars/90001/hash.png"),
+    )
+    guild.get_member = lambda uid: member if uid == 90001 else None
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
     request = SimpleNamespace(
@@ -824,11 +836,18 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     assert sum(p["count"] for p in data["reputation_series"]) == 2
     assert data["reputation_by_type"] and {"name": "Messages", "count": 1} in data["reputation_by_type"]
     assert data["voice_series"] and sum(p["count"] for p in data["voice_series"]) == 1
-    assert data["top_voice_users"][0]["name"] == "User0#0000"
+    assert data["top_voice_users"][0]["name"] == "CoolUser"
     assert data["top_voice_users"][0]["count"] == 60  # 3600s = 60 min
     assert data["popular_games"] == [{"name": "Valorant", "count": 1}]
     assert len(data["new_members_series"]) == 30
     assert len(data["audit_series"]) == 30
+    # Top Reputation resolves the display name + avatar from the live guild.
+    assert data["top_reputation"] == [{
+        "name": "CoolUser", "id": "90001",
+        "avatar_url": "https://cdn.discordapp.com/avatars/90001/hash.png",
+        "count": 42,
+    }]
+    # Top Voice Users resolves the display name + avatar too (covered above).
 
 
 @pytest.mark.asyncio

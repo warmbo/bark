@@ -70,8 +70,8 @@
       const voice = (d.voice_series || []).map(p => ({ label: (p.date || '').slice(5), value: p.count }));
       const reputationTypes = (d.reputation_by_type || []).map(e => ({ label: e.name, value: e.count }));
       const games = (d.popular_games || []).map(g => ({ label: g.name, value: g.count }));
-      const voiceUsers = (d.top_voice_users || []).map(u => ({ label: u.name, value: u.count, sub: u.sessions }));
-      const topReputation = (d.top_reputation || []).map(r => ({ label: r.name, value: r.count }));
+      const voiceUsers = (d.top_voice_users || []).map(u => ({ label: u.name || u.id, value: u.count, sub: u.sessions, avatar: u.avatar_url, id: u.id }));
+      const topReputation = (d.top_reputation || []).map(r => ({ label: r.name || r.id, value: r.count, avatar: r.avatar_url, id: r.id }));
 
       renderChart('lineChart', 'chart-growth', growth, { label: 'Member count', valueLabel: 'Members' });
       renderChart('lineChart', 'chart-new-members', newMembers, { label: 'New members', valueLabel: 'Members' });

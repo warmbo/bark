@@ -135,7 +135,9 @@ class MockGuild:
             m.created_at = datetime(2023, 1, 1, tzinfo=timezone.utc)
             m.avatar = None
             m.display_avatar = MagicMock()
-            m.display_avatar.url = f"https://cdn.discordapp.com/avatars/{m.id}/hash.png"
+            # Discord's real default-avatar CDN (resolves in the browser) so
+            # visual verification of the stats charts shows an actual image.
+            m.display_avatar.url = f"https://cdn.discordapp.com/embed/avatars/{i % 5}.png"
             self.members.append(m)
 
         # For get_member
@@ -441,10 +443,22 @@ def seed_stats():
                         recorded_at=day + timedelta(hours=16),
                     ))
                 s.add(VoiceSession(
-                    guild_id=str(bot._guild.id), user_id="90001", user_tag="User0#0000",
+                    guild_id=str(bot._guild.id), user_id="40001", user_tag="User1#0000",
                     channel_id="1000", channel_name="Gaming", joined_at=day + timedelta(hours=15),
                     left_at=day + timedelta(hours=16, minutes=30), duration_seconds=5400,
                 ))
+            # Reputation profiles so the Top Reputation chart resolves a display
+            # name + avatar from the mock guild's members.
+            from database.models.reputation import ReputationProfile
+
+            s.add(ReputationProfile(
+                guild_id=str(bot._guild.id), user_id="40001", total_score=128.0, level=9,
+                week_start=now.date(), month_start=now.date(),
+            ))
+            s.add(ReputationProfile(
+                guild_id=str(bot._guild.id), user_id="40002", total_score=87.0, level=6,
+                week_start=now.date(), month_start=now.date(),
+            ))
             await s.commit()
 
     loop.run_until_complete(_run())

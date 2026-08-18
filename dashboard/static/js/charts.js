@@ -100,11 +100,12 @@
     const rows = data.slice(0, 10);
     const max = Math.max.apply(null, rows.map(r => r.value).concat([1]));
     const rowH = 22;
+    const hasAvatars = rows.some(r => r.avatar);
     // Reserve enough room for real Discord channel/emoji names and for the
     // value after a full-width bar. The former fixed 42px gutter clipped both.
     const longestLabel = rows.reduce((n, row) => Math.max(n, String(row.label || '').length), 0);
     const barPad = {
-      left: Math.min(140, Math.max(58, longestLabel * 6 + 10)),
+      left: Math.min(150, Math.max(hasAvatars ? 70 : 58, longestLabel * 6 + 10 + (hasAvatars ? 12 : 0))),
       right: 32,
     };
     const iw = W - barPad.left - barPad.right;
@@ -113,7 +114,17 @@
     rows.forEach((r, i) => {
       const y = i * rowH;
       const bw = (r.value / max) * iw;
-      html += '<text x="' + (barPad.left - 6) + '" y="' + (y + rowH / 2 + 3) + '" text-anchor="end" font-size="10" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
+      // Avatar (circular clip) when present; the label then shifts right.
+      if (r.avatar) {
+        const clipId = 'clip-' + i + '-' + (r.id || i);
+        const avX = barPad.left - 16;
+        const avY = y + rowH / 2;
+        html += '<circle cx="' + avX + '" cy="' + avY + '" r="7" fill="var(--bg-card-solid)" stroke="var(--border-subtle)" stroke-width="1"></circle>';
+        html += '<defs><clipPath id="' + esc(clipId) + '"><circle cx="' + avX + '" cy="' + avY + '" r="6.2"></circle></clipPath></defs>';
+        html += '<image x="' + (avX - 6.2) + '" y="' + (avY - 6.2) + '" width="12.4" height="12.4" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + esc(clipId) + ')" href="' + esc(r.avatar) + '"></image>';
+      }
+      const textX = r.avatar ? barPad.left - 10 : barPad.left - 6;
+      html += '<text x="' + textX + '" y="' + (y + rowH / 2 + 3) + '" text-anchor="end" font-size="10" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
       html += '<rect x="' + barPad.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3" fill="var(--accent)" opacity="0.85"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
       html += '<text x="' + (barPad.left + bw + 6) + '" y="' + (y + rowH / 2 + 3) + '" font-size="10" fill="var(--text-tertiary)">' + esc(r.value) + '</text>';
     });

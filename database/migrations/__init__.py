@@ -581,6 +581,48 @@ async def _add_activity_snapshot_message_breakdown(connection: AsyncConnection) 
         )
 
 
+async def _backfill_channel_stats_from_reputation(connection: AsyncConnection) -> None:
+    """Backfill ``daily_channel_stats`` from reputation message events.
+
+    The per-day channel table only starts recording when the stats recorder is
+    deployed, so on an upgrade the Statistics page shows "No messages" for
+    today/7d/30d even though the server has been active. Reputation events
+    already carry one ``message`` row per scored message with ``channel_id``
+    and ``created_at``, so we rebuild historical daily counts from them. Names
+    are resolved live by the stats endpoint (the migration has no Discord
+    context).
+    """
+    table_exists = (
+        await connection.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='reputation_events'"
+        )
+    ).first()
+    channel_table_exists = (
+        await connection.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='daily_channel_stats'"
+        )
+    ).first()
+    if table_exists is None or channel_table_exists is None:
+        return
+    await connection.exec_driver_sql(
+        """
+        INSERT OR IGNORE INTO daily_channel_stats
+            (guild_id, stat_date, channel_id, channel_name, message_count)
+        SELECT
+            guild_id,
+            date(created_at),
+            channel_id,
+            '',
+            COUNT(*)
+        FROM reputation_events
+        WHERE event_type = 'message'
+          AND channel_id IS NOT NULL
+          AND channel_id != ''
+        GROUP BY guild_id, date(created_at), channel_id
+        """
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -723,6 +765,10 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX IF NOT EXISTS ix_voice_game_stats_guild_id ON voice_game_stats (guild_id)",
             "CREATE INDEX IF NOT EXISTS ix_voice_game_stats_recorded_at ON voice_game_stats (recorded_at)",
         ),
+    ),
+    (
+        "0016_backfill_channel_stats_from_reputation",
+        _backfill_channel_stats_from_reputation,
     ),
 )
 

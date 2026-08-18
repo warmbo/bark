@@ -437,3 +437,55 @@ async def test_dashboard_guild_access_dedupes_and_enforces_unique(tmp_path):
                 "('42', '100', 'Guild', 0, 0)"
             )
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_backfill_channel_stats_from_reputation(tmp_path):
+    """The 0016 migration rebuilds historical daily_channel_stats rows from
+    reputation message events, so the Statistics page shows today/7d/30d data
+    even right after an upgrade (the per-day recorder only starts on deploy)."""
+    from database.migrations import _backfill_channel_stats_from_reputation
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'backfill.db'}")
+    async with engine.connect() as connection:
+        await connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        await connection.exec_driver_sql(
+            "CREATE TABLE reputation_events ("
+            "id INTEGER PRIMARY KEY, guild_id VARCHAR(32) NOT NULL, "
+            "event_type VARCHAR(32) NOT NULL, channel_id VARCHAR(32), "
+            "created_at DATETIME NOT NULL)"
+        )
+        await connection.exec_driver_sql(
+            "CREATE TABLE daily_channel_stats ("
+            "id INTEGER PRIMARY KEY, guild_id VARCHAR(32) NOT NULL, "
+            "stat_date DATE NOT NULL, channel_id VARCHAR(32) NOT NULL, "
+            "channel_name VARCHAR(120) NOT NULL DEFAULT '', "
+            "message_count INTEGER NOT NULL DEFAULT 0, "
+            "CONSTRAINT uq_daily_channel_day UNIQUE (guild_id, stat_date, channel_id))"
+        )
+        await connection.exec_driver_sql(
+            "INSERT INTO reputation_events (guild_id, event_type, channel_id, created_at) VALUES "
+            "('1', 'message', '100', '2026-08-14 10:00:00'), "
+            "('1', 'message', '100', '2026-08-14 11:00:00'), "
+            "('1', 'message', '100', '2026-08-14 12:00:00'), "
+            "('1', 'message', '200', '2026-08-14 13:00:00'), "
+            "('1', 'message', '200', '2026-08-15 13:00:00'), "
+            "('1', 'reaction', '100', '2026-08-14 14:00:00'), "  # ignored: not a message
+            "('1', 'message', NULL, '2026-08-14 15:00:00')"  # ignored: no channel
+        )
+        await _backfill_channel_stats_from_reputation(connection)
+        await connection.commit()
+
+        rows = (
+            await connection.exec_driver_sql(
+                "SELECT stat_date, channel_id, message_count "
+                "FROM daily_channel_stats ORDER BY stat_date, channel_id"
+            )
+        ).fetchall()
+        # channel 100 on 08-14 = 3; channel 200 on 08-14 = 1 and 08-15 = 1.
+        assert ("2026-08-14", "100", 3) in rows
+        assert ("2026-08-14", "200", 1) in rows
+        assert ("2026-08-15", "200", 1) in rows
+        assert len(rows) == 3, f"expected 3 backfilled rows, got {rows}"
+    await engine.dispose()
+
