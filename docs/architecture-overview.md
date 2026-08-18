@@ -11,9 +11,7 @@ bark/
 ├── bot/
 │   ├── client.py              # BarkBot — main discord.py Client subclass
 │   └── ...
-├── config/
-│   ├── __init__.py             # Singleton config object
-│   └── ...
+├── config.py                  # Config dataclasses + singleton (env-driven; see docs/configuration.md)
 ├── database/
 │   ├── engine.py               # SQLAlchemy async engine + session_scope
 │   └── models/
