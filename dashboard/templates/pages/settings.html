@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/primitives.html" import page_header %}
+{% from "components/primitives.html" import page_header, settings_section, settings_card %}
 {% block title %}Settings — {{ guild.name }}{% endblock %}
 
 {% block content %}
@@ -13,14 +13,10 @@
         <div class="settings-main">
 
             <!-- Server Settings -->
-            <h2 class="settings-section-heading" id="server-settings">{{ icon("server", 18) }} Server</h2>
-            <p class="settings-section-desc">Per-server configuration — applies only to {{ guild.name }}.</p>
+            {{ settings_section("Server", "Per-server configuration — applies only to " ~ guild.name, icon_name="server", id="server-settings") }}
 
             <!-- Custom Link (URL slug) -->
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("link", 16) }} Custom Link</h2><p class="card-description">A short, human-friendly URL to this server instead of its numeric ID.</p></div>
-                </div>
+            {% call settings_card("Custom Link", "A short, human-friendly URL to this server instead of its numeric ID.", icon_name="link") %}
                 <div class="settings-form">
                     <div class="form-group">
                         <label class="form-label" for="slug-input">Server link</label>
@@ -36,13 +32,10 @@
                         <span class="form-hint" id="slug-status" role="status"></span>
                     </div>
                 </div>
-            </div>
+            {% endcall %}
 
             <!-- Dashboard Access -->
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("shield", 16) }} Dashboard Access</h2><p class="card-description">Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.</p></div>
-                </div>
+            {% call settings_card("Dashboard Access", "Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.", icon_name="shield") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Moderator roles</span>
@@ -73,17 +66,13 @@
                     <button type="button" class="btn btn-primary" id="dashboard-mod-roles-save">{{ icon("save", 14) }} Save</button>
                     <span class="form-hint" id="dashboard-mod-roles-status" role="status"></span>
                 </div>
-            </div>
+            {% endcall %}
 
             <!-- Instance Settings -->
-            <h2 class="settings-section-heading" id="instance-settings">{{ icon("cpu", 18) }} Instance</h2>
-            <p class="settings-section-desc">Applies to the whole Bark instance across every server.</p>
+            {{ settings_section("Instance", "Applies to the whole Bark instance across every server.", icon_name="cpu", id="instance-settings") }}
 
             <!-- Dashboard Configuration -->
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("radio", 16) }} Dashboard Configuration</h2><p class="card-description">Connection and identity information.</p></div>
-                </div>
+            {% call settings_card("Dashboard Configuration", "Connection and identity information.", icon_name="radio") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Server ID</span>
@@ -129,14 +118,11 @@
                         <span class="info-value">Bark {{ request.app.state.version }}</span>
                     </div>
                 </div>
-            </div>
+            {% endcall %}
 
             <!-- Backups (database snapshot + module settings export/import) -->
             {% if is_owner %}
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("database", 16) }} Backups</h2><p class="card-description">Snapshot the full database, or export and restore every module's settings as one JSON file.</p></div>
-                </div>
+            {% call settings_card("Backups", "Snapshot the full database, or export and restore every module's settings as one JSON file.", icon_name="database") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Database snapshots</span>
@@ -158,7 +144,7 @@
                 <div class="workspace-data-card" id="db-backup-result" aria-live="polite"></div>
                 <p class="form-hint">JSON restores one server's settings/modules immediately. A full SQLite .db restore is integrity-checked, staged, migrated on restart, and keeps the current database as a rollback snapshot.</p>
                 <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
-            </div>
+            {% endcall %}
             {% endif %}
 
             <!-- Bot Customization -->
@@ -169,10 +155,7 @@
 
         <!-- Side column: Module Configuration, Config Health, then Updates -->
         <div class="settings-side">
-            <div class="content-card">
-                <div class="card-header">
-                    <h2 class="card-title">{{ icon("puzzle", 16) }} Module Configuration</h2>
-                </div>
+            {% call settings_card("Module Configuration", icon_name="puzzle") %}
                 <div class="module-nav-list" id="module-nav-list">
                     {% if request and request.state and request.state.bot is defined %}
                     {% set _mods = request.state.bot.modules.get_all_modules() %}
@@ -192,26 +175,20 @@
                     {% endif %}
                 {% endif %}
                 </div>
-            </div>
+            {% endcall %}
 
             <!-- Config Health -->
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("activity", 16) }} Config Health</h2><p class="card-description">Configuration issues across every module in this server.</p></div>
-                </div>
+            {% call settings_card("Config Health", "Configuration issues across every module in this server.", icon_name="activity") %}
                 <div class="config-health" id="settings-health">
                     <span class="config-health-label">{{ icon("activity", 14) }} Config health</span>
                     <span class="config-health-status" id="settings-health-status">Loading...</span>
                     <div class="config-health-issues mt-1" id="settings-health-issues"></div>
                 </div>
-            </div>
+            {% endcall %}
 
             <!-- Updates (from GitHub, by release version) -->
             {% if is_owner %}
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("refresh-cw", 16) }} Updates</h2><p class="card-description">Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.</p></div>
-                </div>
+            {% call settings_card("Updates", "Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.", icon_name="refresh-cw") %}
                 <div class="module-info-body">
                     <div class="info-row">
                         <span class="info-label">Channel</span>
@@ -244,30 +221,21 @@
                     <button type="button" class="btn btn-primary" id="update-apply-btn" disabled>{{ icon("download", 14) }} Update &amp; Restart</button>
                 </div>
                 <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
-            </div>
+            {% endcall %}
 
             <!-- Diagnostics (download a redacted report for support) -->
-            <div class="content-card" id="diagnostics-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("file-text", 16) }} Diagnostics</h2><p class="card-description">Download a redacted report of this instance's version, environment, git/remote state and recent logs. Paste it back to us when diagnosing an issue.</p></div>
-                </div>
+            {% call settings_card("Diagnostics", "Download a redacted report of this instance's version, environment, git/remote state and recent logs. Paste it back to us when diagnosing an issue.", icon_name="file-text", id="diagnostics-card") %}
                 <div class="form-actions form-actions-static">
                     <button type="button" class="btn" id="diagnostics-download-btn" aria-label="Download diagnostic report">{{ icon("download", 14) }} Download diagnostic report</button>
                 </div>
                 <div class="workspace-data-card" id="diagnostics-result" aria-live="polite"></div>
-            </div>
+            {% endcall %}
             {% endif %}
         </div>
     </div>
 
     {% if is_owner %}
-    <div class="content-card" id="instance-invites">
-        <div class="card-header">
-            <div>
-                <h2 class="card-title">{{ icon("share-2", 16) }} Hosted Instance Access</h2>
-                <p class="card-description">Create one-time share links for people allowed to add and manage Bark in servers they administer.</p>
-            </div>
-        </div>
+    {% call settings_card("Hosted Instance Access", "Create one-time share links for people allowed to add and manage Bark in servers they administer.", icon_name="share-2", id="instance-invites") %}
         <form class="settings-form" id="instance-invite-form">
             <div class="form-grid form-grid-2">
                 <div class="form-group">
@@ -289,7 +257,7 @@
             <div class="input-row"><input class="form-input" id="instance-invite-url" name="share_url" type="url" readonly><button type="button" class="btn" id="instance-invite-copy">Copy</button></div>
         </div>
         <div class="workspace-data-card" id="instance-invite-list" aria-live="polite"></div>
-    </div>
+    {% endcall %}
     {% endif %}
 
 </div>

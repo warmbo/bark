@@ -12,6 +12,18 @@
 </article>
 {%- endmacro %}
 
+{% macro settings_section(title, description='', icon_name='', id='') -%}
+<h2 class="settings-section-heading"{% if id %} id="{{ id }}"{% endif %}>{% if icon_name %}{{ icon(icon_name, 18) }} {% endif %}{{ title }}</h2>
+{% if description %}<p class="settings-section-desc">{{ description }}</p>{% endif %}
+{%- endmacro %}
+
+{% macro settings_card(title='', description='', icon_name='', classes='', id='') -%}
+<article{% if id %} id="{{ id }}"{% endif %} class="content-card{% if classes %} {{ classes }}{% endif %}">
+  {% if title or description %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{% if icon_name %}{{ icon(icon_name, 16) }} {% endif %}{{ title }}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div></header>{% endif %}
+  {% if caller is defined %}{{ caller() }}{% endif %}
+</article>
+{%- endmacro %}
+
 {% macro badge(label, variant='neutral', classes='') -%}<span class="status-badge status-{{ variant }}{% if classes %} {{ classes }}{% endif %}"><span class="status-indicator" aria-hidden="true"></span>{{ label }}</span>{%- endmacro %}
 
 {% macro input_field(name, label='', value='', type='text', id='', placeholder='', description='') -%}
