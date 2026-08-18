@@ -214,14 +214,17 @@ def create_app(bot: BarkBot) -> DashboardApp:
         Returns 200 HTML with Bark OpenGraph tags instead of a bare 302 so that
         sharing the invite link in Discord shows a Bark-branded card. Discord's
         link unfurl reads the HTML (it never follows client-side redirects);
-        humans get a meta-refresh + JS redirect to the real invite URL, with a
-        manual "Continue to Discord" button as fallback.
+        humans get a meta-refresh + JS redirect to the real Discord OAuth URL,
+        with a manual "Continue to Discord" button as fallback.
+
+        The user-facing invite URL shown in the UI is always the branded
+        ``{public_url}/invite`` (config.dashboard.invite_url); this route
+        computes the actual Discord OAuth redirect target server-side so the
+        page never loops back to itself.
         """
-        invite_url = config.dashboard.invite_url
-        if not invite_url:
-            # No invite configured: still serve the branded page (Discord will
-            # unfurl it), but fall back to the landing page for humans.
-            invite_url = ""
+        from services.dashboard_access import build_bot_invite_url
+
+        invite_url = build_bot_invite_url(config.oauth2.client_id, "")
         tmpl = request.app.state.templates
         return tmpl.TemplateResponse(
             request,
@@ -294,6 +297,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
                     config.oauth2.owner_discord_ids
                     and user_id in config.oauth2.owner_discord_ids
                 ),
+                public_url=config.dashboard.public_url,
             )
         else:
             guilds = [

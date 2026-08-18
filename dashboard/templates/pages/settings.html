@@ -326,14 +326,20 @@
 
     function refreshModRolesSummary() {
         if (!modRolesSummary) return;
-        const checked = document.querySelectorAll('#mod-roles-list input[type="checkbox"]:checked');
+        const checked = Array.from(
+            document.querySelectorAll('#mod-roles-list input[type="checkbox"]:checked')
+        );
         if (!checked.length) {
             modRolesSummary.textContent = 'No moderator roles…';
             return;
         }
-        modRolesSummary.textContent = checked.length === 1
-            ? '1 moderator role selected'
-            : `${checked.length} moderator roles selected`;
+        // List the actual names of every selected role so the closed
+        // dropdown reflects exactly who is selected.
+        const names = checked.map(cb => {
+            const label = cb.closest('label');
+            return label ? label.querySelector('span')?.textContent?.trim() : '';
+        }).filter(Boolean);
+        modRolesSummary.textContent = names.join(', ');
     }
 
     async function loadDashboardModRoles() {

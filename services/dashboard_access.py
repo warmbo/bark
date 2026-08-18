@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 from collections.abc import Iterable, Sequence
 from typing import Any
 
@@ -437,21 +438,26 @@ async def revoke_user_guild_access(
 
 
 def build_bot_invite_url(client_id: str, guild_id: str) -> str:
-    """Build the branded invite link for Bark.
+    """Build the server-targeted Discord OAuth install URL for Bark.
 
-    Always returns the public invite landing URL (``{public_url}/invite``),
-    which resolves to the real Discord OAuth install link server-side via the
-    ``/invite`` route. This keeps a single canonical invite URL everywhere
-    (guild cards, dashboard, help module) instead of leaking the raw Discord
-    OAuth URL into the UI.
+    This is the *real* Discord redirect target, used server-side by the
+    ``/invite`` route to send humans to Discord. It is deliberately NOT what
+    the UI surfaces: the user-facing invite link is always the branded
+    ``{public_url}/invite`` (see ``build_guild_catalog`` and
+    ``config.dashboard.invite_url``), which resolves here via the /invite page.
     """
-    from config import config as _config
-
-    public_url = getattr(_config, "dashboard", None)
-    public_url = getattr(public_url, "public_url", "") if public_url else ""
-    if not public_url:
+    if not client_id:
         return ""
-    return f"{public_url.rstrip('/')}/invite"
+    query = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "scope": "bot applications.commands",
+            "permissions": "8",
+            "guild_id": guild_id,
+            "disable_guild_select": "true",
+        }
+    )
+    return f"https://discord.com/oauth2/authorize?{query}"
 
 
 def build_guild_catalog(
@@ -462,6 +468,7 @@ def build_guild_catalog(
     moderator_roles_by_guild: dict[str, set[str]] | None = None,
     admin_roles_by_guild: dict[str, str | None] | None = None,
     is_instance_owner: bool = False,
+    public_url: str = "",
 ) -> list[dict[str, Any]]:
     """Merge a user's complete Discord server list with live bot state.
 
@@ -471,7 +478,9 @@ def build_guild_catalog(
     ``get_dashboard_admin_role``); they drive the per-server
     ``ready_to_manage`` flag shown as "Ready to manage". ``is_instance_owner``
     marks the person running this Bark instance, who can manage every server
-    their bot is in.
+    their bot is in. ``public_url`` is the dashboard base URL; each guild's
+    ``invite_url`` is the canonical branded ``{public_url}/invite`` link
+    (the /invite route resolves it to the real Discord OAuth URL).
     """
     installed = {str(guild.id): guild for guild in bot_guilds}
     moderator_roles_by_guild = moderator_roles_by_guild or {}
@@ -503,7 +512,7 @@ def build_guild_catalog(
                 "ready_to_manage": can_manage,
                 "manage_reason": manage_reason(access, guild_moderator_roles, guild_admin_role),
                 "access_tier": access_tier,
-                "invite_url": build_bot_invite_url(client_id, access.guild_id),
+                "invite_url": f"{public_url.rstrip('/')}/invite" if public_url else "",
             }
         )
     tier_order = {"connected": 0, "manageable": 1, "other": 2}

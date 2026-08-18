@@ -260,8 +260,13 @@ class Config:
             if value.strip()
         }
 
-        # Invite URL
-        cfg.dashboard.invite_url = os.getenv("BARK_INVITE_URL", "")
+        # Invite URL — canonical branded link is {public_url}/invite (which
+        # resolves to the real Discord OAuth install server-side via /invite).
+        # An explicit BARK_INVITE_URL still wins, but the default is no longer
+        # the raw Discord OAuth URL leaked into the UI.
+        cfg.dashboard.invite_url = os.getenv("BARK_INVITE_URL", "").strip() or (
+            f"{cfg.dashboard.public_url}/invite" if cfg.dashboard.public_url else ""
+        )
 
         # Self-update
         cfg.instance.repo_dir = os.getenv("BARK_REPO_DIR", "")

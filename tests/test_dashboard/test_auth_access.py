@@ -194,7 +194,7 @@ def test_catalog_includes_every_oauth_guild_and_marks_bot_installation():
         },
     )()
 
-    catalog = build_guild_catalog(oauth_guilds, [bot_guild], client_id="123")
+    catalog = build_guild_catalog(oauth_guilds, [bot_guild], client_id="123", public_url="http://test.local")
 
     assert [guild["id"] for guild in catalog] == ["100", "200", "300"]
     assert [guild["access_tier"] for guild in catalog] == ["connected", "manageable", "other"]
@@ -975,6 +975,7 @@ def test_catalog_marks_ready_to_manage_per_server_from_configured_roles():
         bot_guilds,
         client_id="123",
         moderator_roles_by_guild={"100": {"555"}},
+        public_url="http://test.local",
     )
     by_id = {entry["id"]: entry for entry in catalog}
 
@@ -1057,6 +1058,7 @@ def test_catalog_manage_reason_explains_the_grant():
         client_id="123",
         moderator_roles_by_guild={"200": {"111"}},
         admin_roles_by_guild={"300": "222"},
+        public_url="http://test.local",
     )
     by_id = {e["id"]: e for e in catalog}
     assert by_id["100"]["manage_reason"] == "You own this server"

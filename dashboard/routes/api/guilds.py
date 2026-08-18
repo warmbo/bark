@@ -66,6 +66,7 @@ async def list_guilds(request: Request):
                     client_id=config.oauth2.client_id,
                     moderator_roles_by_guild=moderator_roles,
                     admin_roles_by_guild=admin_roles,
+                    public_url=config.dashboard.public_url,
                 )
             }
         )

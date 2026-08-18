@@ -2598,6 +2598,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     font-size: 13px;
 }
 
+/* Upload-banner control sits centered directly below the banner preview. */
+.banner-section > .form-actions-static {
+    justify-content: center;
+    padding-top: var(--space-2);
+}
+
 /* Inline input + button row */
 .input-row {
     display: flex;

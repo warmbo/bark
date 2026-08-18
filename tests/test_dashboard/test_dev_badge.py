@@ -168,11 +168,17 @@ async def test_middleware_does_not_double_inject(app, monkeypatch, client):
 async def test_invite_route_serves_bark_branded_og_page(app, monkeypatch, client):
     """GET /invite returns 200 HTML with Bark OG tags (so Discord's unfurl
     shows a Bark-branded card, not the Discord oauth2 preview), and includes a
-    client-side redirect to the real Discord OAuth invite URL."""
-    import config
+    client-side redirect to the real Discord OAuth invite URL.
 
-    target = "https://discord.com/oauth2/authorize?client_id=123&scope=bot"
-    monkeypatch.setattr(config.config.dashboard, "invite_url", target)
+    The user-facing invite link is the branded {public_url}/invite, but the
+    /invite route itself computes the actual Discord OAuth redirect target
+    server-side (build_bot_invite_url) so the page never loops.
+    """
+    import config
+    from services.dashboard_access import build_bot_invite_url
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    target = build_bot_invite_url("123", "")
     async with client:
         response = await client.get("/invite", follow_redirects=False)
     assert response.status_code == 200
@@ -191,12 +197,12 @@ async def test_invite_route_serves_bark_branded_og_page(app, monkeypatch, client
 
 
 @pytest.mark.asyncio
-async def test_invite_route_without_config_still_serves_branded_page(app, monkeypatch, client):
-    """Without an invite_url configured, /invite still serves the branded page
+async def test_invite_route_without_client_id_still_serves_branded_page(app, monkeypatch, client):
+    """Without a client_id configured, /invite still serves the branded page
     (Discord can unfurl it) but with no client-side redirect."""
     import config
 
-    monkeypatch.setattr(config.config.dashboard, "invite_url", "")
+    monkeypatch.setattr(config.config.oauth2, "client_id", "")
     async with client:
         response = await client.get("/invite", follow_redirects=False)
     assert response.status_code == 200
