@@ -548,6 +548,39 @@ async def _add_reputation_event_daily_cap_idx(connection: AsyncConnection) -> No
     )
 
 
+async def _add_activity_snapshot_message_breakdown(connection: AsyncConnection) -> None:
+    """Add channel/emoji message-breakdown columns to ``activity_snapshots``.
+
+    The Statistics page reads these to show top channels / emojis even after a
+    bot restart clears the in-memory counters. Guarded by a PRAGMA probe so
+    ``create_all`` (which already includes them) and existing DBs both work.
+    Migration-test fixtures may build minimal schemas without the table.
+    """
+    table_exists = (
+        await connection.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='activity_snapshots'"
+        )
+    ).first()
+    if table_exists is None:
+        return
+    columns = {
+        row[1]
+        for row in (
+            await connection.exec_driver_sql('PRAGMA table_info("activity_snapshots")')
+        ).fetchall()
+    }
+    if "channel_messages" not in columns:
+        await connection.exec_driver_sql(
+            "ALTER TABLE activity_snapshots "
+            "ADD COLUMN channel_messages TEXT NOT NULL DEFAULT '{}'"
+        )
+    if "emoji_counts" not in columns:
+        await connection.exec_driver_sql(
+            "ALTER TABLE activity_snapshots "
+            "ADD COLUMN emoji_counts TEXT NOT NULL DEFAULT '{}'"
+        )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -638,6 +671,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     (
         "0012_reputation_event_daily_cap_idx",
         _add_reputation_event_daily_cap_idx,
+    ),
+    (
+        "0013_activity_snapshot_message_breakdown",
+        _add_activity_snapshot_message_breakdown,
     ),
 )
 

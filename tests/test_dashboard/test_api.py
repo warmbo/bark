@@ -726,6 +726,89 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
 
 
 @pytest.mark.asyncio
+async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeypatch):
+    """After a bot restart the in-memory message counters are empty; the stats
+    endpoint must fall back to the persisted daily ActivitySnapshot breakdowns
+    so top channels / emojis still show data (item 5)."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from datetime import date, timedelta
+
+    from database.engine import session_scope
+    from database.models.analytics import ActivitySnapshot
+    from database.models.guild import Guild
+
+    async with session_scope() as s:
+        from sqlalchemy import select
+
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "999"))).scalars().first():
+            s.add(Guild(discord_id="999", name="Persist Guild"))
+            await s.flush()
+        s.add(ActivitySnapshot(
+            guild_id="999",
+            snapshot_date=date.today() - timedelta(days=1),
+            total_members=10,
+            total_channels=3,
+            total_messages=7,
+            total_reactions=4,
+            channels_active=2,
+            channel_messages='{"100":{"name":"general","count":5},"200":{"name":"memes","count":2}}',
+            emoji_counts='{"laugh":4,"wow":1}',
+        ))
+        s.add(ActivitySnapshot(
+            guild_id="999",
+            snapshot_date=date.today(),
+            total_members=11,
+            total_channels=3,
+            total_messages=7,
+            total_reactions=4,
+            channels_active=2,
+            channel_messages='{"100":{"name":"general","count":5},"200":{"name":"memes","count":2}}',
+            emoji_counts='{"laugh":4,"wow":1}',
+        ))
+        await s.commit()
+
+    guild = SimpleNamespace(
+        id=999, name="Persist Guild", member_count=11, owner_id=1, owner=None,
+        banner=None, icon=None, description=None, premium_tier=0,
+        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
+        channels=[], roles=[], emojis=[], created_at=None, verification_level=None,
+        features=[], scheduled_events=[], members=[], text_channels=[], voice_channels=[],
+    )
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    # Simulate a fresh restart: the in-memory counters report zero activity.
+    bot.message_stats = lambda _gid: {
+        "date": date.today().isoformat(), "messages": 0,
+        "channels": {}, "emojis": {}, "emoji_total": {}, "history": [],
+    }
+    bot.top_channels = lambda _gid, days: []
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot), session={"role": "admin"},
+        url=SimpleNamespace(path="/api/v1/guilds/999"),
+    )
+
+    import json
+    stats = await guilds.get_guild_stats(request, 999)
+    assert stats.status_code == 200
+    data = json.loads(stats.body)["data"]
+    # Even with zero live activity, the persisted breakdown still feeds the page:
+    # general (5+5 across two persisted days) remains the top channel.
+    assert data["top_channels_today"][0] == {"name": "general", "count": 10}
+    assert data["top_channels_today"][1] == {"name": "memes", "count": 4}
+    assert data["top_channels_7d"][0]["name"] == "general"
+    assert data["top_channels_30d"][0]["name"] == "general"
+    assert data["top_emojis_all_time"][0] == {"name": "laugh", "count": 8}
+
+
+@pytest.mark.asyncio
 async def test_set_guild_banner_persists_and_clears(app, monkeypatch):
     """PUT /guilds/{id}/banner stores a custom banner URL (and clears it)."""
     from types import SimpleNamespace

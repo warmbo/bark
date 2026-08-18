@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.engine import Base
@@ -31,6 +31,16 @@ class ActivitySnapshot(Base):
     channels_active: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_channels: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     threads_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Per-channel message counts for the snapshot day, stored as a JSON object
+    # mapping channel_id -> {"name": str, "count": int}. Persisted by the data
+    # collector so the Statistics page can show top channels (and their history)
+    # even after a bot restart wiped the in-memory counters.
+    channel_messages: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    # Per-emoji reaction counts (and all-time totals) for the snapshot day,
+    # stored as a JSON object mapping emoji name -> count.
+    emoji_counts: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )

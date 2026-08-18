@@ -282,12 +282,30 @@ def seed_growth():
                 await s.commit()
         async with session_scope() as s:
             start = 128
+            import json
+
+            channel_messages = json.dumps(
+                {
+                    "1000": {"name": "channel-0", "count": 20},
+                    "1001": {"name": "channel-1", "count": 12},
+                    "1002": {"name": "channel-2", "count": 6},
+                },
+                separators=(",", ":"),
+            )
+            emoji_counts = json.dumps(
+                {"laugh": 30, "wow": 8, "🔥": 5}, separators=(",", ":")
+            )
             for d in range(14):
                 s.add(ActivitySnapshot(
                     guild_id=str(bot._guild.id),
                     snapshot_date=date.today() - timedelta(days=13 - d),
                     total_members=start + d * 2,
                     total_channels=40 + d,
+                    total_messages=42,
+                    total_reactions=43,
+                    channels_active=3,
+                    channel_messages=channel_messages,
+                    emoji_counts=emoji_counts,
                 ))
             # Grant user 42 manage access so the guild gate lets the browser in.
             from database.models.permissions import DashboardUser

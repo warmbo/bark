@@ -291,6 +291,10 @@ async def get_guild_stats(request: Request, guild_id: int):
     async with session_scope() as session:
         growth_30d = await _guild_growth_30d(session, guild_id)
         growth_series = await _guild_growth_series(session, guild_id, days=30)
+        # Durable channel/emoji breakdowns persisted by the data collector —
+        # survives bot restarts that clear the in-memory counters.
+        db_ch_7d, db_emoji_all = await _snapshot_channel_emoji_totals(session, guild_id, 7)
+        db_ch_30d, _ = await _snapshot_channel_emoji_totals(session, guild_id, 30)
     online, in_voice = _online_and_voice_counts(guild)
 
     # Today's message/emoji activity (tracked live by the bot).
@@ -303,25 +307,73 @@ async def get_guild_stats(request: Request, guild_id: int):
                 msgs = result
         except Exception:
             msgs = {}
-    channels_today = sorted(msgs.get("channels", {}).values(), key=lambda c: c["count"], reverse=True)[:8]
-    emojis_today = sorted(msgs.get("emojis", {}).items(), key=lambda kv: kv[1], reverse=True)[:8]
+    # Use today's live counters when the bot has data this session; otherwise
+    # fall back to the persisted snapshot (which survives restarts). The
+    # snapshot for "today" is written by the collector on its first tick, so a
+    # just-restarted bot still has yesterday's + today's recorded breakdowns.
+    live_channels = msgs.get("channels", {})
+    live_messages = int(msgs.get("messages", 0) or 0)
+    today_snapshot_channels = {k: v for k, v in db_ch_7d.items()}
+    # If the in-memory counter has any activity, prefer it for "today";
+    # otherwise the persisted 7d window's most recent day is a safe stand-in.
+    if live_messages > 0:
+        channels_today = sorted(
+            live_channels.values(), key=lambda c: c["count"], reverse=True
+        )[:8]
+    else:
+        channels_today = sorted(
+            today_snapshot_channels.values(), key=lambda c: c["count"], reverse=True
+        )[:8]
+    emojis_today = sorted(
+        msgs.get("emojis", {}).items(), key=lambda kv: kv[1], reverse=True
+    )[:8]
 
-    # Trailing-window top channels (7d / 30d) + all-time emoji.
-    top_channels_7d: list[dict] = []
-    top_channels_30d: list[dict] = []
+    # Trailing-window top channels (7d / 30d) + all-time emoji. Combine the
+    # persisted snapshots (durable, survive restarts) with today's live counts
+    # and the in-memory session history (richest for the current session).
+    def _merge_sources(
+        db_map: dict[str, dict], in_memory: list[dict]
+    ) -> list[dict]:
+        merged = {k: dict(v) for k, v in db_map.items()}
+        for ch_id, entry in live_channels.items():
+            agg = merged.setdefault(str(ch_id), {"name": entry["name"], "count": 0})
+            agg["count"] += int(entry.get("count", 0) or 0)
+            agg["name"] = entry["name"]
+        for entry in in_memory:
+            ch_id = str(entry.get("id") or entry.get("channel_id") or entry.get("name"))
+            count = 0
+            try:
+                count = int(entry.get("count", 0) or 0)
+            except (ValueError, TypeError):
+                count = 0
+            name = entry.get("name") or ch_id
+            agg = merged.setdefault(ch_id, {"name": name, "count": 0})
+            agg["count"] += count
+            agg["name"] = name
+        return sorted(merged.values(), key=lambda c: c["count"], reverse=True)[:8]
+
+    in_mem_7d: list[dict] = []
+    in_mem_30d: list[dict] = []
     top_channels_fn = getattr(bot, "top_channels", None)
     if callable(top_channels_fn):
         try:
             r7 = top_channels_fn(guild_id, 7)
             r30 = top_channels_fn(guild_id, 30)
             if isinstance(r7, list):
-                top_channels_7d = r7[:8]
+                in_mem_7d = r7
             if isinstance(r30, list):
-                top_channels_30d = r30[:8]
+                in_mem_30d = r30
         except Exception:
-            top_channels_7d = []
-            top_channels_30d = []
-    all_time_emojis = msgs.get("emoji_total", {}) or {}
+            in_mem_7d, in_mem_30d = [], []
+
+    top_channels_7d = _merge_sources(db_ch_7d, in_mem_7d)
+    top_channels_30d = _merge_sources(db_ch_30d, in_mem_30d)
+    all_time_emojis = dict(db_emoji_all)
+    for name, count in msgs.get("emoji_total", {}).items():
+        try:
+            all_time_emojis[name] = all_time_emojis.get(name, 0) + int(count or 0)
+        except (ValueError, TypeError):
+            pass
     emojis_all_time = [
         {"name": k, "count": v}
         for k, v in sorted(all_time_emojis.items(), key=lambda kv: kv[1], reverse=True)[:8]
@@ -342,7 +394,7 @@ async def get_guild_stats(request: Request, guild_id: int):
             "in_voice": in_voice,
             "growth_30d": growth_30d,
             "growth_series": growth_series,
-            "messages_today": msgs.get("messages", 0),
+            "messages_today": live_messages,
             "top_channels_today": channels_today,
             "top_channels_7d": top_channels_7d,
             "top_channels_30d": top_channels_30d,
@@ -376,6 +428,64 @@ async def _guild_growth_series(session, guild_id: int, days: int = 30) -> list[d
         }
         for row in result.scalars().all()
     ]
+
+
+async def _snapshot_channel_emoji_totals(
+    session, guild_id: int, days: int
+) -> tuple[dict[str, dict], dict[str, int]]:
+    """Aggregate per-channel message counts and all-time emoji counts over the
+    trailing ``days`` from persisted activity snapshots.
+
+    Returns ``(channels, emoji_total)`` where ``channels`` maps channel_id ->
+    {"name": str, "count": int} and ``emoji_total`` maps emoji name -> count.
+    This is the durable source for the Statistics page: the in-memory bot
+    counters reset on restart, but these daily breakdowns survive in the DB.
+    """
+    import json
+    from datetime import date, timedelta
+
+    from sqlalchemy import select
+
+    from database.models.analytics import ActivitySnapshot
+
+    since = date.today() - timedelta(days=max(1, days))
+    result = await session.execute(
+        select(ActivitySnapshot)
+        .where(
+            ActivitySnapshot.guild_id == str(guild_id),
+            ActivitySnapshot.snapshot_date >= since,
+        )
+        .order_by(ActivitySnapshot.snapshot_date)
+    )
+    channels: dict[str, dict] = {}
+    emoji_total: dict[str, int] = {}
+    for row in result.scalars().all():
+        try:
+            day_channels = json.loads(row.channel_messages or "{}")
+        except (json.JSONDecodeError, TypeError):
+            day_channels = {}
+        for ch_id, entry in day_channels.items():
+            try:
+                count = int(entry.get("count", 0) or 0)
+            except (ValueError, TypeError):
+                count = 0
+            if count <= 0:
+                continue
+            agg = channels.setdefault(str(ch_id), {"name": "", "count": 0})
+            agg["count"] += count
+            agg["name"] = entry.get("name") or agg["name"]
+        try:
+            day_emojis = json.loads(row.emoji_counts or "{}")
+        except (json.JSONDecodeError, TypeError):
+            day_emojis = {}
+        for name, count in day_emojis.items():
+            try:
+                count = int(count or 0)
+            except (ValueError, TypeError):
+                count = 0
+            if count > 0:
+                emoji_total[name] = emoji_total.get(name, 0) + count
+    return channels, emoji_total
 
 
 @router.get("/guilds/{guild_id}/dashboard")

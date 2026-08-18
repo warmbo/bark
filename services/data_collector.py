@@ -368,6 +368,27 @@ class GuildDataCollector:
                                 )
                             )
                             existing = result.scalar_one_or_none()
+                            # Today's message/channel/emoji counts tracked live in
+                            # memory. Persist them so the Statistics page shows
+                            # data even after a bot restart clears the counters.
+                            import json
+
+                            msg_stats = {}
+                            msg_stats_fn = getattr(self.bot, "message_stats", None)
+                            if callable(msg_stats_fn):
+                                try:
+                                    raw = msg_stats_fn(guild.id)
+                                    if isinstance(raw, dict):
+                                        msg_stats = raw
+                                except Exception:
+                                    msg_stats = {}
+                            channel_messages = json.dumps(
+                                msg_stats.get("channels", {}), separators=(",", ":")
+                            )
+                            emoji_counts = json.dumps(
+                                msg_stats.get("emoji_total", {}),
+                                separators=(",", ":"),
+                            )
                             if existing:
                                 previous_member_count = existing.total_members
                                 existing.total_members = snapshot["member_count"]
@@ -378,6 +399,17 @@ class GuildDataCollector:
                                 existing.total_channels = snapshot.get("channels", {}).get(
                                     "total_channels", 0
                                 )
+                                existing.total_messages = int(
+                                    msg_stats.get("messages", 0) or 0
+                                )
+                                existing.total_reactions = sum(
+                                    int(v) for v in msg_stats.get("emojis", {}).values()
+                                )
+                                existing.channels_active = len(
+                                    msg_stats.get("channels", {})
+                                )
+                                existing.channel_messages = channel_messages
+                                existing.emoji_counts = emoji_counts
                             else:
                                 # Fresh-day baseline. While the member cache is
                                 # still warming after a restart (guild.chunked
@@ -397,6 +429,18 @@ class GuildDataCollector:
                                         total_channels=snapshot.get("channels", {}).get(
                                             "total_channels", 0
                                         ),
+                                        total_messages=int(
+                                            msg_stats.get("messages", 0) or 0
+                                        ),
+                                        total_reactions=sum(
+                                            int(v)
+                                            for v in msg_stats.get("emojis", {}).values()
+                                        ),
+                                        channels_active=len(
+                                            msg_stats.get("channels", {})
+                                        ),
+                                        channel_messages=channel_messages,
+                                        emoji_counts=emoji_counts,
                                     )
                                 )
                             await session.commit()
