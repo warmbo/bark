@@ -132,8 +132,9 @@ const BarkDialog = (() => {
         const renderCells = (list) => {
             grid.innerHTML = '';
             list.forEach((item, index) => {
-                const cell = document.createElement('button');
-                cell.type = 'button';
+                const cell = document.createElement('div');
+                cell.setAttribute('role', 'button');
+                cell.tabIndex = 0;
                 cell.className = 'dialog-grid-cell';
                 cell.setAttribute('aria-label', `Pick ${item.label || item.url}`);
                 const img = document.createElement('img');
@@ -141,12 +142,19 @@ const BarkDialog = (() => {
                 img.alt = item.label || '';
                 img.loading = 'lazy';
                 cell.appendChild(img);
-                cell.addEventListener('click', () => {
+                const pick = () => {
                     node.hidden = true; node.setAttribute('aria-hidden', 'true');
                     node._resolver = null;
                     gridWrap.hidden = true;
                     if (previousFocus?.isConnected) previousFocus.focus();
                     resolve(item);
+                };
+                cell.addEventListener('click', pick);
+                cell.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        pick();
+                    }
                 });
                 if (onDelete) {
                     const del = document.createElement('button');
@@ -173,7 +181,7 @@ const BarkDialog = (() => {
         renderCells(items);
         gridWrap.hidden = false;
         node.hidden = false; node.setAttribute('aria-hidden', 'false');
-        const first = grid.querySelector('button.dialog-grid-cell');
+        const first = grid.querySelector('.dialog-grid-cell[role="button"]');
         if (first) first.focus();
     });
 
@@ -449,7 +457,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         checkBotHealth();
-        setInterval(checkBotHealth, 30000);
+        const healthTimer = setInterval(checkBotHealth, 30000);
+        // Stop polling when the page is cached by bfcache (so the interval
+        // doesn't keep firing across restores) and restart on pageshow.
+        window.addEventListener('pagehide', () => clearInterval(healthTimer));
     }
 
     // ── Load Manifest & Build Sidebar ─────────────────
@@ -690,14 +701,12 @@ async function loadSidebarManifest(container) {
 
     // Always fetch fresh in background
     try {
-        const res = await fetch(`/api/v1/guilds/${guildId}/manifest`, { cache: 'no-cache' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const raw = await res.json();
-        const data = raw.data || raw;
-        setCachedManifest(guildId, data);
+        const data = await safeFetch(`/api/v1/guilds/${guildId}/manifest`, { cache: 'no-cache' });
+        const payload = data.data || data;
+        setCachedManifest(guildId, payload);
         // Avoid replacing identical cached markup (and briefly recreating its icons).
-        if (!cached || JSON.stringify(cached) !== JSON.stringify(data)) {
-            renderSidebar(container, data, activePage);
+        if (!cached || JSON.stringify(cached) !== JSON.stringify(payload)) {
+            renderSidebar(container, payload, activePage);
         }
     } catch (e) {
         if (cached) return; // cached render is good enough

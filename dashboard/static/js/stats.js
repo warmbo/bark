@@ -26,9 +26,12 @@
     }
   }
 
+  let statsRequestToken = 0;
   async function loadStats() {
+    const requestToken = ++statsRequestToken;
     try {
       const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/dashboard`, { cache: 'no-cache' });
+      if (requestToken !== statsRequestToken) return; // a newer reload started
       const d = (raw && (raw.data || raw)) || {};
 
       setStat('stat-members', d.members);
@@ -68,6 +71,7 @@
       renderChart('barChart', 'chart-emojis-all', emojisAll, { label: 'All-time reactions' });
       renderChart('barChart', 'chart-emojis', emojis, { label: 'Reactions today' });
     } catch (e) {
+      if (requestToken !== statsRequestToken) return; // a newer reload started
       setStat('stat-members', 'Unavailable');
       const err = document.getElementById('chart-growth');
       const msg = (window.BarkCharts && window.BarkCharts.esc)

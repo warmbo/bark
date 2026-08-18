@@ -232,11 +232,11 @@
   }
 
   function buildDataTable(table) {
-    const head = table.columns.map((c) => `<th>${escapeCell(c)}</th>`).join('');
+    const head = table.columns.map((c) => `<th scope="col">${escapeCell(c)}</th>`).join('');
     const body = table.rows.map((row) =>
       `<tr>${row.map((cell) => `<td>${escapeCell(cell)}</td>`).join('')}</tr>`
     ).join('');
-    return `<div style="overflow-x:auto"><table class="data-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+    return `<div style="overflow-x:auto"><table class="data-table"><caption class="sr-only">${escapeCell(table.title || 'Result')}</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
 
   // Actions marked data-auto-run="true" (e.g. the trivia leaderboard) run

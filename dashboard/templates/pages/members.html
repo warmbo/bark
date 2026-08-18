@@ -223,13 +223,13 @@ async function loadMembers(page = 0, append = false) {
         const loaded = grid.querySelectorAll('.member-table-row').length;
         allMembersLoaded = loaded >= membersTotal;
         if (pagination) pagination.hidden = allMembersLoaded;
-        if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; }
+        if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; refreshIcons(); }
     } catch (e) {
         if (requestToken !== memberRequestToken) return;
         if (!append) tbody.innerHTML = `<tr><td colspan="5"><div class="state-panel state-error" role="alert"><div><strong>Failed to load members</strong><p>${escHtml(e.message)}</p></div><button type="button" class="btn btn-sm" data-retry-members>Retry</button></div></td></tr>`;
         else membersPage = Math.max(0, membersPage - 1);
         count.textContent = 'Unavailable';
-        if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; }
+        if (loadMore) { loadMore.disabled = false; loadMore.innerHTML = '{{ icon("chevron-down", 14) }} Load More'; refreshIcons(); }
     }
 }
 

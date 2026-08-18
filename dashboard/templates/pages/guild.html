@@ -59,7 +59,7 @@
             </div>
 
             <!-- Server info chips -->
-            <div class="server-info-chips" id="server-info-chips">
+            <div class="server-info-chips" id="server-info-chips" aria-live="polite" aria-relevant="text">
                 <span class="info-chip" id="info-members">{{ icon("users", 14) }} <span>—</span></span>
                 <span class="info-chip" id="info-created">{{ icon("calendar", 14) }} <span>—</span></span>
                 <span class="info-chip" id="info-boost">{{ icon("zap", 14) }} <span>—</span></span>
@@ -326,10 +326,13 @@ motdSaveBtn?.addEventListener('click', async () => {
     }
 });
 
+let guildProfileRequestToken = 0;
 async function loadGuildProfile() {
+    const requestToken = ++guildProfileRequestToken;
     try {
         // Single aggregate round-trip: profile + viewer flag + module widgets.
         const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/dashboard`, {cache: 'no-cache'});
+        if (requestToken !== guildProfileRequestToken) return; // a newer reload started
         const d = (raw && (raw.data || raw)) || {};
         GUID_VIEWER = !!d.viewer;
         const g = d.guild || {};
@@ -338,6 +341,7 @@ async function loadGuildProfile() {
         renderServerProfile(g);
         renderWidgets(d.cards || []);
     } catch (e) {
+        if (requestToken !== guildProfileRequestToken) return;
         if (eventsFeed) eventsFeed.innerHTML = '<div class="state-panel state-error" role="alert"><div><strong>Could not load server profile</strong><p>' + (typeof escHtml === 'function' ? escHtml(e.message || 'Try again.') : 'Try again.') + '</p></div></div>';
     }
 }

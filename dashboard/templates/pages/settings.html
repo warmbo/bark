@@ -639,6 +639,12 @@
         if (termSubtitle) termSubtitle.textContent = 'Running update commands — this window shows exactly what is happening.';
         termClose.disabled = true;
         termOverlay.hidden = false;
+        // Move focus into the dialog so keyboard/screen-reader users aren't
+        // stranded on the background page while the update runs. The dialog
+        // only closes via the "Finish & Reload" page reload, so there is no
+        // need for a focus trap / Escape handler (there is nothing to cancel).
+        const termFocusTarget = termOverlay.querySelector('.update-terminal, button, [tabindex]');
+        if (termFocusTarget) termFocusTarget.focus();
         termTimer = setInterval(pollUpdateLog, 900);
         pollUpdateLog();
     }
@@ -928,6 +934,7 @@
         } finally {
             backupImportBtn.disabled = !backupFileInput?.files?.[0];
             backupImportBtn.innerHTML = '{{ icon("package-plus", 14) }} Import backup';
+            refreshIcons();
         }
     });
 
@@ -1057,6 +1064,7 @@
             showToast(error.message || 'Failed to update name', 'error');
         } finally {
             btn.disabled = false; btn.innerHTML = '{{ icon("save", 14) }} Save';
+            refreshIcons();
         }
     });
 
@@ -1083,6 +1091,7 @@
         } finally {
             btn.disabled = false;
             btn.innerHTML = '{{ icon("save", 16) }} Update presence';
+            refreshIcons();
         }
     });
 
