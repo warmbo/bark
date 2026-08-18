@@ -814,23 +814,29 @@ function renderNavItem(page, activePage) {
     const activeParts = activePage.split('/');
     const activeBase = activeParts[0];
 
-    // Split the Settings page into its section anchors for active matching.
     const pageRouteBase = pageRoute.split('?')[0];
-    const pageSection = (pageRoute.split('?')[1] || '').replace('section=', '');
-    const isSettingsSplit = pageRouteBase.endsWith('/settings') && (pageSection === 'instance' || pageSection === 'server');
 
     // List pages like "Modules" should only highlight on exact match,
     // never when viewing a sub-page like /guild/{id}/modules/moderation
     const isListPage = pageRoute.match(/\/modules$/) && !page.module;
+
+    // Settings are now two distinct pages (Server + Instance). The Server nav
+    // item (/settings) must only highlight on the exact Server page, never when
+    // the user is on /settings/instance (which the generic prefix rule below
+    // would otherwise match). Instance highlights only on its own page.
+    const isServerSettings = pageRouteBase.endsWith('/settings');
+    const isInstanceSettings = pageRouteBase.endsWith('/settings/instance');
 
     let isActive = pageRouteBase.endsWith(`/${activePage}`)
         || (!isListPage && activeParts.length === 1 && pageRouteBase.endsWith(`/${activeBase}`))
         || activeBase === 'overview' && pageRouteBase === `/guild/${currentGuildId()}`
         || (!isListPage && activePage.startsWith(pageRouteBase.split('/').pop() + '/'))
         || (!isListPage && activeParts.length > 1 && pageRouteBase.endsWith('/' + activeParts[0]));
-    if (isSettingsSplit && activePage === 'settings') {
-        isActive = new URLSearchParams(location.search).get('section') === pageSection;
-    }
+
+    // Exact-match correction for the split settings pages: a route ending in
+    // /settings must NOT match the /settings/instance page, and vice versa.
+    if (isServerSettings) isActive = isActive && activePage === 'settings';
+    if (isInstanceSettings) isActive = isActive && activePage === 'settings/instance';
 
     const isModule = !!page.module;
     const itemClass = isModule ? 'nav-item nav-item-module' : 'nav-item';

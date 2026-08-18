@@ -35,7 +35,7 @@ def _make_bot() -> MagicMock:
     return bot
 
 
-async def _render_settings(monkeypatch, user_id: str | None) -> str:
+async def _render_settings(monkeypatch, user_id: str | None, view: str = "instance") -> str:
     import config as cfg
     from dashboard.routes.web.settings import settings_page
 
@@ -47,11 +47,16 @@ async def _render_settings(monkeypatch, user_id: str | None) -> str:
 
     request = SimpleNamespace(
         state=SimpleNamespace(bot=_make_bot()),
-        session={"user": {"id": user_id, "username": "Test"}} if user_id else {},
-        url=SimpleNamespace(path="/guild/1/settings"),
+        session=({"user": {"id": user_id, "username": "Test"}} if user_id else {}),
+        url=SimpleNamespace(path=f"/guild/1/settings/{'instance' if view == 'instance' else ''}"),
         app=SimpleNamespace(state=SimpleNamespace(version="test")),
     )
-    response = await settings_page(request, 1)
+    # The owner-only cards (Backups, Updates, Diagnostics, Bot Customization,
+    # Hosted Instance Access) live on the Instance page, so render that view.
+    from dashboard.routes.web import settings as settings_mod
+
+    handler = settings_mod.settings_instance_page if view == "instance" else settings_page
+    response = await handler(request, 1)
     return response.body.decode()
 
 

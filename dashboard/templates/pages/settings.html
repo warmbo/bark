@@ -12,6 +12,7 @@
         <!-- Main column: Server + Instance settings -->
         <div class="settings-main">
 
+            {% if settings_view == 'server' %}
             <!-- Server Settings -->
             {{ settings_section("Server", "Per-server configuration — applies only to " ~ guild.name, icon_name="server", id="server-settings") }}
 
@@ -67,7 +68,9 @@
                     <span class="form-hint" id="dashboard-mod-roles-status" role="status"></span>
                 </div>
             {% endcall %}
+            {% endif %}
 
+            {% if settings_view == 'instance' %}
             <!-- Instance Settings -->
             {{ settings_section("Instance", "Applies to the whole Bark instance across every server.", icon_name="cpu", id="instance-settings") }}
 
@@ -155,10 +158,12 @@
             {% if is_owner %}
             {% include "components/bot_customization.html" %}
             {% endif %}
+            {% endif %}
         </div>
 
-        <!-- Side column: Module Configuration, Config Health, then Updates -->
+        <!-- Side column: Module Configuration, Config Health (server); Updates, Diagnostics (instance) -->
         <div class="settings-side">
+            {% if settings_view == 'server' %}
             {% call settings_card("Module Configuration", icon_name="puzzle") %}
                 <div class="module-nav-list" id="module-nav-list">
                     {% if request and request.state and request.state.bot is defined %}
@@ -189,7 +194,9 @@
                     <div class="config-health-issues mt-1" id="settings-health-issues"></div>
                 </div>
             {% endcall %}
+            {% endif %}
 
+            {% if settings_view == 'instance' %}
             <!-- Updates (from GitHub, by release version) -->
             {% if is_owner %}
             {% call settings_card("Updates", "Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.", icon_name="refresh-cw") %}
@@ -235,9 +242,11 @@
                 <div class="workspace-data-card" id="diagnostics-result" aria-live="polite"></div>
             {% endcall %}
             {% endif %}
+            {% endif %}
         </div>
     </div>
 
+    {% if settings_view == 'instance' %}
     {% if is_owner %}
     {% call settings_card("Hosted Instance Access", "Create one-time share links for people allowed to add and manage Bark in servers they administer.", icon_name="share-2", id="instance-invites") %}
         <form class="settings-form" id="instance-invite-form">
@@ -262,6 +271,7 @@
         </div>
         <div class="workspace-data-card" id="instance-invite-list" aria-live="polite"></div>
     {% endcall %}
+    {% endif %}
     {% endif %}
 
 </div>
