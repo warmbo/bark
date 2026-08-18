@@ -30,7 +30,7 @@
   async function loadStats() {
     const requestToken = ++statsRequestToken;
     try {
-      const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/dashboard`, { cache: 'no-cache' });
+      const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/stats`, { cache: 'no-cache' });
       if (requestToken !== statsRequestToken) return; // a newer reload started
       const d = (raw && (raw.data || raw)) || {};
 
