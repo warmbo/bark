@@ -686,17 +686,19 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
-    bot.message_stats = lambda _gid: {
-        "date": "2026-08-14", "messages": 5,
-        "channels": {"100": {"name": "general", "count": 3}, "200": {"name": "memes", "count": 2}},
-        "emojis": {"laugh": 4},
-        "emoji_total": {"laugh": 40},
-        "history": [],
-    }
-    bot.top_channels = lambda _gid, days: (
-        [{"name": "general", "count": 12}] if days >= 30
-        else [{"name": "general", "count": 8}]
-    )
+    # Seed the daily stats tables — the source of truth the stats endpoint reads.
+    from datetime import date, timedelta
+
+    from database.engine import session_scope
+    from database.models.analytics import DailyChannelStat, DailyEmojiStat
+
+    async with session_scope() as s:
+        s.add(DailyChannelStat(guild_id="123456", stat_date=date.today(), channel_id="100", channel_name="general", message_count=3))
+        s.add(DailyChannelStat(guild_id="123456", stat_date=date.today(), channel_id="200", channel_name="memes", message_count=2))
+        s.add(DailyChannelStat(guild_id="123456", stat_date=date.today() - timedelta(days=1), channel_id="100", channel_name="general", message_count=8))
+        s.add(DailyEmojiStat(guild_id="123456", stat_date=date.today(), emoji_name="laugh", count=4))
+        s.add(DailyEmojiStat(guild_id="123456", stat_date=date.today() - timedelta(days=1), emoji_name="laugh", count=40))
+        await s.commit()
     request = SimpleNamespace(
         state=SimpleNamespace(bot=bot), session={"role": "admin"},
         url=SimpleNamespace(path="/api/v1/guilds/123456"),
@@ -715,21 +717,23 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     stats = await guilds.get_guild_stats(request, 123456)
     assert stats.status_code == 200
     sdata = json.loads(stats.body)["data"]
+    # DB-sourced stats.
     assert sdata["messages_today"] == 5
     assert sdata["top_channels_today"][0]["name"] == "general"
     assert sdata["top_channels_today"][0]["count"] == 3
     assert sdata["top_emojis_today"][0] == {"name": "laugh", "count": 4}
-    # Trailing-window + all-time stats.
-    assert sdata["top_channels_7d"][0]["count"] == 8
-    assert sdata["top_channels_30d"][0]["count"] == 12
-    assert sdata["top_emojis_all_time"][0] == {"name": "laugh", "count": 40}
+    # Trailing-window + all-time stats (aggregated from the daily tables).
+    assert sdata["top_channels_7d"][0]["name"] == "general"
+    assert sdata["top_channels_7d"][0]["count"] == 11
+    assert sdata["top_channels_30d"][0]["name"] == "general"
+    assert sdata["top_emojis_all_time"][0] == {"name": "laugh", "count": 44}
 
 
 @pytest.mark.asyncio
 async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeypatch):
-    """After a bot restart the in-memory message counters are empty; the stats
-    endpoint must fall back to the persisted daily ActivitySnapshot breakdowns
-    so top channels / emojis still show data (item 5)."""
+    """The Statistics page reads entirely from the persisted daily stats tables
+    (source of truth) — even with no in-memory live counters (a fresh restart),
+    top channels / emojis still show data from the DB (item 5)."""
     from types import SimpleNamespace
 
     import config
@@ -742,7 +746,7 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     from datetime import date, timedelta
 
     from database.engine import session_scope
-    from database.models.analytics import ActivitySnapshot
+    from database.models.analytics import ActivitySnapshot, DailyChannelStat, DailyEmojiStat
     from database.models.guild import Guild
 
     async with session_scope() as s:
@@ -751,28 +755,18 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         if not (await s.execute(select(Guild).where(Guild.discord_id == "999"))).scalars().first():
             s.add(Guild(discord_id="999", name="Persist Guild"))
             await s.flush()
-        s.add(ActivitySnapshot(
-            guild_id="999",
-            snapshot_date=date.today() - timedelta(days=1),
-            total_members=10,
-            total_channels=3,
-            total_messages=7,
-            total_reactions=4,
-            channels_active=2,
-            channel_messages='{"100":{"name":"general","count":5},"200":{"name":"memes","count":2}}',
-            emoji_counts='{"laugh":4,"wow":1}',
-        ))
-        s.add(ActivitySnapshot(
-            guild_id="999",
-            snapshot_date=date.today(),
-            total_members=11,
-            total_channels=3,
-            total_messages=7,
-            total_reactions=4,
-            channels_active=2,
-            channel_messages='{"100":{"name":"general","count":5},"200":{"name":"memes","count":2}}',
-            emoji_counts='{"laugh":4,"wow":1}',
-        ))
+        # Today + yesterday member snapshots (for growth).
+        s.add(ActivitySnapshot(guild_id="999", snapshot_date=date.today() - timedelta(days=1), total_members=10))
+        s.add(ActivitySnapshot(guild_id="999", snapshot_date=date.today(), total_members=11))
+        # Per-day channel/emoji stats — the source of truth the page reads.
+        s.add(DailyChannelStat(guild_id="999", stat_date=date.today() - timedelta(days=1), channel_id="100", channel_name="general", message_count=5))
+        s.add(DailyChannelStat(guild_id="999", stat_date=date.today() - timedelta(days=1), channel_id="200", channel_name="memes", message_count=2))
+        s.add(DailyChannelStat(guild_id="999", stat_date=date.today(), channel_id="100", channel_name="general", message_count=5))
+        s.add(DailyChannelStat(guild_id="999", stat_date=date.today(), channel_id="200", channel_name="memes", message_count=2))
+        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today() - timedelta(days=1), emoji_name="laugh", count=4))
+        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today() - timedelta(days=1), emoji_name="wow", count=1))
+        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="laugh", count=4))
+        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="wow", count=1))
         await s.commit()
 
     guild = SimpleNamespace(
@@ -784,12 +778,6 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
-    # Simulate a fresh restart: the in-memory counters report zero activity.
-    bot.message_stats = lambda _gid: {
-        "date": date.today().isoformat(), "messages": 0,
-        "channels": {}, "emojis": {}, "emoji_total": {}, "history": [],
-    }
-    bot.top_channels = lambda _gid, days: []
     request = SimpleNamespace(
         state=SimpleNamespace(bot=bot), session={"role": "admin"},
         url=SimpleNamespace(path="/api/v1/guilds/999"),
@@ -799,12 +787,13 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     stats = await guilds.get_guild_stats(request, 999)
     assert stats.status_code == 200
     data = json.loads(stats.body)["data"]
-    # Even with zero live activity, the persisted breakdown still feeds the page:
-    # general (5+5 across two persisted days) remains the top channel.
-    assert data["top_channels_today"][0] == {"name": "general", "count": 10}
-    assert data["top_channels_today"][1] == {"name": "memes", "count": 4}
+    # The page reads from the DB, so top channels / emojis always show.
+    assert data["messages_today"] == 7
+    assert data["top_channels_today"] == [{"name": "general", "count": 5}, {"name": "memes", "count": 2}]
     assert data["top_channels_7d"][0]["name"] == "general"
+    assert data["top_channels_7d"][0]["count"] == 10
     assert data["top_channels_30d"][0]["name"] == "general"
+    assert data["top_emojis_today"][0] == {"name": "laugh", "count": 4}
     assert data["top_emojis_all_time"][0] == {"name": "laugh", "count": 8}
 
 

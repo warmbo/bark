@@ -381,6 +381,12 @@ class BarkBot(commands.Bot):
                 self.record_message(message.guild.id, message.channel)
             except Exception:
                 logger.debug("Could not record message stats", exc_info=True)
+            try:
+                from services.stats_recorder import record_message as _persist_message
+
+                await _persist_message(message.guild.id, message.channel)
+            except Exception:
+                logger.debug("Could not persist message stats", exc_info=True)
         await self.process_commands(message)
         bus = self.modules.event_bus
         await bus.emit("discord_message", message=message)
@@ -461,6 +467,9 @@ class BarkBot(commands.Bot):
         try:
             if reaction.message and reaction.message.guild and not getattr(user, "bot", False):
                 self.record_reaction(reaction.message.guild.id, reaction.emoji)
+                from services.stats_recorder import record_reaction as _persist_reaction
+
+                await _persist_reaction(reaction.message.guild.id, reaction.emoji)
             await self.paginator.on_reaction_add(reaction, user)
         except Exception:
             logger.exception("Paginator reaction handling failed")

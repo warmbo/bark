@@ -1,6 +1,10 @@
 """Database models — import all models here so they register with Base.metadata."""
 
-from database.models.analytics import ActivitySnapshot
+from database.models.analytics import (
+    ActivitySnapshot,
+    DailyChannelStat,
+    DailyEmojiStat,
+)
 from database.models.attachments import FileAttachment
 from database.models.auto_voice import AutoVoiceChannel
 from database.models.automod import AutoModConfig
@@ -31,6 +35,8 @@ __all__ = [
     "AuditLog",
     "AutoModConfig",
     "AutoVoiceChannel",
+    "DailyChannelStat",
+    "DailyEmojiStat",
     "DashboardGuildAccess",
     "DashboardUser",
     "FileAttachment",

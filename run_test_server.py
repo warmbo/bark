@@ -282,30 +282,46 @@ def seed_growth():
                 await s.commit()
         async with session_scope() as s:
             start = 128
-            import json
+            from database.models.analytics import DailyChannelStat, DailyEmojiStat
 
-            channel_messages = json.dumps(
-                {
-                    "1000": {"name": "channel-0", "count": 20},
-                    "1001": {"name": "channel-1", "count": 12},
-                    "1002": {"name": "channel-2", "count": 6},
-                },
-                separators=(",", ":"),
-            )
-            emoji_counts = json.dumps(
-                {"laugh": 30, "wow": 8, "🔥": 5}, separators=(",", ":")
-            )
+            # Per-day channel/emoji stats — the source of truth for Statistics.
             for d in range(14):
                 s.add(ActivitySnapshot(
                     guild_id=str(bot._guild.id),
                     snapshot_date=date.today() - timedelta(days=13 - d),
                     total_members=start + d * 2,
                     total_channels=40 + d,
-                    total_messages=42,
-                    total_reactions=43,
-                    channels_active=3,
-                    channel_messages=channel_messages,
-                    emoji_counts=emoji_counts,
+                ))
+            for d in range(14):
+                s.add(DailyChannelStat(
+                    guild_id=str(bot._guild.id),
+                    stat_date=date.today() - timedelta(days=13 - d),
+                    channel_id="1000", channel_name="channel-0", message_count=20,
+                ))
+                s.add(DailyChannelStat(
+                    guild_id=str(bot._guild.id),
+                    stat_date=date.today() - timedelta(days=13 - d),
+                    channel_id="1001", channel_name="channel-1", message_count=12,
+                ))
+                s.add(DailyChannelStat(
+                    guild_id=str(bot._guild.id),
+                    stat_date=date.today() - timedelta(days=13 - d),
+                    channel_id="1002", channel_name="channel-2", message_count=6,
+                ))
+                s.add(DailyEmojiStat(
+                    guild_id=str(bot._guild.id),
+                    stat_date=date.today() - timedelta(days=13 - d),
+                    emoji_name="laugh", count=30,
+                ))
+                s.add(DailyEmojiStat(
+                    guild_id=str(bot._guild.id),
+                    stat_date=date.today() - timedelta(days=13 - d),
+                    emoji_name="wow", count=8,
+                ))
+                s.add(DailyEmojiStat(
+                    guild_id=str(bot._guild.id),
+                    stat_date=date.today() - timedelta(days=13 - d),
+                    emoji_name="🔥", count=5,
                 ))
             # Grant user 42 manage access so the guild gate lets the browser in.
             from database.models.permissions import DashboardUser

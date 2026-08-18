@@ -676,6 +676,38 @@ MIGRATIONS: tuple[Migration, ...] = (
         "0013_activity_snapshot_message_breakdown",
         _add_activity_snapshot_message_breakdown,
     ),
+    (
+        "0014_daily_channel_emoji_stats",
+        (
+            """
+            CREATE TABLE IF NOT EXISTS daily_channel_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id VARCHAR(32) NOT NULL,
+                stat_date DATE NOT NULL,
+                channel_id VARCHAR(32) NOT NULL,
+                channel_name VARCHAR(120) NOT NULL DEFAULT '',
+                message_count INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT uq_daily_channel_day UNIQUE (guild_id, stat_date, channel_id),
+                FOREIGN KEY(guild_id) REFERENCES guilds (discord_id)
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_daily_channel_stats_guild_id ON daily_channel_stats (guild_id)",
+            "CREATE INDEX IF NOT EXISTS ix_daily_channel_stats_stat_date ON daily_channel_stats (stat_date)",
+            """
+            CREATE TABLE IF NOT EXISTS daily_emoji_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id VARCHAR(32) NOT NULL,
+                stat_date DATE NOT NULL,
+                emoji_name VARCHAR(120) NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT uq_daily_emoji_day UNIQUE (guild_id, stat_date, emoji_name),
+                FOREIGN KEY(guild_id) REFERENCES guilds (discord_id)
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_daily_emoji_stats_guild_id ON daily_emoji_stats (guild_id)",
+            "CREATE INDEX IF NOT EXISTS ix_daily_emoji_stats_stat_date ON daily_emoji_stats (stat_date)",
+        ),
+    ),
 )
 
 

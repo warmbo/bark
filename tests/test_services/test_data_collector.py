@@ -102,9 +102,10 @@ async def test_collector_skips_fresh_baseline_while_cache_warming(db, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_collector_persists_channel_and_emoji_breakdown(db, monkeypatch):
-    """The collector writes today's live channel/emoji message counts into the
-    daily ActivitySnapshot so the Statistics page survives a bot restart."""
+async def test_collector_focuses_on_member_snapshot_not_per_event_stats(db, monkeypatch):
+    """The collector persists member/growth snapshots only; per-event channel
+    and emoji stats are written on every message/reaction by the stats recorder
+    (source of truth), not rolled into the snapshot here."""
     today = datetime.now(timezone.utc).date()
     async with session_scope() as session:
         session.add(Guild(discord_id="3", name="Guild"))
@@ -120,12 +121,6 @@ async def test_collector_persists_channel_and_emoji_breakdown(db, monkeypatch):
         "services.data_collector.asyncio.sleep",
         AsyncMock(side_effect=__import__("asyncio").CancelledError),
     )
-    collector.bot.message_stats = lambda _gid: {
-        "messages": 9,
-        "channels": {"100": {"name": "general", "count": 6}, "200": {"name": "memes", "count": 3}},
-        "emojis": {"laugh": 5},
-        "emoji_total": {"laugh": 5, "wow": 2},
-    }
 
     await collector._run_loop()
 
@@ -138,12 +133,6 @@ async def test_collector_persists_channel_and_emoji_breakdown(db, monkeypatch):
                 )
             )
         ).scalar_one()
-    import json
-
-    assert saved.total_messages == 9
-    assert saved.total_reactions == 5
-    assert saved.channels_active == 2
-    channels = json.loads(saved.channel_messages)
-    assert channels["100"] == {"name": "general", "count": 6}
-    assert channels["200"] == {"name": "memes", "count": 3}
-    assert json.loads(saved.emoji_counts) == {"laugh": 5, "wow": 2}
+    assert saved.total_members == 20
+    assert saved.total_channels == 4
+    assert saved.new_members == 0
