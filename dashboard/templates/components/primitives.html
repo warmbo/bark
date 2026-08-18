@@ -1,14 +1,23 @@
 {% from "components/icons.html" import icon %}
 {# Bark v0.3 shadcn/Jinja primitives. These own visual markup while IDs and
    data attributes remain stable for the existing behavior layer. #}
-{% macro button(label='', variant='default', size='default', type='button', icon_name='', id='', classes='', disabled=false) -%}
-<button type="{{ type }}"{% if id %} id="{{ id }}"{% endif %} class="btn{% if variant == 'primary' %} btn-primary{% elif variant == 'destructive' %} btn-danger{% endif %}{% if size == 'sm' %} btn-sm{% elif size == 'xs' %} btn-xs{% endif %}{% if classes %} {{ classes }}{% endif %}"{% if disabled %} disabled{% endif %}>{% if icon_name %}{{ icon(icon_name, 14 if size in ['sm', 'xs'] else 16) }}{% endif %}{{ label }}{% if caller is defined %}{{ caller() }}{% endif %}</button>
+{# button(label, variant, size, type, icon_name, id, classes, attrs, disabled)
+   attrs = raw HTML attribute string (e.g. data-md="**" title="Bold") appended
+   verbatim to the button tag — enables data-* hooks for the behavior layer. #}
+{% macro button(label='', variant='default', size='default', type='button', icon_name='', id='', classes='', attrs='', disabled=false) -%}
+<button type="{{ type }}"{% if id %} id="{{ id }}"{% endif %} class="btn{% if variant == 'primary' %} btn-primary{% elif variant == 'destructive' %} btn-danger{% elif variant == 'accent' %} btn-accent{% endif %}{% if size == 'sm' %} btn-sm{% elif size == 'xs' %} btn-xs{% endif %}{% if classes %} {{ classes }}{% endif %}"{% if attrs %} {{ attrs }}{% endif %}{% if disabled %} disabled{% endif %}>{% if icon_name %}{{ icon(icon_name, 14 if size in ['sm', 'xs'] else 16) }}{% endif %}{{ label }}{% if caller is defined %}{{ caller() }}{% endif %}</button>
 {%- endmacro %}
 
-{% macro card(title='', description='', classes='', id='') -%}
-<article{% if id %} id="{{ id }}"{% endif %} class="content-card{% if classes %} {{ classes }}{% endif %}">
-  {% if title or description %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{{ title }}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div></header>{% endif %}
-  <div class="config-body">{% if caller is defined %}{{ caller() }}{% endif %}</div>
+{# link_button(label, href, variant, size, icon_name, id, classes, attrs, target, rel)
+   Anchor styled as a button (for <a class="btn"> CTAs that must remain links). #}
+{% macro link_button(label='', href='#', variant='default', size='default', icon_name='', id='', classes='', attrs='', target='', rel='') -%}
+<a href="{{ href }}"{% if id %} id="{{ id }}"{% endif %} class="btn{% if variant == 'primary' %} btn-primary{% elif variant == 'destructive' %} btn-danger{% elif variant == 'accent' %} btn-accent{% endif %}{% if size == 'sm' %} btn-sm{% elif size == 'xs' %} btn-xs{% endif %}{% if classes %} {{ classes }}{% endif %}"{% if attrs %} {{ attrs }}{% endif %}{% if target %} target="{{ target }}"{% endif %}{% if rel %} rel="{{ rel }}"{% endif %}>{% if icon_name %}{{ icon(icon_name, 14 if size in ['sm', 'xs'] else 16) }}{% endif %}{{ label }}{% if caller is defined %}{{ caller() }}{% endif %}</a>
+{%- endmacro %}
+
+{% macro card(title='', description='', classes='', id='', attrs='', body_classes='config-body', header_actions='') -%}
+<article{% if id %} id="{{ id }}"{% endif %} class="content-card{% if classes %} {{ classes }}{% endif %}"{% if attrs %} {{ attrs }}{% endif %}>
+  {% if title or description or header_actions %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{{ title }}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div>{% if header_actions %}<div class="card-header-actions">{{ header_actions }}</div>{% endif %}</header>{% endif %}
+  <div class="{{ body_classes }}">{% if caller is defined %}{{ caller() }}{% endif %}</div>
 </article>
 {%- endmacro %}
 
@@ -17,25 +26,25 @@
 {% if description %}<p class="settings-section-desc">{{ description }}</p>{% endif %}
 {%- endmacro %}
 
-{% macro settings_card(title='', description='', icon_name='', classes='', id='') -%}
-<article{% if id %} id="{{ id }}"{% endif %} class="content-card{% if classes %} {{ classes }}{% endif %}">
-  {% if title or description %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{% if icon_name %}{{ icon(icon_name, 16) }} {% endif %}{{ title }}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div></header>{% endif %}
+{% macro settings_card(title='', description='', icon_name='', classes='', id='', attrs='', header_actions='') -%}
+<article{% if id %} id="{{ id }}"{% endif %} class="content-card{% if classes %} {{ classes }}{% endif %}"{% if attrs %} {{ attrs }}{% endif %}>
+  {% if title or description or header_actions %}<header class="card-header"><div>{% if title %}<h2 class="card-title">{% if icon_name %}{{ icon(icon_name, 16) }} {% endif %}{{ title }}</h2>{% endif %}{% if description %}<p class="card-description">{{ description }}</p>{% endif %}</div>{% if header_actions %}<div class="card-header-actions">{{ header_actions }}</div>{% endif %}</header>{% endif %}
   {% if caller is defined %}{{ caller() }}{% endif %}
 </article>
 {%- endmacro %}
 
 {% macro badge(label, variant='neutral', classes='') -%}<span class="status-badge status-{{ variant }}{% if classes %} {{ classes }}{% endif %}"><span class="status-indicator" aria-hidden="true"></span>{{ label }}</span>{%- endmacro %}
 
-{% macro input_field(name, label='', value='', type='text', id='', placeholder='', description='') -%}
-{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<input class="form-input" id="{{ control_id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
+{% macro input_field(name, label='', value='', type='text', id='', placeholder='', description='', classes='', required=false, autocomplete='') -%}
+{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<input class="form-input{% if classes %} {{ classes }}{% endif %}" id="{{ control_id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if required %} required{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
 {%- endmacro %}
 
-{% macro select_field(name, label='', id='', description='') -%}
-{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<select class="form-select" id="{{ control_id }}" name="{{ name }}"{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{% if caller is defined %}{{ caller() }}{% endif %}</select>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
+{% macro select_field(name, label='', id='', description='', classes='') -%}
+{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<select class="form-select{% if classes %} {{ classes }}{% endif %}" id="{{ control_id }}" name="{{ name }}"{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{% if caller is defined %}{{ caller() }}{% endif %}</select>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
 {%- endmacro %}
 
-{% macro textarea_field(name, label='', value='', id='', rows=4, placeholder='', description='') -%}
-{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<textarea class="form-textarea" id="{{ control_id }}" name="{{ name }}" rows="{{ rows }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{{ value }}</textarea>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
+{% macro textarea_field(name, label='', value='', id='', rows=4, placeholder='', description='', classes='') -%}
+{% set control_id = id or name %}<div class="form-group">{% if label %}<label class="form-label" for="{{ control_id }}">{{ label }}</label>{% endif %}<textarea class="form-textarea{% if classes %} {{ classes }}{% endif %}" id="{{ control_id }}" name="{{ name }}" rows="{{ rows }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if description %} aria-describedby="{{ control_id }}-description"{% endif %}>{{ value }}</textarea>{% if description %}<p class="form-hint" id="{{ control_id }}-description">{{ description }}</p>{% endif %}</div>
 {%- endmacro %}
 
 {% macro separator(classes='') -%}<div class="separator{% if classes %} {{ classes }}{% endif %}" role="separator"></div>{%- endmacro %}
@@ -53,12 +62,20 @@
 </header>
 {%- endmacro %}
 
-{% macro state_panel(kind='empty', title='', message='', action_label='', action_id='') -%}
+{% macro state_panel(kind='empty', title='', message='', action_label='', action_id='', icon_name='', action_href='', action_variant='default', heading_tag='strong') -%}
 <div class="state-panel state-{{ kind }}" role="{{ 'alert' if kind == 'error' else 'status' }}">
-  <span class="state-panel-icon" aria-hidden="true">{{ icon('alert-circle' if kind == 'error' else ('loader-circle' if kind == 'loading' else 'inbox'), 18) }}</span>
-  <div><strong>{{ title }}</strong>{% if message %}<p>{{ message }}</p>{% endif %}</div>
-  {% if action_label %}<button type="button" class="btn btn-sm" id="{{ action_id }}">{{ action_label }}</button>{% endif %}
+  <span class="state-panel-icon" aria-hidden="true">{{ icon(icon_name or ('alert-circle' if kind == 'error' else ('loader-circle' if kind == 'loading' else 'inbox')), 18) }}</span>
+  <div><{{ heading_tag }}>{{ title }}</{{ heading_tag }}>{% if message %}<p>{{ message }}</p>{% endif %}</div>
+  {% if action_label %}{% if action_href %}<a href="{{ action_href }}" class="btn btn-sm{% if action_variant == 'primary' %} btn-primary{% elif action_variant == 'destructive' %} btn-danger{% endif %}"{% if action_id %} id="{{ action_id }}"{% endif %}>{{ action_label }}</a>{% else %}<button type="button" class="btn btn-sm{% if action_variant == 'primary' %} btn-primary{% elif action_variant == 'destructive' %} btn-danger{% endif %}"{% if action_id %} id="{{ action_id }}"{% endif %}>{{ action_label }}</button>{% endif %}{% endif %}
 </div>
+{%- endmacro %}
+
+{% macro info_row(label, value) -%}
+<div class="info-row"><span class="info-label">{{ label }}</span><span class="info-value">{{ value }}</span></div>
+{%- endmacro %}
+
+{% macro stat_card(icon_name='', label='', value='', classes='') -%}
+<div class="stat-card{% if classes %} {{ classes }}{% endif %}"><div class="stat-card-icon">{{ icon(icon_name, 18) }}</div><div class="stat-card-body"><div class="stat-card-value">{{ value }}</div><div class="stat-card-label">{{ label }}</div></div></div>
 {%- endmacro %}
 
 {% macro status_badge(label, kind='neutral') -%}

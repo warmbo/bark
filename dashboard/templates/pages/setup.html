@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
-{% from "components/icons.html" import icon %}
+{% from "components/primitives.html" import input_field, button %}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,19 +35,9 @@
 
         <div class="content-card setup-card">
             <form id="setup-form">
-                <div class="form-group">
-                    <label class="form-label" for="setup-token">Discord bot token</label>
-                    <input class="form-input" id="setup-token" name="token" type="password" required autocomplete="off"
-                           placeholder="MTEz...xxxx.yyyy-zzzz">
-                    <span class="form-hint">From the Discord Developer Portal → your application → Bot → Reset Token.</span>
-                </div>
+                {{ input_field('token', 'Discord bot token', type='password', id='setup-token', placeholder='MTEz...xxxx.yyyy-zzzz', description='From the Discord Developer Portal → your application → Bot → Reset Token.', required=true, autocomplete='off') }}
 
-                <div class="form-group">
-                    <label class="form-label" for="setup-public-url">Public dashboard URL</label>
-                    <input class="form-input" id="setup-public-url" name="public_url" type="url" required
-                           value="{{ public_url }}" placeholder="https://bark.example.com">
-                    <span class="form-hint">The address users will open to reach this dashboard.</span>
-                </div>
+                {{ input_field('public_url', 'Public dashboard URL', type='url', value=public_url, id='setup-public-url', placeholder='https://bark.example.com', description='The address users will open to reach this dashboard.', required=true) }}
 
                 <hr class="setup-divider">
 
@@ -58,28 +48,14 @@
                     <span class="form-hint">Needed for Discord-login on the dashboard. Leave all OAuth fields empty to skip login for now.</span>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="setup-client-secret">OAuth2 client secret</label>
-                    <input class="form-input" id="setup-client-secret" name="client_secret" type="password" autocomplete="off"
-                           placeholder="Discord app client secret">
-                </div>
+                {{ input_field('client_secret', 'OAuth2 client secret', type='password', id='setup-client-secret', placeholder='Discord app client secret', autocomplete='off') }}
 
-                <div class="form-group">
-                    <label class="form-label" for="setup-redirect-uri">Redirect URI</label>
-                    <input class="form-input" id="setup-redirect-uri" name="redirect_uri" type="url"
-                           value="{{ redirect_uri }}" placeholder="https://bark.example.com/auth/callback">
-                    <span class="form-hint">Must match exactly in the Discord Developer Portal → OAuth2 → Redirects.</span>
-                </div>
+                {{ input_field('redirect_uri', 'Redirect URI', type='url', value=redirect_uri, id='setup-redirect-uri', placeholder='https://bark.example.com/auth/callback', description='Must match exactly in the Discord Developer Portal → OAuth2 → Redirects.') }}
 
-                <div class="form-group">
-                    <label class="form-label" for="setup-owner-ids">Owner Discord IDs</label>
-                    <input class="form-input" id="setup-owner-ids" name="owner_ids" type="text" autocomplete="off"
-                           placeholder="123456789012345678, 234567890123456789">
-                    <span class="form-hint">Comma-separated Discord user IDs that administer this instance.</span>
-                </div>
+                {{ input_field('owner_ids', 'Owner Discord IDs', id='setup-owner-ids', placeholder='123456789012345678, 234567890123456789', description='Comma-separated Discord user IDs that administer this instance.', autocomplete='off') }}
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="setup-submit">Save configuration</button>
+                    {{ button('Save configuration', variant='primary', type='submit', id='setup-submit') }}
                     <span class="form-hint" id="setup-status" role="status"></span>
                 </div>
             </form>

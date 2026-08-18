@@ -3,7 +3,7 @@
     <div><h2 class="card-title">{{ icon("list", 16) }} Moderation Cases</h2><p class="card-description">Review active cases and open a case for complete details.</p></div>
     <div class="card-header-actions">
       <button type="button" class="btn btn-sm" data-refresh-section="cases" aria-label="Refresh moderation cases">{{ icon("refresh-cw", 14) }} Refresh</button>
-      <button type="button" class="btn btn-sm" id="mod-export-btn" data-export-moderation aria-label="Export moderation data as JSON">{{ icon("download", 14) }} Export</button>
+      {{ button('Export', size='sm', id='mod-export-btn', icon_name='download', attrs='data-export-moderation aria-label="Export moderation data as JSON"') }}
     </div>
   </div>
   <div id="mod-cases-content" aria-live="polite"><div class="skeleton skeleton-card"></div></div>

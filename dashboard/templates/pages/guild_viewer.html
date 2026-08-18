@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/primitives.html" import settings_card, state_panel %}
 {% block title %}{{ guild.name }} — Status{% endblock %}
 {% block og_description %}Read-only server status for Bark — view-only access{% endblock %}
 
@@ -13,15 +14,7 @@
         <p class="page-subtitle">Server status and metrics — read-only access</p>
     </div>
 
-    <div class="state-panel" role="status">
-        <span class="state-panel-icon" aria-hidden="true">{{ icon("eye", 18) }}</span>
-        <div>
-            <strong>You have view-only access to this server</strong>
-            <p>Server owners, administrators, and members with a moderator role assigned in
-            Settings → Dashboard Access can manage Bark here. You can still see live server
-            metrics below.</p>
-        </div>
-    </div>
+    {{ state_panel('empty', 'You have view-only access to this server', 'Server owners, administrators, and members with a moderator role assigned in Settings → Dashboard Access can manage Bark here. You can still see live server metrics below.', icon_name='eye') }}
 
     <!-- Live server metrics (static, from Discord cache — no management data) -->
     <div class="stats-grid">
@@ -59,10 +52,7 @@
 
     <div class="guild-layout">
         <!-- Server Info -->
-        <div class="content-card">
-            <div class="card-header">
-                <div><h2 class="card-title">{{ icon("info", 16) }} Server Info</h2><p class="card-description">Public server details</p></div>
-            </div>
+        {% call settings_card("Server Info", "Public server details", icon_name="info") %}
             <div class="module-info-body">
                 <div class="info-row"><span class="info-label">Owner</span><span class="info-value">{{ guild.owner.name if guild.owner else 'Unknown' }}</span></div>
                 <div class="info-row"><span class="info-label">ID</span><span class="info-value mono">{{ guild.id }}</span></div>
@@ -71,21 +61,18 @@
                 <div class="info-row"><span class="info-label">Boosts</span><span class="info-value">{{ guild.premium_subscription_count }} (Tier {{ guild.premium_tier }})</span></div>
                 <div class="info-row"><span class="info-label">Bark</span><span class="info-value"><span class="status-dot online" aria-hidden="true"></span> Connected</span></div>
             </div>
-        </div>
+        {% endcall %}
 
         <!-- Access -->
         <div>
-            <div class="content-card">
-                <div class="card-header">
-                    <div><h2 class="card-title">{{ icon("shield", 16) }} Your Access</h2><p class="card-description">What you can do on this server</p></div>
-                </div>
+            {% call settings_card("Your Access", "What you can do on this server", icon_name="shield") %}
                 <div class="module-info-body">
                     <div class="info-row"><span class="info-label">Role</span><span class="info-value"><span class="badge badge-muted">View only</span></span></div>
                     <div class="info-row"><span class="info-label">Manage modules</span><span class="info-value">No</span></div>
                     <div class="info-row"><span class="info-label">Moderation</span><span class="info-value">No</span></div>
                     <div class="info-row"><span class="info-label">Settings</span><span class="info-value">No</span></div>
                 </div>
-            </div>
+            {% endcall %}
         </div>
     </div>
 </div>

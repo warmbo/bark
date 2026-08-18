@@ -8,7 +8,7 @@
 </article>
 {% if module_data.can_manage_module %}
 <article class="content-card danger-zone" id="voice-danger-zone">
-  <div class="card-header"><div><h2 class="card-title">{{ icon("alert-triangle", 16) }} Data retention danger zone</h2><p class="card-description">Permanent server-scoped record deletion. These actions cannot be undone.</p></div><span class="status-badge status-danger">Admin only</span></div>
+  <div class="card-header"><div><h2 class="card-title">{{ icon("alert-triangle", 16) }} Data retention danger zone</h2><p class="card-description">Permanent server-scoped record deletion. These actions cannot be undone.</p></div>{{ status_badge('Admin only', 'danger') }}</div>
   <div class="danger-zone-list"><div class="danger-zone-row"><div><strong>Clear voice history</strong><p>Delete every stored voice session for this server.</p></div><button type="button" class="btn btn-danger btn-sm" data-purge="voice-history" data-purge-label="voice history">{{ icon("trash-2", 14) }} Clear all</button></div></div>
 </article>
 {% endif %}

@@ -1,12 +1,9 @@
 {% extends "base.html" %}
-{% from "components/primitives.html" import page_header %}
+{% from "components/primitives.html" import page_header, state_panel %}
 {% block title %}Moderation — {{ guild.name }}{% endblock %}
 {% block content %}
 <div class="page-container">
   {{ page_header("Moderation", "Moderation tools for " ~ guild.name, icon_name="shield") }}
-  <div class="state-panel" role="status">
-    <div><strong>Moderation moved to the module workspace</strong><p>Cases, warnings, notes, rulesets, word lists, and voice history now share one workspace.</p></div>
-    <a class="btn btn-primary" href="/guild/{{ guild.id }}/modules/moderation">Open Moderation</a>
-  </div>
+  {{ state_panel('empty', 'Moderation moved to the module workspace', 'Cases, warnings, notes, rulesets, word lists, and voice history now share one workspace.', action_label='Open Moderation', action_href='/guild/' ~ guild.id ~ '/modules/moderation', action_variant='primary') }}
 </div>
 {% endblock %}

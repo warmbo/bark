@@ -1,7 +1,7 @@
 <article class="content-card workspace-data-card" data-section="notes">
   <div class="card-header">
     <div><h2 class="card-title">{{ icon("file-text", 16) }} User Notes</h2><p class="card-description">Private context for the moderation team. Notes are never shown to members.</p></div>
-    <div class="card-header-actions"><button type="button" class="btn btn-sm" data-refresh-section="notes" aria-label="Refresh user notes">{{ icon("refresh-cw", 14) }} Refresh</button>{% if module_data.can_manage_module %}<button type="button" class="btn btn-primary btn-sm" id="mod-note-new-btn">{{ icon("plus", 14) }} Add note</button>{% endif %}</div>
+    <div class="card-header-actions"><button type="button" class="btn btn-sm" data-refresh-section="notes" aria-label="Refresh user notes">{{ icon("refresh-cw", 14) }} Refresh</button>{% if module_data.can_manage_module %}{{ button('Add note', variant='primary', size='sm', id='mod-note-new-btn', icon_name='plus') }}{% endif %}</div>
   </div>
   {% if module_data.can_manage_module %}
   <form class="config-body inline-editor-form" id="mod-note-form" hidden>

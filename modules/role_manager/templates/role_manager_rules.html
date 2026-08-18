@@ -3,7 +3,7 @@
     <div><h2 class="card-title">{{ icon("badge-check", 16) }} Role Rules</h2><p class="card-description">Rules that automatically assign or release roles. Each rule watches one trigger; when the trigger is true the role is added, and when it stops being true the role is removed.</p></div>
     <div class="card-header-actions">
       <button type="button" class="btn btn-sm" data-refresh-section="rules" aria-label="Refresh role rules">{{ icon("refresh-cw", 14) }} Refresh</button>
-      {% if module_data.can_manage_module %}<button type="button" class="btn btn-primary btn-sm" id="rm-new-rule-btn">{{ icon("plus", 14) }} New rule</button>{% endif %}
+      {% if module_data.can_manage_module %}{{ button('New rule', variant='primary', size='sm', id='rm-new-rule-btn', icon_name='plus') }}{% endif %}
     </div>
   </div>
 

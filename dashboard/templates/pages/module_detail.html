@@ -1,6 +1,6 @@
 {# Module workspace contract: docs/module-workspace.md #}
 {% extends "base.html" %}
-{% from "components/primitives.html" import schema_field, state_panel, status_badge %}
+{% from "components/primitives.html" import schema_field, state_panel, status_badge, button, settings_card %}
 {% block title %}{{ module_name | replace('_', ' ') | title }} — {{ guild.name }}{% endblock %}
 
 {% block content %}
