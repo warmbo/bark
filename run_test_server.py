@@ -318,6 +318,56 @@ bark_config.config.oauth2.client_id = ""
 bark_config.config.oauth2.client_secret = ""
 bark_config.config.oauth2.redirect_uri = ""
 
+
+def seed_moderation():
+    """Seed rulesets, cases, warnings, notes, word lists, audit logs so the
+    data tabs render real content during visual verification."""
+
+    async def _run():
+        from sqlalchemy import select
+
+        from database.models.moderation import AuditLog, ModerationCase, UserNote, Warning
+        from database.models.ruleset import Rule, RuleSet, WordList
+
+        async with session_scope() as s:
+            gid = str(bot._guild.id)
+            if (await s.execute(select(RuleSet).where(RuleSet.guild_id == gid))).scalars().first():
+                return
+            rs = RuleSet(guild_id=gid, name="Scam Protection", enabled=True, priority=100)
+            rs2 = RuleSet(guild_id=gid, name="New Account Shield", enabled=False, priority=50,
+                          account_age_minutes_max=2880)
+            s.add(rs)
+            s.add(rs2)
+            await s.flush()
+            s.add(Rule(ruleset_id=rs.id, trigger_type="scam_link", effect_type="ban",
+                       trigger_config="{}", effect_config="{\"delete_days\": 1}", conditions="{}"))
+            s.add(Rule(ruleset_id=rs.id, trigger_type="invite_link", effect_type="warn",
+                       trigger_config="{\"threshold\": 1, \"window_seconds\": 10}", effect_config="{}", conditions="{}"))
+            s.add(Rule(ruleset_id=rs2.id, trigger_type="any_link", effect_type="warn",
+                       trigger_config="{\"threshold\": 1}", effect_config="{}", conditions="{}"))
+            s.add(WordList(guild_id=gid, name="Swear words", list_type="word", entries='["badword1", "badword2"]'))
+            s.add(WordList(guild_id=gid, name="Scam domains", list_type="domain", entries='["scam.gg", "evil.io"]'))
+            s.add(ModerationCase(guild_id=gid, case_number=1, action_type="warn", target_id="90001",
+                                 target_tag="User0#0000", moderator_id="42", moderator_tag="Tester#0000",
+                                 reason="Repeated spam in #general", resolved=False))
+            s.add(ModerationCase(guild_id=gid, case_number=2, action_type="ban", target_id="90002",
+                                 target_tag="User1#0000", moderator_id="42", moderator_tag="Tester#0000",
+                                 reason="Raid participation / malicious link", resolved=True))
+            s.add(Warning(guild_id=gid, user_id="90001", moderator_id="42", reason="Spam", active=True))
+            s.add(UserNote(guild_id=gid, user_id="90001", author_id="42",
+                           content="Repeat offender — keep an eye on them.", created_at=datetime.now(timezone.utc)))
+            for action in ("warn", "ban", "member_join", "message_delete", "voice_join"):
+                s.add(AuditLog(guild_id=gid, action=action, actor_id="42", target_id="90001",
+                               details="{\"channel\": \"#general\"}",
+                               created_at=datetime.now(timezone.utc)))
+            await s.flush()
+            await s.commit()
+
+    loop.run_until_complete(_run())
+
+
+seed_moderation()
+
 dashboard_app = create_app(bot)  # type: ignore
 app = dashboard_app.app
 

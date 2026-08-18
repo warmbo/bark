@@ -3242,7 +3242,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 @media (max-width: 1024px) { .module-health-strip { grid-template-columns: repeat(2,1fr); }.workspace-overview-grid, .operation-grid, .detail-grid { grid-template-columns: 1fr; }.context-palette-button kbd { display: none; } }
 @media (max-width: 480px) { .module-health-strip > div { grid-template-columns: 1fr; row-gap: 2px; } }
 @media (min-width: 1025px) and (max-width: 1279px) { .operation-grid { grid-template-columns: 1fr; } }
-@media (min-width: 1280px) and (max-width: 1919px) { .operation-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; } }
+@media (min-width: 1280px) and (max-width: 1919px) {
+  .operation-grid > :last-child:nth-child(odd):not(:only-child) {
+    /* Keep odd card counts aligned to the grid instead of forcing the last
+       card full-width (which made e.g. moderation's 5-card Operate tab look
+       stair-stepped / "not contained"). grid-auto-flow keeps it in column. */
+    grid-column: auto;
+  }
+}
 @media (min-width: 1280px) and (max-width: 1439px) { .module-workspace { --workspace-density: 1; } }
 @media (min-width: 1440px) and (max-width: 1919px) { .module-workspace { --workspace-density: 2; } }
 @media (min-width: 1920px) { .module-workspace { --workspace-density: 3; }.operation-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }

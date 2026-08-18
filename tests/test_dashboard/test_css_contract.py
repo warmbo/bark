@@ -78,10 +78,19 @@ def test_css_avoids_unbounded_transition_all():
     assert not re.search(r"transition\s*:\s*all\b", css_source())
 
 
-def test_desktop_operation_grid_balances_incomplete_rows():
+def test_desktop_operation_grid_keeps_odd_card_counts_uniform():
+    """Multi-card operation grids (e.g. moderation's 5-card Operate tab) must
+    keep every card the same grid width. A lone card still spans full width
+    (:only-child), but an odd number of cards must NOT stretch the last one to
+    full width (that produced a stair-stepped, 'not contained' look)."""
     css = css_source()
     assert ".operation-grid:has(> :only-child)" in css
-    assert ".operation-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }" in css
+    assert ".operation-grid > :last-child:nth-child(odd):not(:only-child)" in css
+    # The odd-card-count rule must NOT stretch the last card to full width.
+    assert not re.search(
+        r"\.operation-grid\s*>\s*:last-child:nth-child\(odd\)[^{]*grid-column:\s*1\s*/\s*-1",
+        css,
+    )
 
 
 def test_mobile_health_strip_stacks_labels_and_values():
