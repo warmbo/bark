@@ -4093,3 +4093,104 @@ textarea.form-input { min-height: 96px; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   REMAKER — flat shadcn surfaces.
+   Strips the legacy glassmorphism (frosted backdrop, glows, gradients,
+   heavy shadows) across the full shell and turns every surface into a
+   flat, bordered shadcn surface. Loads last, so it wins over legacy.css.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Body: solid token background, no wallpaper-scaling over the shell.
+   (Keeps the bark wallpaper as a faint fixed wash; flattens the app.) */
+body {
+  background-color: var(--background);
+  background-attachment: fixed;
+}
+/* Remove the wallpaper/vignette overlays that fought the flat look. */
+body::before, body::after { opacity: 0; }
+
+/* Sidebar: solid surface, no frost. */
+.sidebar {
+  background: var(--sidebar);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-right: 1px solid var(--sidebar-border);
+}
+.sidebar-footer {
+  background: var(--sidebar);
+  border-top: 1px solid var(--sidebar-border);
+}
+.sidebar-header { border-bottom: 1px solid var(--sidebar-border); }
+.sidebar-version { border-color: var(--border); background: transparent; }
+
+/* Glass utilities -> flat card surfaces. */
+.glass, .glass-strong {
+  background: var(--card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: var(--border);
+}
+
+/* Neutralize glows on status dots / accents. */
+.status-dot.online { box-shadow: none; }
+
+/* Nav groups / nav items: flat rows with hover accent. */
+.nav-item, .module-nav-item {
+  background: transparent;
+  border-radius: var(--radius);
+}
+.nav-item:hover, .module-nav-item:hover { background: var(--sidebar-accent); }
+.nav-item.active { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
+
+/* Panels / dialogs / popovers / dropdowns: flat elevated surfaces. */
+.dialog-overlay { background: color-mix(in oklab, var(--background) 72%, transparent); }
+.app-dialog,
+.palette,
+.update-terminal-dialog,
+.role-access-popover,
+.checkbox-role-panel,
+.qa-popover {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 24px color-mix(in oklab, var(--background) 45%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Tables: flat rows, zebra from token, no glass. */
+.data-table, .member-table, .audit-table { background: transparent; }
+.data-table thead th,
+.member-table thead th,
+.audit-table thead th { background: var(--secondary); border-bottom: 1px solid var(--border); }
+.data-table tbody tr:nth-child(even),
+.member-table tbody tr:nth-child(even) { background: color-mix(in oklab, var(--muted) 38%, transparent); }
+.data-table tbody tr:hover,
+.member-table tbody tr:hover { background: var(--accent); }
+
+/* Badges / status chips: flat tinted surfaces from tokens. */
+.status-badge, .badge, .badge-sm {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.status-badge.status-success, .badge-ok { background: color-mix(in oklab, var(--green) 14%, transparent); color: var(--green); border-color: color-mix(in oklab, var(--green) 30%, transparent); }
+.status-badge.status-danger, .badge-warn { background: color-mix(in oklab, var(--red) 14%, transparent); color: var(--red); border-color: color-mix(in oklab, var(--red) 30%, transparent); }
+
+/* Tabs: flat underline treatment. */
+.tab { border-bottom: 2px solid transparent; color: var(--muted-foreground); background: transparent; }
+.tab.active { border-bottom-color: var(--primary); color: var(--foreground); }
+.tab:hover { color: var(--foreground); background: transparent; }
+
+/* Toggle switch: token-colored, flat. */
+.toggle-slider { background: var(--secondary); border: 1px solid var(--border); }
+.toggle-switch input:checked + .toggle-slider { background: var(--primary); border-color: var(--primary); }
+
+/* Remove residual gradients on page backgrounds / headers. */
+.page-header, .card-header, .dashboard-welcome {
+  background: transparent;
+  background-image: none;
+}
+
+
