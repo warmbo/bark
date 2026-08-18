@@ -141,10 +141,19 @@ async def create_case(request: Request, guild_id: str):
     action_type = str(data.get("action_type", "warn"))
     target_id = str(data.get("target_id", ""))
     target_tag = str(data.get("target_tag", "Unknown#0000"))
-    moderator_id = str(data.get("moderator_id", ""))
-    moderator_tag = str(data.get("moderator_tag", "Unknown#0000"))
     reason = str(data.get("reason", ""))
     duration = data.get("duration")
+    # Never trust the client for WHO performed the action. A moderator could
+    # otherwise attribute a case to another user (audit-record forgery). Derive
+    # the actor from the authenticated session, falling back to the submitted
+    # values only when the session carries no identity (permissive mode).
+    session_user = request.session.get("user") or {}
+    moderator_id = str(session_user.get("id") or data.get("moderator_id", ""))
+    moderator_tag = str(
+        session_user.get("display_name")
+        or session_user.get("username")
+        or data.get("moderator_tag", "Unknown#0000")
+    )
     case_number = await ModerationService.create_case(
         guild_id=gid,
         action_type=action_type,
@@ -343,7 +352,10 @@ async def guild_voice_history(
             username = s.user_id
             user_tag = s.user_tag or s.user_id
             if guild:
-                member = guild.get_member(int(s.user_id))
+                try:
+                    member = guild.get_member(int(s.user_id))
+                except (TypeError, ValueError):
+                    member = None
                 if member:
                     username = member.display_name
                     user_tag = str(member)
@@ -353,7 +365,10 @@ async def guild_voice_history(
             # and live lookup only applies when no name was recorded.
             channel_name = s.channel_name
             if not channel_name and guild and s.channel_id:
-                ch = guild.get_channel(int(s.channel_id))
+                try:
+                    ch = guild.get_channel(int(s.channel_id))
+                except (TypeError, ValueError):
+                    ch = None
                 if ch:
                     channel_name = ch.name
 

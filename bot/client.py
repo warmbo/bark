@@ -314,6 +314,40 @@ class BarkBot(commands.Bot):
             except Exception:
                 logger.exception("Failed to sync slash commands after guild join")
 
+    async def on_guild_remove(self, guild: discord.Guild) -> None:
+        """Revoke dashboard access for every user of a guild the bot left.
+
+        A server removed from Bark (owner kicked the bot) must no longer be
+        manageable from the dashboard. The access snapshot is otherwise only
+        refreshed at login, so stale rows would let former members keep
+        mutating a server Bark no longer monitors.
+        """
+        try:
+            from sqlalchemy import delete
+
+            from database.engine import session_scope
+            from database.models.permissions import DashboardGuildAccess
+
+            async with session_scope() as session:
+                result = await session.execute(
+                    delete(DashboardGuildAccess).where(
+                        DashboardGuildAccess.guild_id == str(guild.id)
+                    )
+                )
+                deleted = getattr(result, "rowcount", 0) or 0
+                if deleted:
+                    logger.info(
+                        "Revoked dashboard access for %s user(s) after guild %s (%s) was removed",
+                        deleted,
+                        guild.id,
+                        guild.name,
+                    )
+        except Exception:
+            logger.exception(
+                "Failed to revoke dashboard access on guild remove (guild %s)",
+                guild.id,
+            )
+
     # ── Event → EventBus bridge ───────────────────────
 
     async def on_interaction(self, interaction) -> None:
@@ -452,6 +486,29 @@ class BarkBot(commands.Bot):
         self.record_server_event(member.guild.id, "member_leave", member, member.guild.name)
         bus = self.modules.event_bus
         await bus.emit("discord_member_remove", member=member)
+        # A user removed from a server must lose dashboard access to it
+        # immediately, not at the next login. The dashboard authorization
+        # reads the persisted access snapshot; keep it in sync with live
+        # Discord membership so a kicked ex-admin can't keep mutating.
+        try:
+            from database.engine import session_scope
+            from services.dashboard_access import revoke_user_guild_access
+
+            async with session_scope() as session:
+                revoked = await revoke_user_guild_access(
+                    session, str(member.id), member.guild.id
+                )
+                if revoked:
+                    logger.info(
+                        "Revoked dashboard access for user %s in guild %s (member removed)",
+                        member.id,
+                        member.guild.id,
+                    )
+        except Exception:  # never let membership bookkeeping break the bot
+            logger.exception(
+                "Failed to revoke dashboard access on member remove (guild %s)",
+                member.guild.id,
+            )
 
     async def on_voice_state_update(
         self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState

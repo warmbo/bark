@@ -360,6 +360,7 @@ async def _mod_action(request: Request, guild_id: str, action: str, executor):
     target_id = data.get("target_id", "").strip()
     reason = data.get("reason", "Dashboard action").strip()
     duration = data.get("duration")
+    channel_id = data.get("channel_id") if action == "vc_move" else None
 
     if not target_id:
         return api_error("target_id is required")
@@ -410,7 +411,10 @@ async def _mod_action(request: Request, guild_id: str, action: str, executor):
         pass  # If actor lookup fails, proceed with bot-only check
 
     try:
-        await executor(guild, member, reason, duration)
+        if action == "vc_move":
+            await executor(guild, member, reason, duration, channel_id=channel_id)
+        else:
+            await executor(guild, member, reason, duration)
     except discord.Forbidden:
         return api_forbidden(f"Cannot {action} that member")
     except Exception:
@@ -483,10 +487,13 @@ async def _exec_vc_kick(guild, member, reason, duration):
     await member.move_to(None, reason=reason)
 
 
-async def _exec_vc_move(guild, member, reason, duration):
-    ch_id = duration  # Reuse duration param as channel_id for vc_move
+async def _exec_vc_move(guild, member, reason, duration, channel_id=None):
+    ch_id = channel_id or duration  # legacy callers pass the channel id via duration
     if ch_id:
-        channel = guild.get_channel(int(ch_id))
+        try:
+            channel = guild.get_channel(int(ch_id))
+        except (TypeError, ValueError):
+            channel = None
         if channel:
             await member.move_to(channel, reason=reason)
 

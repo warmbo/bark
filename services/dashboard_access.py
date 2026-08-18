@@ -410,6 +410,33 @@ async def user_shares_guild_with_bot(
     return result.scalar_one_or_none() is not None
 
 
+async def revoke_user_guild_access(
+    session: AsyncSession,
+    discord_user_id: str,
+    guild_id: int | str,
+) -> bool:
+    """Revoke a dashboard user's access to a guild (member left / was removed).
+
+    The dashboard's admission + authorization reads the persisted
+    ``DashboardGuildAccess`` snapshot written at OAuth login. Without a live
+    membership check this snapshot is stale: a user removed from a server (or
+    a server removed from the bot) keeps their dashboard access and their
+    prior manage tier until they log in again. ``on_member_remove`` /
+    ``on_guild_remove`` call this so removal takes effect immediately instead
+    of at the next login.
+
+    Returns True when a row was actually deleted (so callers can log a
+    meaningful change), False when there was nothing to revoke.
+    """
+    result = await session.execute(
+        delete(DashboardGuildAccess).where(
+            DashboardGuildAccess.user_discord_id == discord_user_id,
+            DashboardGuildAccess.guild_id == str(guild_id),
+        )
+    )
+    return (getattr(result, "rowcount", 0) or 0) > 0
+
+
 def build_bot_invite_url(client_id: str, guild_id: str) -> str:
     """Build a server-targeted Discord install URL for Bark."""
     if not client_id:

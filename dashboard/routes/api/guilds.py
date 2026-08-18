@@ -823,7 +823,10 @@ async def _load_role_items(session, guild_id: int, guild) -> list[dict]:
     items = []
     for row in assignments:
         user = _member_name(guild, row.user_id)
-        role = guild.get_role(int(row.role_id)) if row.role_id else None
+        try:
+            role = guild.get_role(int(row.role_id)) if row.role_id else None
+        except (TypeError, ValueError):
+            role = None
         role_name = str(getattr(role, "name", None) or row.role_id or "role")
         action = "assigned" if row.action == "add" else "removed"
         trigger = f" ({rule_names.get(row.rule_id, 'manual')})" if row.rule_id else ""

@@ -1573,7 +1573,10 @@ class ModerationModule(BarkModule):
                                 else [],
                             }
             except Exception:
-                pass
+                logger.exception(
+                    "Failed to load legacy AutoModConfig for guild %s — AutoMod rules disabled for this cycle",
+                    guild_id,
+                )
 
         self._config_cache[guild_id] = result
         self._cache_ttl[guild_id] = now

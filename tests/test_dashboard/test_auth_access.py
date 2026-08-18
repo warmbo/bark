@@ -1309,3 +1309,45 @@ async def test_csrf_rejects_untrusted_origin_and_allows_trusted(db, monkeypatch)
             headers={"Origin": "http://10.0.0.227:8091"},
         )
         assert "Cross-origin" not in (trusted.text or "")
+
+
+@pytest.mark.asyncio
+async def test_revoke_user_guild_access_deletes_only_that_user_guild_pair(db):
+    """A user removed from a guild must lose dashboard access to it immediately."""
+    from services.dashboard_access import revoke_user_guild_access
+
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="42", username="Cody", role="admin"))
+
+    login = [
+        {"id": "100", "name": "Alpha", "icon": None, "owner": True, "permissions": "0"},
+        {"id": "200", "name": "Beta", "icon": None, "owner": False, "permissions": str(0x20)},
+    ]
+    async with session_scope() as session:
+        await replace_user_guild_access(session, "42", login)
+
+    # Revoke only user 42's access to guild 100; guild 200 must remain.
+    async with session_scope() as session:
+        revoked = await revoke_user_guild_access(session, "42", 100)
+        assert revoked is True
+
+    async with session_scope() as session:
+        rows = await get_user_guild_access(session, "42")
+        assert [row.guild_id for row in rows] == ["200"]
+
+    # Second call (row already gone) reports no change.
+    async with session_scope() as session:
+        assert await revoke_user_guild_access(session, "42", 100) is False
+
+    # Other users' rows for the same guild are untouched.
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="99", username="Other", role="viewer"))
+    async with session_scope() as session:
+        await replace_user_guild_access(
+            session,
+            "99",
+            [{"id": "100", "name": "Alpha", "icon": None, "owner": False, "permissions": "0"}],
+        )
+    async with session_scope() as session:
+        rows = await get_user_guild_access(session, "99")
+        assert [row.guild_id for row in rows] == ["100"]

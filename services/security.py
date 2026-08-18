@@ -113,7 +113,13 @@ def mutation_capability(method: str, path: str) -> str | None:
         return "settings.automod"
     module_match = re.fullmatch(r"modules/([a-z0-9_-]+)(?:/(toggle|reload))?", tail)
     if module_match:
-        return "modules.manage" if module_match.group(2) else "modules.configure"
+        # Module lifecycle routes must resolve to the MODULE's own capability
+        # (e.g. ``moderation.manage``), not the global ``modules.configure``,
+        # so per-guild ModuleRoleAccess overrides apply uniformly. The generic
+        # ``modules.configure``/``modules.manage`` core actions are the
+        # fallback when no per-guild override exists (both default to admin).
+        module_name = module_match.group(1)
+        return f"{module_name}.manage" if module_match.group(2) else f"{module_name}.configure"
     module_action_match = re.match(r"modules/([a-z0-9_-]+)/", tail)
     if module_action_match:
         return f"{module_action_match.group(1)}.manage"
