@@ -105,16 +105,19 @@ def test_schema_groups_cover_all_flat_keys_in_sections():
     all_keys = [
         "primary_channel_id", "channel_name_template", "fallback_name",
         "name_uppercase", "name_lowercase", "name_titlecase",
-        "user_limit", "bitrate_kbps",
+        "user_limit", "bitrate_kbps", "max_channels_per_user",
         "inherit_permissions", "private_by_default", "required_role_id",
+        "auto_join_role_id",
         "owner_can_rename", "owner_can_limit", "owner_can_lock",
         "empty_delete_delay_seconds",
     ]
     for key in all_keys:
         assert _schema_field(schema, key) is not None, f"{key} missing from schema"
 
+    # The casing toggles were consolidated into "Channel Setup & Naming" so the
+    # 2-column layout flows 4 balanced sections instead of 5 ragged ones.
     sections = schema["properties"]
-    assert set(sections) == {"channel", "naming", "limits", "access", "cleanup"}
+    assert set(sections) == {"channel", "limits", "access", "cleanup"}
     # No flat top-level fields remain.
     for section in sections.values():
         assert section["type"] == "object" and section["properties"]

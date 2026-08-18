@@ -111,9 +111,9 @@
 
   const previewName = document.getElementById('auto-voice-preview-name');
   const caseInputs = [
-    document.getElementById('config-naming-name_uppercase') || document.getElementById('config-name_uppercase'),
-    document.getElementById('config-naming-name_lowercase') || document.getElementById('config-name_lowercase'),
-    document.getElementById('config-naming-name_titlecase') || document.getElementById('config-name_titlecase'),
+    document.getElementById('config-channel-name_uppercase') || document.getElementById('config-name_uppercase'),
+    document.getElementById('config-channel-name_lowercase') || document.getElementById('config-name_lowercase'),
+    document.getElementById('config-channel-name_titlecase') || document.getElementById('config-name_titlecase'),
   ].filter(Boolean);
 
   const readCaseFlags = () => ({

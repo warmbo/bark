@@ -35,13 +35,20 @@ class ManagedChannel:
 # each group maps to its flat keys so legacy (pre-grouping) configs keep
 # working and are lifted into the grouped shape on read.
 CONFIG_GROUPS: dict[str, list[str]] = {
-    "channel": ["primary_channel_id", "channel_name_template", "fallback_name"],
-    "naming": ["name_uppercase", "name_lowercase", "name_titlecase"],
+    "channel": [
+        "primary_channel_id",
+        "channel_name_template",
+        "fallback_name",
+        "name_uppercase",
+        "name_lowercase",
+        "name_titlecase",
+    ],
     "limits": ["user_limit", "bitrate_kbps", "max_channels_per_user"],
     "access": [
         "inherit_permissions",
         "private_by_default",
         "required_role_id",
+        "auto_join_role_id",
         "owner_can_rename",
         "owner_can_limit",
         "owner_can_lock",
@@ -75,8 +82,17 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         lifted = {key: raw[key] for key in keys if key in raw}
         if lifted:
             grouped[group] = lifted
+    # Legacy "naming" group (pre-consolidation): fold its casing keys into
+    # "channel" so old stored configs keep validating under the new schema.
+    legacy_naming = raw.get("naming")
+    if isinstance(legacy_naming, dict):
+        channel = grouped.setdefault("channel", {})
+        for key in ("name_uppercase", "name_lowercase", "name_titlecase"):
+            if key in legacy_naming:
+                channel[key] = legacy_naming[key]
     result = dict(raw)
     result.update(grouped)
+    result.pop("naming", None)
     # Drop the lifted flat keys now that they live in their group.
     for group, keys in CONFIG_GROUPS.items():
         if group in grouped:
@@ -107,12 +123,23 @@ class AutoVoiceModule(BarkModule):
 
     @staticmethod
     def _cfg(config: dict[str, Any], key: str, default=None):
-        """Read a config key from its group, falling back to a legacy flat key."""
+        """Read a config key from its group, falling back to a legacy flat key.
+
+        The casing keys (name_uppercase/… ) previously lived in their own
+        "naming" group; they now live under "channel". Configs saved before
+        the consolidation may still store them under "naming" — check that
+        legacy location too so old data keeps reading correctly.
+        """
         group = _KEY_TO_GROUP.get(key)
         if group:
             section = config.get(group)
             if isinstance(section, dict) and key in section:
                 return section[key]
+        # Legacy "naming" group (pre-consolidation) for the casing keys.
+        if key in ("name_uppercase", "name_lowercase", "name_titlecase"):
+            legacy = config.get("naming")
+            if isinstance(legacy, dict) and key in legacy:
+                return legacy[key]
         return config.get(key, default)
 
     async def load_dashboard_config(self, guild_id: int) -> dict[str, Any]:
@@ -180,8 +207,8 @@ class AutoVoiceModule(BarkModule):
             "properties": {
                 "channel": {
                     "type": "object",
-                    "title": "Channel Setup",
-                    "description": "Which channel starts a temporary voice channel and how new channels are named.",
+                    "title": "Channel Setup & Naming",
+                    "description": "Which channel starts a temporary voice channel, how new channels are named, and optional casing to apply.",
                     "properties": {
                         "primary_channel_id": {
                             "type": "string",
@@ -209,13 +236,6 @@ class AutoVoiceModule(BarkModule):
                             "default": "General",
                             "maxLength": 100,
                         },
-                    },
-                },
-                "naming": {
-                    "type": "object",
-                    "title": "Channel Naming",
-                    "description": "Optional casing applied to the finished channel name.",
-                    "properties": {
                         "name_uppercase": {
                             "type": "boolean",
                             "title": "ALL UPPERCASE",

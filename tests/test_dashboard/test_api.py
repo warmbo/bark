@@ -1022,12 +1022,20 @@ def test_auto_voice_flat_config_validates_against_grouped_schema():
     errors = _validate_config(normalized, properties)
     assert errors == [], f"flat auto_voice config must validate clean, got {errors}"
 
-    # The grouped shape itself also validates.
+    # The grouped shape itself also validates (casing now under "channel").
     grouped_errors = _validate_config(
-        {"channel": {"primary_channel_id": "222"}, "naming": {"name_uppercase": True}},
+        {"channel": {"primary_channel_id": "222", "name_uppercase": True}},
         properties,
     )
     assert grouped_errors == [], f"grouped auto_voice config must validate clean, got {grouped_errors}"
+
+    # A legacy config still carrying the pre-consolidation "naming" group must
+    # normalize into the "channel" group and validate clean (no orphan key).
+    legacy = normalize_config({"channel": {"primary_channel_id": "222"}, "naming": {"name_uppercase": True}})
+    assert "naming" not in legacy
+    assert legacy["channel"]["name_uppercase"] is True
+    legacy_errors = _validate_config(legacy, properties)
+    assert legacy_errors == [], f"legacy 'naming' auto_voice config must validate clean, got {legacy_errors}"
 
 
 def test_speak_config_with_module_managed_phrases_validates_clean():
