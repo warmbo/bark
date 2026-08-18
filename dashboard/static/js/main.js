@@ -312,17 +312,17 @@ async function copyText(text, label = 'Copied') {
     }
 }
 
-// Wire every [data-copy] button: copy the text in its data-copy attribute
-// (or the trimmed textContent of data-copy-target selector).
+// Wire every copy button. Buttons declare either a literal value via
+// data-copy, or a CSS selector to read the text from via data-copy-target.
 function initCopyButtons() {
-    document.querySelectorAll('[data-copy]').forEach((btn) => {
+    document.querySelectorAll('[data-copy], [data-copy-target]').forEach((btn) => {
         if (btn.dataset.copyBound) return;
         btn.dataset.copyBound = '1';
         btn.addEventListener('click', () => {
             const target = btn.dataset.copyTarget;
             const text = target
                 ? (document.querySelector(target)?.textContent || '').trim()
-                : (btn.dataset.copy || '');
+                : (btn.dataset.copy || '').trim();
             if (text) copyText(text, btn.dataset.copyLabel || 'Copied');
         });
     });
