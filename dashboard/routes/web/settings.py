@@ -18,18 +18,18 @@ router = APIRouter(tags=["web-settings"])
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, guild_id: int):
-    """Server settings (per-guild config). The instance-wide page lives at
-    /settings/instance. (plan item 9: Server vs Instance are separate pages.)"""
-    return await _settings_page(request, guild_id, view="server")
+    """Server settings (per-guild config) — a dedicated page.
+    (plan item 9: Server vs Instance are separate pages, not sections.)"""
+    return await _settings_page(request, guild_id, "pages/settings_server.html")
 
 
 @router.get("/settings/instance", response_class=HTMLResponse)
 async def settings_instance_page(request: Request, guild_id: int):
     """Instance settings (applies to the whole Bark instance, not one server)."""
-    return await _settings_page(request, guild_id, view="instance")
+    return await _settings_page(request, guild_id, "pages/settings_instance.html")
 
 
-async def _settings_page(request: Request, guild_id: int, view: str):
+async def _settings_page(request: Request, guild_id: int, template: str):
     bot = request.state.bot
     guild = bot.get_guild(guild_id)
 
@@ -43,11 +43,10 @@ async def _settings_page(request: Request, guild_id: int, view: str):
 
     return templates.TemplateResponse(
         request,
-        "pages/settings.html",
+        template,
         {
             "guild": guild,
             "config": config,
             "is_owner": can_manage_instance(request),
-            "settings_view": view,
         },
     )

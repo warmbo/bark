@@ -330,11 +330,10 @@ def seed_moderation():
         from database.models.ruleset import Rule, RuleSet, WordList
 
         async with session_scope() as s:
-            gid = str(bot._guild.id)
-            if (await s.execute(select(RuleSet).where(RuleSet.guild_id == gid))).scalars().first():
+            if (await s.execute(select(RuleSet).where(RuleSet.guild_id == str(bot._guild.id)))).scalars().first():
                 return
-            rs = RuleSet(guild_id=gid, name="Scam Protection", enabled=True, priority=100)
-            rs2 = RuleSet(guild_id=gid, name="New Account Shield", enabled=False, priority=50,
+            rs = RuleSet(guild_id=str(bot._guild.id), name="Scam Protection", enabled=True, priority=100)
+            rs2 = RuleSet(guild_id=str(bot._guild.id), name="New Account Shield", enabled=False, priority=50,
                           account_age_minutes_max=2880)
             s.add(rs)
             s.add(rs2)
@@ -345,19 +344,19 @@ def seed_moderation():
                        trigger_config="{\"threshold\": 1, \"window_seconds\": 10}", effect_config="{}", conditions="{}"))
             s.add(Rule(ruleset_id=rs2.id, trigger_type="any_link", effect_type="warn",
                        trigger_config="{\"threshold\": 1}", effect_config="{}", conditions="{}"))
-            s.add(WordList(guild_id=gid, name="Swear words", list_type="word", entries='["badword1", "badword2"]'))
-            s.add(WordList(guild_id=gid, name="Scam domains", list_type="domain", entries='["scam.gg", "evil.io"]'))
-            s.add(ModerationCase(guild_id=gid, case_number=1, action_type="warn", target_id="90001",
+            s.add(WordList(guild_id=str(bot._guild.id), name="Swear words", list_type="word", entries='["badword1", "badword2"]'))
+            s.add(WordList(guild_id=str(bot._guild.id), name="Scam domains", list_type="domain", entries='["scam.gg", "evil.io"]'))
+            s.add(ModerationCase(guild_id=str(bot._guild.id), case_number=1, action_type="warn", target_id="90001",
                                  target_tag="User0#0000", moderator_id="42", moderator_tag="Tester#0000",
                                  reason="Repeated spam in #general", resolved=False))
-            s.add(ModerationCase(guild_id=gid, case_number=2, action_type="ban", target_id="90002",
+            s.add(ModerationCase(guild_id=str(bot._guild.id), case_number=2, action_type="ban", target_id="90002",
                                  target_tag="User1#0000", moderator_id="42", moderator_tag="Tester#0000",
                                  reason="Raid participation / malicious link", resolved=True))
-            s.add(Warning(guild_id=gid, user_id="90001", moderator_id="42", reason="Spam", active=True))
-            s.add(UserNote(guild_id=gid, user_id="90001", author_id="42",
+            s.add(Warning(guild_id=str(bot._guild.id), user_id="90001", moderator_id="42", reason="Spam", active=True))
+            s.add(UserNote(guild_id=str(bot._guild.id), user_id="90001", author_id="42",
                            content="Repeat offender — keep an eye on them.", created_at=datetime.now(timezone.utc)))
             for action in ("warn", "ban", "member_join", "message_delete", "voice_join"):
-                s.add(AuditLog(guild_id=gid, action=action, actor_id="42", target_id="90001",
+                s.add(AuditLog(guild_id=str(bot._guild.id), action=action, actor_id="42", target_id="90001",
                                details="{\"channel\": \"#general\"}",
                                created_at=datetime.now(timezone.utc)))
             await s.flush()

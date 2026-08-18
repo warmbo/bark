@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% from "components/primitives.html" import page_header, settings_section, settings_card %}
+{% block title %}Instance Settings — {{ guild.name }}{% endblock %}
+
+{% block content %}
+{% set active_page = "settings" %}
+
+<div class="page-container">
+    {{ page_header("Instance Settings", "Applies to the whole Bark instance across every server.", icon_name="cpu") }}
+
+    <div class="settings-grid">
+        <!-- Main column: Instance settings -->
+        <div class="settings-main">
+
+            {{ settings_section("Instance", "Applies to the whole Bark instance across every server.", icon_name="cpu", id="instance-settings") }}
+
+            <!-- Dashboard Configuration -->
+            {% call settings_card("Dashboard Configuration", "Connection and identity information.", icon_name="radio") %}
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Server ID</span>
+                        <span class="info-value"><code class="code-sm">{{ guild.id }}</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Authentication</span>
+                        <span class="info-value">
+                            {% if config.oauth2.enabled %}
+                            <span class="badge badge-ok">OAuth2 Enabled</span>
+                            {% elif config.oauth2.client_id %}
+                            <span class="badge badge-warn">OAuth2 Incomplete</span>
+                            {% else %}
+                            <span class="badge badge-muted">Permissive Mode</span>
+                            <span class="form-hint mt-1">Set BARK_OAUTH2_CLIENT_ID to enable Discord login.</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Public URL</span>
+                        <span class="info-value url-copy-row">
+                            <a href="{{ config.dashboard.public_url }}" rel="noopener"><code class="code-sm" id="public-url-value">{{ config.dashboard.public_url }}</code></a>
+                            <button type="button" class="btn btn-icon" data-copy-target="#public-url-value" data-copy-label="Public URL copied" aria-label="Copy public URL" title="Copy public URL">{{ icon("copy", 14) }}</button>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">OAuth Callback</span>
+                        <span class="info-value"><code class="code-sm">{{ config.oauth2.redirect_uri }}</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Invite URL</span>
+                        <span class="info-value url-copy-row">
+                            {% if config.dashboard.invite_url %}
+                            <code class="code-sm" id="invite-url-value">{{ config.dashboard.invite_url }}</code>
+                            <button type="button" class="btn btn-icon" data-copy-target="#invite-url-value" data-copy-label="Invite URL copied" aria-label="Copy invite URL" title="Copy invite URL">{{ icon("copy", 14) }}</button>
+                            {% else %}
+                            <span class="text-tertiary">Not configured</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Data Directory</span>
+                        <span class="info-value"><code class="code-sm">{{ config.data_dir }}</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Version</span>
+                        <span class="info-value">Bark {{ request.app.state.version }}</span>
+                    </div>
+                </div>
+            {% endcall %}
+
+            <!-- Backups (database snapshot + module settings export/import) -->
+            {% if is_owner %}
+            {% call settings_card("Backups", "Snapshot the full database, or export and restore every module's settings as one JSON file.", icon_name="database") %}
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Database snapshots</span>
+                        <span class="info-value">
+                            <ul class="backup-list" id="backup-list">
+                                <li class="text-tertiary">Loading…</li>
+                            </ul>
+                        </span>
+                    </div>
+                </div>
+                <div class="form-actions form-actions-static backup-actions">
+                    <button type="button" class="btn btn-primary" id="backup-create-btn">{{ icon("download", 14) }} Backup Now</button>
+                    <button type="button" class="btn" id="backup-export-btn">{{ icon("download", 14) }} Export settings (.json)</button>
+                    <input type="file" id="backup-file-input" name="backup_file" accept=".json,.db,application/json,application/octet-stream" hidden>
+                    <label for="backup-file-input" class="btn">{{ icon("upload", 14) }} Choose v0.2/v0.3 backup</label>
+                    <button type="button" class="btn btn-primary" id="backup-import-btn" disabled>{{ icon("package-plus", 14) }} Import backup</button>
+                    <span class="form-hint" id="backup-file-name" style="align-self:center;">No file selected</span>
+                </div>
+                <div class="workspace-data-card" id="db-backup-result" aria-live="polite"></div>
+                <p class="form-hint">JSON restores one server's settings/modules immediately. A full SQLite .db restore is integrity-checked, staged, migrated on restart, and keeps the current database as a rollback snapshot.</p>
+                <div class="workspace-data-card" id="backup-result" aria-live="polite" hidden></div>
+            {% endcall %}
+            {% endif %}
+
+            <!-- Bot Customization -->
+            {% if is_owner %}
+            {% include "components/bot_customization.html" %}
+            {% endif %}
+
+        </div>
+
+        <!-- Side column: Updates, Diagnostics -->
+        <div class="settings-side">
+
+            <!-- Updates (from GitHub, by release version) -->
+            {% if is_owner %}
+            {% call settings_card("Updates", "Pull the latest release from GitHub and restart the instance. Updates are tracked by version number.", icon_name="refresh-cw") %}
+                <div class="module-info-body">
+                    <div class="info-row">
+                        <span class="info-label">Channel</span>
+                        <span class="info-value">
+                            <select id="update-channel" name="update_channel" class="form-select form-select-sm" aria-label="Update channel">
+                                <option value="main">Stable (main)</option>
+                                <option value="dev">Dev (dev)</option>
+                            </select>
+                            <p class="form-hint" id="update-channel-hint">The Stable channel tracks GitHub's main branch. The Dev channel is one-way: once an instance moves to Dev it cannot switch back to Stable.</p>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Current version</span>
+                        <span class="info-value"><code class="code-sm" id="update-current">—</code></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Available version</span>
+                        <span class="info-value"><code class="code-sm" id="update-available">—</code> <span class="text-tertiary" id="update-available-date"></span></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Source</span>
+                        <span class="info-value"><a href="#" id="update-repo" rel="noopener" target="_blank" class="text-secondary">—</a></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Releases</span>
+                        <span class="info-value"><a href="#" id="update-releases" rel="noopener" target="_blank" class="text-secondary">View on GitHub</a></span>
+                    </div>
+                </div>
+                <div class="form-actions form-actions-static">
+                    <button type="button" class="btn btn-primary" id="update-apply-btn" disabled>{{ icon("download", 14) }} Update &amp; Restart</button>
+                </div>
+                <div class="workspace-data-card" id="update-result" aria-live="polite"></div>
+            {% endcall %}
+
+            <!-- Diagnostics (download a redacted report for support) -->
+            {% call settings_card("Diagnostics", "Download a redacted report of this instance's version, environment, git/remote state and recent logs. Paste it back to us when diagnosing an issue.", icon_name="file-text", id="diagnostics-card") %}
+                <div class="form-actions form-actions-static">
+                    <button type="button" class="btn" id="diagnostics-download-btn" aria-label="Download diagnostic report">{{ icon("download", 14) }} Download diagnostic report</button>
+                </div>
+                <div class="workspace-data-card" id="diagnostics-result" aria-live="polite"></div>
+            {% endcall %}
+            {% endif %}
+
+        </div>
+    </div>
+
+    {% if is_owner %}
+    {% call settings_card("Hosted Instance Access", "Create one-time share links for people allowed to add and manage Bark in servers they administer.", icon_name="share-2", id="instance-invites") %}
+        <form class="settings-form" id="instance-invite-form">
+            <div class="form-grid form-grid-2">
+                <div class="form-group">
+                    <label class="form-label" for="instance-invite-days">Link lifetime</label>
+                    <select class="form-input" id="instance-invite-days" name="expires_in_days">
+                        <option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option>
+                    </select>
+                    <span class="form-hint">Each link can be redeemed once, then grants ongoing access until you revoke it.</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="instance-invite-note">Note (optional)</label>
+                    <input class="form-input" id="instance-invite-note" name="note" type="text" maxlength="240" placeholder="Who is this for?">
+                </div>
+            </div>
+            <div class="form-actions form-actions-static"><button type="submit" class="btn btn-primary" id="instance-invite-create">{{ icon("link", 16) }} Create secure link</button></div>
+        </form>
+        <div class="form-group" id="instance-invite-result" hidden>
+            <label class="form-label" for="instance-invite-url">Copy this link now — it is intentionally shown only once.</label>
+            <div class="input-row"><input class="form-input" id="instance-invite-url" name="share_url" type="url" readonly><button type="button" class="btn" id="instance-invite-copy">Copy</button></div>
+        </div>
+        <div class="workspace-data-card" id="instance-invite-list" aria-live="polite"></div>
+    {% endcall %}
+    {% endif %}
+
+</div>
+
+<!-- Live update terminal (opened by Update & Restart) -->
+<div class="dialog-overlay" id="update-terminal-overlay" hidden>
+    <div class="update-terminal-dialog" role="dialog" aria-modal="true" aria-labelledby="update-terminal-title">
+        <h2 class="update-terminal-title" id="update-terminal-title">{{ icon("terminal", 18) }} Updating Bark</h2>
+        <p class="update-terminal-subtitle" id="update-terminal-subtitle">Running update commands — this window shows exactly what is happening.</p>
+        <div class="update-progress" id="update-progress" hidden>
+            <div class="update-progress-track" aria-hidden="true"><div class="update-progress-fill" id="update-progress-fill"></div></div>
+            <div class="update-progress-meta">
+                <span id="update-progress-label">Starting…</span>
+                <span id="update-progress-eta"></span>
+            </div>
+        </div>
+        <div class="update-terminal" id="update-terminal-log" aria-live="polite" tabindex="0"></div>
+        <div class="dialog-actions">
+            <button type="button" class="btn btn-primary" id="update-terminal-close" disabled>{{ icon("refresh-cw", 14) }} Finish &amp; Reload</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% include "components/settings_scripts.html" %}
+{% endblock %}

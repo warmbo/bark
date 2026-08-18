@@ -131,8 +131,13 @@ def test_rendered_page_literal_ids_are_unique_and_aria_references_resolve():
         ids = re.findall(r'\bid\s*=\s*["\']([A-Za-z][\w:.-]*)["\']', html)
         duplicates = sorted(item for item in set(ids) if ids.count(item) > 1)
         assert duplicates == [], f"{page.relative_to(ROOT)} duplicate IDs: {duplicates}"
+        # Strip <script> blocks before checking attribute references: JS
+        # selectors like label[for="avatar-upload"] are not HTML label/aria
+        # attributes and may legitimately reference ids that exist on another
+        # page (e.g. bot customization lives on the Instance settings page).
+        html_no_scripts = re.sub(r"<script\b.*?</script>", "", html, flags=re.S)
         for attr in ("for", "aria-controls", "aria-labelledby", "aria-describedby"):
-            references = re.findall(rf'\b{attr}\s*=\s*["\']([A-Za-z][\w:.-]*)["\']', html)
+            references = re.findall(rf'\b{attr}\s*=\s*["\']([A-Za-z][\w:.-]*)["\']', html_no_scripts)
             dangling = sorted(set(reference for reference in references if reference not in ids))
             assert dangling == [], f"{page.relative_to(ROOT)} dangling {attr}: {dangling}"
 

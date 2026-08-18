@@ -77,6 +77,7 @@ ALLOWED_SHARED_MODULE_TEMPLATES = {
     "components/discord_toolbar.html",
     "components/icons.html",
     "components/primitives.html",
+    "components/settings_scripts.html",
 }
 
 
