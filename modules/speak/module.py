@@ -111,7 +111,19 @@ class SpeakModule(BarkModule):
                     "default": 0,
                     "minimum": 0,
                     "maximum": 3600,
-                }
+                },
+                # Module-managed data (edited via the dedicated /phrases API and
+                # the Speak Phrases workspace), persisted alongside the form
+                # settings in the same config dict. Declared here so the config
+                # health check recognizes it as valid instead of reporting
+                # "phrases: unknown setting". It is a free-form object with no
+                # declared sub-properties, which the form renderer skips (it
+                # cannot draw a free-form container) — see module_detail.html.
+                "phrases": {
+                    "type": "object",
+                    "title": "Speak Phrases",
+                    "description": "Preset phrase key->text map (module-managed).",
+                },
             },
         }
 

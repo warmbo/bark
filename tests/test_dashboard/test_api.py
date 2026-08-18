@@ -5,6 +5,8 @@ Uses httpx AsyncClient against the FastAPI app with a mock bot.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 
@@ -1026,6 +1028,36 @@ def test_auto_voice_flat_config_validates_against_grouped_schema():
         properties,
     )
     assert grouped_errors == [], f"grouped auto_voice config must validate clean, got {grouped_errors}"
+
+
+def test_speak_config_with_module_managed_phrases_validates_clean():
+    """The speak module stores a module-managed ``phrases`` dict alongside its
+    form settings; config health must not flag it as an unknown setting."""
+    from dashboard.routes.api.modules import _validate_config
+    from modules.speak.module import SpeakModule
+
+    schema = SpeakModule.__new__(SpeakModule).get_settings_schema()
+    properties = schema.get("properties", {})
+
+    # ``phrases`` is declared in the schema (as a free-form object with no
+    # sub-properties — module-managed data, not a form control).
+    assert "phrases" in properties
+    assert properties["phrases"]["type"] == "object"
+    assert "properties" not in properties["phrases"]
+
+    stored = {
+        "delete_delay_seconds": 5,
+        "phrases": {"word1": "hello", "word2": "world"},
+    }
+    errors = _validate_config(stored, properties)
+    assert errors == [], f"speak config with phrases must validate clean, got {errors}"
+
+    # The generic form renderer must not try to draw a control for the
+    # free-form ``phrases`` object (it has no renderable sub-fields).
+    module_detail = (Path(__file__).resolve().parents[2] / "dashboard" / "templates" / "pages" / "module_detail.html").read_text()
+    assert (
+        "prop.type != 'object' or prop.properties" in module_detail
+    ), "form renderer must skip free-form object props (module-managed data)"
 
 
 @pytest.mark.asyncio

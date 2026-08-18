@@ -201,7 +201,8 @@ def test_catalog_includes_every_oauth_guild_and_marks_bot_installation():
     assert catalog[0]["connected"] is True
     assert catalog[0]["member_count"] == 25
     assert catalog[1]["connected"] is False
-    assert "guild_id=200" in catalog[1]["invite_url"]
+    # Invite link is the canonical branded landing URL, not the raw Discord OAuth URL.
+    assert catalog[1]["invite_url"].endswith("/invite")
     assert catalog[2]["can_manage"] is False
 
 

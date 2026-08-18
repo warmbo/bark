@@ -123,16 +123,21 @@
       {% if module_data.settings_schema and module_data.settings_schema.properties %}
         <form class="module-config-form {{ 'config-layout-columns' if module_data.config_layout == 'columns' else '' }}" id="module-config-form" data-module="{{ module_name }}">
         {% for key, prop in module_data.settings_schema.properties.items() %}
+          {# A free-form object with no declared sub-properties (e.g. a
+             module-managed key like speak's "phrases") has no renderable
+             control — skip it. Object groups WITH sub-properties render a
+             fieldset below. #}
+          {% if prop.type != 'object' or prop.properties %}
           {% if prop.type == 'object' and prop.properties %}
           <fieldset class="config-subsection"><legend class="config-subsection-title">{{ prop.title | default(key | replace('_', ' ') | title) }}</legend>{% if prop.description %}<p class="config-subsection-desc">{{ prop.description }}</p>{% endif %}
             <div class="form-grid">{% for sub_key, sub_prop in prop.properties.items() %}{{ schema_field(key ~ '__' ~ sub_key, sub_prop, module_data.config.get(key, {}).get(sub_key, sub_prop.default), 'config-' ~ key ~ '-' ~ sub_key) }}{% endfor %}</div>
           </fieldset>
           {% else %}{{ schema_field(key, prop, module_data.config.get(key, prop.default), 'config-' ~ key) }}{% endif %}
+          {% endif %}
         {% endfor %}
         <div class="form-actions"><button type="button" class="btn" id="discard-config-btn" disabled>Cancel</button><button type="submit" class="btn btn-primary" id="save-config-btn" disabled>{{ icon('save', 16) }} Save Changes</button></div>
         </form>
-      {% elif module_name == 'speak' %}
-        {% include 'components/speak_phrases.html' %}
+        {% if module_name == 'speak' %}{% include 'components/speak_phrases.html' %}{% endif %}
       {% else %}{{ state_panel('empty', 'No configuration required', 'This module is ready with its built-in defaults.') }}{% endif %}
       </div>
     </article>

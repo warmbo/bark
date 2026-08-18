@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import urllib.parse
 from collections.abc import Iterable, Sequence
 from typing import Any
 
@@ -438,19 +437,21 @@ async def revoke_user_guild_access(
 
 
 def build_bot_invite_url(client_id: str, guild_id: str) -> str:
-    """Build a server-targeted Discord install URL for Bark."""
-    if not client_id:
+    """Build the branded invite link for Bark.
+
+    Always returns the public invite landing URL (``{public_url}/invite``),
+    which resolves to the real Discord OAuth install link server-side via the
+    ``/invite`` route. This keeps a single canonical invite URL everywhere
+    (guild cards, dashboard, help module) instead of leaking the raw Discord
+    OAuth URL into the UI.
+    """
+    from config import config as _config
+
+    public_url = getattr(_config, "dashboard", None)
+    public_url = getattr(public_url, "public_url", "") if public_url else ""
+    if not public_url:
         return ""
-    query = urllib.parse.urlencode(
-        {
-            "client_id": client_id,
-            "scope": "bot applications.commands",
-            "permissions": "8",
-            "guild_id": guild_id,
-            "disable_guild_select": "true",
-        }
-    )
-    return f"https://discord.com/oauth2/authorize?{query}"
+    return f"{public_url.rstrip('/')}/invite"
 
 
 def build_guild_catalog(
