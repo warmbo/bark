@@ -112,6 +112,8 @@ class ReputationTier(Base):
     min_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     min_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     color_hex: Mapped[str] = mapped_column(String(7), nullable=False, default="#99aab5")
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    """Human-readable reason to reach this tier — what it means / what it unlocks."""
     role_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     assign_role: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

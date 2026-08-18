@@ -18,15 +18,13 @@ router = APIRouter(tags=["web-settings"])
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, guild_id: int):
-    """Server settings (per-guild config) — a dedicated page.
-    (plan item 9: Server vs Instance are separate pages, not sections.)"""
-    return await _settings_page(request, guild_id, "pages/settings_server.html")
+    """Server + instance settings merged into one page.
 
-
-@router.get("/settings/instance", response_class=HTMLResponse)
-async def settings_instance_page(request: Request, guild_id: int):
-    """Instance settings (applies to the whole Bark instance, not one server)."""
-    return await _settings_page(request, guild_id, "pages/settings_instance.html")
+    Per-server configuration (slug, dashboard access) and instance-wide
+    settings (backups, updates, diagnostics, bot customization, instance
+    access) now share a single Settings page.
+    """
+    return await _settings_page(request, guild_id, "pages/settings.html")
 
 
 async def _settings_page(request: Request, guild_id: int, template: str):

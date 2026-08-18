@@ -12,7 +12,7 @@
     });
   }
 
-  const W = 560, H = 180, PAD = { top: 12, right: 12, bottom: 22, left: 42 };
+  const W = 560, H = 190, PAD = { top: 14, right: 14, bottom: 26, left: 46 };
 
   function niceMax(v) {
     if (!v) return 10;
@@ -39,6 +39,7 @@
     const min = 0;
     const range = Math.max(1, max - min);
     const stepX = iw / Math.max(1, points.length - 1);
+    const color = opts.color || 'var(--accent)';
     const coords = points.map((p, i) => {
       const x = PAD.left + (points.length === 1 ? 0 : i * stepX);
       const y = p.value == null ? null : H - PAD.bottom - ((p.value - min) / range) * ih;
@@ -51,13 +52,13 @@
     coords.forEach((c, i) => {
       if (c.y == null) return;
       line += (i === 0 || coords[i - 1].y == null ? 'M' : 'L') + c.x.toFixed(1) + ',' + c.y.toFixed(1) + ' ';
-      dots += '<circle cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1) + '" r="2.4" fill="var(--accent)"><title>' + esc(c.label) + ': ' + esc(c.value) + '</title></circle>';
+      dots += '<circle cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1) + '" r="3" fill="' + color + '" stroke="var(--bg-card-solid)" stroke-width="1.2"><title>' + esc(c.label) + ': ' + esc(c.value) + '</title></circle>';
     });
     const first = coords.find(c => c.y != null);
     const last = coords.slice().reverse().find(c => c.y != null);
     if (first && last) {
       area = '<path d="M' + first.x.toFixed(1) + ',' + (H - PAD.bottom) + ' L' + first.x.toFixed(1) + ',' + first.y.toFixed(1) +
-        ' ' + line.replace(/^M/, '') + 'L' + last.x.toFixed(1) + ',' + (H - PAD.bottom) + ' Z" fill="var(--accent)" opacity="0.12"></path>';
+        ' ' + line.replace(/^M/, '') + 'L' + last.x.toFixed(1) + ',' + (H - PAD.bottom) + ' Z" fill="' + color + '" opacity="0.14"></path>';
     }
 
     // Y gridlines + labels
@@ -67,15 +68,15 @@
       const val = min + (range * t) / yTicks;
       const y = H - PAD.bottom - ((val - min) / range) * ih;
       grid += '<line x1="' + PAD.left + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD.right) + '" y2="' + y.toFixed(1) + '" stroke="var(--border-subtle)" stroke-width="1"></line>';
-      grid += '<text x="' + (PAD.left - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--text-tertiary)">' + Math.round(val) + '</text>';
+      grid += '<text x="' + (PAD.left - 7) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" font-size="11" font-weight="600" fill="var(--text-tertiary)">' + Math.round(val) + '</text>';
     }
     // X labels (first, middle, last)
     const xLabels = [coords[0], coords[Math.floor((coords.length - 1) / 2)], coords[coords.length - 1]];
     xLabels.forEach(c => {
-      grid += '<text x="' + c.x.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="9" fill="var(--text-tertiary)">' + esc(c.label) + '</text>';
+      grid += '<text x="' + c.x.toFixed(1) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="11" font-weight="500" fill="var(--text-tertiary)">' + esc(c.label) + '</text>';
     });
 
-    el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg">' + grid + area + '<path d="' + line.trim() + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"></path>' + dots + '</svg>';
+    el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg">' + grid + area + '<path d="' + line.trim() + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linejoin="round"></path>' + dots + '</svg>';
     if (opts.valueLabel) {
       const lastV = points[points.length - 1];
       if (lastV && lastV.value != null) {
@@ -99,34 +100,40 @@
     }
     const rows = data.slice(0, 10);
     const max = Math.max.apply(null, rows.map(r => r.value).concat([1]));
-    const rowH = 22;
+    const rowH = 26;
     const hasAvatars = rows.some(r => r.avatar);
     // Reserve enough room for real Discord channel/emoji names and for the
     // value after a full-width bar. The former fixed 42px gutter clipped both.
     const longestLabel = rows.reduce((n, row) => Math.max(n, String(row.label || '').length), 0);
     const barPad = {
-      left: Math.min(150, Math.max(hasAvatars ? 70 : 58, longestLabel * 6 + 10 + (hasAvatars ? 12 : 0))),
-      right: 32,
+      left: Math.min(160, Math.max(hasAvatars ? 76 : 64, longestLabel * 6.5 + 12 + (hasAvatars ? 12 : 0))),
+      right: 36,
     };
     const iw = W - barPad.left - barPad.right;
     const chartH = rows.length * rowH;
-    let html = '<svg viewBox="0 0 ' + W + ' ' + chartH + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg">';
+    const baseColor = opts.color || 'var(--accent)';
+    const gradId = 'bar-grad-' + Math.random().toString(36).slice(2, 8);
+    let html = '<svg viewBox="0 0 ' + W + ' ' + chartH + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg">'
+      + '<defs><linearGradient id="' + gradId + '" x1="0" y1="0" x2="1" y2="0">'
+      + '<stop offset="0%" stop-color="' + baseColor + '"></stop>'
+      + '<stop offset="100%" stop-color="' + baseColor + '" stop-opacity="0.62"></stop>'
+      + '</linearGradient></defs>';
     rows.forEach((r, i) => {
       const y = i * rowH;
       const bw = (r.value / max) * iw;
       // Avatar (circular clip) when present; the label then shifts right.
       if (r.avatar) {
         const clipId = 'clip-' + i + '-' + (r.id || i);
-        const avX = barPad.left - 16;
+        const avX = barPad.left - 17;
         const avY = y + rowH / 2;
-        html += '<circle cx="' + avX + '" cy="' + avY + '" r="7" fill="var(--bg-card-solid)" stroke="var(--border-subtle)" stroke-width="1"></circle>';
-        html += '<defs><clipPath id="' + esc(clipId) + '"><circle cx="' + avX + '" cy="' + avY + '" r="6.2"></circle></clipPath></defs>';
-        html += '<image x="' + (avX - 6.2) + '" y="' + (avY - 6.2) + '" width="12.4" height="12.4" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + esc(clipId) + ')" href="' + esc(r.avatar) + '"></image>';
+        html += '<circle cx="' + avX + '" cy="' + avY + '" r="7.5" fill="var(--bg-card-solid)" stroke="' + baseColor + '" stroke-width="1"></circle>';
+        html += '<defs><clipPath id="' + esc(clipId) + '"><circle cx="' + avX + '" cy="' + avY + '" r="6.6"></circle></clipPath></defs>';
+        html += '<image x="' + (avX - 6.6) + '" y="' + (avY - 6.6) + '" width="13.2" height="13.2" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + esc(clipId) + ')" href="' + esc(r.avatar) + '"></image>';
       }
-      const textX = r.avatar ? barPad.left - 10 : barPad.left - 6;
-      html += '<text x="' + textX + '" y="' + (y + rowH / 2 + 3) + '" text-anchor="end" font-size="10" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
-      html += '<rect x="' + barPad.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3" fill="var(--accent)" opacity="0.85"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
-      html += '<text x="' + (barPad.left + bw + 6) + '" y="' + (y + rowH / 2 + 3) + '" font-size="10" fill="var(--text-tertiary)">' + esc(r.value) + '</text>';
+      const textX = r.avatar ? barPad.left - 11 : barPad.left - 7;
+      html += '<text x="' + textX + '" y="' + (y + rowH / 2 + 3.5) + '" text-anchor="end" font-size="12" font-weight="500" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
+      html += '<rect x="' + barPad.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3.5" fill="url(#' + gradId + ')" opacity="0.92"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
+      html += '<text x="' + (barPad.left + bw + 7) + '" y="' + (y + rowH / 2 + 3.5) + '" font-size="12" font-weight="700" fill="var(--text-primary)">' + esc(r.value) + '</text>';
     });
     html += '</svg>';
     el.innerHTML = html;
@@ -168,7 +175,7 @@
       const pct = total ? Math.round((Number(row.value) / total) * 100) : 0;
       return '<div class="chart-legend-item"><span class="chart-legend-swatch" style="background:' + palette[i % palette.length] + '"></span><span>' + esc(row.label) + '</span><span class="chart-legend-value">' + esc(row.value) + ' (' + pct + '%)</span></div>';
     }).join('');
-    el.innerHTML = '<div class="pie-wrap"><svg viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg chart-pie">' + arcs + '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text-primary)">' + esc(total) + '</text></svg><div class="chart-legend">' + legend + '</div></div>';
+    el.innerHTML = '<div class="pie-wrap"><svg viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + esc(opts.label || 'Chart') + '" class="chart-svg chart-pie">' + arcs + '<text x="' + cx + '" y="' + (cy + 5) + '" text-anchor="middle" font-size="15" font-weight="700" fill="var(--text-primary)">' + esc(total) + '</text></svg><div class="chart-legend">' + legend + '</div></div>';
   }
 
   window.BarkCharts = { lineChart: lineChart, barChart: barChart, pieChart: pieChart, esc: esc };

@@ -623,6 +623,33 @@ async def _backfill_channel_stats_from_reputation(connection: AsyncConnection) -
     )
 
 
+async def _add_reputation_tier_purpose(connection: AsyncConnection) -> None:
+    """Add the ``purpose`` column to ``reputation_tiers``.
+
+    Each tier gets a human-readable reason to reach it (what it means / what it
+    unlocks), surfaced in the dashboard tiers list and the next-tier hint in the
+    ``/reputation`` command. ``create_all`` already includes the column on fresh
+    databases, so the ALTER is guarded by a PRAGMA column probe.
+    """
+    table_exists = (
+        await connection.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='reputation_tiers'"
+        )
+    ).first()
+    if table_exists is None:
+        return
+    columns = {
+        row[1]
+        for row in (
+            await connection.exec_driver_sql('PRAGMA table_info("reputation_tiers")')
+        ).fetchall()
+    }
+    if "purpose" not in columns:
+        await connection.exec_driver_sql(
+            "ALTER TABLE reputation_tiers ADD COLUMN purpose TEXT NOT NULL DEFAULT ''"
+        )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (
         "0001_dashboard_guild_access",
@@ -769,6 +796,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     (
         "0016_backfill_channel_stats_from_reputation",
         _backfill_channel_stats_from_reputation,
+    ),
+    (
+        "0017_reputation_tier_purpose",
+        _add_reputation_tier_purpose,
     ),
 )
 

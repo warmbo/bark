@@ -170,6 +170,7 @@ async def test_tiers_list_returns_ladder_sorted_by_sort_order(
     tiers = response.json()["data"]["tiers"]
     assert [t["name"] for t in tiers] == ["Recruit", "Scout"]
     assert all("role_id" in t and "assign_role" in t for t in tiers)
+    assert all("purpose" in t for t in tiers)  # purpose drives the next-tier hint
 
 
 @pytest.mark.asyncio

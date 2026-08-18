@@ -11,6 +11,25 @@
 
   const GUILD_ID = window.BARK_GUILD_ID;
 
+  // Distinct data-viz colors per chart (vibrant, readable on the dark surfaces).
+  // These are chart-series colors, not UI-chrome tokens — variety here is what
+  // the Statistics page needs to feel alive and scannable.
+  const C = {
+    growth: '#4da6ff',
+    newMembers: '#a37dff',
+    reputation: '#ffc14d',
+    voice: '#3ddc8f',
+    audit: '#ff6b8a',
+    games: '#ff9f5e',
+    voiceUsers: '#22d3c5',
+    reputationTop: '#ffd34d',
+    channelsToday: '#4da6ff',
+    channels7d: '#a37dff',
+    channels30d: '#ff7ac0',
+    emojisAll: '#3ddc8f',
+    emojisToday: '#ff6b8a',
+  };
+
   function setStat(id, val, fallback) {
     const el = document.getElementById(id);
     if (el) el.textContent = val != null && val !== '' ? String(val) : (fallback || '—');
@@ -73,20 +92,20 @@
       const voiceUsers = (d.top_voice_users || []).map(u => ({ label: u.name || u.id, value: u.count, sub: u.sessions, avatar: u.avatar_url, id: u.id }));
       const topReputation = (d.top_reputation || []).map(r => ({ label: r.name || r.id, value: r.count, avatar: r.avatar_url, id: r.id }));
 
-      renderChart('lineChart', 'chart-growth', growth, { label: 'Member count', valueLabel: 'Members' });
-      renderChart('lineChart', 'chart-new-members', newMembers, { label: 'New members', valueLabel: 'Members' });
-      renderChart('lineChart', 'chart-reputation', reputation, { label: 'Reputation events', valueLabel: 'Events' });
+      renderChart('lineChart', 'chart-growth', growth, { label: 'Member count', valueLabel: 'Members', color: C.growth });
+      renderChart('lineChart', 'chart-new-members', newMembers, { label: 'New members', valueLabel: 'Members', color: C.newMembers });
+      renderChart('lineChart', 'chart-reputation', reputation, { label: 'Reputation events', valueLabel: 'Events', color: C.reputation });
       renderChart('pieChart', 'chart-reputation-types', reputationTypes, { label: 'Reputation' });
-      renderChart('lineChart', 'chart-voice', voice, { label: 'Voice sessions', valueLabel: 'Sessions' });
-      renderChart('barChart', 'chart-voice-users', voiceUsers, { label: 'Voice minutes', emptyTitle: 'No voice time yet', emptyHint: 'Appears once members spend time in voice channels.' });
-      renderChart('lineChart', 'chart-audit', audit, { label: 'Moderation events', valueLabel: 'Events' });
-      renderChart('barChart', 'chart-games', games, { label: 'Games', emptyTitle: 'No games detected yet', emptyHint: 'Appears when members play games in temporary voice channels.' });
-      renderChart('barChart', 'chart-reputation-top', topReputation, { label: 'Reputation', emptyTitle: 'No reputation yet', emptyHint: 'Appears as members earn reputation points.' });
-      renderChart('barChart', 'chart-channels', channels, { label: 'Messages today', emptyTitle: 'No messages today', emptyHint: 'Appears once members post in channels.' });
-      renderChart('barChart', 'chart-channels-7d', channels7d, { label: 'Messages (7d)', emptyTitle: 'No messages in 7 days', emptyHint: 'Appears once members post in channels.' });
-      renderChart('barChart', 'chart-channels-30d', channels30d, { label: 'Messages (30d)', emptyTitle: 'No messages in 30 days', emptyHint: 'Appears once members post in channels.' });
-      renderChart('barChart', 'chart-emojis-all', emojisAll, { label: 'All-time reactions', emptyTitle: 'No reactions yet', emptyHint: 'Appears once members react to messages.' });
-      renderChart('barChart', 'chart-emojis', emojis, { label: 'Reactions today', emptyTitle: 'No reactions today', emptyHint: 'Appears once members react to messages.' });
+      renderChart('lineChart', 'chart-voice', voice, { label: 'Voice sessions', valueLabel: 'Sessions', color: C.voice });
+      renderChart('barChart', 'chart-voice-users', voiceUsers, { label: 'Voice minutes', emptyTitle: 'No voice time yet', emptyHint: 'Appears once members spend time in voice channels.', color: C.voiceUsers });
+      renderChart('lineChart', 'chart-audit', audit, { label: 'Moderation events', valueLabel: 'Events', color: C.audit });
+      renderChart('barChart', 'chart-games', games, { label: 'Games', emptyTitle: 'No games detected yet', emptyHint: 'Appears when members play games in temporary voice channels.', color: C.games });
+      renderChart('barChart', 'chart-reputation-top', topReputation, { label: 'Reputation', emptyTitle: 'No reputation yet', emptyHint: 'Appears as members earn reputation points.', color: C.reputationTop });
+      renderChart('barChart', 'chart-channels', channels, { label: 'Messages today', emptyTitle: 'No messages today', emptyHint: 'Appears once members post in channels.', color: C.channelsToday });
+      renderChart('barChart', 'chart-channels-7d', channels7d, { label: 'Messages (7d)', emptyTitle: 'No messages in 7 days', emptyHint: 'Appears once members post in channels.', color: C.channels7d });
+      renderChart('barChart', 'chart-channels-30d', channels30d, { label: 'Messages (30d)', emptyTitle: 'No messages in 30 days', emptyHint: 'Appears once members post in channels.', color: C.channels30d });
+      renderChart('barChart', 'chart-emojis-all', emojisAll, { label: 'All-time reactions', emptyTitle: 'No reactions yet', emptyHint: 'Appears once members react to messages.', color: C.emojisAll });
+      renderChart('barChart', 'chart-emojis', emojis, { label: 'Reactions today', emptyTitle: 'No reactions today', emptyHint: 'Appears once members react to messages.', color: C.emojisToday });
     } catch (e) {
       if (requestToken !== statsRequestToken) return; // a newer reload started
       setStat('stat-members', 'Unavailable');

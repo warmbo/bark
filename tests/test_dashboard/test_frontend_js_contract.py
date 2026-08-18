@@ -496,7 +496,7 @@ def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listen
 
 
 def test_public_and_invite_url_rows_have_copy_buttons():
-    html = source(TEMPLATES / "pages" / "settings_instance.html")
+    html = source(TEMPLATES / "pages" / "settings.html")
     # Public URL row exposes a copy button targeting its value.
     assert 'id="public-url-value"' in html
     assert 'data-copy-target="#public-url-value"' in html

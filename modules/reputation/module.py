@@ -505,6 +505,7 @@ class ReputationModule(BarkModule):
                         "min_level": t.min_level,
                         "min_score": round(float(t.min_score), 1),
                         "color_hex": t.color_hex,
+                        "purpose": t.purpose,
                         "role_id": t.role_id,
                         "assign_role": t.assign_role,
                         "sort_order": t.sort_order,
@@ -570,6 +571,8 @@ class ReputationModule(BarkModule):
                     tier.symbol = str(payload["symbol"])[:16]
                 if "color_hex" in payload:
                     tier.color_hex = str(payload["color_hex"])[:7]
+                if "purpose" in payload:
+                    tier.purpose = str(payload["purpose"])[:300]
                 if "min_level" in payload:
                     tier.min_level = max(0, int(payload["min_level"]))
                 if "min_score" in payload:
@@ -610,6 +613,7 @@ class ReputationModule(BarkModule):
                         "min_level": tier.min_level,
                         "min_score": round(float(tier.min_score), 1),
                         "color_hex": tier.color_hex,
+                        "purpose": tier.purpose,
                         "role_id": tier.role_id,
                         "assign_role": tier.assign_role,
                         "sort_order": tier.sort_order,
@@ -668,6 +672,7 @@ class ReputationModule(BarkModule):
                     min_level=max(0, int(payload.get("min_level") or 0)),
                     min_score=max(0.0, float(payload.get("min_score") or 0)),
                     color_hex=str(payload.get("color_hex") or "#99aab5")[:7],
+                    purpose=str(payload.get("purpose") or "")[:300],
                     role_id=role_id,
                     assign_role=bool(payload.get("assign_role", False)),
                     sort_order=(max_order or 0) + 1,
@@ -684,6 +689,7 @@ class ReputationModule(BarkModule):
                         "min_level": tier.min_level,
                         "min_score": round(float(tier.min_score), 1),
                         "color_hex": tier.color_hex,
+                        "purpose": tier.purpose,
                         "role_id": tier.role_id,
                         "assign_role": tier.assign_role,
                         "sort_order": tier.sort_order,
@@ -1006,118 +1012,74 @@ class ReputationModule(BarkModule):
 
     # ── Default tiers ────────────────────────────────────
 
-    async def _ensure_default_tiers(self, guild_id: int) -> None:
-        """Create default tier records if none exist for this guild.
+    # Default tier ladder. Each entry: (name, symbol, min_level, color, sort_order, purpose).
+    # The level thresholds get finer toward the top so long-time members keep
+    # seeing fresh milestones ("more advancement"), and every tier states *why*
+    # you'd want it ("purpose"). Existing deployments get newly-added defaults on
+    # next boot because _ensure_default_tiers inserts any that are missing.
+    _DEFAULT_TIERS: tuple[tuple, ...] = (
+        ("Recruit", "⬜", 0, "#99aab5", 0, "Everyone starts here — the more you take part, the faster you rise."),
+        ("Scout", "🥉", 10, "#cd7f32", 1, "You're getting noticed. Keep contributing to climb the ladder."),
+        ("Warrior", "🥈", 20, "#c0c0c0", 2, "A reliable regular. Eligible for early channel perks."),
+        ("Elite", "🥇", 30, "#ffd700", 3, "A respected voice in the community."),
+        ("Champion", "💎", 40, "#e5e4e2", 4, "A standout contributor. Unlocks VIP channels."),
+        ("Sentinel", "🛡️", 45, "#7fb3ff", 5, "Trusted pillar of the server — a natural fit for the moderator track."),
+        ("Guardian", "🌟", 50, "#b9f2ff", 6, "The community depends on you. Elevated access."),
+        ("Legend", "👑", 60, "#ff6b6b", 7, "A legendary regular. Highest honors."),
+        ("Mythic", "🌀", 70, "#ca9ee6", 8, "Barely a myth — nearly untouchable."),
+        ("Titan", "⚡", 80, "#a78bfa", 9, "One of the server's strongest members."),
+        ("Immortal", "🔥", 90, "#ef4444", 10, "A permanent fixture of this community."),
+        ("Ascendant", "🌌", 110, "#6ee7ff", 11, "Beyond mortal ranks. Reserved for icons."),
+        ("Celestial", "✨", 135, "#f7c8ff", 12, "A celestial presence among members."),
+        ("Omega", "🏆", 160, "#ffb020", 13, "The pinnacle. Only the most dedicated reach this."),
+    )
 
-        Every 10 levels = one tier advancement.
+    async def _ensure_default_tiers(self, guild_id: int) -> None:
+        """Ensure the default tier ladder exists for this guild.
+
+        Adds any default tier that is missing (by name) and backfills a purpose
+        on existing defaults that lack one — so existing guilds pick up new
+        tiers and purpose text on boot without duplicating or clobbering
+        server customizations.
         """
+        created = 0
         async with session_scope() as session:
             from sqlalchemy import select
 
             result = await session.execute(
                 select(ReputationTier).where(ReputationTier.guild_id == str(guild_id))
             )
-            existing = result.scalars().first()
-            if existing is not None:
-                return
+            existing = list(result.scalars().all())
+            by_name = {t.name: t for t in existing}
 
-            default_tiers = [
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Recruit",
-                    symbol="⬜",
-                    min_level=0,
-                    min_score=0,
-                    color_hex="#99aab5",
-                    is_default=True,
-                    sort_order=0,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Scout",
-                    symbol="🥉",
-                    min_level=10,
-                    min_score=0,
-                    color_hex="#cd7f32",
-                    sort_order=1,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Warrior",
-                    symbol="🥈",
-                    min_level=20,
-                    min_score=0,
-                    color_hex="#c0c0c0",
-                    sort_order=2,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Elite",
-                    symbol="🥇",
-                    min_level=30,
-                    min_score=0,
-                    color_hex="#ffd700",
-                    sort_order=3,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Champion",
-                    symbol="💎",
-                    min_level=40,
-                    min_score=0,
-                    color_hex="#e5e4e2",
-                    sort_order=4,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Guardian",
-                    symbol="🌟",
-                    min_level=50,
-                    min_score=0,
-                    color_hex="#b9f2ff",
-                    sort_order=5,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Legend",
-                    symbol="👑",
-                    min_level=60,
-                    min_score=0,
-                    color_hex="#ff6b6b",
-                    sort_order=6,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Mythic",
-                    symbol="🌀",
-                    min_level=70,
-                    min_score=0,
-                    color_hex="#ca9ee6",
-                    sort_order=7,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Titan",
-                    symbol="⚡",
-                    min_level=80,
-                    min_score=0,
-                    color_hex="#a78bfa",
-                    sort_order=8,
-                ),
-                ReputationTier(
-                    guild_id=str(guild_id),
-                    name="Immortal",
-                    symbol="🔥",
-                    min_level=90,
-                    min_score=0,
-                    color_hex="#ef4444",
-                    sort_order=9,
-                ),
-            ]
-            for tier in default_tiers:
-                session.add(tier)
+            for name, symbol, min_level, color, sort_order, purpose in self._DEFAULT_TIERS:
+                tier = by_name.get(name)
+                if tier is None:
+                    session.add(
+                        ReputationTier(
+                            guild_id=str(guild_id),
+                            name=name,
+                            symbol=symbol,
+                            min_level=min_level,
+                            min_score=0,
+                            color_hex=color,
+                            purpose=purpose,
+                            is_default=True,
+                            sort_order=sort_order,
+                        )
+                    )
+                    created += 1
+                elif tier.is_default and not tier.purpose:
+                    # Backfill purpose text on default tiers that predate it.
+                    tier.purpose = purpose
+
             await session.commit()
-        self._logger.info("Created default reputation tiers for guild %s", guild_id)
+        if created:
+            self._logger.info(
+                "Created %d missing default reputation tiers for guild %s",
+                created,
+                guild_id,
+            )
 
     # ── Lifecycle ───────────────────────────────────────
 
@@ -2202,21 +2164,28 @@ class ReputationModule(BarkModule):
                 )
                 return
 
-            # Look up tier
+            # Look up tier + next tier (ordered ladder) so members see *why* to
+            # keep going and what the next milestone unlocks.
             async with session_scope() as session:
                 from sqlalchemy import select
 
                 t_result = await session.execute(
-                    select(ReputationTier).where(
-                        ReputationTier.guild_id == str(guild_id),
-                        ReputationTier.name == profile.current_tier,
-                    )
+                    select(ReputationTier)
+                    .where(ReputationTier.guild_id == str(guild_id))
+                    .order_by(ReputationTier.sort_order, ReputationTier.min_level)
                 )
-                tier = t_result.scalar_one_or_none()
-
+                ladder = list(t_result.scalars().all())
+            tier = next((t for t in ladder if t.name == profile.current_tier), None)
             symbol = tier.symbol if tier else "⬜"
             color = int(tier.color_hex.lstrip("#"), 16) if tier else 0x99AAB5
             tier_name = tier.name if tier else "Unranked"
+
+            # The next tier is the one whose ladder position is strictly above
+            # the member's current tier (fall back to "highest reached").
+            current_idx = next(
+                (i for i, t in enumerate(ladder) if t.name == tier_name), -1
+            )
+            next_tier = ladder[current_idx + 1] if 0 <= current_idx < len(ladder) - 1 else None
 
             progress = next_level_progress(
                 profile.total_score,
@@ -2239,6 +2208,27 @@ class ReputationModule(BarkModule):
             embed.add_field(
                 name="Level Progress", value=f"{bar} {progress['percent']}%", inline=False
             )
+            if next_tier is not None:
+                levels_left = max(0, next_tier.min_level - profile.level)
+                unlock = (
+                    f" <@&{next_tier.role_id}>"
+                    if next_tier.assign_role and next_tier.role_id
+                    else ""
+                )
+                next_value = (
+                    f"**{next_tier.symbol} {next_tier.name}** at Level {next_tier.min_level}"
+                    f" ({levels_left} to go)\n"
+                    f"{next_tier.purpose or 'Keep contributing to unlock this tier.'}"
+                )
+                if unlock:
+                    next_value += f"\nUnlocks the role {unlock} — it may grant more channel access!"
+                embed.add_field(name="Next Tier", value=next_value, inline=False)
+            else:
+                embed.add_field(
+                    name="🏆 Max Tier Reached",
+                    value="You've reached the top of the ladder — you're a pillar of this server.",
+                    inline=False,
+                )
             embed.add_field(name="Messages", value=str(profile.messages_count), inline=True)
             embed.add_field(
                 name="Reactions Received", value=str(profile.reactions_received), inline=True

@@ -489,3 +489,41 @@ async def test_backfill_channel_stats_from_reputation(tmp_path):
         assert len(rows) == 3, f"expected 3 backfilled rows, got {rows}"
     await engine.dispose()
 
+
+async def test_add_reputation_tier_purpose(tmp_path):
+    """The 0017 migration adds a purpose column to reputation_tiers.
+
+    It is guarded by a PRAGMA probe so it tolerates both fresh schemas (where
+    create_all already has the column) and legacy ones (that need the ALTER).
+    """
+    from database.migrations import _add_reputation_tier_purpose
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'tier_purpose.db'}")
+    async with engine.connect() as connection:
+        # Legacy schema without the purpose column.
+        await connection.exec_driver_sql(
+            "CREATE TABLE reputation_tiers ("
+            "id INTEGER PRIMARY KEY, guild_id VARCHAR(32) NOT NULL, "
+            "name VARCHAR(64) NOT NULL, symbol VARCHAR(16) NOT NULL, "
+            "min_score FLOAT NOT NULL DEFAULT 0, min_level INTEGER NOT NULL DEFAULT 0, "
+            "color_hex VARCHAR(7) NOT NULL DEFAULT '#99aab5', "
+            "role_id VARCHAR(32), assign_role BOOLEAN NOT NULL DEFAULT 0, "
+            "is_default BOOLEAN NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0)"
+        )
+        await _add_reputation_tier_purpose(connection)
+        await connection.commit()
+
+        columns = {
+            row[1]
+            for row in (
+                await connection.exec_driver_sql(
+                    'PRAGMA table_info("reputation_tiers")'
+                )
+            ).fetchall()
+        }
+        assert "purpose" in columns, f"purpose column missing; columns={columns}"
+
+        # Idempotent: running again must not error when the column exists.
+        await _add_reputation_tier_purpose(connection)
+    await engine.dispose()
+

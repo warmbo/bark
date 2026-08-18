@@ -14,14 +14,14 @@
             <div><h2 class="card-title">{{ icon("activity", 16) }} Server at a Glance</h2><p class="card-description">Live snapshot — updates every few minutes</p></div>
         </div>
         <div class="stats-list" id="stats-metrics" aria-live="polite" aria-relevant="additions text">
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("users", 16) }}</span><span class="sl-label">Members</span><span class="sl-value" id="stat-members">—</span><span class="sl-sub" id="stat-online">—</span></div>
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("trending-up", 16) }}</span><span class="sl-label">Member growth (30d)</span><span class="sl-value" id="stat-growth">—</span><span class="sl-sub">Net change</span></div>
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("message-square", 16) }}</span><span class="sl-label">Messages today</span><span class="sl-value" id="stat-messages">—</span><span class="sl-sub">Non-bot</span></div>
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("hash", 16) }}</span><span class="sl-label">Top channel today</span><span class="sl-value" id="stat-top-channel">—</span><span class="sl-sub" id="stat-top-channel-count">—</span></div>
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("smile", 16) }}</span><span class="sl-label">Top emoji</span><span class="sl-value" id="stat-top-emoji">—</span><span class="sl-sub" id="stat-top-emoji-count">—</span></div>
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("message-circle", 16) }}</span><span class="sl-label">Channels</span><span class="sl-value" id="stat-channels">—</span><span class="sl-sub" id="stat-channel-split">—</span></div>
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("zap", 16) }}</span><span class="sl-label">Boosts</span><span class="sl-value" id="stat-boosts">—</span><span class="sl-sub" id="stat-tier">—</span></div>
-            <div class="stats-list-row"><span class="sl-icon">{{ icon("headphones", 16) }}</span><span class="sl-label">In voice</span><span class="sl-value" id="stat-voice">—</span><span class="sl-sub">Right now</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#4da6ff">{{ icon("users", 16) }}</span><span class="sl-label">Members</span><span class="sl-value" id="stat-members">—</span><span class="sl-sub" id="stat-online">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#a37dff">{{ icon("trending-up", 16) }}</span><span class="sl-label">Member growth (30d)</span><span class="sl-value" id="stat-growth">—</span><span class="sl-sub">Net change</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#ffc14d">{{ icon("message-square", 16) }}</span><span class="sl-label">Messages today</span><span class="sl-value" id="stat-messages">—</span><span class="sl-sub">Non-bot</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#3ddc8f">{{ icon("hash", 16) }}</span><span class="sl-label">Top channel today</span><span class="sl-value" id="stat-top-channel">—</span><span class="sl-sub" id="stat-top-channel-count">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#ff6b8a">{{ icon("smile", 16) }}</span><span class="sl-label">Top emoji</span><span class="sl-value" id="stat-top-emoji">—</span><span class="sl-sub" id="stat-top-emoji-count">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#22d3c5">{{ icon("message-circle", 16) }}</span><span class="sl-label">Channels</span><span class="sl-value" id="stat-channels">—</span><span class="sl-sub" id="stat-channel-split">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#ff9f5e">{{ icon("zap", 16) }}</span><span class="sl-label">Boosts</span><span class="sl-value" id="stat-boosts">—</span><span class="sl-sub" id="stat-tier">—</span></div>
+            <div class="stats-list-row"><span class="sl-icon" style="--metric-color:#ffd34d">{{ icon("headphones", 16) }}</span><span class="sl-label">In voice</span><span class="sl-value" id="stat-voice">—</span><span class="sl-sub">Right now</span></div>
         </div>
     </div>
 
@@ -143,6 +143,6 @@
 
 {% block scripts %}
 <script>window.BARK_GUILD_ID = '{{ guild.id }}';</script>
-<script src="/static/js/charts.js?v=6"></script>
-<script src="/static/js/stats.js?v=6"></script>
+<script src="/static/js/charts.js?v=7"></script>
+<script src="/static/js/stats.js?v=7"></script>
 {% endblock %}

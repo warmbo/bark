@@ -93,14 +93,8 @@ CORE_PAGES = [
     },
     {
         "route": "/guild/{guild_id}/settings",
-        "label": "Server",
-        "icon": "server",
-        "category": "settings",
-    },
-    {
-        "route": "/guild/{guild_id}/settings/instance",
-        "label": "Instance",
-        "icon": "cpu",
+        "label": "Settings",
+        "icon": "settings",
         "category": "settings",
     },
 ]

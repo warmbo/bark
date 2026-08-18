@@ -477,14 +477,14 @@ textarea:focus-visible,
 
 /* Statistics page charts (dependency-free SVG). */
 .chart-wrap { position: relative; margin-top: 6px; }
-.chart-svg { width: 100%; height: auto; max-height: 300px; display: block; }
-.chart-current { position: absolute; top: 0; right: 0; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.chart-svg { width: 100%; height: auto; max-height: 340px; display: block; }
+.chart-current { position: absolute; top: 0; right: 0; font-size: 12px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 2px 8px; border-radius: var(--radius-full, 999px); }
 .pie-wrap { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .chart-pie { width: 180px; flex-shrink: 0; }
-.chart-legend { display: flex; flex-direction: column; gap: 5px; min-width: 160px; flex: 1; }
-.chart-legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); }
-.chart-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-.chart-legend-value { margin-left: auto; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.chart-legend { display: flex; flex-direction: column; gap: 6px; min-width: 160px; flex: 1; }
+.chart-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.chart-legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.chart-legend-value { margin-left: auto; color: var(--text-tertiary); font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .stat-value {
     font-size: 30px;
@@ -496,12 +496,12 @@ textarea:focus-visible,
 /* Overview metrics as a compact list */
 .stats-overview { margin-bottom: 20px; }
 .stats-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
-.stats-list-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--border-subtle); min-width: 0; }
+.stats-list-row { display: flex; align-items: center; gap: 10px; padding: 12px 2px; border-bottom: 1px solid var(--border-subtle); min-width: 0; }
 .stats-list-row:last-child { border-bottom: none; }
-.sl-icon { color: var(--accent); display: inline-flex; align-items: center; justify-content: center; width: 20px; flex-shrink: 0; }
-.sl-label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sl-value { margin-left: auto; font-size: 16px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.sl-sub { font-size: 12px; color: var(--text-tertiary); min-width: 74px; text-align: right; white-space: nowrap; }
+.sl-icon { --metric-color: var(--accent); color: var(--metric-color); display: inline-flex; align-items: center; justify-content: center; width: 22px; flex-shrink: 0; }
+.sl-label { font-size: 14px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl-value { margin-left: auto; font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -.2px; }
+.sl-sub { font-size: 13px; color: var(--text-tertiary); min-width: 74px; text-align: right; white-space: nowrap; }
 
 @media (max-width: 640px) {
     .stats-list { grid-template-columns: 1fr; }
@@ -2212,7 +2212,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .info-label { color: var(--text-tertiary); font-size: 13px; font-weight: 500; min-width: 100px; }
 .info-value { font-weight: 500; text-align: right; max-width: 65%; overflow: hidden; text-overflow: ellipsis; }
 .info-value.mono { font-family: var(--font-mono); font-size: 13px; }
-.event-list { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; overflow: visible; }
+.event-list { display: flex; flex-direction: column; gap: 0; width: 100%; }
 
 /* URL rows with a copy button: keep the link left-aligned and the copy
    icon pinned to the right, overriding the default right-aligned info-value. */

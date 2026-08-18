@@ -116,13 +116,14 @@
         <td><input type="number" min="0" class="form-input form-input-sm tier-level" value="${Number(t.min_level)}" aria-label="Min level"></td>
         <td><input type="number" min="0" step="0.5" class="form-input form-input-sm tier-score" value="${Number(t.min_score)}" aria-label="Min score"></td>
         <td><input type="text" class="form-input form-input-sm tier-color" value="${escHtml(t.color_hex)}" aria-label="Tier color" size="8"></td>
+        <td><input type="text" class="form-input form-input-sm tier-purpose" value="${escHtml(t.purpose || '')}" placeholder="Why reach this tier…" aria-label="Tier purpose" title="Shown in /reputation as the reason to advance"></td>
         <td><select class="form-select form-select-sm tier-role" aria-label="Linked role">${roleOptions(t.role_id)}</select></td>
         <td><input type="checkbox" class="tier-assign" ${t.assign_role ? 'checked' : ''} aria-label="Auto-assign role on level-up" title="Auto-assign: grant this role automatically when a member reaches this tier's level"></td>
         <td><button type="button" class="btn btn-sm tier-save" data-name="${escHtml(t.name)}">Save</button>
             <button type="button" class="btn btn-sm btn-danger tier-delete" data-name="${escHtml(t.name)}" aria-label="Delete tier">Delete</button></td>
       </tr>`).join('');
       container.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr>
-        <th>Symbol</th><th>Name</th><th>Min Level</th><th>Min Score</th><th>Color</th><th>Linked Role</th><th>Auto</th><th></th>
+        <th>Symbol</th><th>Name</th><th>Min Level</th><th>Min Score</th><th>Color</th><th>Purpose</th><th>Linked Role</th><th>Auto</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table></div>`;
       refreshIcons();
     } catch (error) {
@@ -138,7 +139,7 @@
     if (!tbody) {
       // loadTiers() renders a bare state-panel when there are no tiers —
       // inject the table shell so "Add Tier" is not a silent no-op.
-      container.innerHTML = '<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Symbol</th><th>Name</th><th>Min Level</th><th>Min Score</th><th>Color</th><th>Linked Role</th><th>Auto</th><th></th></tr></thead><tbody></tbody></table></div>';
+      container.innerHTML = '<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Symbol</th><th>Name</th><th>Min Level</th><th>Min Score</th><th>Color</th><th>Purpose</th><th>Linked Role</th><th>Auto</th><th></th></tr></thead><tbody></tbody></table></div>';
       tbody = container.querySelector('tbody');
       refreshIcons();
     }
@@ -153,6 +154,7 @@
       <td><input type="number" min="0" class="form-input form-input-sm tier-level" value="0" aria-label="Min level"></td>
       <td><input type="number" min="0" step="0.5" class="form-input form-input-sm tier-score" value="0" aria-label="Min score"></td>
       <td><input type="text" class="form-input form-input-sm tier-color" value="#99aab5" aria-label="Tier color" size="8"></td>
+      <td><input type="text" class="form-input form-input-sm tier-purpose" value="" placeholder="Why reach this tier…" aria-label="Tier purpose"></td>
       <td><select class="form-select form-select-sm tier-role" aria-label="Linked role">${roleOptions(null)}</select></td>
       <td><input type="checkbox" class="tier-assign" aria-label="Auto-assign role on level-up" title="Auto-assign: grant this role automatically when a member reaches this tier's level"></td>
       <td><button type="button" class="btn btn-sm btn-primary tier-save" data-new="true">Save</button></td>`;
@@ -169,6 +171,7 @@
       min_level: Number(row.querySelector('.tier-level').value || 0),
       min_score: Number(row.querySelector('.tier-score').value || 0),
       color_hex: row.querySelector('.tier-color').value,
+      purpose: row.querySelector('.tier-purpose') ? row.querySelector('.tier-purpose').value : '',
       role_id: row.querySelector('.tier-role').value || null,
       assign_role: row.querySelector('.tier-assign').checked,
     };
