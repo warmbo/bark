@@ -1,14 +1,12 @@
 {% extends "base.html" %}
+{% from "components/primitives.html" import page_header %}
 {% block title %}Settings — {{ guild.name }}{% endblock %}
 
 {% block content %}
 {% set active_page = "settings" %}
 
 <div class="page-container">
-    <div class="page-header">
-        <h1 class="page-title">{{ icon("settings", 24) }} Settings</h1>
-        <p class="page-subtitle">Server configuration and bot customization</p>
-    </div>
+    {{ page_header("Settings", "Server configuration and bot customization", icon_name="settings") }}
 
     <div class="settings-grid">
         <!-- Main column: Server + Instance settings -->

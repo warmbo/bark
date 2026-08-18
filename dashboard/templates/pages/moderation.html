@@ -1,11 +1,9 @@
 {% extends "base.html" %}
+{% from "components/primitives.html" import page_header %}
 {% block title %}Moderation — {{ guild.name }}{% endblock %}
 {% block content %}
 <div class="page-container">
-  <div class="page-header">
-    <h1 class="page-title">{{ icon("shield", 24) }} Moderation</h1>
-    <p class="page-subtitle">Moderation tools for {{ guild.name }}</p>
-  </div>
+  {{ page_header("Moderation", "Moderation tools for " ~ guild.name, icon_name="shield") }}
   <div class="state-panel" role="status">
     <div><strong>Moderation moved to the module workspace</strong><p>Cases, warnings, notes, rulesets, word lists, and voice history now share one workspace.</p></div>
     <a class="btn btn-primary" href="/guild/{{ guild.id }}/modules/moderation">Open Moderation</a>

@@ -1,14 +1,12 @@
 {% extends "base.html" %}
+{% from "components/primitives.html" import page_header %}
 {% block title %}Statistics — {{ guild.name }}{% endblock %}
 
 {% block content %}
 {% set active_page = "stats" %}
 
 <div class="page-container">
-    <div class="page-header">
-        <h1 class="page-title">{{ icon("bar-chart-3", 24) }} Statistics</h1>
-        <p class="page-subtitle">Server activity, growth, and engagement for <strong>{{ guild.name }}</strong></p>
-    </div>
+    {{ page_header("Statistics", "Server activity, growth, and engagement for " ~ guild.name, icon_name="bar-chart-3") }}
 
     <!-- Overview metrics as a compact list -->
     <div class="content-card stats-overview">

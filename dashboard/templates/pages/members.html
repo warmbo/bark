@@ -1,14 +1,12 @@
 {% extends "base.html" %}
+{% from "components/primitives.html" import page_header %}
 {% block title %}Members — {{ guild.name }}{% endblock %}
 
 {% block content %}
 {% set active_page = "members" %}
 
 <div class="page-container">
-    <div class="page-header">
-        <h1 class="page-title">{{ icon("users", 24) }} Members</h1>
-        <p class="page-subtitle">Browse, search, filter, and moderate server members</p>
-    </div>
+    {{ page_header("Members", "Browse, search, filter, and moderate server members", icon_name="users") }}
 
     <div class="member-controls">
         <div class="search-bar">
