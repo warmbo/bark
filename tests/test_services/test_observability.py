@@ -87,4 +87,7 @@ async def test_tree_error_handler_expected_errors_reply_with_message():
 
     await handler(interaction, error)
     response.send_message.assert_awaited_once()
-    assert "that's not a channel" in response.send_message.await_args.args[0]
+    reply = response.send_message.await_args.args[0]
+    # Generic reply — never echo the raw exception (it can contain internals).
+    assert "Couldn't run that command" in reply
+    assert "that's not a channel" not in reply

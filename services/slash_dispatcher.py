@@ -489,7 +489,15 @@ class SlashDispatcher:
         try:
             return self.manager.is_enabled_for_guild(guild_id, leaf.module_name)
         except Exception:
-            return True
+            # Fail closed: on any state/DB error, don't advertise a module's
+            # commands (a disabled-module error on invoke is worse than the
+            # command being absent from autocomplete).
+            logger.exception(
+                "Failed to resolve enablement for module %s in guild %s — failing closed",
+                leaf.module_name,
+                guild_id,
+            )
+            return False
 
 
 # ── Parameter / arg parsing helpers ──────────────────

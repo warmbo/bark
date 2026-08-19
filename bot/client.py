@@ -144,7 +144,9 @@ class BarkBot(commands.Bot):
                     guild_id,
                     error,
                 )
-                message = f"Couldn't run that command: {error}"
+                # Never echo the raw exception to the user — it can contain
+                # internals (paths, URLs). Log it (above); reply generically.
+                message = "Couldn't run that command — check the arguments and try again."
             if interaction.response.is_done():
                 await interaction.followup.send(message, ephemeral=True)
             else:

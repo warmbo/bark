@@ -477,7 +477,14 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 return _json_error(409, f"Module '{module_name}' is disabled for this server")
 
         path = request.url.path
-        if path.startswith("/api/"):
+        # Rate-limit /api/ AND the unauthenticated auth entry points (login
+        # hammering, callback/share probing) — the only paths reachable without
+        # a session.
+        is_auth_entry = (
+            path in {"/auth/login", "/auth/callback", "/auth/logout"}
+            or path.startswith("/auth/share/")
+        )
+        if path.startswith("/api/") or is_auth_entry:
             identity = rate_limit_identity(request)
             read_lim, write_lim = _get_limiters()
             method = request.method.upper()
