@@ -146,7 +146,7 @@
           {% else %}{{ schema_field(key, prop, module_data.config.get(key, prop.default), 'config-' ~ key) }}{% endif %}
           {% endif %}
         {% endfor %}
-        <div class="form-actions"><button type="button" class="btn" id="discard-config-btn" disabled>Cancel</button><button type="submit" class="btn btn-primary" id="save-config-btn" disabled>{{ icon('save', 16) }} Save Changes</button></div>
+        <div class="form-actions form-actions-static"><button type="button" class="btn" id="discard-config-btn" disabled>Cancel</button><button type="submit" class="btn btn-primary" id="save-config-btn" disabled>{{ icon('save', 16) }} Save Changes</button></div>
         </form>
       {% else %}{{ state_panel('empty', 'No configuration required', 'This module is ready with its built-in defaults.') }}{% endif %}
       </div>

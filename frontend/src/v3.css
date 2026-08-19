@@ -187,7 +187,16 @@ textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in okla
 .auto-voice-preview-card .template-preview { margin-bottom: var(--space-4); }
 .template-preview { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--muted); border: 1px solid var(--border); }
 .template-preview-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); flex-shrink: 0; }
-.template-preview-name { font-family: var(--font-mono); font-size: 15px; color: var(--foreground); }/* shadcn Badge */
+.template-preview-name { font-family: var(--font-mono); font-size: 15px; color: var(--foreground); }
+/* Empty/error states inside full-width module cards should read as centered
+   intent, not a left-aligned orphan (audit round 7: help/logging looked like
+   they had a void on the right). */
+.workspace-form-card .state-panel,
+.workspace-data-card .state-panel,
+.workspace-split-main .state-panel { justify-content: center; text-align: center; }
+.workspace-form-card .state-panel .btn,
+.workspace-data-card .state-panel .btn,
+.workspace-split-main .state-panel .btn { margin-left: 0; }/* shadcn Badge */
 .badge, .status-badge, .info-chip, .role-chip, .cmd-badge {
   border: 1px solid var(--border);
   border-radius: var(--radius);

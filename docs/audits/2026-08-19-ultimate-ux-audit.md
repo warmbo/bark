@@ -898,6 +898,33 @@ surface back to full width.
   moderation grid|activity, auto-voice form|preview, role_manager rules|guide);
   side column is sticky and the layout collapses correctly at ≤1100px.
 
+---
+
+# Round 7 — Full Re-Audit (2026-08-19, after rounds 1–6b)
+
+Full 96-section methodology re-run against the current tree (HEAD `b6fbe7e`):
+17-screen wall at 1440px + 5-screen mobile strip, static CSS probes (dead classes,
+entropy markers, spacing), pixel-level verification of every vision finding.
+
+## Findings + fixes
+
+| # | Sev | Finding | Verification | Fix | Status |
+|---|---|---|---|---|---|
+| R7-1 | P4 | Sticky `.form-actions` pinned Save/Cancel to the **viewport bottom**, leaving a large dead gap in short config forms (welcome, speak) | wall + pixel scan | Module config form + action forms switched to `.form-actions-static` (in-flow, right after fields) | ✅ verified: buttons sit tight below fields |
+| R7-2 | P4 | Empty/error `state-panel`s inside full-width module cards read as **left-aligned orphans** ("void on the right") | wall (help/logging) + pixel proof the split collapse was working | Centered state panels in workspace form/data cards (`.workspace-split-main .state-panel { justify-content:center }`) | ✅ verified: centered hero state |
+| R7-3 | P3 | 3 dead classes remained: `.workspace-primary-card`, `.skeleton-card.mb-2`, `.skeleton-text.tiny` | zero refs in templates/JS/tests | Removed | ✅ main.css smaller |
+| R7-4 | — | Wall flagged "empty right pane" on speak/help, "misaligned preview" on auto-voice, "missing breadcrumb" on members | **Pixel-level proof these were vision misreads**: help card spans x300–1405 (full width), auto-voice cards align at y=209 both columns, `:has(.workspace-split-side:empty)` collapse confirmed working via standalone Chromium probe + byte-empty DOM | None — documented false positives | n/a |
+
+## Verified clean at this HEAD
+
+- Dead classes: 66 → **3 → 0** (only contract-required `.guild-bar-icon` remains in a shared rule)
+- No design-era entropy in CSS (`legacy` hits are migration comments; `!important` is Tailwind preflight + print rules)
+- 13-step font ladder, token radii, z-index layers, spacing scale — all holding from rounds 3–5
+- Side-by-side module composition (round 6b) renders correctly on all four split modules
+- 783 tests green, ruff clean
+
+**Acceptance criteria status:** the interface now meets all §94 checks except "200% zoom" (not re-probed this round — clamp-based layout, low risk) and "Before/After gallery complete" (round-6b/7 captures pending final gallery pass).
+
 
 
 
