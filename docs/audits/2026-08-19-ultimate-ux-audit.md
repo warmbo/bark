@@ -647,8 +647,20 @@ strip), and per-page files (`dashboard-1440.png`, `guild-1440.png`, `guild-768.p
 `member_detail-1440.png`, `stats-1440.png`, `landing-1440.png`, `invite-1440.png`,
 `setup-1440.png`, `plugin_catalog-1440.png`, plus `*-390.png` mobile variants).
 
-**After:** captured at the same URLs/viewports after each backlog phase lands, using the
-same mock server, so each fix is diffable side-by-side. Populate as fixes ship (P5-26).
+**After** (fixes shipped in rounds 3–4, commit `aa7d908`) —
+`docs/audits/2026-08-19-screenshots/after/`, same mock server + viewport so each pair
+is diffable:
+
+| Screen | Before | After | What changed |
+|---|---|---|---|
+| Dashboard (CTA) | `dashboard-1440.png` | `after/dashboard-after-1440.png` | "Open" is now a primary accent button, not a muted text link |
+| Members | `members-1440.png` | `after/members-after-1440.png` | Button ladder normalized (sm/xs smaller than base) |
+| Member detail | `member_detail-1440.png` | `after/member_detail-after-1440.png` | Standard page-header rhythm with back-link |
+| Module 404 | `plugin_catalog-1440.png` (raw "Module not found" white page) | `after/module-notfound-after-1440.png` | Designed in-shell 404 with recovery button |
+
+**Remaining:** recapture guild/settings/stats/modules/moderation at their final state
+after the module-pages pass (round 5), then close out the gallery.
+
 
 ---
 
@@ -713,6 +725,58 @@ same mock server, so each fix is diffable side-by-side. Populate as fixes ship (
 
 **Next step:** implement the P1 batch, then the P2 token consolidation, per the commit
 order above — each phase ending with build + contract tests + dev deploy + live verify.
+
+---
+
+# Round 5 — Module Pages Hyper-Audit (2026-08-19, after P0–P4 closed)
+
+Re-ran the design methodology **scoped to module pages** (the modules grid + all 9
+workspaces), per Cody's request. Method: rendered-DOM inventory of every module page
+(tab structures, operation cards, config forms, extra tabs), a 9-screen screenshot wall
+(`wall-modules.png` in the screenshots dir), and vision + code cross-checks.
+
+## Module-page anatomy (verified consistent)
+
+All 9 workspaces share one shell (`module_detail.html`): back-link → title/eyebrow/
+description → action bar (role pill, status badge, enable toggle, Reload, Admin+ menu) →
+4-cell health strip (Runtime/Configuration/Version/Commands) → workspace tabs →
+tab panels. Tab sets vary by module **architecture, not accident**:
+
+| Module | Tabs | Primary surface |
+|---|---|---|
+| announcements | Operate · About | 1 action card |
+| auto_voice | Configure · About | config form (4 props) |
+| help | Configure · About | "No configuration required" empty state |
+| logging | Configure · Logs · About | config form (8 props) + logs table |
+| moderation | Operate · Configure · Cases · Warnings · Notes · Rulesets · Word Lists · Voice · About | 5 action cards + 8 extra tabs |
+| reputation | Configure · Tiers · Leaderboard · Thanks Log · About | config form (10 props) + 3 data tabs |
+| role_manager | Rules · Assignment Log · About | 2 extra tabs (no config) |
+| speak | Configure · About | config + phrases editor |
+| welcome | Configure · About | config form (10 props) |
+
+## Findings + fixes (module pass)
+
+| # | Sev | Finding | Fix | Status |
+|---|---|---|---|---|
+| M1 | P3 | role_manager (and any no-operations/no-configure module with extra tabs) **defaulted to the About tab** — users landed on docs instead of the primary Rules surface | Tab-default logic now: first extra tab is active when there's no Operate/Configure (aria-selected + tabindex + panel visibility all consistent) | ✅ verified in browser |
+| M2 | P3 | Number inputs in module config forms rendered full-width (reputation "Leaderboard Size") | `.form-input[type="number"] { max-width: 180px }` | ✅ verified (~180px) |
+| M3 | P3 | Boolean toggle rows in 3-col form grids staggered vertically | `.form-grid .form-group { align-self: start }` + min-height label rows for toggle groups | ✅ verified (clean columns) |
+| M4 | P4 | `buildDataTable` (module action results) uses `style="overflow-x:auto"` inline vs `renderDataTable`'s `.table-scroll` class — same component, two wrappers | (queued with the JS dedupe pass — the caption/scope a11y gap from round 2 is already fixed) | queued |
+| M5 | — | modules grid cards: unequal whitespace inside equal-height cards (Moderation's many tags force tall row-mates) | Accepted — equal-height grid + pinned footers is the deliberate pattern; command tags already capped at 4 with "+N more" | verified correct |
+| M6 | — | Speak 404 / role_manager 404 error states on the wall | **Mock-only** (module-hosted API routes 404 under MockBarkBot; real backend routes exist — `test_frontend_api_paths_have_matching_backend_routes` proves them). The error states render correctly (state-panel + Retry) — that's the designed behavior working. | not a bug |
+| M7 | — | 9-tab horizontal scroll at 390px, operation grid single-column, Quick Warn reachable above the fold | Verified working; health strip 2×2 at mobile is the documented contract | verified clean |
+
+## Module-page clean areas (verified, no findings)
+
+- Shared workspace shell: header/health-strip/tabs identical across all 9 pages (vision-confirmed on the wall)
+- Operation-grid action cards: uniform anatomy (zap icon header, description, schema-driven fields, primary/danger submit, live result region)
+- Config forms: schema_field macro renders every type identically (text/select/api_select/boolean/color/media_picker/array)
+- Empty states: help's "No configuration required" and all `state-panel` variants are the canonical pattern
+- Tab keyboard behavior: arrow-key nav + aria-selected wiring via `initTabs` (contract-tested)
+- Mobile: no overflow at 390px across the module pages
+
+**Gallery:** module wall `wall-modules.png` (before) + `mod-role_manager-after-1440.png`,
+`mod-reputation-after-1440.png` (after) added to the screenshots dir.
 
 
 

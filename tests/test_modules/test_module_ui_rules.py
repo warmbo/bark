@@ -171,3 +171,19 @@ def test_every_module_declares_a_renderable_schema_or_none():
             # A schema with a non-empty properties dict must yield props.
             if (schema.get("properties") or {}) and not props:
                 pytest.fail(f"modules.{package} schema declares properties but none are walkable")
+
+
+def test_module_detail_defaults_to_first_extra_tab_when_no_primary():
+    """Audit M1 (2026-08-19): modules with extra tabs but no operations and no
+    Configure tab (e.g. role_manager's Rules) must default to their first extra
+    tab, not About. The template's default-tab logic uses the
+    no_primary_tab/default_extra_tab flags."""
+    src = (TEMPLATES / "pages" / "module_detail.html").read_text(encoding="utf-8")
+    assert "{% set no_primary_tab = not has_operations and not module_data.show_configure_tab %}" in src
+    assert "{% set default_extra_tab = no_primary_tab and module_data.extra_tabs | length > 0 %}" in src
+    # First extra tab button carries active/aria-selected/tabindex when default.
+    assert "class=\"tab {{ 'active' if default_extra_tab and loop.first else '' }}\"" in src
+    # About is active only when there is no primary AND no default extra tab.
+    assert "'active' if no_primary_tab and not default_extra_tab else ''" in src
+    # The first extra tab panel is visible (not hidden) when it is the default.
+    assert "{{ 'hidden' if not (default_extra_tab and loop.first) else '' }}" in src

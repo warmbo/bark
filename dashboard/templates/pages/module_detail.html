@@ -6,6 +6,8 @@
 {% block content %}
 {% set active_page = 'module_' + module_name %}
 {% set has_operations = module_data.actions | length > 0 %}
+{% set no_primary_tab = not has_operations and not module_data.show_configure_tab %}
+{% set default_extra_tab = no_primary_tab and module_data.extra_tabs | length > 0 %}
 <div class="page-container module-workspace" data-tab-scope data-guild-id="{{ guild.id }}" data-module-name="{{ module_name }}" data-user-role="{{ request.session.get('role', 'admin') }}" data-can-manage="{{ 'true' if module_data.can_manage_module else 'false' }}">
   <header class="page-header page-header-standard module-workspace-header">
     <div class="module-heading">
@@ -56,8 +58,8 @@
   <div class="tabs workspace-tabs" role="tablist" aria-label="{{ module_name | replace('_', ' ') | title }} workspace">
     {% if has_operations %}<button id="workspace-tab-operate" class="tab active" type="button" role="tab" aria-controls="tab-operate" aria-selected="true">Operate</button>{% endif %}
     {% if module_data.show_configure_tab %}<button id="workspace-tab-configure" class="tab {{ '' if has_operations else 'active' }}" type="button" role="tab" aria-controls="tab-configure" aria-selected="{{ 'false' if has_operations else 'true' }}" {{ 'tabindex="-1"' if has_operations else '' }}>Configure</button>{% endif %}
-    {% for tab in module_data.extra_tabs %}<button id="workspace-tab-{{ tab.id }}" class="tab" type="button" role="tab" aria-controls="tab-{{ tab.id }}" aria-selected="false" tabindex="-1">{{ tab.label }}</button>{% endfor %}
-    <button id="workspace-tab-about" class="tab {{ 'active' if not has_operations and not module_data.show_configure_tab else '' }}" type="button" role="tab" aria-controls="tab-about" aria-selected="{{ 'true' if not has_operations and not module_data.show_configure_tab else 'false' }}" {{ 'tabindex="-1"' if has_operations or module_data.show_configure_tab else '' }}>About</button>
+    {% for tab in module_data.extra_tabs %}<button id="workspace-tab-{{ tab.id }}" class="tab {{ 'active' if default_extra_tab and loop.first else '' }}" type="button" role="tab" aria-controls="tab-{{ tab.id }}" aria-selected="{{ 'true' if default_extra_tab and loop.first else 'false' }}" {{ 'tabindex="0"' if default_extra_tab and loop.first else 'tabindex="-1"' }}>{{ tab.label }}</button>{% endfor %}
+    <button id="workspace-tab-about" class="tab {{ 'active' if no_primary_tab and not default_extra_tab else '' }}" type="button" role="tab" aria-controls="tab-about" aria-selected="{{ 'true' if no_primary_tab and not default_extra_tab else 'false' }}" {{ 'tabindex="0"' if no_primary_tab and not default_extra_tab else 'tabindex="-1"' }}>About</button>
   </div>
 
   {% if has_operations %}<section class="tab-panel active" id="tab-operate" role="tabpanel" aria-labelledby="workspace-tab-operate" tabindex="0">
@@ -156,9 +158,9 @@
     {% endif %}
   </section>{% endif %}
 
-  {% for tab in module_data.extra_tabs %}<section class="tab-panel" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" hidden>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
+  {% for tab in module_data.extra_tabs %}<section class="tab-panel {{ 'active' if default_extra_tab and loop.first else '' }}" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" {{ 'hidden' if not (default_extra_tab and loop.first) else '' }}>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
 
-  <section class="tab-panel" id="tab-about" role="tabpanel" aria-labelledby="workspace-tab-about" tabindex="0" hidden>
+  <section class="tab-panel {{ 'active' if no_primary_tab and not default_extra_tab else '' }}" id="tab-about" role="tabpanel" aria-labelledby="workspace-tab-about" tabindex="0" {{ 'hidden' if not (no_primary_tab and not default_extra_tab) else '' }}>
     <div class="about-grid">
       <article class="content-card">
         <div class="card-header"><h2 class="card-title">{{ icon('book-open', 16) }} About this module</h2></div>

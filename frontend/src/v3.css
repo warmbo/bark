@@ -144,7 +144,22 @@ textarea {
 .form-textarea:focus,
 input:focus,
 select:focus,
-textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in oklab, var(--ring) 32%, transparent); outline-offset: -1px; box-shadow: none; }.form-label { color: var(--foreground); font-size: .875rem; font-weight: 550; }.toggle-slider { border-radius: var(--radius-full); background: var(--input); border: 1px solid var(--border); }.toggle-switch input:checked + .toggle-slider { background: var(--primary); }/* shadcn Badge */
+textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in oklab, var(--ring) 32%, transparent); outline-offset: -1px; box-shadow: none; }.form-label { color: var(--foreground); font-size: .875rem; font-weight: 550; }.toggle-slider { border-radius: var(--radius-full); background: var(--input); border: 1px solid var(--border); }.toggle-switch input:checked + .toggle-slider { background: var(--primary); }/* Module config forms: numeric inputs don't need full width, and boolean
+   toggles in a grid align to the label row (audit 2026-08-19 module pass). */
+.form-input[type="number"] { max-width: 180px; }
+.form-grid .form-group, .form-grid-2 .form-group, .form-grid-3 .form-group { align-self: start; }
+.form-grid .form-group:has(.toggle-switch) .form-label-row { min-height: 28px; align-items: center; }/* Micro-motion (P5, audit 2026-08-19): subtle entrance for dialogs and tab
+   panels. The global prefers-reduced-motion block neutralizes both to ~0ms. */
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+.app-dialog, .update-terminal-dialog, .palette, .workspace-modal { animation: dialog-in 140ms var(--ease-out) both; }
+@keyframes panel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.tab-panel.active { animation: panel-in 120ms var(--ease-out) both; }/* shadcn Badge */
 .badge, .status-badge, .info-chip, .role-chip, .cmd-badge {
   border: 1px solid var(--border);
   border-radius: var(--radius);
