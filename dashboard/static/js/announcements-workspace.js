@@ -3,9 +3,10 @@
  * Mirrors modules/announcements/module.py `post_announcement` rendering so the
  * Operate tab shows exactly what Bark will post: plain-text mode vs embed mode,
  * the title/description, embed accent color, media image, the appended
- * "[Watch Video]" link, and the 2000/4096 character caps. The action card is
- * re-laid out as a split pane — composer left, live preview right. Loaded only
- * on the announcements module detail page (see pages/module_detail.html).
+ * "[Watch Video]" link, and the 2000/4096 character caps. The composer stays a
+ * standard operation-grid action card; the live preview renders in a canonical
+ * workspace-data-card below the grid (same pattern as moderation's activity
+ * card). Loaded only on the announcements module detail page.
  */
 (() => {
   'use strict';
@@ -90,25 +91,24 @@
     return out;
   }
 
-  // ── Split-pane layout: composer left, preview right ───────────────────
+  // ── Canonical preview card: composer stays a normal operation-grid card,
+  //    the live Discord preview is a standard workspace-data-card below the
+  //    grid (same pattern as moderation's "Recent Activity"). (remake 2026-08-19)
 
-  const configBody = card.querySelector('.config-body');
-  const form = card.querySelector('.module-action-form');
-  const result = card.querySelector('.action-result');
+  const previewCard = document.createElement('article');
+  previewCard.className = 'content-card workspace-data-card announcement-preview-card';
+  previewCard.innerHTML =
+    '<div class="card-header"><div><h2 class="card-title">' + (typeof getIconSvg === 'function' ? getIconSvg('eye', 16) : '') + ' Live Preview</h2>' +
+    '<p class="card-description">Exactly what Bark will post, updating as you type.</p></div></div>' +
+    '<div class="config-body announcement-preview-body"></div>';
+  card.after(previewCard);
+  // Move the preview card OUT of the operation grid so it spans the full width
+  // below the composer card (grid items would otherwise sit side-by-side).
+  const opGrid = card.closest('.operation-grid');
+  if (opGrid) opGrid.after(previewCard);
+  if (typeof refreshIcons === 'function') refreshIcons();
 
-  const split = document.createElement('div');
-  split.className = 'announcement-split';
-
-  const formCol = document.createElement('div');
-  formCol.className = 'announcement-form-col';
-  if (form) formCol.appendChild(form);
-  if (result) formCol.appendChild(result);
-
-  const previewCol = document.createElement('div');
-  previewCol.className = 'announcement-preview-col';
-
-  split.append(formCol, previewCol);
-  if (configBody) configBody.replaceChildren(split);
+  const previewBody = previewCard.querySelector('.announcement-preview-body');
 
   // ── Preview UI ────────────────────────────────────────────────────────
 
@@ -116,7 +116,6 @@
   preview.className = 'announcement-preview';
   preview.setAttribute('aria-live', 'polite');
   preview.innerHTML =
-    '<div class="announcement-preview-label">Discord preview</div>' +
     '<div class="discord-preview">' +
       '<div class="discord-message">' +
         '<img class="discord-avatar" src="/static/img/bark-avatar.png" alt="" loading="lazy">' +
@@ -131,7 +130,7 @@
         '</div>' +
       '</div>' +
     '</div>';
-  previewCol.appendChild(preview);
+  previewBody.appendChild(preview);
 
   const timestampEl = preview.querySelector('.discord-timestamp');
   const contentEl = preview.querySelector('.discord-message-content');

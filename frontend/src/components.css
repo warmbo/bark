@@ -1075,22 +1075,10 @@ textarea:focus-visible,
     min-height: 28px;
     width: auto;
     height: 28px;  /* consolidated from two identical per-selector rules */
-}.discord-toolbar { display: flex; gap: 2px; padding: 5px 6px; background: var(--bg-elevated); border: 1px solid var(--border-input); border-bottom: 0; flex-wrap: wrap; }.discord-toolbar button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 7px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background var(--transition-fast), color var(--transition-fast); }.discord-toolbar button:hover { background: var(--bg-card); color: var(--text-primary); }.discord-toolbar .sep { width: 1px; background: var(--border-subtle); margin: 2px 4px; }.discord-toolbar + textarea.form-input { border-top: 0; }/* ── Announcements live Discord preview ───────────────── */
+}.discord-toolbar { display: flex; gap: 2px; padding: 5px 6px; background: var(--bg-elevated); border: 1px solid var(--border-input); border-bottom: 0; flex-wrap: wrap; }.discord-toolbar button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 7px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background var(--transition-fast), color var(--transition-fast); }.discord-toolbar button:hover { background: var(--bg-card); color: var(--text-primary); }.discord-toolbar .sep { width: 1px; background: var(--border-subtle); margin: 2px 4px; }.discord-toolbar + textarea.form-input { border-top: 0; }/* ── Announcements live Discord preview (canonical data-card, remake 2026-08-19) ── */
 
-.announcement-split {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: var(--space-lg);
-    align-items: start;
-}.announcement-form-col { min-width: 0; }.announcement-preview-col {
-    min-width: 0;
-    position: sticky;
-    top: 90px;
-}@media (max-width: 1100px) {
-    .announcement-split { grid-template-columns: minmax(0, 1fr); }.announcement-preview-col { position: static; }}.announcement-preview { min-width: 0; }.announcement-preview-label {
-    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--text-tertiary); margin-bottom: 8px;
-}.discord-preview {
+.announcement-preview-card .announcement-preview-body { max-width: none; }
+.announcement-preview { min-width: 0; }.discord-preview {
     background: var(--discord-chat-bg); border: 1px solid var(--discord-code-border); border-radius: var(--radius);
     padding: 14px 16px; max-width: 640px;
 }.discord-message { display: flex; gap: 12px; align-items: flex-start; }.discord-avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background: var(--discord-code-bg); object-fit: cover; }.discord-message-body { min-width: 0; flex: 1; }.discord-message-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }.discord-username { color: var(--discord-heading); font-weight: 600; font-size: 15px; }.discord-bot-badge { background: var(--discord-blurple); color: var(--c-white); font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: var(--radius); text-transform: uppercase; letter-spacing: 0.02em; }.discord-timestamp { color: var(--discord-subtext); font-size: 12px; }.discord-message-content { color: var(--discord-text); font-size: 15px; line-height: 1.45; word-wrap: break-word; margin-top: 2px; }.discord-placeholder { color: var(--c-gray550); font-style: italic; }.discord-message-content a.discord-link, .discord-embed a.discord-link { color: var(--c-blue-bright); text-decoration: none; }.discord-message-content a.discord-link:hover, .discord-embed a.discord-link:hover { text-decoration: underline; }.discord-message-content code.discord-code, .discord-embed code.discord-code { background: var(--discord-code-bg); padding: 1px 4px; border-radius: var(--radius); font-family: var(--font-mono); font-size: 13px; }.discord-message-content pre.discord-codeblock { background: var(--discord-code-bg); border: 1px solid var(--discord-code-border); border-radius: var(--radius); padding: 8px 10px; margin: 4px 0; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; color: var(--discord-text); white-space: pre; }.discord-message-content blockquote.discord-quote, .discord-embed-desc blockquote.discord-quote { border-left: 4px solid var(--discord-quote-border); margin: 4px 0; padding: 2px 10px; color: var(--discord-text); }.discord-message-content .discord-h2, .discord-embed-desc .discord-h2 { color: var(--discord-heading); font-size: 18px; font-weight: 700; margin: 6px 0 2px; }.discord-message-content .discord-h3, .discord-embed-desc .discord-h3 { color: var(--discord-heading); font-size: 16px; font-weight: 700; margin: 6px 0 2px; }.discord-message-content .discord-h4, .discord-embed-desc .discord-h4 { color: var(--discord-heading); font-size: 14px; font-weight: 700; margin: 6px 0 2px; }.discord-message-content .discord-li, .discord-embed-desc .discord-li { display: block; color: var(--discord-text); }.discord-message-content .discord-subtext, .discord-embed-desc .discord-subtext { color: var(--discord-subtext); font-size: 12px; }.discord-message-content .discord-spoiler, .discord-embed-desc .discord-spoiler { background: var(--discord-code-bg); color: var(--discord-code-bg); border-radius: var(--radius); padding: 0 3px; cursor: pointer; }.discord-message-content .discord-spoiler:hover, .discord-embed-desc .discord-spoiler:hover { color: var(--discord-text); }.discord-embed { display: flex; gap: 12px; background: var(--c-discord-embed); border-radius: var(--radius); margin-top: 8px; overflow: hidden; }.discord-embed-bar { width: 4px; flex-shrink: 0; background: var(--discord-blurple); }.discord-embed-body { padding: 10px 14px 10px 0; min-width: 0; flex: 1; }.discord-embed-title { color: var(--discord-heading); font-weight: 600; font-size: 16px; margin-bottom: 4px; }.discord-embed-desc { color: var(--discord-text); font-size: 14px; line-height: 1.4; word-wrap: break-word; }.discord-embed-image { max-width: 100%; max-height: 320px; border-radius: var(--radius); margin-top: 8px; display: block; }.discord-embed-footer { color: var(--discord-subtext); font-size: 12px; margin-top: 8px; display: flex; gap: 6px; align-items: center; }/* ── Embed color picker field ─────────────────────────── */
@@ -1910,48 +1898,5 @@ textarea:focus-visible,
   background: var(--glass-tint);
 }.behavior-footnote strong { color: var(--text-secondary); }@media (max-width: 640px) {
   .behavior-guide-grid { grid-template-columns: 1fr; }}/* Reputation thanks search input width */
-.rep-search-input { width: 200px; }/* ── Speak module phrase editor ─────────────────────── */
-.speak-row {
-    display: grid;
-    grid-template-columns: minmax(120px, 220px) 1fr auto;
-    gap: 8px;
-    align-items: center;
-    margin-bottom: 8px;
-    padding: 10px 12px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius);
-    background: var(--bg-elevated);
-}.speak-row .speak-key {
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 13px;
-}.speak-row .speak-text {
-    font-size: 13px;
-}.speak-row .speak-remove {
-    flex-shrink: 0;
-    color: var(--text-tertiary);
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-    padding: 6px;
-    border-radius: var(--radius);
-}.speak-row .speak-remove:hover {
-    color: var(--red);
-    background: var(--c-red-soft-bg10);
-}.speak-column-headers {
-    display: grid;
-    grid-template-columns: minmax(120px, 220px) 1fr auto;
-    gap: 8px;
-    padding: 0 12px 6px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-}@media (max-width: 700px) {
-    .speak-column-headers { display: none; }.speak-row {
-        grid-template-columns: 1fr auto;
-    }.speak-row .speak-text {
-        grid-column: 1 / -1;
-        grid-row: 2;
-    }}/* Auto Voice: name-template preview/help spans the whole config grid row */
+.rep-search-input { width: 200px; }/* Auto Voice: name-template preview/help spans the whole config grid row */
 .template-preview, .template-help { grid-column: 1 / -1; }

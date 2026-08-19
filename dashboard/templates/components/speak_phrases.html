@@ -14,8 +14,20 @@
       <code>{{ command_prefix }}speak word1</code> to trigger the phrase. Deleting a key's text removes it.
     </p>
   </div>
-  <div id="speak-phrases-content" aria-live="polite">
-    <div class="skeleton skeleton-card"></div>
+  <div class="table-scroll speak-table-wrap">
+    <table class="data-table speak-table">
+      <caption class="sr-only">Speak phrases</caption>
+      <thead>
+        <tr>
+          <th scope="col" class="speak-key-col">Key</th>
+          <th scope="col">Phrase text</th>
+          <th scope="col" class="speak-actions-col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody id="speak-phrases-content" aria-live="polite">
+        <tr><td colspan="3"><div class="skeleton skeleton-card"></div></td></tr>
+      </tbody>
+    </table>
   </div>
   <div class="form-actions" id="speak-phrases-actions" hidden>
     <button type="button" class="btn btn-primary" id="speak-phrases-save">{{ icon("save", 14) }} Save Phrases</button>

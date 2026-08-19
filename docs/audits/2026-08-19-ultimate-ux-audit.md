@@ -778,6 +778,70 @@ tab panels. Tab sets vary by module **architecture, not accident**:
 **Gallery:** module wall `wall-modules.png` (before) + `mod-role_manager-after-1440.png`,
 `mod-reputation-after-1440.png` (after) added to the screenshots dir.
 
+---
+
+# Round 6 — Module Pages Remake (2026-08-19, per Cody)
+
+Cody's directive: *"There is still a lot of disparity and 'larger overall' choices on the
+module pages. Entire pages could/should be remade for the modules to achieve unity. Take
+all the features and elements of each module page, and restructure them following the
+design philosophy of the overall site and apply it to each one during creation."*
+
+## The disparity found
+
+The shared shell (header/health-strip/tabs) was already unified, but the **content
+surfaces** had three bespoke layouts that made module pages feel like different products:
+
+| Surface | Before (bespoke) | Problem |
+|---|---|---|
+| Announcements Operate | JS rebuilt the action card into a **split pane** (composer left / sticky preview right) | Only module with a split layout; different density/anatomy from every other Operate tab |
+| Speak Configure | Custom `.speak-row` grid rows + column headers | Only module without a `.data-table`; different row anatomy |
+| Auto Voice Configure | Inline `template-preview` + `template-help` injected after the input | Only module with inline mid-form preview; no card framing |
+
+## The canonical anatomy (applied to every module)
+
+1. Header → health strip → tabs (unchanged, already unified)
+2. **Operate tab** = `.operation-grid` of `.action-card`s — every action module, no exceptions
+3. **Configure tab** = `.workspace-form-card` (schema fieldsets) + optional **module
+   data-card surfaces below** (speak phrases, previews)
+4. **Data tabs** = `.workspace-data-card` (already canonical)
+5. **Preview surfaces** = canonical `workspace-data-card` **below the grid/form** — the
+   same pattern moderation already used for "Recent Activity"
+
+## Changes shipped
+
+- **Announcements**: composer stays a normal full-width action-card; the live Discord
+  preview moved into a `workspace-data-card` ("Live Preview") below the operation grid
+  (`card.after` → `opGrid.after` so it spans full width). All markdown-renderer logic
+  preserved. Contract tests updated to assert the canonical card (split-pane classes
+  gone).
+- **Speak**: phrase editor rebuilt as a `.data-table` (Key / Phrase text / actions
+  columns, `speak-table-wrap` scroll container); rows are table rows with form inputs;
+  add/remove/save/refresh behavior preserved. Legacy `.speak-row`/`.speak-column-headers`
+  CSS deleted.
+- **Auto Voice**: preview + name-template reference now render inside a canonical
+  `workspace-data-card` ("Channel Name Preview") below the config form instead of being
+  injected mid-form. Live update logic preserved.
+- Dead CSS removed: `announcement-split`, `announcement-form-col`,
+  `announcement-preview-col`, `announcement-preview-label`, `speak-row`,
+  `speak-column-headers` (and their media-query variants).
+- Unified preview styles in v3.css: `.template-preview` (solid border, muted surface)
+  consistent for auto-voice; `.speak-table` cell/padding rules.
+
+## Verified
+
+- 783 tests pass (2 contract tests rewritten to the new anatomy; markdown renderer test
+  re-pointed at the new section marker), ruff clean.
+- Browser-verified: announcements composer full-width + Live Preview data-card below
+  (DOM order confirmed: `</article></div><article ... announcement-preview-card>`);
+  auto-voice preview card present after the config form; speak editor renders the
+  data-table with Key/Phrase headers.
+- The 404s on speak/role_manager walls are mock-only (module-hosted API routes;
+  real backend routes exist and are contract-proven).
+
+**Result:** every module page now follows one anatomy — header, health strip, tabs, and
+content built only from the canonical card/table/form vocabulary.
+
 
 
 

@@ -1,7 +1,8 @@
 /* Speak module workspace — phrase editor for /bark speak.
  * Loads the guild's phrases, lets admins add/edit/remove rows, and saves
- * them via the module API. Self-contained: no external deps beyond the
- * shared escHtml helper from main.js.
+ * them via the module API. Rows render inside the canonical .data-table
+ * surface (see components/speak_phrases.html). Self-contained: no external
+ * deps beyond the shared escHtml helper from main.js.
  */
 (function () {
   'use strict';
@@ -23,38 +24,36 @@
     const safeKey = escHtml(key || '');
     const safeText = escHtml(text || '');
     return `
-      <div class="speak-row" data-speak-row>
-        <input type="text" class="form-input speak-key" value="${safeKey}" placeholder="word1" aria-label="Phrase key" maxlength="64" spellcheck="false">
-        <input type="text" class="form-input speak-text" value="${safeText}" placeholder="The text /bark speak word1 will output" aria-label="Phrase text" maxlength="1900">
-        <button type="button" class="btn btn-sm speak-remove" aria-label="Remove phrase"><i data-lucide="trash-2" width="14" height="14"></i></button>
-      </div>`;
+      <tr data-speak-row>
+        <td class="speak-key-col"><input type="text" class="form-input speak-key" value="${safeKey}" placeholder="word1" aria-label="Phrase key" maxlength="64" spellcheck="false"></td>
+        <td><input type="text" class="form-input speak-text" value="${safeText}" placeholder="The text /bark speak word1 will output" aria-label="Phrase text" maxlength="1900"></td>
+        <td class="speak-actions-col"><button type="button" class="btn btn-sm speak-remove" aria-label="Remove phrase"><i data-lucide="trash-2" width="14" height="14"></i></button></td>
+      </tr>`;
   }
 
   function render(phrases) {
     const entries = Object.entries(phrases || {});
     if (!entries.length) {
       container.innerHTML =
-        '<div class="state-panel state-empty" role="status"><div><strong>No phrases yet</strong>' +
-        '<p>Click <em>Add Phrase</em> to create the first one, then tell members to run <code>/bark speak &lt;key&gt;</code>.</p></div></div>';
+        '<tr><td colspan="3"><div class="state-panel state-empty" role="status"><div><strong>No phrases yet</strong>' +
+        '<p>Click <em>Add Phrase</em> to create the first one, then tell members to run <code>/bark speak &lt;key&gt;</code>.</p></div></div></td></tr>';
       actions.hidden = true;
       return;
     }
-    container.innerHTML =
-      '<div class="speak-column-headers" aria-hidden="true"><span>Key</span><span>Phrase text</span><span></span></div>' +
-      entries.map(([k, v]) => rowHtml(k, v)).join('');
+    container.innerHTML = entries.map(([k, v]) => rowHtml(k, v)).join('');
     actions.hidden = false;
     if (window.lucide) lucide.createIcons();
   }
 
   async function loadPhrases() {
-    container.innerHTML = '<div class="skeleton skeleton-card"></div>';
+    container.innerHTML = '<tr><td colspan="3"><div class="skeleton skeleton-card"></div></td></tr>';
     try {
       const result = await safeFetch(phraseEndpoint(), { cache: 'no-cache' });
       render(result?.data?.phrases || {});
     } catch (error) {
       container.innerHTML =
-        `<div class="state-panel state-error" role="status"><div><strong>Could not load phrases</strong>` +
-        `<p>${escHtml(error.message || 'Unknown error')}</p></div></div>`;
+        `<tr><td colspan="3"><div class="state-panel state-error" role="status"><div><strong>Could not load phrases</strong>` +
+        `<p>${escHtml(error.message || 'Unknown error')}</p></div></div></td></tr>`;
       actions.hidden = true;
     }
   }
@@ -111,8 +110,8 @@
     row.remove();
     if (!container.querySelector('[data-speak-row]')) {
       container.innerHTML =
-        '<div class="state-panel state-empty" role="status"><div><strong>No phrases yet</strong>' +
-        '<p>Click <em>Add Phrase</em> to create the first one.</p></div></div>';
+        '<tr><td colspan="3"><div class="state-panel state-empty" role="status"><div><strong>No phrases yet</strong>' +
+        '<p>Click <em>Add Phrase</em> to create the first one.</p></div></div></td></tr>';
       actions.hidden = true;
     }
   });

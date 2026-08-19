@@ -76,14 +76,27 @@
     return rendered || 'Voice 02';
   }
 
-  // ── Preview + reference UI ─────────────────────────────────────
+  // ── Preview + reference UI (canonical data-card below the config form,
+  //    remake 2026-08-19 — same pattern as every module preview surface) ──
 
+  const previewCard = document.createElement('article');
+  previewCard.className = 'content-card workspace-data-card auto-voice-preview-card';
+  previewCard.innerHTML =
+    '<div class="card-header"><div><h2 class="card-title">' + (typeof getIconSvg === 'function' ? getIconSvg('mic', 16) : '') + ' Channel Name Preview</h2>' +
+    '<p class="card-description">How Bark will name new voice channels, updating live from the template above.</p></div></div>' +
+    '<div class="config-body"></div>';
+  const formCard = document.querySelector('.workspace-form-card');
+  (formCard || templateInput.closest('.content-card'))?.after(previewCard);
+  if (typeof refreshIcons === 'function') refreshIcons();
+
+  const previewBody = previewCard.querySelector('.config-body');
   const preview = document.createElement('div');
   preview.className = 'template-preview';
   preview.setAttribute('aria-live', 'polite');
   preview.innerHTML =
     '<span class="template-preview-label">Preview</span>' +
     '<code class="template-preview-name" id="auto-voice-preview-name"></code>';
+  previewBody.appendChild(preview);
 
   const help = document.createElement('details');
   help.className = 'template-help';
@@ -104,8 +117,7 @@
     '</tbody></table>' +
     '<p class="form-hint">Transforms combine with <code>+</code> (e.g. <code>""caps+acro: counter strike""</code> → <code>CS</code>). ' +
     'The channel is renamed live when the majority game changes.</p>';
-
-  templateInput.closest('.form-group')?.after(preview, help);
+  previewBody.appendChild(help);
 
   // ── Live preview update ────────────────────────────────────────
 

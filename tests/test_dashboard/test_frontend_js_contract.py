@@ -233,18 +233,22 @@ def test_announcements_workspace_registers_live_discord_preview():
     assert "discord-spoiler" in ann
 
 
-def test_announcements_preview_uses_split_pane_and_color_picker():
-    """The announcements composer must sit beside a sticky preview pane, embed
-    must be the default mode, and the color field must feed the preview bar."""
+def test_announcements_preview_uses_canonical_preview_card_and_color_picker():
+    """The announcements composer stays a standard operation-grid action card;
+    the live Discord preview renders in a canonical workspace-data-card below
+    the grid (remake 2026-08-19 — same pattern as moderation's activity card).
+    Embed must be the default mode, and the color field must feed the preview."""
     detail = source(TEMPLATES / "pages" / "module_detail.html")
     ann = source(JS / "announcements-workspace.js")
     module = source(ROOT / "modules" / "announcements" / "module.py")
 
-    # Split-pane layout: composer column + preview column.
-    assert "announcement-split" in ann
-    assert "announcement-form-col" in ann
-    assert "announcement-preview-col" in ann
-    assert "announcement-split" in source(STATIC / "css" / "main.css")
+    # Canonical preview card: composer untouched, preview in a data-card below.
+    assert "announcement-preview-card" in ann
+    assert "workspace-data-card" in ann
+    assert "card.after(previewCard)" in ann
+    assert "announcement-split" not in ann
+    assert "announcement-form-col" not in ann
+    assert "announcement-preview-col" not in ann
     # Embed formatting is the default but the toggle stays.
     assert '"default": True' in module
     assert "field.type == 'boolean'" in detail
@@ -266,7 +270,7 @@ def test_discord_markdown_renderer_covers_discord_tokens():
     formatting and cover Discord's core inline/block tokens."""
     ann = source(JS / "announcements-workspace.js")
     start = ann.index("function esc(")
-    end = ann.index("// ── Split-pane layout", start)
+    end = ann.index("// ── Canonical preview card", start)
     renderer = ann[start:end]
 
     script = f"""

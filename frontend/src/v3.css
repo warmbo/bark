@@ -159,7 +159,18 @@ textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in okla
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.tab-panel.active { animation: panel-in 120ms var(--ease-out) both; }/* shadcn Badge */
+.tab-panel.active { animation: panel-in 120ms var(--ease-out) both; }
+/* Module surface uniformity (remake 2026-08-19): speak phrase editor rows and
+   module preview cards follow the canonical data-card/table anatomy. */
+.speak-table-wrap { margin-top: var(--space-2); }
+.speak-table .speak-key-col { width: 220px; }
+.speak-table .speak-actions-col { width: 64px; text-align: right; }
+.speak-table [data-speak-row] td { padding: var(--space-2) var(--space-3); }
+.speak-table [data-speak-row] .form-input { min-height: 36px; }
+.auto-voice-preview-card .template-preview { margin-bottom: var(--space-4); }
+.template-preview { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--muted); border: 1px solid var(--border); }
+.template-preview-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); flex-shrink: 0; }
+.template-preview-name { font-family: var(--font-mono); font-size: 15px; color: var(--foreground); }/* shadcn Badge */
 .badge, .status-badge, .info-chip, .role-chip, .cmd-badge {
   border: 1px solid var(--border);
   border-radius: var(--radius);
