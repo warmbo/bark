@@ -1291,6 +1291,10 @@ async def test_csrf_rejects_untrusted_origin_and_allows_trusted(db, monkeypatch)
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
     monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+    # The LAN origin is trusted only when the operator lists it (BARK_TRUSTED_ORIGINS).
+    monkeypatch.setattr(
+        config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"]
+    )
     bot = MagicMock()
     bot.modules = MagicMock()
     bot.modules.event_bus.get_subscribers.return_value = {}

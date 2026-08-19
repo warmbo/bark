@@ -101,15 +101,46 @@ async def test_dispatch_invokes_leaf_callback_with_kwargs():
     _register_fake_module(d, "moderation", "warn", leaf)
 
     interaction = MagicMock()
-    interaction.user = "u"
-    interaction.guild = None
+    interaction.user = SimpleNamespace(name="invoker", id=1)
+    member = SimpleNamespace(name="someuser", display_name="someuser", id=123)
+    guild = MagicMock()
+    guild.members = [member]
+    interaction.guild = guild
     interaction.response = MagicMock()
 
     await d.dispatch(interaction, "warn", "someuser reason here")
     assert callback.await_count == 1
     kwargs = callback.await_args.kwargs
-    assert kwargs["reason"] == "reason"
-    assert kwargs["member"] is not None
+    # The final string param is a free-form sink: the whole reason survives.
+    assert kwargs["reason"] == "reason here"
+    assert kwargs["member"] is member
+
+
+@pytest.mark.asyncio
+async def test_dispatch_unresolved_member_shows_not_found_not_self_target():
+    """A mistyped mention must not self-moderate — show a not-found error."""
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    leaf, callback = _make_leaf(
+        "warn",
+        params=[
+            SimpleNamespace(name="member", type=discord.AppCommandOptionType.mentionable, required=True),
+            SimpleNamespace(name="reason", type=discord.AppCommandOptionType.string, required=False),
+        ],
+    )
+    _register_fake_module(d, "moderation", "warn", leaf)
+
+    interaction = MagicMock()
+    interaction.user = SimpleNamespace(name="invoker", id=1)
+    guild = MagicMock()
+    guild.members = []  # nothing matches the typo'd target
+    interaction.guild = guild
+    interaction.response.send_message = AsyncMock()
+
+    await d.dispatch(interaction, "warn", "typo some reason")
+    assert callback.await_count == 0  # never warned the invoker by default
+    interaction.response.send_message.assert_awaited_once()
+    args, _ = interaction.response.send_message.await_args
+    assert "member" in args[0]
 
 
 @pytest.mark.asyncio

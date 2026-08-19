@@ -41,16 +41,43 @@ def create_setup_app() -> FastAPI:
     return app
 
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def resolve_setup_host(host: str, setup_token: str) -> str:
+    """Return the host the setup server should bind.
+
+    Without a setup token the wizard is a zero-auth bootstrap, so a non-loopback
+    host is forced back to loopback — the unauthenticated wizard must never be
+    reachable off-host.
+    """
+    if not setup_token and host not in _LOOPBACK_HOSTS:
+        logger.warning(
+            "Setup mode has no BARK_SETUP_TOKEN — forcing loopback bind "
+            "(configured host %r would expose the unauthenticated wizard)",
+            host,
+        )
+        return "127.0.0.1"
+    return host
+
+
 async def run_setup() -> None:
-    """Run the setup server on the configured dashboard port."""
+    """Run the setup server on the configured dashboard port.
+
+    When no ``BARK_SETUP_TOKEN`` is configured, the setup wizard is a
+    zero-auth bootstrap, so it is forced to bind loopback — it must never be
+    exposed on a non-loopback interface where an unauthenticated client could
+    claim the instance by writing ``.env``.
+    """
     from uvicorn import Config, Server
 
     app = create_setup_app()
-    logger.info("Setup mode: open http://%s:%s/setup to configure Bark", config.dashboard.host, config.dashboard.port)
+    host = resolve_setup_host(config.dashboard.host, config.dashboard.setup_token)
+    logger.info("Setup mode: open http://%s:%s/setup to configure Bark", host, config.dashboard.port)
     server = Server(
         Config(
             app,
-            host=config.dashboard.host,
+            host=host,
             port=config.dashboard.port,
             log_level="warning",
         )

@@ -2,8 +2,8 @@
 Guilds API routes.
 """
 
-from datetime import datetime, timezone
 import re
+from datetime import datetime, timezone
 
 import discord
 from fastapi import APIRouter, Request

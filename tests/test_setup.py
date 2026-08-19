@@ -170,3 +170,40 @@ async def test_setup_post_refuses_when_already_configured(setup_app, tmp_path):
         )
     assert response.status_code == 409
     assert "already exists" in response.json()["error"]
+
+
+# ── Setup-token gate ──────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_setup_post_requires_token_when_configured(setup_app, tmp_path, monkeypatch):
+    from config import config
+
+    monkeypatch.setattr(config.dashboard, "setup_token", "s3cr3t-t0ken")
+    async with AsyncClient(
+        transport=ASGITransport(app=setup_app), base_url="http://test"
+    ) as client:
+        # Missing token → 403, no .env written.
+        denied = await client.post(
+            "/api/setup", json={"token": "MTEz.abc.def", "public_url": "https://x.example"}
+        )
+        assert denied.status_code == 403
+        assert not (tmp_path / ".env").exists()
+        # Correct token → accepted.
+        ok = await client.post(
+            "/api/setup",
+            json={"token": "MTEz.abc.def", "public_url": "https://x.example"},
+            headers={"X-Setup-Token": "s3cr3t-t0ken"},
+        )
+        assert ok.status_code == 200
+        assert (tmp_path / ".env").read_text().startswith("BARK_BOT_TOKEN=")
+
+
+def test_resolve_setup_host_forces_loopback_without_token():
+    from dashboard.setup_app import resolve_setup_host
+
+    assert resolve_setup_host("0.0.0.0", "") == "127.0.0.1"
+    assert resolve_setup_host("10.0.0.227", "") == "127.0.0.1"
+    assert resolve_setup_host("127.0.0.1", "") == "127.0.0.1"
+    # A configured token permits a non-loopback bind (remote, token-gated setup).
+    assert resolve_setup_host("0.0.0.0", "s3cr3t-t0ken") == "0.0.0.0"

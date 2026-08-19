@@ -8,7 +8,6 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -21,7 +20,7 @@ from bark_version import __version__
 from config import config
 from dashboard.app import DashboardApp
 from dashboard.middleware.compression import SafeGzipMiddleware
-from services.security import AuthMiddleware, SecurityMiddleware
+from services.security import AuthMiddleware, SecurityMiddleware, trusted_origin_hosts
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -54,12 +53,11 @@ def create_app(bot: BarkBot) -> DashboardApp:
         same_site="lax",
         https_only=config.dashboard.secure_cookies,
     )
-    public_host = urlparse(config.dashboard.public_url).hostname
     app.add_middleware(
         TrustedHostMiddleware,
-        # The dev instance is also reached directly over LAN by IP
-        # (http://10.0.0.227:8091), not only via the public hostname.
-        allowed_hosts=[host for host in (public_host, "localhost", "127.0.0.1", "test", "10.0.0.227") if host],
+        # Hosts derived from config (public_url + bind host + loopback +
+        # BARK_TRUSTED_ORIGINS); "test" covers the test client's hostname.
+        allowed_hosts=sorted(trusted_origin_hosts(config) | {"test"}),
     )
 
     # Static files

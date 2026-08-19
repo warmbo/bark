@@ -386,29 +386,35 @@ async def _mod_action(request: Request, guild_id: str, action: str, executor):
     if member.bot:
         return api_error("Cannot moderate bot accounts")
 
-    # Verify the dashboard user has the required Discord permission
-    try:
-        session_user = request.session.get("user", {})
-        actor_id = session_user.get("id", "")
-        if actor_id:
+    # Verify the dashboard user has the required Discord permission.
+    session_user = request.session.get("user", {})
+    actor_id = session_user.get("id", "")
+    if actor_id:
+        try:
             actor_member = guild.get_member(int(actor_id))
-            if actor_member:
-                if required_perm and not getattr(
-                    actor_member.guild_permissions, required_perm, False
-                ):
-                    return api_forbidden(
-                        f"You lack '{required_perm}' Discord permission for {action}"
-                    )
-                # Role hierarchy check: actor's top role must be above target's top role
-                if action in ("kick", "ban", "timeout"):
-                    actor_top = actor_member.top_role.position
-                    target_top = member.top_role.position
-                    if actor_top <= target_top and not actor_member.guild_permissions.administrator:
-                        return api_forbidden(
-                            "Cannot moderate that member — their highest role is equal to or above yours"
-                        )
-    except (ValueError, TypeError):
-        pass  # If actor lookup fails, proceed with bot-only check
+        except (ValueError, TypeError):
+            # An unparseable actor id means we cannot confirm live membership —
+            # fail closed rather than act on a stale login snapshot.
+            return api_forbidden("Could not verify your membership in this server")
+        if actor_member is None:
+            # The actor is not a resolvable live member (removed/demoted while
+            # the bot couldn't observe it). Fail closed: never moderate on a
+            # stale DashboardGuildAccess snapshot alone.
+            return api_forbidden("Could not verify your membership in this server")
+        if required_perm and not getattr(
+            actor_member.guild_permissions, required_perm, False
+        ):
+            return api_forbidden(
+                f"You lack '{required_perm}' Discord permission for {action}"
+            )
+        # Role hierarchy check: actor's top role must be above target's top role
+        if action in ("kick", "ban", "timeout"):
+            actor_top = actor_member.top_role.position
+            target_top = member.top_role.position
+            if actor_top <= target_top and not actor_member.guild_permissions.administrator:
+                return api_forbidden(
+                    "Cannot moderate that member — their highest role is equal to or above yours"
+                )
 
     try:
         if action == "vc_move":

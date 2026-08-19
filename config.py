@@ -63,6 +63,16 @@ class DashboardConfig:
     forwarded_allow_ips: str = "127.0.0.1"
     rate_limit_per_minute: int = 60
     invite_url: str = ""
+    # Optional shared secret that gates the first-time setup wizard. When empty,
+    # the setup server is forced to bind loopback (see run_setup), so it is only
+    # reachable from the host itself. Set BARK_SETUP_TOKEN to allow a remote,
+    # token-gated first-time setup on a non-loopback bind.
+    setup_token: str = ""
+    # Extra full origins (scheme://host[:port]) trusted for CSRF writes, e.g.
+    # a direct LAN address the dashboard is reached on (http://10.0.0.227:8090).
+    # The public_url origin and loopback are always trusted; list any other
+    # real origin here (comma-separated via BARK_TRUSTED_ORIGINS).
+    trusted_origins: list[str] = field(default_factory=list)
 
     @property
     def secure_cookies(self) -> bool:
@@ -267,6 +277,12 @@ class Config:
         cfg.dashboard.invite_url = os.getenv("BARK_INVITE_URL", "").strip() or (
             f"{cfg.dashboard.public_url}/invite" if cfg.dashboard.public_url else ""
         )
+        cfg.dashboard.setup_token = os.getenv("BARK_SETUP_TOKEN", "")
+        cfg.dashboard.trusted_origins = [
+            value.strip()
+            for value in os.getenv("BARK_TRUSTED_ORIGINS", "").split(",")
+            if value.strip()
+        ]
 
         # Self-update
         cfg.instance.repo_dir = os.getenv("BARK_REPO_DIR", "")

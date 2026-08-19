@@ -62,10 +62,16 @@ async def test_cross_origin_api_write_is_rejected():
 
 
 @pytest.mark.asyncio
-async def test_lan_origin_api_write_is_allowed():
+async def test_lan_origin_api_write_is_allowed(monkeypatch):
     """Direct LAN access (http://10.0.0.227:8091) is a supported dashboard
     path, so state-changing requests from that origin must not be treated
-    as cross-origin."""
+    as cross-origin — when the operator lists it in BARK_TRUSTED_ORIGINS."""
+    import config
+
+    monkeypatch.setattr(
+        config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"]
+    )
+
     app = FastAPI()
     app.add_middleware(SecurityMiddleware)
 
@@ -82,6 +88,35 @@ async def test_lan_origin_api_write_is_allowed():
 
     assert response.status_code == 200
     assert response.json() == {"saved": True}
+
+
+@pytest.mark.asyncio
+async def test_same_host_different_port_origin_is_rejected(monkeypatch):
+    """A second service on the same host (different port) must NOT pass CSRF —
+    SameSite=Lax treats same-host/different-port as same-site, so the origin
+    check is the only remaining defense."""
+    import config
+
+    monkeypatch.setattr(
+        config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"]
+    )
+
+    app = FastAPI()
+    app.add_middleware(SecurityMiddleware)
+
+    @app.post("/api/v1/save")
+    async def save():
+        return {"saved": True}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://10.0.0.227:8091"
+    ) as client:
+        response = await client.post(
+            "/api/v1/save", headers={"Origin": "http://10.0.0.227:8080"}
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "Cross-origin write rejected"
 
 
 @pytest.mark.asyncio

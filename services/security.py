@@ -23,11 +23,60 @@ PUBLIC_PATHS = {
     "/api/v1/ping",
 }
 
-# Origins allowed for state-changing requests (CSRF). The public hostname is
-# added at request time; these are the LAN/direct-access hosts also trusted by
-# TrustedHostMiddleware (see dashboard/__init__.py). Hostname-only comparison
-# tolerates scheme/port differences (http vs https, :8091).
-_TRUSTED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "10.0.0.227"}
+# Origins allowed for state-changing requests (CSRF). We compare the FULL
+# origin (scheme + host + port), not just the hostname — SameSite=Lax treats
+# any same-host/different-port origin as same-site, so a second service on the
+# dashboard host (different port) could otherwise drive a cross-origin write
+# with a victim's session cookie. The allowlist is derived from config at
+# request time (public_url + bind host + BARK_TRUSTED_ORIGINS), so no host IP
+# is hardcoded.
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
+
+
+def _allowed_origins(config) -> set[str]:
+    """Full origins (``scheme://host[:port]``, lowercase) trusted for writes."""
+    origins: set[str] = set()
+    public = urlsplit(config.dashboard.public_url)
+    if public.netloc:
+        origins.add(f"{public.scheme}://{public.netloc}".lower())
+    host = config.dashboard.host
+    port = config.dashboard.port
+    if host and host not in {"0.0.0.0", "::", "[::]"}:
+        for scheme in ("http", "https"):
+            origins.add(f"{scheme}://{host}:{port}".lower())
+    for loopback in _LOOPBACK_HOSTS:
+        for scheme in ("http", "https"):
+            origins.add(f"{scheme}://{loopback}:{port}".lower())
+    for extra in config.dashboard.trusted_origins:
+        if extra:
+            origins.add(extra.strip().lower())
+    return origins
+
+
+def _origin_allowed(origin: str, config) -> bool:
+    """True when an Origin/Referer header is a trusted dashboard origin."""
+    parsed = urlsplit(origin)
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    return f"{parsed.scheme}://{parsed.netloc}".lower() in _allowed_origins(config)
+
+
+def trusted_origin_hosts(config) -> set[str]:
+    """Hostnames (no port) trusted by TrustedHostMiddleware, derived from the
+    same config as the CSRF origin allowlist."""
+    hosts: set[str] = set()
+    public = urlsplit(config.dashboard.public_url)
+    if public.hostname:
+        hosts.add(public.hostname.lower())
+    host = config.dashboard.host
+    if host and host not in {"0.0.0.0", "::", "[::]"}:
+        hosts.add(host.lower())
+    hosts |= {h for h in _LOOPBACK_HOSTS if h not in {"[::1]"}}
+    for extra in config.dashboard.trusted_origins:
+        parsed = urlsplit(extra)
+        if parsed.hostname:
+            hosts.add(parsed.hostname.lower())
+    return hosts
 
 
 def _is_public(path: str) -> bool:
@@ -404,12 +453,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         origin = request.headers.get("origin")
         referer = request.headers.get("referer")
-        origin_host = urlsplit(origin).hostname if origin else None
-        referer_host = urlsplit(referer).hostname if referer else None
-        allowed_origins = _TRUSTED_ORIGIN_HOSTS
-        public_host = urlsplit(config.dashboard.public_url).hostname
-        if public_host:
-            allowed_origins = allowed_origins | {public_host}
         if (
             (request.url.path.startswith("/api/") or request.url.path == "/auth/logout")
             and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
@@ -419,10 +462,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             # untrusted. (Both-absent requests — curl/scripts — carry no victim
             # session in a browser and the session cookie is SameSite=Lax, so
             # they are not a browser CSRF vector.)
-            if origin_host is not None:
-                if origin_host not in allowed_origins:
+            if origin:
+                if not _origin_allowed(origin, config):
                     return _json_error(403, "Cross-origin write rejected")
-            elif referer_host is not None and referer_host not in allowed_origins:
+            elif referer and not _origin_allowed(referer, config):
                 return _json_error(403, "Cross-origin write rejected")
 
         module_action = _module_action_from_path(request.url.path)

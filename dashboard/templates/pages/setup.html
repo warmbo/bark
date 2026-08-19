@@ -54,6 +54,10 @@
 
                 {{ input_field('owner_ids', 'Owner Discord IDs', id='setup-owner-ids', placeholder='123456789012345678, 234567890123456789', description='Comma-separated Discord user IDs that administer this instance.', autocomplete='off') }}
 
+                {% if setup_token_required %}
+                {{ input_field('setup_token', 'Setup token', type='password', id='setup-token-field', placeholder='BARK_SETUP_TOKEN', description='Required to complete setup on this instance.', required=true, autocomplete='off') }}
+                {% endif %}
+
                 <div class="form-actions">
                     {{ button('Save configuration', variant='primary', type='submit', id='setup-submit') }}
                     <span class="form-hint" id="setup-status" role="status"></span>
@@ -79,9 +83,15 @@
                 result.hidden = true;
                 try {
                     const payload = Object.fromEntries(new FormData(form).entries());
+                    // The setup token (when required) travels as a header, not
+                    // in the .env payload.
+                    const setupToken = payload.setup_token || '';
+                    delete payload.setup_token;
+                    const headers = {'Content-Type': 'application/json'};
+                    if (setupToken) headers['X-Setup-Token'] = setupToken;
                     const res = await fetch('/api/setup', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers,
                         body: JSON.stringify(payload),
                     });
                     const data = await res.json();

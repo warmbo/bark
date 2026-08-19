@@ -6,6 +6,7 @@ once ``.env`` exists the wizard redirects away and normal auth takes over.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 from pathlib import Path
@@ -55,6 +56,7 @@ async def setup_page(request: Request):
             "version": __version__,
             "public_url": config.dashboard.public_url,
             "redirect_uri": f"{config.dashboard.public_url}/auth/callback",
+            "setup_token_required": bool(config.dashboard.setup_token),
         },
     )
 
@@ -69,6 +71,14 @@ async def submit_setup(request: Request):
             "A .env file already exists — delete it to re-run setup",
             status_code=409,
         )
+    # When a setup token is configured, writing .env requires it. Without one,
+    # the setup server is forced loopback-only (see run_setup), so this path is
+    # only reachable from the host itself.
+    setup_token = config.dashboard.setup_token
+    if setup_token and not hmac.compare_digest(
+        request.headers.get("x-setup-token", ""), setup_token
+    ):
+        return api_error("Invalid or missing setup token", status_code=403)
     try:
         payload = await request.json()
     except Exception:

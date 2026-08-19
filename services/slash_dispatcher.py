@@ -207,6 +207,15 @@ class SlashDispatcher:
             await self._show_usage(interaction, leaf)
             return
         kwargs = await parse_args_to_kwargs(interaction, leaf.command, args)
+        unresolved = _unresolved_required_target(leaf.command, kwargs)
+        if unresolved is not None:
+            # A required member/role/channel didn't resolve (mistyped mention or
+            # stale id). Fail clearly instead of acting on a default target.
+            await interaction.response.send_message(
+                f"Couldn't find that {unresolved} — check the mention or ID and try again.",
+                ephemeral=True,
+            )
+            return
         await leaf.command.callback(interaction, **kwargs)
 
     # ── Guidance / menus ──────────────────────────────
@@ -494,40 +503,66 @@ async def parse_args_to_kwargs(
     Reuses the same token→type conversion the prefix adapter used, but resolves
     mentions/roles/channels against the interaction's guild instead of a text
     command context.
+
+    The FINAL string parameter is a free-form sink: it consumes every remaining
+    token (joined with spaces) so multi-word content (reasons, messages, notes)
+    is preserved instead of being shredded into one word per parameter. When the
+    tokens run out early, the remaining parameters are left unset so the
+    callback's own defaults apply — we never fabricate a default target.
     """
     params = list(getattr(command, "parameters", []))
     tokens = (args or "").split()
     kwargs: dict[str, Any] = {}
-    for param in params:
+    for i, param in enumerate(params):
+        if not tokens:
+            break
         t = param.type
+        is_last = i == len(params) - 1
         if t is discord.AppCommandOptionType.string:
-            kwargs[param.name] = tokens.pop(0) if tokens else ""
+            if is_last:
+                kwargs[param.name] = " ".join(tokens)
+                tokens = []
+            else:
+                kwargs[param.name] = tokens.pop(0)
         elif t is discord.AppCommandOptionType.number:
             try:
-                kwargs[param.name] = float(tokens.pop(0)) if tokens else 0.0
+                kwargs[param.name] = float(tokens.pop(0))
             except (TypeError, ValueError):
                 kwargs[param.name] = 0.0
         elif t is discord.AppCommandOptionType.integer:
             try:
-                kwargs[param.name] = int(tokens.pop(0)) if tokens else 0
+                kwargs[param.name] = int(tokens.pop(0))
             except (TypeError, ValueError):
                 kwargs[param.name] = 0
         elif t is discord.AppCommandOptionType.boolean:
-            raw = tokens.pop(0) if tokens else ""
+            raw = tokens.pop(0)
             kwargs[param.name] = raw.strip().lower() in ("true", "1", "yes", "on", "y", "enabled")
         elif t in (discord.AppCommandOptionType.user, discord.AppCommandOptionType.mentionable):
-            kwargs[param.name] = await _resolve_member(interaction, tokens.pop(0)) if tokens else interaction.user
+            kwargs[param.name] = await _resolve_member(interaction, tokens.pop(0))
         elif t is discord.AppCommandOptionType.role:
-            kwargs[param.name] = await _resolve_role(interaction, tokens.pop(0)) if tokens else None
+            kwargs[param.name] = await _resolve_role(interaction, tokens.pop(0))
         elif t is discord.AppCommandOptionType.channel:
-            kwargs[param.name] = await _resolve_channel(interaction, tokens.pop(0)) if tokens else None
+            kwargs[param.name] = await _resolve_channel(interaction, tokens.pop(0))
     return kwargs
+
+
+def _unresolved_required_target(command, kwargs: dict[str, Any]) -> str | None:
+    """Name of a required member/role/channel param that failed to resolve.
+
+    Returns ``None`` when every required target resolved. Lets the dispatcher
+    show a clear "not found" error instead of acting on a default (e.g. warning
+    the invoker when a mistyped mention failed to resolve).
+    """
+    for p in getattr(command, "parameters", []):
+        if getattr(p, "required", False) and kwargs.get(p.name) is None:
+            return p.name
+    return None
 
 
 async def _resolve_member(interaction, raw: str):
     guild = getattr(interaction, "guild", None)
     if guild is None:
-        return interaction.user
+        return None
     raw = raw.strip()
     target_id = _extract_id(raw, "<@", ">")
     if target_id is None:
@@ -541,7 +576,7 @@ async def _resolve_member(interaction, raw: str):
     for m in guild.members:
         if m.name == raw or m.display_name == raw or str(m.id) == raw:
             return m
-    return interaction.user
+    return None
 
 
 async def _resolve_role(interaction, raw: str):

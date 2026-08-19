@@ -37,7 +37,6 @@ def _make_bot() -> MagicMock:
 
 async def _render_settings(monkeypatch, user_id: str | None) -> str:
     import config as cfg
-    from dashboard.routes.web.settings import settings_page
 
     # Enable OAuth so can_manage_instance actually checks the owner list.
     monkeypatch.setattr(cfg.config.oauth2, "client_id", "123")
