@@ -2787,6 +2787,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 .toast-icon { flex-shrink: 0; font-size: 17px; line-height: 1; }
 .toast-error .toast-icon { color: var(--red); }
+.toast-warning .toast-icon { color: var(--yellow); }
 .toast-success .toast-icon { color: var(--green); }
 
 /* ── Pagination ────────────────────────────────────────── */

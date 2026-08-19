@@ -300,16 +300,27 @@
       replaceSelection(markdown, markdown.length);
     };
 
-    Array.from(toolbar.querySelectorAll('button[data-insert]')).forEach((btn) => {
-      btn.addEventListener('mousedown', (event) => {
+    // Activate on mousedown (keeps the textarea focused + selection intact for
+    // mouse users) AND on Enter/Space (keyboard a11y). Only keydown/mousedown
+    // are bound — no click, so the two paths never double-fire.
+    const bindToolbar = (el, action) => {
+      el.addEventListener('mousedown', (event) => {
         event.preventDefault();
-        insertToken(btn.dataset.insert);
+        action();
       });
+      el.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          action();
+        }
+      });
+    };
+
+    Array.from(toolbar.querySelectorAll('button[data-insert]')).forEach((btn) => {
+      bindToolbar(btn, () => insertToken(btn.dataset.insert));
     });
-    toolbar.querySelector('button[data-action="link"]')?.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      insertLink();
-    });
+    const linkBtn = toolbar.querySelector('button[data-action="link"]');
+    if (linkBtn) bindToolbar(linkBtn, insertLink);
   });
 
   // ── Media picker (action fields) ─────────────────────────

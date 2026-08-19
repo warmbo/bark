@@ -275,11 +275,14 @@ function showToast(message, type = 'success') {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
 
+    const isError = type === 'error';
+    const isWarning = type === 'warning';
+    const icon = isError ? '✕' : (isWarning ? '⚠' : '✓');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-    toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-    toast.innerHTML = `<span class="toast-icon">${type === 'error' ? '✕' : '✓'}</span>
+    toast.setAttribute('role', isError ? 'alert' : 'status');
+    toast.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+    toast.innerHTML = `<span class="toast-icon">${icon}</span>
                        <span class="toast-msg">${escHtml(message)}</span>`;
     document.body.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('visible'));
