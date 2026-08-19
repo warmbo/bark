@@ -1283,6 +1283,71 @@ async def test_settings_redacts_staff_roles_for_moderator(db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_update_general_settings_rejects_unknown_keys(monkeypatch):
+    """Arbitrary GuildSetting keys must NOT be writable via /settings/general —
+    only the staff-role keys have a dedicated, validated write path here."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    import dashboard.routes.api.settings as settings_mod
+
+    monkeypatch.setattr(settings_mod, "check_api_permission", lambda *_a, **_k: True)
+    request = SimpleNamespace(
+        json=AsyncMock(
+            return_value={"slug": "hacked", "dashboard_admin_role": "777"}
+        ),
+    )
+    resp = await settings_mod.update_general_settings(request, 1)
+    assert resp.status_code == 400
+    assert "slug" in bytes(resp.body).decode("utf-8", errors="ignore")  # rejected key named
+
+
+@pytest.mark.asyncio
+async def test_update_general_settings_allows_only_staff_role_keys(monkeypatch):
+    """The two staff-role keys are the sole accepted inputs."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    import dashboard.routes.api.settings as settings_mod
+
+    monkeypatch.setattr(settings_mod, "check_api_permission", lambda *_a, **_k: True)
+
+    # Capture the keys actually written via the (stubbed) session.
+    written = []
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def execute(self, _stmt):
+            return MagicMock(scalar_one_or_none=lambda: None)
+
+        def add(self, obj):
+            written.append(obj.key)
+
+        async def commit(self):
+            return None
+
+    monkeypatch.setattr(settings_mod, "session_scope", lambda: _FakeSession())
+
+    request = SimpleNamespace(
+        json=AsyncMock(
+            return_value={
+                "dashboard_moderator_roles": '["555"]',
+                "dashboard_admin_role": "777",
+                "motd": "ignored",  # unknown -> whole request rejected
+            }
+        ),
+    )
+    resp = await settings_mod.update_general_settings(request, 1)
+    assert resp.status_code == 400
+    assert written == []  # nothing written on an unknown-key request
+
+
+@pytest.mark.asyncio
 async def test_csrf_rejects_untrusted_origin_and_allows_trusted(db, monkeypatch):
     """State-changing /api requests with an untrusted Origin must be rejected;
     a trusted Origin passes the CSRF gate."""

@@ -219,3 +219,54 @@ async def test_mod_action_proceeds_when_no_session_actor(monkeypatch):
     resp = await actions._mod_action(request, "1", "timeout", _async_noop)
     assert resp.status_code == 200
     assert calls.get("action_type") == "timeout"
+
+
+@pytest.mark.asyncio
+async def test_create_case_gates_permission_in_handler(monkeypatch):
+    """Defense-in-depth: POST /moderation/cases must be gated in-handler (not
+    only by middleware), so a middleware short-circuit can't open case creation."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    import dashboard.routes.api.moderation as mod
+
+    monkeypatch.setattr(mod, "get_module_min_role", AsyncMock(return_value=None))
+    monkeypatch.setattr(mod, "check_api_permission", lambda *_a, **_k: False)
+
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=MagicMock()),
+        session={},
+        json=AsyncMock(return_value={}),
+    )
+    resp = await mod.create_case(request, "1")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_create_case_permits_when_authorized(monkeypatch):
+    """An authorized caller reaches case creation (permissive default True)."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    import dashboard.routes.api.moderation as mod
+
+    monkeypatch.setattr(mod, "get_module_min_role", AsyncMock(return_value=None))
+    monkeypatch.setattr(mod, "check_api_permission", lambda *_a, **_k: True)
+    # Guild exists so the handler proceeds past the gate.
+    bot = MagicMock()
+    bot.get_guild.return_value = object()
+    bot.modules.event_bus = MagicMock()
+    monkeypatch.setattr(
+        mod.ModerationService,
+        "create_case",
+        AsyncMock(return_value=7),
+    )
+    monkeypatch.setattr(mod, "emit_moderation_case_created", AsyncMock())
+
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot),
+        session={"user": {"id": "42"}},
+        json=AsyncMock(return_value={"action_type": "warn", "target_id": "10"}),
+    )
+    resp = await mod.create_case(request, "1")
+    assert resp.status_code == 200

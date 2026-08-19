@@ -20,6 +20,10 @@ from services.response import (
 
 router = APIRouter(tags=["api-settings"])
 
+# The only keys the general-settings endpoint may write. Every other GuildSetting
+# key is written via its own dedicated, validated endpoint.
+_GENERAL_SETTING_ALLOWLIST = {"dashboard_admin_role", "dashboard_moderator_roles"}
+
 # ── Backup & Restore (settings + module stats) ──────
 
 BACKUP_FORMAT = "bark-backup"
@@ -288,15 +292,32 @@ async def get_all_settings(request: Request, guild_id: int):
 
 @router.put("/guilds/{guild_id}/settings/general")
 async def update_general_settings(request: Request, guild_id: int):
-    """Update general guild settings."""
+    """Update general guild settings.
+
+    Only the staff-role keys are writable here (the Settings → Access card).
+    Every other ``GuildSetting`` key goes through its own dedicated, validated
+    endpoint (slug, MOTD, banner, bot appearance). Rejecting unknown keys stops
+    a moderator with ``settings.general`` from writing arbitrary/sensitive
+    ``GuildSetting`` rows (e.g. promoting a role to dashboard admin).
+    """
     if not check_api_permission(request, "settings.general"):
         return api_forbidden()
     data = await request.json()
+    allowed = {k: v for k, v in data.items() if k in _GENERAL_SETTING_ALLOWLIST}
+    rejected = [k for k in data if k not in _GENERAL_SETTING_ALLOWLIST]
+    if rejected:
+        return api_error(
+            "Settings endpoint accepts only "
+            f"{sorted(_GENERAL_SETTING_ALLOWLIST)}; got unknown key(s): {sorted(rejected)}",
+            status_code=400,
+        )
+    if not allowed:
+        return api_error("No writable settings provided", status_code=400)
 
     async with session_scope() as session:
         from sqlalchemy import select
 
-        for key, value in data.items():
+        for key, value in allowed.items():
             result = await session.execute(
                 select(GuildSetting).where(
                     GuildSetting.guild_id == str(guild_id),

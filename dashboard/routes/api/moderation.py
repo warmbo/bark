@@ -135,6 +135,12 @@ async def get_case(request: Request, guild_id: str, case_number: int):
 async def create_case(request: Request, guild_id: str):
     """Create a new moderation case."""
     gid = int(guild_id)
+    # Defense-in-depth: gate in-handler like every sibling mutation route, not
+    # just via middleware — if auth middleware is ever short-circuited
+    # (permissive mode, refactor), case creation stays authorized.
+    await get_module_min_role("moderation", guild_id)
+    if not check_api_permission(request, "moderation.cases.create", guild_id):
+        return api_forbidden("Insufficient permissions")
     if request.state.bot.get_guild(gid) is None:
         return api_error("Guild not found", status_code=404)
     data = await request.json()
