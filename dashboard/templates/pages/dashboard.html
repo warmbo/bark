@@ -28,7 +28,7 @@
         </div>
     </div>
     <div class="guild-card-action">
-        {% if guild.access_tier == 'connected' %}<span>Open</span>{{ icon("arrow-right", 15) }}
+        {% if guild.access_tier == 'connected' %}<span class="guild-card-open">Open{{ icon("arrow-right", 15) }}</span>
         {% elif guild.access_tier == 'manageable' and guild.invite_url %}<span>Add Bark</span>{{ icon("external-link", 15) }}
         {% else %}{{ icon("lock", 15) }}{% endif %}
     </div>

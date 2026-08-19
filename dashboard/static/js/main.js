@@ -286,10 +286,13 @@ function showToast(message, type = 'success') {
                        <span class="toast-msg">${escHtml(message)}</span>`;
     document.body.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('visible'));
+    // Errors/warnings carry information worth reading — give them more dwell
+    // than the 3s success toast (audit §34: critical errors shouldn't vanish).
+    const dwellMs = isError ? 8000 : (isWarning ? 6000 : 3000);
     setTimeout(() => {
         toast.classList.remove('visible');
         setTimeout(() => toast.remove(), 250);
-    }, 3000);
+    }, dwellMs);
 }
 
 // Copy arbitrary text to the clipboard, with a graceful fallback for browsers
