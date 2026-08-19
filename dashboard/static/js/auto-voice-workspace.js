@@ -87,6 +87,10 @@
     '<div class="config-body"></div>';
   const formCard = document.querySelector('.workspace-form-card');
   (formCard || templateInput.closest('.content-card'))?.after(previewCard);
+  // Drop the preview card into the workspace side column (canonical
+  // side-by-side composition: config left, live preview + reference right).
+  const sideCol = document.querySelector('#tab-configure .workspace-split-side');
+  if (sideCol) sideCol.appendChild(previewCard);
   if (typeof refreshIcons === 'function') refreshIcons();
 
   const previewBody = previewCard.querySelector('.config-body');

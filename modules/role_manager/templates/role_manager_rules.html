@@ -7,6 +7,9 @@
     </div>
   </div>
 
+  <div class="workspace-split">
+    <div class="workspace-split-main">
+
   <details class="behavior-guide" open>
     <summary>{{ icon("settings", 14) }} Behavior settings</summary>
     <div class="config-body">
@@ -19,18 +22,6 @@
       </form>
       {% endif %}
     </div>
-  </details>
-
-  <details class="behavior-guide">
-    <summary>{{ icon("book-open", 14) }} How each rule type behaves</summary>
-    <div class="behavior-guide-grid">
-      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("user-plus", 15) }}</span><div><strong>Welcome</strong><p>When a member joins the server, the role is added immediately. The role is never removed automatically — it is a one-way welcome grant.</p></div></div>
-      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("calendar-days", 15) }}</span><div><strong>Tenure</strong><p>When a member has been in the server for at least the configured number of days, the role is added. The module checks every few minutes and grants the role to anyone who has crossed the milestone since the last check.</p></div></div>
-      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("headphones", 15) }}</span><div><strong>Voice</strong><p>While a member is connected to any voice channel, the role is added. As soon as they leave (or disconnect), the role is removed. Useful for "in call" badges.</p></div></div>
-      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("radio", 15) }}</span><div><strong>Stream</strong><p>While a member is live on <strong>Twitch</strong>, the role is added. When their stream ends or they switch to a different activity, the role is removed. Bark detects this from the member's Discord presence — the member must have linked their Twitch account to Discord. Streams on other platforms (e.g. YouTube) do <em>not</em> trigger it.</p></div></div>
-      <div class="behavior-item"><span class="behavior-item-icon">{{ icon("smile", 15) }}</span><div><strong>Reaction</strong><p>Members react to a message with the configured emoji to claim the role themselves. Un-reacting removes it. You can scope the rule to a single pinned message (by message ID) or let any message in the channel work. Supports both unicode emoji (🎮) and custom server emoji (<code>&lt;:name:1234&gt;</code>).</p></div></div>
-    </div>
-    <p class="behavior-footnote"><strong>Note:</strong> the bot can only manage roles that sit below its own highest role in the server's role list. Rules pointing at a higher role are skipped, and a warning is logged instead of failing.</p>
   </details>
 
   {% if module_data.can_manage_module %}
@@ -57,4 +48,19 @@
   </form>
   {% endif %}
   <div id="rm-rules-content" aria-live="polite"><div class="skeleton skeleton-card"></div></div>
+    </div>
+    <div class="workspace-split-side">
+      <details class="behavior-guide" open>
+        <summary>{{ icon("book-open", 14) }} How each rule type behaves</summary>
+        <div class="behavior-guide-grid">
+          <div class="behavior-item"><span class="behavior-item-icon">{{ icon("user-plus", 15) }}</span><div><strong>Welcome</strong><p>When a member joins the server, the role is added immediately. The role is never removed automatically — it is a one-way welcome grant.</p></div></div>
+          <div class="behavior-item"><span class="behavior-item-icon">{{ icon("calendar-days", 15) }}</span><div><strong>Tenure</strong><p>When a member has been in the server for at least the configured number of days, the role is added. The module checks every few minutes and grants the role to anyone who has crossed the milestone since the last check.</p></div></div>
+          <div class="behavior-item"><span class="behavior-item-icon">{{ icon("headphones", 15) }}</span><div><strong>Voice</strong><p>While a member is connected to any voice channel, the role is added. As soon as they leave (or disconnect), the role is removed. Useful for "in call" badges.</p></div></div>
+          <div class="behavior-item"><span class="behavior-item-icon">{{ icon("radio", 15) }}</span><div><strong>Stream</strong><p>While a member is live on <strong>Twitch</strong>, the role is added. When their stream ends or they switch to a different activity, the role is removed. Bark detects this from the member's Discord presence — the member must have linked their Twitch account to Discord. Streams on other platforms (e.g. YouTube) do <em>not</em> trigger it.</p></div></div>
+          <div class="behavior-item"><span class="behavior-item-icon">{{ icon("smile", 15) }}</span><div><strong>Reaction</strong><p>Members react to a message with the configured emoji to claim the role themselves. Un-reacting removes it. You can scope the rule to a single pinned message (by message ID) or let any message in the channel work. Supports both unicode emoji (🎮) and custom server emoji (<code>&lt;:name:1234&gt;</code>).</p></div></div>
+        </div>
+        <p class="behavior-footnote"><strong>Note:</strong> the bot can only manage roles that sit below its own highest role in the server's role list. Rules pointing at a higher role are skipped, and a warning is logged instead of failing.</p>
+      </details>
+    </div>
+  </div>
 </article>

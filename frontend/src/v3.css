@@ -167,6 +167,23 @@ textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in okla
 .speak-table .speak-actions-col { width: 64px; text-align: right; }
 .speak-table [data-speak-row] td { padding: var(--space-2) var(--space-3); }
 .speak-table [data-speak-row] .form-input { min-height: 36px; }
+/* Module workspace side-by-side composition (remake round 2, 2026-08-19):
+   primary column + sticky contextual side column. */
+.workspace-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.workspace-split-main { min-width: 0; display: grid; gap: var(--space-4); align-content: start; }
+.workspace-split-side { min-width: 0; position: sticky; top: 76px; display: grid; gap: var(--space-4); align-content: start; }
+/* Modules without a contextual side surface collapse to full-width single column. */
+.workspace-split:has(.workspace-split-side:empty) { grid-template-columns: minmax(0, 1fr); }
+.workspace-split:has(.workspace-split-side:empty) .workspace-split-side { display: none; }
+@media (max-width: 1100px) {
+  .workspace-split { grid-template-columns: minmax(0, 1fr); }
+  .workspace-split-side { position: static; }
+}
 .auto-voice-preview-card .template-preview { margin-bottom: var(--space-4); }
 .template-preview { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--muted); border: 1px solid var(--border); }
 .template-preview-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); flex-shrink: 0; }

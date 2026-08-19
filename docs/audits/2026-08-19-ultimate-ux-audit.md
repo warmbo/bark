@@ -842,6 +842,62 @@ surfaces** had three bespoke layouts that made module pages feel like different 
 **Result:** every module page now follows one anatomy — header, health strip, tabs, and
 content built only from the canonical card/table/form vocabulary.
 
+---
+
+# Round 6b — Module Pages: Side-by-Side Workspace Composition (2026-08-19)
+
+Cody's follow-up: *"We should go back to 'side-by-side' designs on the module pages.
+Also, these do not feel like full remakes at all."*
+
+## The correction
+
+Round 6 standardized module content into single-column stacks — that flattened away the
+side-by-side composition that made the original announcements split-pane feel like a real
+workspace. The remake was too timid: it rearranged cards instead of composing pages.
+
+**New canonical anatomy — every module workspace is a two-pane split:**
+
+```
+Page header → health strip → tabs
+┌──────────────────────────┬──────────────────┐
+│ workspace-split-main     │ workspace-split- │
+│ (primary surface:        │ side             │
+│  operation grid / config │ (contextual:     │
+│  form / data)            │  preview /       │
+│                          │  activity /      │
+│                          │  reference)      │
+└──────────────────────────┴──────────────────┘
+side column: sticky (follows scroll), collapses to single column ≤1100px,
+and `:has(.workspace-split-side:empty)` collapses modules without a side
+surface back to full width.
+```
+
+## What changed
+
+1. **`.workspace-split` primitive** (v3.css): `minmax(0,1.55fr) minmax(300px,1fr)`,
+   sticky side (`top:76px`), responsive collapse at 1100px, `:empty` collapse.
+2. **module_detail.html** — the shared shell now builds the split for every module:
+   - Operate tab: operation-grid in main column; moderation's "Recent Activity"
+     rendered into the side column.
+   - Configure tab: `workspace-form-card` + advanced/danger sections in main; an
+     empty side slot that module JS fills (auto-voice preview) or that collapses.
+3. **Announcements** — composer (left) | Live Preview (right) restored, now via the
+   canonical split instead of the bespoke split-pane classes.
+4. **Auto Voice** — config form (left) | "Channel Name Preview" + template reference
+   (right).
+5. **Role Manager Rules** — behavior settings + inline editor + rules table (left) |
+   "How each rule type behaves" guide (right, sticky reference while editing rules).
+6. Modules without a natural side surface (welcome, logging, reputation, speak)
+   automatically render full-width via the `:empty` collapse — no orphaned empty
+   columns.
+
+## Verified
+
+- 783 tests green, ruff clean.
+- Browser-verified on all four split modules (announcements composer|preview,
+  moderation grid|activity, auto-voice form|preview, role_manager rules|guide);
+  side column is sticky and the layout collapses correctly at ≤1100px.
+
 
 
 

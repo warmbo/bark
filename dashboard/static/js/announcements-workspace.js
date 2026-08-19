@@ -102,10 +102,10 @@
     '<p class="card-description">Exactly what Bark will post, updating as you type.</p></div></div>' +
     '<div class="config-body announcement-preview-body"></div>';
   card.after(previewCard);
-  // Move the preview card OUT of the operation grid so it spans the full width
-  // below the composer card (grid items would otherwise sit side-by-side).
-  const opGrid = card.closest('.operation-grid');
-  if (opGrid) opGrid.after(previewCard);
+  // Drop the preview card into the workspace side column (canonical
+  // side-by-side composition: composer left, live preview right).
+  const sideCol = card.closest('.tab-panel')?.querySelector('.workspace-split-side');
+  if (sideCol) sideCol.appendChild(previewCard);
   if (typeof refreshIcons === 'function') refreshIcons();
 
   const previewBody = previewCard.querySelector('.announcement-preview-body');

@@ -63,7 +63,9 @@
   </div>
 
   {% if has_operations %}<section class="tab-panel active" id="tab-operate" role="tabpanel" aria-labelledby="workspace-tab-operate" tabindex="0">
-    <div class="operation-grid">
+    <div class="workspace-split">
+      <div class="workspace-split-main">
+        <div class="operation-grid">
     {% for action in module_data.actions %}
       <article class="content-card action-card {{ 'auto-run' if action.auto_run else '' }}" id="action-{{ action.id }}">
         <div class="card-header"><div><h2 class="card-title">{{ icon('zap', 16) }} {{ action.label }}</h2>{% if action.description %}<p class="card-description">{{ action.description }}</p>{% endif %}</div>{% if action.destructive %}{{ status_badge('Destructive', 'danger') }}{% endif %}</div>
@@ -104,7 +106,9 @@
         </div>
       </article>
     {% endfor %}
-    </div>
+        </div>
+      </div>
+      <div class="workspace-split-side">
     {% if module_name == 'moderation' %}
     <article class="content-card moderation-activity-card">
       <div class="card-header"><div><h2 class="card-title">{{ icon('activity', 16) }} Recent Activity</h2><p class="card-description">Bark's recent moderation activity across this server</p></div></div>
@@ -117,9 +121,13 @@
       </div>
     </article>
     {% endif %}
+      </div>
+    </div>
   </section>{% endif %}
 
   {% if module_data.show_configure_tab %}<section class="tab-panel {{ '' if has_operations else 'active' }}" id="tab-configure" role="tabpanel" aria-labelledby="workspace-tab-configure" tabindex="0" {{ 'hidden' if has_operations else '' }}>
+    <div class="workspace-split">
+      <div class="workspace-split-main">
     <article class="content-card workspace-form-card">
       <div class="card-header"><div><h2 class="card-title">{{ icon('settings', 16) }} Configuration</h2><p class="card-description">Changes apply to this server only.</p></div></div>
       <div class="config-body">
@@ -140,10 +148,10 @@
         {% endfor %}
         <div class="form-actions"><button type="button" class="btn" id="discard-config-btn" disabled>Cancel</button><button type="submit" class="btn btn-primary" id="save-config-btn" disabled>{{ icon('save', 16) }} Save Changes</button></div>
         </form>
-        {% if module_name == 'speak' %}{% include 'components/speak_phrases.html' %}{% endif %}
       {% else %}{{ state_panel('empty', 'No configuration required', 'This module is ready with its built-in defaults.') }}{% endif %}
       </div>
     </article>
+    {% if module_name == 'speak' %}{% include 'components/speak_phrases.html' %}{% endif %}
     {% if module_name == 'moderation' and module_data.can_manage_module %}
     <details class="advanced-section">
       <summary>{{ icon("alert-triangle", 12) }} Data Retention</summary>
@@ -156,6 +164,9 @@
       </article>
     </details>
     {% endif %}
+      </div>
+      <div class="workspace-split-side"></div>
+    </div>
   </section>{% endif %}
 
   {% for tab in module_data.extra_tabs %}<section class="tab-panel {{ 'active' if default_extra_tab and loop.first else '' }}" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" {{ 'hidden' if not (default_extra_tab and loop.first) else '' }}>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
@@ -180,8 +191,8 @@
 
 {% block scripts %}
 <script src="/static/js/module-workspace.js?v=17"></script>
-{% if module_name == 'auto_voice' %}<script src="/static/js/auto-voice-workspace.js?v=5"></script>{% endif %}
-{% if module_name == 'announcements' %}<script src="/static/js/announcements-workspace.js?v=5"></script>{% endif %}
+{% if module_name == 'auto_voice' %}<script src="/static/js/auto-voice-workspace.js?v=6"></script>{% endif %}
+{% if module_name == 'announcements' %}<script src="/static/js/announcements-workspace.js?v=6"></script>{% endif %}
 {% if module_name == 'logging' %}<script src="/static/js/logging-workspace.js?v=2"></script>{% endif %}
 {% if module_name == 'moderation' %}<script src="/static/js/moderation-workspace.js?v=8"></script>{% endif %}
 {% if module_name == 'reputation' %}<script src="/static/js/reputation-workspace.js?v=3"></script>{% endif %}
