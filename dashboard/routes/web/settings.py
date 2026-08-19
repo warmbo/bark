@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from config import config
+from services.response import render_not_found
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -32,7 +33,14 @@ async def _settings_page(request: Request, guild_id: int, template: str):
     guild = bot.get_guild(guild_id)
 
     if guild is None:
-        return HTMLResponse("Guild not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Server not found",
+            message="That server isn't available through this dashboard.",
+            hint="It may have been removed or Bark may have lost access to it.",
+            back_href="/dashboard",
+            guild_id=guild_id,
+        )
 
     # Owner-only sections (Backups, Updates, Diagnostics, Bot Customization,
     # Hosted Instance Access) are hidden for non-owners. This mirrors the

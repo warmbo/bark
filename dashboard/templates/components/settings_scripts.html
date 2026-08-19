@@ -709,9 +709,23 @@
             if (typeSelect && data.activity_type) typeSelect.value = data.activity_type;
             if (nameInput && data.activity_name) nameInput.value = data.activity_name;
         } catch (error) {
+            const errBox = document.getElementById('bot-custom-error');
+            const msgEl = document.getElementById('bot-custom-error-message');
+            if (errBox) {
+                if (msgEl) msgEl.textContent = error.message || 'The bot appearance settings couldn\'t be loaded.';
+                errBox.hidden = false;
+            }
             showToast('Could not load bot appearance: ' + (error.message || 'Unknown error'), 'error');
         }
     }
+
+    // Retry appearance load after an inline error
+    const botCustomRetry = document.getElementById('bot-custom-retry');
+    botCustomRetry?.addEventListener('click', async () => {
+        const errBox = document.getElementById('bot-custom-error');
+        if (errBox) errBox.hidden = true;
+        await loadBotAppearance();
+    });
 
     // Avatar upload
     avatarUpload?.addEventListener('change', async () => {

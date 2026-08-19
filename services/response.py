@@ -214,6 +214,27 @@ def api_not_found(resource: str = "Resource") -> JSONResponse:
     return api_error(f"{resource} not found", status_code=404)
 
 
+def render_not_found(
+    request,
+    templates,
+    *,
+    title: str = "Not found",
+    message: str = "That page doesn't exist.",
+    hint: str = "",
+    back_href: str = "/dashboard",
+    back_label: str = "Back to dashboard",
+    icon_name: str = "search-x",
+    guild_id: int | str | None = None,
+):
+    """Designed in-shell 404 page. Replaces raw `HTMLResponse("...", 404)` returns."""
+    ctx: dict = {
+        "title": title, "message": message, "hint": hint,
+        "back_href": back_href, "back_label": back_label,
+        "icon_name": icon_name, "guild_id": guild_id,
+    }
+    return templates.TemplateResponse(request, "pages/not_found.html", ctx, status_code=404)
+
+
 def api_forbidden(message: str = "Insufficient permissions") -> JSONResponse:
     """Return a 403 response."""
     return api_error(message, status_code=403)

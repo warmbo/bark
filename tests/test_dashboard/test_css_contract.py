@@ -52,9 +52,11 @@ def test_css_keyboard_and_reduced_motion_contracts():
     reduced_motion = rule_body(css, "@media (prefers-reduced-motion: reduce)")
     # The media rule contains nested blocks, so check the source for its explicit
     # scroll override as well as the global animation/transition override.
+    # (Single implementation lives in v3.css — the shadcn layer — which neutralizes
+    # motion with ~0ms durations rather than `none`, so elements keep reachable states.)
     assert "html { scroll-behavior: auto !important; }" in css
-    assert "transition: none !important;" in css
-    assert "animation: none !important;" in css
+    assert "transition-duration: .01ms !important;" in css
+    assert "animation-duration: .01ms !important;" in css
     assert reduced_motion.strip()
 
 
@@ -104,3 +106,33 @@ def test_activity_feed_fade_mask_contract():
     assert ".activity-feed.is-masked" in css
     assert "mask-image: linear-gradient(to bottom" in css
     assert ".activity-more-wrap" in css
+
+
+def test_button_size_ladder_is_monotonic():
+    """Size variants must be strictly smaller than base (audit 2026-08-19: the
+    ladder was inverted — .btn-sm rendered bigger than .btn). Enforce the
+    v3 REMAKER values so the regression can't return."""
+    css = css_source()
+    assert ".btn-sm { min-height: 32px; padding: 4px 12px; font-size: 12px; }" in css
+    assert ".btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 11px; line-height: 1.6; }" in css
+    # .btn-icon must follow the sharp-corner token, not a hardcoded radius.
+    btn_icon = re.search(r"\.btn-icon\s*\{[^}]*\}", css, re.S)
+    assert btn_icon, "missing .btn-icon rule"
+    assert "border-radius: var(--radius)" in btn_icon.group(0)
+    assert "border-radius: 6px" not in btn_icon.group(0)
+
+
+def test_reduced_motion_single_implementation():
+    """Exactly one prefers-reduced-motion block (legacy + v3 duplication was
+    merged 2026-08-19; the v3 shadcn implementation is canonical)."""
+    assert css_source().count("@media (prefers-reduced-motion: reduce)") == 1
+
+
+def test_no_dead_clamp_spacing_ladder():
+    """The --space-xs..xl clamp ladder in tokens.css was dead (v3 fixed scale
+    wins the cascade). No clamp() values may ship in the spacing tokens."""
+    css = css_source()
+    for token in ("--space-xs", "--space-sm", "--space-md", "--space-lg", "--space-xl"):
+        m = re.search(rf"{token}:\s*([^;]+);", css)
+        assert m, f"missing {token}"
+        assert "clamp" not in m.group(1), f"{token} must be a fixed scale value, got {m.group(1)}"

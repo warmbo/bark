@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Bark{% endblock %}
+
+{% block content %}
+<div class="state-panel state-empty module-not-found-state" role="alert">
+    <div>
+        <h1 class="card-title">{{ icon(icon_name or "search-x", 18) }} {{ title }}</h1>
+        <p>{{ message }}</p>
+        {% if hint %}<p class="guild-offline-followup">{{ hint }}</p>{% endif %}
+    </div>
+    <div class="form-actions form-actions-static">
+        <a class="btn" href="{{ back_href }}">{{ back_label }}</a>
+    </div>
+</div>
+{% endblock %}

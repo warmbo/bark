@@ -156,8 +156,8 @@ body::after {
 .btn-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--primary-foreground); }
 .btn-danger { background: var(--destructive); color: var(--destructive-foreground); border-color: var(--destructive); }
-.btn-sm { min-height: 32px; }
-.btn-xs { min-height: 32px; min-width: 32px; }
+.btn-sm { min-height: 32px; padding: 4px 12px; font-size: 12px; }
+.btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 11px; line-height: 1.6; }
 .btn:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* shadcn Field / Input / Select / Textarea */
@@ -497,6 +497,10 @@ textarea.form-input { min-height: 96px; }
 }
 .backup-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .bot-customization-card .bot-customization-body { gap: var(--space-5); padding: var(--space-5); }
+.bot-customization-card .bot-customization-body .bot-custom-error { flex-basis: 100%; }
+.bot-customization-card .bot-customization-body .bot-custom-error[hidden] + .bot-custom-sidebar { display: flex; }
+.bot-customization-card .bot-customization-body:has(.bot-custom-error:not([hidden])) > .bot-custom-sidebar,
+.bot-customization-card .bot-customization-body:has(.bot-custom-error:not([hidden])) > .bot-custom-main { display: none; }
 .bot-custom-sidebar,
 .bot-custom-main { gap: var(--space-4); }
 
@@ -611,6 +615,7 @@ textarea.form-input { min-height: 96px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 

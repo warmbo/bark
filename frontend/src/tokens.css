@@ -68,6 +68,11 @@
     --ease-out: cubic-bezier(.16, 1, .3, 1);
     --z-overlay: 1800;
     --z-dialog: 1900;
+    /* Named stacking layers — replaces the magic z-index ladder (9999/99999/etc). */
+    --z-sticky: 100;
+    --z-banner: 600;
+    --z-toast: 99999;
+    --z-skip-link: 10000;
 
     /* ── Typography (font-sans/mono come from theme.css) ── */
     --bg-avatar: none;
@@ -88,12 +93,7 @@
     --content-max-width: 1440px;
     --content-padding: clamp(24px, 3vw, 38px);
 
-    /* ── Adaptive Spacing ── */
-    --space-xs: clamp(6px, 0.4vw, 10px);
-    --space-sm: clamp(8px, 0.6vw, 14px);
-    --space-md: clamp(14px, 1.2vw, 26px);
-    --space-lg: clamp(17px, 1.45vw, 29px);
-    --space-xl: clamp(23px, 2.3vw, 41px);
+    /* ── Adaptive Spacing ── (dead ladder: superseded by the fixed scale in v3.css) */
 
     /* ── Transitions ── */
     --transition-fast: 150ms ease;

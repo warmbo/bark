@@ -243,13 +243,30 @@ document.getElementById('members-load-more')?.addEventListener('click', () => {
 async function executeQuick(action, userId, name, sourceButton) {
     if (sourceButton.disabled) return;
     const consequence = action === 'ban' ? 'This permanently removes and bans the member.' : action === 'kick' ? 'This removes the member from the server.' : `This applies a ${action} moderation action.`;
+    let body = {target_id: userId, reason: `Dashboard ${action}`};
+    if (action === 'timeout') {
+        const minutes = await BarkDialog.prompt({
+            title: `Timeout ${name}`,
+            message: 'Duration in minutes (1–40320, i.e. up to 28 days):',
+            defaultValue: '10',
+            confirmLabel: 'Confirm timeout',
+            placeholder: '10',
+        });
+        if (minutes === null) return;
+        const parsed = Number(minutes);
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > 40320) {
+            showToast('Timeout duration must be a whole number of minutes between 1 and 40320.', 'error');
+            return;
+        }
+        body.duration = parsed;
+    }
     const confirmed = await BarkDialog.confirm({title: `${action[0].toUpperCase() + action.slice(1)} ${name}`, message: consequence, confirmLabel: `Confirm ${action}`, danger: action === 'kick' || action === 'ban'});
     if (!confirmed) return;
     sourceButton.disabled = true;
     try {
         const raw = await safeFetch(`/api/v1/guilds/${GUILD_ID}/actions/${action}`, {
             method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({target_id: userId, reason: `Dashboard ${action}`})
+            body: JSON.stringify(body)
         });
         const data = raw.data || raw;
         if (data.success || raw.success) {

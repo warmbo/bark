@@ -80,7 +80,7 @@ textarea:focus-visible,
     position: absolute;
     top: -100%;
     left: 0;
-    z-index: 10000;
+    z-index: var(--z-skip-link);
     padding: 8px 16px;
     background: var(--accent);
     color: var(--c-white);
@@ -137,7 +137,7 @@ textarea:focus-visible,
     left: 0;
     height: 100vh;
     height: 100dvh;
-    z-index: 100;
+    z-index: var(--z-sticky);
     overflow: hidden;
     /* Exclude from view-transition so sidebar stays solid during page crossfade */
     view-transition-name: sidebar;
@@ -1223,7 +1223,7 @@ textarea:focus-visible,
     position: absolute;
     right: 14px;
     top: 100%;
-    z-index: 100;
+    z-index: var(--z-sticky);
     background: var(--bg-sidebar);
     backdrop-filter: var(--glass-blur-heavy);
     -webkit-backdrop-filter: var(--glass-blur-heavy);
@@ -1890,7 +1890,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .btn:hover { background: var(--bg-card-hover); color: var(--text-primary); border-color: var(--glass-border-hover); }
 .btn:active { transform: scale(0.97); }
 
-.btn-sm { padding: 5px 16px; font-size: 13px; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
 .btn-primary { background: var(--accent); color: var(--c-white); border-color: transparent; }
 .btn-primary:hover { background: var(--accent-hover); color: var(--c-white); }
 .btn-danger { background: var(--red); color: var(--c-white); border-color: var(--red); }
@@ -2234,7 +2234,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     padding: 0;
     flex-shrink: 0;
     border: 1px solid var(--glass-border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg-elevated);
     color: var(--text-secondary);
     cursor: pointer;
@@ -2281,7 +2281,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     bottom: 0;
     left: var(--sidebar-width);
     right: 0;
-    z-index: 9999;
+    z-index: var(--z-banner);
     transform: translateY(100%);
     transition: transform var(--transition-normal);
     background: var(--bg-sidebar);
@@ -2577,7 +2577,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
     position: fixed;
     bottom: 24px;
     right: 24px;
-    z-index: 99999;
+    z-index: var(--z-toast);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2660,7 +2660,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 /* ── Hover Card ──────────────────────────────────────── */
 
 .hover-card {
-    position: absolute; z-index: 200; width: 320px;
+    position: absolute; z-index: var(--z-sticky); width: 320px;
     max-width: calc(100vw - 2 * var(--space-md));
     background: var(--bg-sidebar);
     backdrop-filter: var(--glass-blur-heavy);
@@ -2680,7 +2680,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .palette-overlay {
     position: fixed;
     inset: 0;
-    z-index: 9998;
+    z-index: var(--z-banner);
     background: var(--bg-overlay);
     display: flex;
     align-items: flex-start;
@@ -2835,16 +2835,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 
 /* ── Reduced motion ───────────────────────────────── */
 
-@media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto !important; }
-
-    *,
-    *::before,
-    *::after {
-        transition: none !important;
-        animation: none !important;
-    }
-}
+/* prefers-reduced-motion: single implementation lives in v3.css (the shadcn
+   layer loads last and wins). This legacy block was removed 2026-08-19. */
 
 /* ── Responsive: Mobile ────────────────────────────── */
 
@@ -3028,7 +3020,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--fon
 .update-progress-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-secondary); }
 
 /* ── Bot-disconnected banner ────────────────────────── */
-.bot-offline-banner { position: sticky; top: 0; z-index: 600; display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--c-discord-warn-bg); border-bottom: 1px solid var(--c-discord-warn-alpha); color: var(--c-discord-warn-text); font-size: 13px; }
+.bot-offline-banner { position: sticky; top: 0; z-index: var(--z-banner); display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--c-discord-warn-bg); border-bottom: 1px solid var(--c-discord-warn-alpha); color: var(--c-discord-warn-text); font-size: 13px; }
 .bot-offline-banner code { background: var(--c-shadow-35b); padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono, monospace); }
 .bot-offline-banner[hidden] { display: none; }
 

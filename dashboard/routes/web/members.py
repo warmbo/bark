@@ -8,6 +8,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from services.response import render_not_found
+
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -20,7 +22,14 @@ async def member_browser(request: Request, guild_id: int):
     guild = bot.get_guild(guild_id)
 
     if guild is None:
-        return HTMLResponse("Guild not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Server not found",
+            message="That server isn't available through this dashboard.",
+            hint="It may have been removed or Bark may have lost access to it.",
+            back_href="/dashboard",
+            guild_id=guild_id,
+        )
 
     response = templates.TemplateResponse(
         request,
@@ -39,15 +48,38 @@ async def member_detail(request: Request, guild_id: int, user_id: str):
     guild = bot.get_guild(guild_id)
 
     if guild is None:
-        return HTMLResponse("Guild not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Server not found",
+            message="That server isn't available through this dashboard.",
+            hint="It may have been removed or Bark may have lost access to it.",
+            back_href="/dashboard",
+            guild_id=guild_id,
+        )
 
     try:
         member_id = int(user_id)
     except (TypeError, ValueError):
-        return HTMLResponse("Member not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Member not found",
+            message="That member doesn't exist on this server.",
+            back_href=f"/guild/{guild_id}/members",
+            back_label="Back to Members",
+            icon_name="users",
+            guild_id=guild_id,
+        )
     member = guild.get_member(member_id)
     if member is None:
-        return HTMLResponse("Member not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Member not found",
+            message="That member doesn't exist on this server.",
+            back_href=f"/guild/{guild_id}/members",
+            back_label="Back to Members",
+            icon_name="users",
+            guild_id=guild_id,
+        )
 
     return templates.TemplateResponse(
         request,

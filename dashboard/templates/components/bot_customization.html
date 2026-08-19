@@ -4,6 +4,14 @@
         <div><h2 class="card-title">{{ icon("palette", 16) }} Bot Customization {{ role_pill('instance_owner') }}</h2><p class="card-description">Change the bot's name, avatar, banner, and Discord presence.</p></div>
     </div>
     <div class="bot-customization-body">
+        <div class="state-panel state-error bot-custom-error" id="bot-custom-error" role="alert" hidden>
+            <span class="state-panel-icon" aria-hidden="true">{{ icon("alert-circle", 18) }}</span>
+            <div>
+                <strong>Couldn't load bot customization</strong>
+                <p id="bot-custom-error-message">The bot appearance settings couldn't be loaded.</p>
+            </div>
+            <button type="button" class="btn btn-sm" id="bot-custom-retry">{{ icon("refresh-cw", 14) }} Retry</button>
+        </div>
         <div class="bot-custom-sidebar">
             <!-- Avatar preview -->
             <div class="avatar-preview-section" id="bot-avatar-section">

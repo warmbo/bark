@@ -13,7 +13,10 @@ from database.engine import session_scope
 from database.models.module import ModuleConfig
 from database.models.permissions import ModuleRoleAccess
 from services.dashboard_access import user_is_guild_member
-from services.response import set_cached_module_min_role
+from services.response import (
+    render_not_found,
+    set_cached_module_min_role,
+)
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -49,7 +52,14 @@ async def modules_page(request: Request, guild_id: int):
     guild = bot.get_guild(guild_id)
 
     if guild is None:
-        return HTMLResponse("Guild not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Server not found",
+            message="That server isn't available through this dashboard.",
+            hint="It may have been removed or Bark may have lost access to it.",
+            back_href="/dashboard",
+            guild_id=guild_id,
+        )
 
     all_modules = bot.modules.get_all_modules()
     plugin_names = bot.modules.plugin_names()
@@ -100,11 +110,27 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
     guild = bot.get_guild(guild_id)
 
     if guild is None:
-        return HTMLResponse("Guild not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Server not found",
+            message="That server isn't available through this dashboard.",
+            hint="It may have been removed or Bark may have lost access to it.",
+            back_href="/dashboard",
+            guild_id=guild_id,
+        )
 
     module = bot.modules.get_module(module_name)
     if module is None:
-        return HTMLResponse("Module not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Module not found",
+            message="That module doesn't exist on this server.",
+            hint="It may have been removed, renamed, or disabled — check the Modules page for everything available.",
+            back_href=f"/guild/{guild_id}/modules",
+            back_label="Back to Modules",
+            icon_name="puzzle",
+            guild_id=guild_id,
+        )
 
     from sqlalchemy import select
 
@@ -211,7 +237,14 @@ async def plugin_catalog_page(request: Request, guild_id: int):
     guild = bot.get_guild(guild_id)
 
     if guild is None:
-        return HTMLResponse("Guild not found", status_code=404)
+        return render_not_found(
+            request, templates,
+            title="Server not found",
+            message="That server isn't available through this dashboard.",
+            hint="It may have been removed or Bark may have lost access to it.",
+            back_href="/dashboard",
+            guild_id=guild_id,
+        )
 
     return templates.TemplateResponse(
         request,
