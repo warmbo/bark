@@ -267,7 +267,10 @@ textarea.form-input { min-height: 96px; }.form-grid { gap: 0 var(--space-4); }.f
 .tabs,
 .workspace-tabs { margin-bottom: var(--space-5); padding: var(--space-1); gap: var(--space-1); }.tab { min-height: 36px; padding: 7px var(--space-3); }.module-workspace-header { margin-bottom: var(--space-5); }.module-health-strip { margin-bottom: var(--space-5); }.module-health-strip > div { padding: var(--space-3) var(--space-4); }.operation-grid, .detail-grid { gap: var(--space-4); }
 .module-workspace .content-card { margin-bottom: var(--space-4); }.module-workspace .card-header { padding: var(--space-3) var(--space-4); }.module-workspace .config-body { padding: var(--space-4); }.module-workspace .config-subsection { padding: var(--space-3) var(--space-4); }/* Dashboard, statistics, module catalog, and reusable grids */
-.dashboard-welcome { gap: var(--space-4); margin-bottom: var(--space-6); padding: var(--space-5); }.dashboard-welcome-body { min-width: 0; }.dashboard-stats-strip { gap: var(--space-3); margin-bottom: var(--space-6); }.dashboard-stat-item { gap: var(--space-3); padding: var(--space-3) var(--space-4); }.server-group { margin-bottom: var(--space-8); }.server-group-header { gap: var(--space-3); margin-bottom: var(--space-3); }.guild-grid { gap: var(--space-4); }.guild-card { gap: var(--space-4); padding: var(--space-4); }.stats-grid { gap: var(--space-4); margin-bottom: var(--space-6); }.stat-card { padding: var(--space-5); }.stats-list { column-gap: var(--space-8); }.stats-list-row { gap: var(--space-3); padding: var(--space-3) var(--space-1); }.stats-charts {
+.dashboard-welcome { gap: var(--space-4); margin-bottom: var(--space-6); padding: var(--space-5); }.dashboard-welcome-body { min-width: 0; }.dashboard-stats-strip { gap: var(--space-3); margin-bottom: var(--space-6); }.dashboard-stat-item { gap: var(--space-3); padding: var(--space-3) var(--space-4); }.server-group { margin-bottom: var(--space-8); }.server-group-header { gap: var(--space-3); margin-bottom: var(--space-3); }.guild-grid { gap: var(--space-4); }
+/* A single connected server spans the row instead of stranding in column 1 —
+   mirrors the operation-grid :only-child rule (audit 2026-08-19 P4-24). */
+.guild-grid:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }.guild-card { gap: var(--space-4); padding: var(--space-4); }.stats-grid { gap: var(--space-4); margin-bottom: var(--space-6); }.stat-card { padding: var(--space-5); }.stats-list { column-gap: var(--space-8); }.stats-list-row { gap: var(--space-3); padding: var(--space-3) var(--space-1); }.stats-charts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
@@ -344,7 +347,16 @@ textarea.form-input { min-height: 96px; }.form-grid { gap: 0 var(--space-4); }.f
   .server-profile-head { align-items: flex-start; flex-wrap: wrap; }.server-profile-titles,
   .server-profile-name { min-width: 0; overflow-wrap: anywhere; }}@media (min-width: 640px) and (max-width: 1024px) {
   .modules-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }}@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto !important; }*, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }}/* ════════════════════════════════════════════════════════════════════
+  html { scroll-behavior: auto !important; }*, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }}/* Mobile touch targets ≥44px (audit P2-12, 2026-08-19): filter selects,
+   table row actions, and search/clear controls on small screens. */
+@media (max-width: 480px) {
+  .filter-row .filter-select,
+  .filter-row select,
+  .filter-row .btn,
+  .search-bar input { min-height: 44px; }
+  .member-row-actions .btn { min-width: 40px; min-height: 40px; }
+  .qa-warn, .qa-timeout, .qa-kick, .qa-ban { min-width: 40px; }
+}/* ════════════════════════════════════════════════════════════════════
    REMAKER — flat shadcn surfaces.
    Strips the legacy glassmorphism (frosted backdrop, glows, gradients,
    heavy shadows) across the full shell and turns every surface into a

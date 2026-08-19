@@ -605,7 +605,7 @@ Prioritized per the methodology's P0–P5 ladder and the phase order
 
 | # | Item | Fix |
 |---|---|---|
-| 14 | Typography: 24 sizes incl. fractional | semantic `--text-*` ladder, kill stragglers |
+| 14 | Typography: 24 sizes incl. fractional | ✅ semantic ladder — 13 sizes, no fractionals/odds (12.5/13.5/8/9/19/21px normalized); contract test `test_font_size_ladder_has_no_fractional_or_odd_stragglers` | done |
 | 15 | 15 literal radii vs 0px contract | token sweep |
 | 16 | Dead CSS (~50 verified selectors) + duplicate blocks | delete; dedupe `.form-actions-static`/`.settings-grid` |
 | 17 | Modules vs moderation density mismatch | module-card min-height; moderation spacing to 8px rhythm |
@@ -615,12 +615,12 @@ Prioritized per the methodology's P0–P5 ladder and the phase order
 
 ## P4 — visual refinement (Phase E)
 
-| # | Item |
-|---|---|
-| 21 | Stats sub-metric alignment asymmetry + chart max-width |
-| 22 | Invite empty-CTA state polish |
-| 23 | Toast warning duration (persist >3s for warnings) |
-| 24 | "Getting started" dead right side on dashboard |
+| # | Item | Status |
+|---|---|---|
+| 21 | Stats sub-metric alignment asymmetry + chart max-width | verified clean (sl-sub already uniform) |
+| 22 | Invite empty-CTA state polish | ✅ ghost-button recovery + tokenized accent (invite had raw `#3b82f6`/white — a real contrast fix: now `--primary`/`--primary-foreground` 9.93:1) |
+| 23 | Toast warning duration (persist >3s for warnings) | ✅ 8s error / 6s warning / 3s success |
+| 24 | "Getting started" dead right side on dashboard | ✅ single guild card now spans full row (`:only-child` rule, mirrors operation-grid) |
 
 ## P5 — delight / polish
 

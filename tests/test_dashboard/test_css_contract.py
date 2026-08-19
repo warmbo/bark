@@ -136,3 +136,13 @@ def test_no_dead_clamp_spacing_ladder():
         m = re.search(rf"{token}:\s*([^;]+);", css)
         assert m, f"missing {token}"
         assert "clamp" not in m.group(1), f"{token} must be a fixed scale value, got {m.group(1)}"
+
+
+def test_font_size_ladder_has_no_fractional_or_odd_stragglers():
+    """Audit P3-14 (2026-08-19): the type ladder must not contain fractional
+    (12.5/13.5px) or odd (8/9/19/21px) sizes — they read as unplanned values.
+    Allowed sizes are the deliberate ladder steps."""
+    allowed = {"10px", "11px", "12px", "13px", "14px", "15px", "16px",
+               "17px", "18px", "20px", "22px", "24px", "30px"}
+    sizes = set(re.findall(r"font-size:\s*(\d+(?:\.\d+)?px)", css_source()))
+    assert sizes - allowed == set(), f"off-ladder font sizes: {sorted(sizes - allowed)}"
