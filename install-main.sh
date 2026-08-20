@@ -38,6 +38,7 @@ BARK_SYSTEMD="${BARK_SYSTEMD:-auto}"
 BARK_INSTALL_HOST="${BARK_INSTALL_HOST:-127.0.0.1}"
 BARK_INSTALL_PORT="${BARK_INSTALL_PORT:-8090}"
 BARK_NO_START="${BARK_NO_START:-0}"
+BARK_DATA_DIR="${BARK_DATA_DIR:-$BARK_INSTALL_DIR/data}"
 # Rootless installs: set BARK_NO_SUDO=1 to make the installer NEVER call sudo
 # (it will fail with guidance instead of prompting). Python 3.13+ is then
 # provisioned user-locally via uv into BARK_LOCAL_BIN (default ~/.local/bin),
@@ -295,9 +296,15 @@ check_writable_with_space "temp directory" "$BARK_TMPDIR" 8192
 # Stop a previously installed Bark before mutating its checkout, so git
 # reset/pip can't race a live process and the dashboard port is freed for
 # rebind. Only ever touches Bark's own unit / processes — never anything else.
+IS_UPDATE=0
+SERVICE_WAS_ACTIVE=0
+PRE_UPDATE_COMMIT=""
+PRE_UPDATE_BACKUP=""
+
 stop_old_instance() {
     if have systemctl; then
         if systemctl --user is-active bark.service >/dev/null 2>&1; then
+            SERVICE_WAS_ACTIVE=1
             log "Stopping running Bark service (bark.service)"
             systemctl --user stop bark.service || true
         fi
@@ -317,9 +324,86 @@ stop_old_instance() {
     fi
 }
 
+create_pre_update_backup() {
+    local database="$BARK_DATA_DIR/bark.db"
+    local backup_dir="$BARK_DATA_DIR/backups"
+    local backup_python backup_tmp
+    [ -f "$database" ] || return 0
+    backup_python="$PY"
+    if [ -x "$BARK_INSTALL_DIR/.venv/bin/python" ]; then
+        backup_python="$BARK_INSTALL_DIR/.venv/bin/python"
+    fi
+    mkdir -p "$backup_dir"
+    PRE_UPDATE_BACKUP="$backup_dir/bark-backup-$($backup_python -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"))').db"
+    backup_tmp="$PRE_UPDATE_BACKUP.tmp.$$"
+    if ! "$backup_python" - "$database" "$backup_tmp" <<'PY'
+import sqlite3
+import sys
+
+source = sqlite3.connect(sys.argv[1])
+destination = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(destination)
+    integrity = destination.execute("PRAGMA integrity_check").fetchone()
+    if integrity != ("ok",):
+        raise RuntimeError(f"backup integrity check failed: {integrity}")
+finally:
+    destination.close()
+    source.close()
+PY
+    then
+        rm -f "$backup_tmp"
+        PRE_UPDATE_BACKUP=""
+        return 1
+    fi
+    chmod 600 "$backup_tmp"
+    mv "$backup_tmp" "$PRE_UPDATE_BACKUP"
+    log "Pre-update database backup: $PRE_UPDATE_BACKUP"
+}
+
+recreate_previous_venv() {
+    if [ -x "$BARK_INSTALL_DIR/.venv/bin/python" ] && \
+       [ -x "$BARK_INSTALL_DIR/.venv/bin/pip" ]; then
+        return 0
+    fi
+    warn "Previous virtualenv is missing or incomplete; recreating it"
+    rm -rf "$BARK_INSTALL_DIR/.venv"
+    if [ "$PY_PROVIDER" = "uv" ]; then
+        "$UV_BIN" venv --python 3.13 "$BARK_INSTALL_DIR/.venv"
+    else
+        "$PY" -m venv "$BARK_INSTALL_DIR/.venv"
+    fi
+}
+
+rollback_failed_update() {
+    local status=$?
+    trap - ERR EXIT
+    set +e
+    warn "Update failed — restoring Bark revision $PRE_UPDATE_COMMIT"
+    if ! git -C "$BARK_INSTALL_DIR" reset --hard "$PRE_UPDATE_COMMIT"; then
+        warn "Rollback failed; Bark was left stopped to avoid running mixed code. Restore revision $PRE_UPDATE_COMMIT manually."
+    elif ! recreate_previous_venv; then
+        warn "Rollback restored the code but could not recreate the previous virtualenv; Bark was left stopped."
+    elif ! "$BARK_INSTALL_DIR/.venv/bin/pip" install --quiet "$BARK_INSTALL_DIR"; then
+        warn "Rollback restored the code but could not restore its dependencies; Bark was left stopped."
+    elif [ "$SERVICE_WAS_ACTIVE" = "1" ]; then
+        systemctl --user start bark.service || \
+            warn "Could not restart bark.service; run: systemctl --user start bark.service"
+    fi
+    if [ -n "$PRE_UPDATE_BACKUP" ]; then
+        warn "Database backup retained at: $PRE_UPDATE_BACKUP"
+        warn "If a database migration caused the failure, restore this backup before running the previous Bark revision."
+    fi
+    exit "$status"
+}
+
 if [ -d "$BARK_INSTALL_DIR/.git" ]; then
+    IS_UPDATE=1
     log "Updating existing install in $BARK_INSTALL_DIR"
+    PRE_UPDATE_COMMIT="$(git -C "$BARK_INSTALL_DIR" rev-parse HEAD)"
     stop_old_instance
+    trap rollback_failed_update ERR EXIT
+    create_pre_update_backup
     git -C "$BARK_INSTALL_DIR" fetch --quiet origin
     git -C "$BARK_INSTALL_DIR" checkout --quiet "$BARK_BRANCH" || true
     git -C "$BARK_INSTALL_DIR" reset --hard --quiet "origin/$BARK_BRANCH"
@@ -358,6 +442,19 @@ fi
 port_busy() {
     (exec 3<>"/dev/tcp/127.0.0.1/$BARK_INSTALL_PORT") 2>/dev/null && { exec 3>&-; return 0; } || return 1
 }
+
+wait_for_bark_health() {
+    local attempt state
+    for attempt in {1..15}; do
+        state="$(systemctl --user show bark.service -p ActiveState --value 2>/dev/null || true)"
+        if [ "$state" = "active" ] && \
+           curl -fsS "http://127.0.0.1:${BARK_INSTALL_PORT}/api/v1/health" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
 if port_busy; then
     warn "Port $BARK_INSTALL_PORT is already in use — Bark would fail to bind."
     warn "Pick a free port and rerun:  BARK_INSTALL_PORT=8091 curl -fsSL https://raw.githubusercontent.com/warmbo/bark/main/install.sh | bash"
@@ -367,7 +464,12 @@ if port_busy; then
 fi
 
 if [ "$BARK_NO_START" = "1" ]; then
-    log "Install complete (not started — BARK_NO_START=1)"
+    trap - ERR EXIT
+    if [ "$IS_UPDATE" = "1" ]; then
+        log "Bark update complete (not started — BARK_NO_START=1)"
+    else
+        log "Install complete (not started — BARK_NO_START=1)"
+    fi
     log "Run it yourself:  cd $BARK_INSTALL_DIR && ./run.sh"
     exit 0
 fi
@@ -400,6 +502,7 @@ WorkingDirectory=$BARK_INSTALL_DIR
 EnvironmentFile=-$BARK_INSTALL_DIR/.env
 Environment=BARK_DASHBOARD_HOST=$BARK_INSTALL_HOST
 Environment=BARK_DASHBOARD_PORT=$BARK_INSTALL_PORT
+Environment=BARK_DATA_DIR=$BARK_DATA_DIR
 ExecStart=$BARK_INSTALL_DIR/.venv/bin/python $BARK_INSTALL_DIR/app.py
 Restart=always
 RestartSec=5
@@ -421,28 +524,39 @@ WantedBy=default.target
 EOF
     systemctl --user daemon-reload
     systemctl --user enable --now bark
-    sleep 3
-    systemctl --user is-active bark >/dev/null 2>&1 || warn "Service installed but not active — check: journalctl --user -u bark -n 50"
-    log "Bark service installed and started."
+    if [ "$IS_UPDATE" = "1" ]; then
+        if ! wait_for_bark_health; then
+            warn "Bark did not become healthy after the update; rolling back."
+            false
+        fi
+        trap - ERR EXIT
+        log "Bark update complete; service restarted."
+    else
+        sleep 3
+        systemctl --user is-active bark >/dev/null 2>&1 || warn "Service installed but not active — check: journalctl --user -u bark -n 50"
+        log "Bark service installed and started."
+    fi
 else
     log "Starting Bark in the foreground (Ctrl+C to stop)"
 fi
 
-url="http://${BARK_INSTALL_HOST}:${BARK_INSTALL_PORT}/setup"
-url_callback="http://${BARK_INSTALL_HOST}:${BARK_INSTALL_PORT}/auth/callback"
-log "First-time setup: open $url in your browser"
-if [ "$BARK_INSTALL_HOST" = "127.0.0.1" ]; then
-    warn "If this is a remote server, use an SSH tunnel:  ssh -L ${BARK_INSTALL_PORT}:127.0.0.1:${BARK_INSTALL_PORT} user@server"
-    warn "or reinstall with BARK_INSTALL_HOST=0.0.0.0 for LAN access."
+if [ "$IS_UPDATE" = "0" ]; then
+    url="http://${BARK_INSTALL_HOST}:${BARK_INSTALL_PORT}/setup"
+    url_callback="http://${BARK_INSTALL_HOST}:${BARK_INSTALL_PORT}/auth/callback"
+    log "First-time setup: open $url in your browser"
+    if [ "$BARK_INSTALL_HOST" = "127.0.0.1" ]; then
+        warn "If this is a remote server, use an SSH tunnel:  ssh -L ${BARK_INSTALL_PORT}:127.0.0.1:${BARK_INSTALL_PORT} user@server"
+        warn "or reinstall with BARK_INSTALL_HOST=0.0.0.0 for LAN access."
+    fi
+    log "Setup steps:"
+    log "  1. Create an app at https://discord.com/developers/applications -> New Application"
+    log "  2. Bot -> Reset Token -> copy it; OAuth2 -> copy Client ID / Client Secret"
+    log "  3. Bot -> Privileged Gateway Intents -> enable Presence, Server Members, and"
+    log "     Message Content intents (Bark requires all three; missing them = gateway"
+    log "     error 4014 / connection restart loop)."
+    log "  4. OAuth2 -> Redirects -> add: $url_callback"
+    log "  5. Paste them into the setup page; Bark writes .env and restarts itself."
 fi
-log "Setup steps:"
-log "  1. Create an app at https://discord.com/developers/applications -> New Application"
-log "  2. Bot -> Reset Token -> copy it; OAuth2 -> copy Client ID / Client Secret"
-log "  3. Bot -> Privileged Gateway Intents -> enable Presence, Server Members, and"
-log "     Message Content intents (Bark requires all three; missing them = gateway"
-log "     error 4014 / connection restart loop)."
-log "  4. OAuth2 -> Redirects -> add: $url_callback"
-log "  5. Paste them into the setup page; Bark writes .env and restarts itself."
 
 if [ "$BARK_INSTALL_PORT" = "8090" ]; then
     warn "If the dashboard will sit behind Cloudflare: port 8090 is NOT proxied by Cloudflare."
@@ -450,6 +564,7 @@ if [ "$BARK_INSTALL_PORT" = "8090" ]; then
 fi
 
 if [ "$use_systemd" = "no" ]; then
+    trap - ERR EXIT
     cd "$BARK_INSTALL_DIR"
     export BARK_DASHBOARD_HOST="$BARK_INSTALL_HOST"
     export BARK_DASHBOARD_PORT="$BARK_INSTALL_PORT"

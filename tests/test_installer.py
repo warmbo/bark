@@ -89,7 +89,7 @@ def test_install_stops_old_instance_before_update():
     update_branch = src.split("Updating existing install", 1)[1]
     upd_head = update_branch.split("# ──", 1)[0]  # up to the next section marker
     stop_idx = upd_head.find("stop_old_instance")
-    fetch_idx = upd_head.find("git -C")
+    fetch_idx = upd_head.find("fetch --quiet origin")
     assert stop_idx != -1, "stop_old_instance not called in the update path"
     assert (
         stop_idx < fetch_idx
@@ -104,6 +104,59 @@ def test_install_stops_old_instance_before_update():
     assert "pgrep -f" in src and "readlink" in src
     assert '"$cwd" = "$BARK_INSTALL_DIR"' in src, "must scope the kill by cwd"
     assert '= "$$"' in src, "must never kill itself"
+
+
+def test_existing_install_is_backed_up_before_git_mutation():
+    """Rerunning the installer must snapshot an existing SQLite database before
+    fetch/reset changes the checkout."""
+    src = INSTALL_MAIN.read_text()
+    update_branch = src.split("Updating existing install", 1)[1]
+    upd_head = update_branch.split("# ──", 1)[0]
+
+    backup_idx = upd_head.find("create_pre_update_backup")
+    fetch_idx = upd_head.find("fetch --quiet origin")
+    assert backup_idx != -1, "existing-install path must create a database backup"
+    assert backup_idx < fetch_idx, "database backup must happen before git mutation"
+    assert "sqlite3.connect" in src and ".backup(" in src
+    assert "bark-backup-" in src
+    assert 'backup_tmp="$PRE_UPDATE_BACKUP.tmp.$$"' in src
+    assert 'mv "$backup_tmp" "$PRE_UPDATE_BACKUP"' in src
+
+
+def test_failed_update_rolls_code_back_and_restarts_previous_service():
+    """Any failure after mutation must restore the previous revision and bring
+    an initially-active service back instead of leaving Bark offline."""
+    src = INSTALL_MAIN.read_text()
+    assert 'PRE_UPDATE_COMMIT="$(git -C "$BARK_INSTALL_DIR" rev-parse HEAD)"' in src
+    assert "rollback_failed_update()" in src
+    assert 'git -C "$BARK_INSTALL_DIR" reset --hard "$PRE_UPDATE_COMMIT"' in src
+    assert 'trap rollback_failed_update ERR' in src
+    assert 'systemctl --user start bark.service' in src
+    assert "Database backup retained at:" in src
+    assert "recreate_previous_venv" in src
+    assert "Rollback failed; Bark was left stopped" in src
+
+
+def test_update_waits_for_stable_service_and_http_health():
+    """An activating/restarting systemd unit is not a successful update."""
+    src = INSTALL_MAIN.read_text()
+    assert "wait_for_bark_health()" in src
+    assert 'systemctl --user show bark.service -p ActiveState --value' in src
+    assert '"http://127.0.0.1:${BARK_INSTALL_PORT}/api/v1/health"' in src
+    assert "Bark did not become healthy after the update" in src
+
+
+def test_systemd_unit_preserves_custom_data_directory():
+    src = INSTALL_MAIN.read_text()
+    assert "Environment=BARK_DATA_DIR=$BARK_DATA_DIR" in src
+
+
+def test_existing_install_uses_update_specific_completion_message():
+    """A successful rerun is an update, not another first-time setup."""
+    src = INSTALL_MAIN.read_text()
+    assert 'if [ "$IS_UPDATE" = "1" ]; then' in src
+    assert "Bark update complete" in src
+    assert 'if [ "$IS_UPDATE" = "0" ]; then' in src
 
 
 def test_install_main_cleans_launcher_staging_file():
