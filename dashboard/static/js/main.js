@@ -295,6 +295,26 @@ function showToast(message, type = 'success') {
     }, dwellMs);
 }
 
+// Toggle a button into/out of its busy state: disable it, set aria-busy, and
+// (when active) swap its content for a label. The original innerHTML is stashed
+// on dataset.idleHtml and restored when deactivated. Shared global so every
+// module workspace (reputation, etc.) can use it; moderation keeps its own
+// identical local copy.
+function busy(button, active, label) {
+    if (!button) return;
+    if (active) {
+        button.dataset.idleHtml = button.innerHTML;
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        if (label) button.textContent = label;
+    } else {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        if (button.dataset.idleHtml) button.innerHTML = button.dataset.idleHtml;
+        delete button.dataset.idleHtml;
+    }
+}
+
 // Copy arbitrary text to the clipboard, with a graceful fallback for browsers
 // without the async Clipboard API. Shows a toast on success/failure.
 async function copyText(text, label = 'Copied') {
