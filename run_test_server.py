@@ -108,6 +108,7 @@ class MockGuild:
             e = MagicMock()
             e.name = f"emoji{i}"
             e.animated = False
+            e.url = f"https://cdn.discordapp.com/emojis/{100000 + i}.png"
             self.emojis.append(e)
 
         # Roles
@@ -155,7 +156,17 @@ class MockGuild:
             # Discord's real default-avatar CDN (resolves in the browser) so
             # visual verification of the stats charts shows an actual image.
             m.display_avatar.url = f"https://cdn.discordapp.com/embed/avatars/{i % 5}.png"
+            # Presence: mix online/idle/dnd/offline so the Online Now panel and
+            # the live overview render realistically during visual QA.
+            statuses = [discord.Status.online, discord.Status.idle, discord.Status.dnd, discord.Status.offline]
+            m.status = statuses[i % 4]
             self.members.append(m)
+
+        # Put a few members in voice channels so the In Voice panel renders.
+        for idx, member in enumerate(self.members[1:6]):
+            channel = self.voice_channels[idx % len(self.voice_channels)]
+            channel.members = []
+            channel.members.append(member)
 
         # For get_member
         self._member_dict = {m.id: m for m in self.members}
@@ -307,6 +318,15 @@ def seed_growth():
             start = 128
             from database.models.analytics import DailyChannelStat, DailyEmojiStat
 
+            # Idempotency: if stats were already seeded, skip (re-runs would
+            # otherwise hit the UNIQUE(guild,date,channel) constraint).
+            existing_stats = await s.execute(
+                select(DailyChannelStat).where(
+                    DailyChannelStat.guild_id == str(bot._guild.id)
+                )
+            )
+            if existing_stats.scalars().first() is not None:
+                return
             # Per-day channel/emoji stats — the source of truth for Statistics.
             for d in range(14):
                 s.add(ActivitySnapshot(

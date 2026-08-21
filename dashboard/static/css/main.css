@@ -2127,9 +2127,32 @@ textarea:focus-visible,
   min-height: 0;
 }
 
-/* Recent Activity is the densest panel — span the full grid width and give
-   the feed a taller scroll region. */
+/* Kill the inherited content-card margins that break the grid rhythm.
+   content-card + content-card adds a top margin and content-card adds a
+   bottom margin; inside the #dashboard-widgets grid these stack on top of the
+   grid gap and produce uneven, disorderly spacing. */
+#dashboard-widgets > .content-card,
+#dashboard-widgets > .dashboard-widget {
+  margin: 0;
+}
+
+/* Meaningful overview layout: a 2-column grid keeps every row flush and
+   gap-free. The presence trio packs as Online|InVoice then Emojis|(widget);
+   Recent Activity spans the full row as its own clean band; the module widgets
+   (Recent Cases / Top Members) fill 2-up with no holes. Dense auto-flow keeps
+   any hidden panels (empty In Voice / Emojis) from leaving gaps. */
+#dashboard-widgets {
+  grid-auto-flow: dense;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .live-panel.activity-panel { grid-column: 1 / -1; }
+
+/* On narrow screens the 2-column overview grid collapses to a single column
+   so panels never cram/overflow. */
+@media (max-width: 700px) {
+  #dashboard-widgets { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Presence summary */
 .presence-row { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }

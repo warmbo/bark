@@ -842,18 +842,39 @@ async def get_guild_dashboard(request: Request, guild_id: int):
 
 
 def _member_brief(member) -> dict:
-    """Small, JSON-safe profile for an online/voice member."""
+    """Small, JSON-safe profile for an online/voice member.
+
+    Every field is str-coerced and exception-guarded so a mock or a member with
+    a partial/unresolved attribute can NEVER leak a non-JSON-serializable object
+    (e.g. a MagicMock display_name) into the dashboard payload — that would 500
+    the whole overview page (hit live on the test server: `Object of type
+    MagicMock is not JSON serializable`).
+    """
+    def _safe_str(value, fallback: str) -> str:
+        try:
+            v = str(value).strip()
+            return v if v and "MagicMock" not in v else fallback
+        except Exception:
+            return fallback
+
     try:
-        avatar = member.display_avatar.url if getattr(member, "display_avatar", None) else None
+        _avatar = getattr(member, "display_avatar", None)
+        avatar = getattr(_avatar, "url", None) if _avatar else None
+        avatar = _safe_str(avatar, "") if avatar else None
     except Exception:
         avatar = None
     try:
-        status = str(member.status).split(".")[-1] if getattr(member, "status", None) else "offline"
+        status = str(getattr(member, "status", None) or "offline").split(".")[-1]
+        if status not in ("online", "idle", "dnd", "offline"):
+            status = "offline"
     except Exception:
         status = "offline"
     return {
-        "id": str(getattr(member, "id", "")),
-        "name": str(getattr(member, "display_name", None) or getattr(member, "name", "") or "Unknown"),
+        "id": _safe_str(getattr(member, "id", ""), ""),
+        "name": _safe_str(
+            getattr(member, "display_name", None) or getattr(member, "name", ""),
+            "Unknown",
+        ),
         "avatar_url": avatar,
         "status": status,
     }
@@ -909,14 +930,14 @@ def _dashboard_live_data(guild) -> dict:
     try:
         for emoji in getattr(guild, "emojis", []) or []:
             try:
-                url = emoji.url if getattr(emoji, "url", None) else None
+                url = getattr(emoji, "url", None) or None
                 animated = bool(getattr(emoji, "animated", False))
             except Exception:
                 url, animated = None, False
-            if url:
+            if url and isinstance(url, str):
                 emojis.append(
                     {
-                        "id": str(getattr(emoji, "id", "")),
+                        "id": str(getattr(emoji, "id", "") or ""),
                         "name": str(getattr(emoji, "name", "") or "emoji"),
                         "url": url,
                         "animated": animated,
