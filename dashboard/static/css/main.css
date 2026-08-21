@@ -2698,14 +2698,19 @@ body::before, body::after { opacity: 0; }/* Sidebar: solid surface, no frost. */
 }
 /* Bark theme palettes — per-guild accent schemes.
  *
- * Each theme overrides ONLY the accent-family tokens (primary + ring + the
- * derived accent/sidebar/chart aliases). The dark-navy neutrals
- * (--background, --card, --foreground, --border, ...) stay constant, so the
- * whole dashboard re-skins just by changing the accent hue.
+ * A theme is more than the accent hue: it tints the WHOLE surface model so
+ * every element picks up at least a hint of the accent. Each theme shifts the
+ * neutral surfaces (background, card, popover, sidebar, border, input,
+ * secondary/muted) toward its accent hue and bumps their chroma slightly, so
+ * emerald cards read green, rose cards read warm-red, and so on — while text
+ * (--foreground / --primary-foreground) stays warm-ivory / near-white for
+ * contrast.
  *
- * Applied by setting data-theme="<name>" on <html> (e.g. via the per-guild
- * theme picker). "steel" is the default Bark look and needs no override.
+ * "steel" is the default Bark look and keeps the navy-blue hue-250 model.
+ * Applied by setting data-theme="<name>" on <html> via the per-guild picker.
  */
+
+/* ── Steel Blue (default) ───────────────────────────────────────────── */
 [data-theme="steel"],
 :root,
 .dark,
@@ -2717,8 +2722,22 @@ body::before, body::after { opacity: 0; }/* Sidebar: solid surface, no frost. */
   --sidebar-ring: oklch(0.62 0.08 250);
   --chart-1: oklch(0.62 0.08 250);
   --accent-hover: oklch(0.36 0.03 250);
+
+  /* Steel keeps the navy-250 surface model. */
+  --background: oklch(0.155 0.015 250);
+  --card: oklch(0.195 0.018 250 / 0.96);
+  --popover: oklch(0.18 0.018 252);
+  --secondary: oklch(0.24 0.015 250);
+  --muted: oklch(0.22 0.016 250);
+  --accent: oklch(0.30 0.025 250);
+  --border: oklch(0.32 0.02 250 / 0.6);
+  --input: oklch(0.25 0.018 250 / 0.8);
+  --sidebar: oklch(0.115 0.012 250 / 0.985);
+  --sidebar-accent: oklch(0.22 0.015 250);
+  --sidebar-border: oklch(0.3 0.02 250 / 0.55);
 }
 
+/* ── Emerald ─────────────────────────────────────────────────────────── */
 [data-theme="emerald"] {
   --primary: oklch(0.62 0.11 160);
   --primary-foreground: oklch(0.99 0.01 160);
@@ -2727,8 +2746,21 @@ body::before, body::after { opacity: 0; }/* Sidebar: solid surface, no frost. */
   --sidebar-ring: oklch(0.64 0.12 160);
   --chart-1: oklch(0.64 0.12 160);
   --accent-hover: oklch(0.40 0.06 160);
+
+  --background: oklch(0.16 0.03 160);
+  --card: oklch(0.20 0.032 160 / 0.96);
+  --popover: oklch(0.185 0.03 160);
+  --secondary: oklch(0.245 0.028 160);
+  --muted: oklch(0.225 0.028 160);
+  --accent: oklch(0.30 0.045 160);
+  --border: oklch(0.325 0.034 160 / 0.6);
+  --input: oklch(0.255 0.032 160 / 0.8);
+  --sidebar: oklch(0.12 0.026 160 / 0.985);
+  --sidebar-accent: oklch(0.225 0.028 160);
+  --sidebar-border: oklch(0.305 0.032 160 / 0.55);
 }
 
+/* ── Violet ──────────────────────────────────────────────────────────── */
 [data-theme="violet"] {
   --primary: oklch(0.60 0.10 300);
   --primary-foreground: oklch(0.98 0.01 300);
@@ -2737,8 +2769,21 @@ body::before, body::after { opacity: 0; }/* Sidebar: solid surface, no frost. */
   --sidebar-ring: oklch(0.62 0.11 300);
   --chart-1: oklch(0.62 0.11 300);
   --accent-hover: oklch(0.40 0.06 300);
+
+  --background: oklch(0.16 0.032 300);
+  --card: oklch(0.20 0.034 300 / 0.96);
+  --popover: oklch(0.185 0.032 300);
+  --secondary: oklch(0.245 0.03 300);
+  --muted: oklch(0.225 0.03 300);
+  --accent: oklch(0.30 0.048 300);
+  --border: oklch(0.325 0.036 300 / 0.6);
+  --input: oklch(0.255 0.034 300 / 0.8);
+  --sidebar: oklch(0.12 0.028 300 / 0.985);
+  --sidebar-accent: oklch(0.225 0.03 300);
+  --sidebar-border: oklch(0.305 0.034 300 / 0.55);
 }
 
+/* ── Amber ───────────────────────────────────────────────────────────── */
 [data-theme="amber"] {
   --primary: oklch(0.70 0.13 70);
   --primary-foreground: oklch(0.20 0.02 70);
@@ -2747,8 +2792,21 @@ body::before, body::after { opacity: 0; }/* Sidebar: solid surface, no frost. */
   --sidebar-ring: oklch(0.72 0.14 70);
   --chart-1: oklch(0.72 0.14 70);
   --accent-hover: oklch(0.48 0.08 70);
+
+  --background: oklch(0.175 0.028 70);
+  --card: oklch(0.215 0.03 70 / 0.96);
+  --popover: oklch(0.20 0.028 70);
+  --secondary: oklch(0.26 0.026 70);
+  --muted: oklch(0.24 0.026 70);
+  --accent: oklch(0.315 0.04 70);
+  --border: oklch(0.34 0.03 70 / 0.6);
+  --input: oklch(0.27 0.028 70 / 0.8);
+  --sidebar: oklch(0.13 0.024 70 / 0.985);
+  --sidebar-accent: oklch(0.24 0.026 70);
+  --sidebar-border: oklch(0.32 0.028 70 / 0.55);
 }
 
+/* ── Rose ────────────────────────────────────────────────────────────── */
 [data-theme="rose"] {
   --primary: oklch(0.60 0.15 20);
   --primary-foreground: oklch(0.99 0.01 20);
@@ -2757,5 +2815,17 @@ body::before, body::after { opacity: 0; }/* Sidebar: solid surface, no frost. */
   --sidebar-ring: oklch(0.62 0.16 20);
   --chart-1: oklch(0.62 0.16 20);
   --accent-hover: oklch(0.42 0.08 20);
+
+  --background: oklch(0.16 0.032 20);
+  --card: oklch(0.20 0.034 20 / 0.96);
+  --popover: oklch(0.185 0.032 20);
+  --secondary: oklch(0.245 0.03 20);
+  --muted: oklch(0.225 0.03 20);
+  --accent: oklch(0.30 0.048 20);
+  --border: oklch(0.325 0.036 20 / 0.6);
+  --input: oklch(0.255 0.034 20 / 0.8);
+  --sidebar: oklch(0.12 0.028 20 / 0.985);
+  --sidebar-accent: oklch(0.225 0.03 20);
+  --sidebar-border: oklch(0.305 0.034 20 / 0.55);
 }
 
