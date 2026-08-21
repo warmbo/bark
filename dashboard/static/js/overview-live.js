@@ -98,7 +98,9 @@
     }
     panel.hidden = false;
     el('activity-total').textContent = items.length + (items.length === 1 ? ' event' : ' events');
-    feed.innerHTML = items.slice(0, 10).map(function (a) {
+    // Wide panel: two-column feed grid to use the full width meaningfully.
+    feed.classList.add('activity-grid-2col');
+    feed.innerHTML = items.slice(0, 12).map(function (a) {
       var time = a.timestamp ? timeAgo(a.timestamp) : '';
       var tsAttr = a.timestamp ? ' data-activity-timestamp="' + escHtml(a.timestamp).replaceAll('"', '&quot;').replaceAll("'", '&#39;') + '"' : '';
       var reason = a.reason ? '<span class="activity-reason">' + escHtml(a.reason) + '</span>' : '';
