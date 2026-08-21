@@ -9,6 +9,24 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Bark — {% block title %}Dashboard{% endblock %}</title>
+    {% set _path = request.path if (request and request.path) else '' %}
+    {% if _path.startswith('/guild/') %}
+    {% set _gid = _path.split('/')[2] %}
+    <script>
+        // Apply the per-guild accent theme before first paint so it persists
+        // across every page of this guild. The theme is stored in localStorage
+        // (set by the Settings picker and the overview) and mirrored on
+        // documentElement.
+        (function () {
+            try {
+                var gid = '{{ _gid }}';
+                if (!gid) return;
+                var saved = localStorage.getItem('bark-theme-' + gid);
+                if (saved) document.documentElement.setAttribute('data-theme', saved);
+            } catch (e) {}
+        })();
+    </script>
+    {% endif %}
     <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/css/main.css?v=342">
     {% block head %}{% endblock %}

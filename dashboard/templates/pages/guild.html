@@ -407,6 +407,8 @@ async function loadGuildProfile() {
         // Apply the per-guild accent theme (data-theme on <html>) from the aggregate.
         const theme = g.theme || 'steel';
         document.documentElement.setAttribute('data-theme', theme);
+        // Persist so the theme survives navigation to every other guild page.
+        try { localStorage.setItem('bark-theme-' + GUILD_ID, theme); } catch (e) {}
     } catch (e) {
         if (requestToken !== guildProfileRequestToken) return;
         if (eventsFeed) eventsFeed.innerHTML = '<div class="state-panel state-error" role="alert"><div><strong>Could not load server profile</strong><p>' + (typeof escHtml === 'function' ? escHtml(e.message || 'Try again.') : 'Try again.') + '</p></div></div>';

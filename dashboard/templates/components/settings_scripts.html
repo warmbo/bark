@@ -232,6 +232,7 @@
                 const theme = (d.guild && d.guild.theme) || 'steel';
                 setThemeSelection(theme);
                 document.documentElement.setAttribute('data-theme', theme);
+                try { localStorage.setItem('bark-theme-' + GUILD_ID, theme); } catch (e) {}
             })
             .catch(() => {});
         // Live preview: hover/click a swatch updates the accent immediately.
@@ -264,7 +265,10 @@
                 body: JSON.stringify({ theme }),
             });
             const d = (res && (res.data || res)) || {};
-            document.documentElement.setAttribute('data-theme', d.theme || theme);
+            const applied = d.theme || theme;
+            document.documentElement.setAttribute('data-theme', applied);
+            // Persist so the theme survives navigation to every other guild page.
+            try { localStorage.setItem('bark-theme-' + GUILD_ID, applied); } catch (e) {}
             if (themeStatusEl) {
                 themeStatusEl.textContent = 'Saved — this server now uses this accent.';
                 themeStatusEl.style.color = 'var(--green)';
