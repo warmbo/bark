@@ -1096,6 +1096,29 @@ async def test_guild_slug_serves_pages_directly_without_redirect(client):
     assert resp3.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_unmatched_non_api_path_renders_branded_standalone_404(client):
+    """An unmatched non-API path returns the branded Bark 404 HTML (not a bare
+    JSON body), so every self-hosted instance serves a polished on-brand page."""
+    resp = await client.get("/definitely-not-a-real-route-xyz")
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("text/html")
+    body = resp.content
+    assert b"<title>404" in body
+    assert b"bark-avatar.png" in body  # bundled logo referenced
+    assert b"Go to dashboard" in body
+
+
+@pytest.mark.asyncio
+async def test_unmatched_api_path_stays_json(client):
+    """Unmatched /api/ paths keep the JSON error envelope (never HTML)."""
+    resp = await client.get("/api/v1/does-not-exist")
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/json")
+    data = resp.json()
+    assert data["success"] is False
+
+
 def test_module_config_validation_rejects_array_and_enum_type_drift():
     from dashboard.routes.api.modules import _validate_config
 

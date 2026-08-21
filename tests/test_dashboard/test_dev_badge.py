@@ -126,17 +126,22 @@ async def test_middleware_injects_badge_into_every_html_response(
 
 @pytest.mark.asyncio
 async def test_middleware_skips_non_html_responses(app, monkeypatch, client):
-    """API JSON, static CSS, and JSON error responses must NOT get the overlay."""
+    """API JSON, static CSS, and API JSON-error responses must NOT get the
+    overlay; branded HTML 404 pages (which are HTML) DO get it."""
     import config
 
     monkeypatch.setattr(config.config.instance, "dev_badge", True)
     async with client:
         api = await client.get("/api/v1/health")
         css = await client.get("/static/css/main.css")
+        api404 = await client.get("/api/v1/nonexistent-route-xyz")
         notfound = await client.get("/nonexistent-page-xyz")
     assert 'class="dev-badge-overlay"' not in api.text
     assert 'class="dev-badge-overlay"' not in css.text
-    assert 'class="dev-badge-overlay"' not in notfound.text
+    assert 'class="dev-badge-overlay"' not in api404.text
+    # The branded 404 is an HTML page, so it receives the dev overlay like any
+    # other HTML response (it is no longer a bare JSON error body).
+    assert 'class="dev-badge-overlay"' in notfound.text
 
 
 @pytest.mark.asyncio

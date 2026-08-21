@@ -477,7 +477,7 @@ def test_pages_use_shared_container_primitives():
         "modules-grid",
         "settings-grid",
     )
-    exempt = {"landing.html", "invite.html"}  # intentionally bespoke/utility
+    exempt = {"landing.html", "invite.html", "not_found_standalone.html"}  # intentionally bespoke/utility
     for page in PAGES:
         if page.name in exempt:
             continue

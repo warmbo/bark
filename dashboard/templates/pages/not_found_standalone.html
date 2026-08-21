@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block notfound_title %}404 — Bark{% endblock %}</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b0b0e">
+  <style>
+    :root {
+      --bg: #0b0b0e;
+      --card: rgba(255, 255, 255, 0.05);
+      --border: rgba(255, 255, 255, 0.09);
+      --foreground: #f4f4f5;
+      --muted: #9a9aa3;
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--foreground);
+      font-family: var(--sans);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(1200px 600px at 70% -10%, rgba(59,130,246,0.10), transparent 60%),
+                  linear-gradient(180deg, rgba(11,11,14,.92) 0%, rgba(11,11,14,.86) 100%);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0;
+      padding: 40px 44px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 12px;
+      font-weight: 700; font-size: 18px; letter-spacing: -0.01em;
+      margin-bottom: 24px;
+    }
+    .brand img.logo {
+      width: 34px; height: 34px;
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.25), 0 4px 16px rgba(0,0,0,0.5);
+      display: block;
+    }
+    .code {
+      font-family: var(--mono);
+      font-size: 56px; font-weight: 700; line-height: 1;
+      color: var(--accent);
+      margin-bottom: 14px;
+      letter-spacing: -0.04em;
+      text-shadow: 0 0 28px rgba(59,130,246,0.35);
+    }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 10px; }
+    p { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 26px; }
+    .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    a.btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px;
+      border-radius: 0;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--foreground);
+      font-family: var(--sans); font-size: 14px; font-weight: 500;
+      text-decoration: none;
+      transition: border-color 160ms, background 160ms;
+    }
+    a.btn:hover { border-color: var(--accent); color: var(--foreground); }
+    a.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    a.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .mono-note { font-family: var(--mono); font-size: 11px; color: var(--muted); opacity: .7; margin-top: 22px; }
+    @media (max-width: 420px) { .card { padding: 30px 22px; } .code { font-size: 44px; } }
+  </style>
+</head>
+<body>
+  <div class="card" role="alert">
+    <div class="brand">
+      <img class="logo" src="/static/img/bark-avatar.png" alt="Bark logo" width="34" height="34">
+      <span>Bark</span>
+    </div>
+    <div class="code">404</div>
+    <h1>{% block notfound_heading %}Page not found{% endblock %}</h1>
+    <p>{{ message }}</p>
+    <div class="actions">
+      <a class="btn primary" href="/dashboard">Go to dashboard</a>
+      <a class="btn" href="/">Bark home</a>
+    </div>
+    <div class="mono-note">{{ instance_domain }}</div>
+  </div>
+</body>
+</html>

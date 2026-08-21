@@ -90,15 +90,37 @@ def create_app(bot: BarkBot) -> DashboardApp:
     from fastapi import HTTPException
     from fastapi.exception_handlers import http_exception_handler
     from fastapi.responses import JSONResponse
+    from starlette.exceptions import HTTPException as StarletteHTTPException
 
-    @app.exception_handler(HTTPException)
-    async def _envelope_http_exception(request: Request, exc: HTTPException):
+    async def _envelope_or_branded_404(request: Request, exc):
+        """Shared handling: API errors keep the JSON envelope; a 404 on a
+        non-API path renders the branded Bark 404 page."""
         if request.url.path.startswith("/api/"):
             content = {"success": False, "error": str(exc.detail or "Request failed")}
             return JSONResponse(
-                status_code=exc.status_code, content=content, headers=exc.headers
+                status_code=exc.status_code, content=content, headers=getattr(exc, "headers", None)
+            )
+        if exc.status_code == 404:
+            from services.response import render_not_found_standalone
+
+            return await render_not_found_standalone(
+                request,
+                templates,
+                detail=str(exc.detail) if exc.detail else None,
             )
         return await http_exception_handler(request, exc)
+
+    @app.exception_handler(HTTPException)
+    async def _envelope_http_exception(request: Request, exc: HTTPException):
+        return await _envelope_or_branded_404(request, exc)
+
+    # Unmatched routes raise StarletteHTTPException (a subclass of HTTPException);
+    # FastAPI's built-in handler for that subclass would otherwise win and return a
+    # bare JSON body. Register the same branded handling for it so a broken URL on
+    # ANY instance renders the on-brand 404 page.
+    @app.exception_handler(StarletteHTTPException)
+    async def _envelope_starlette_http_exception(request: Request, exc: StarletteHTTPException):
+        return await _envelope_or_branded_404(request, exc)
 
     # Make templates available on app state
     app.state.templates = templates

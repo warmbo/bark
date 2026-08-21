@@ -235,6 +235,42 @@ def render_not_found(
     return templates.TemplateResponse(request, "pages/not_found.html", ctx, status_code=404)
 
 
+async def render_not_found_standalone(
+    request,
+    templates,
+    *,
+    detail: str | None = None,
+):
+    """Standalone branded Bark 404 page for unmatched non-API routes.
+
+    This is the page a random/broken URL hits on ANY Bark instance — it does
+    not depend on the dashboard shell or on any reverse-proxy configuration, so
+    every self-hosted deployment serves the same on-brand 404. The logo is the
+    bundled static avatar (served by the app itself).
+    """
+    from config import config
+
+    instance_domain = ""
+    try:
+        instance_domain = (config.dashboard.public_url or "").replace(
+            "https://", ""
+        ).replace("http://", "").rstrip("/")
+    except Exception:
+        instance_domain = ""
+    message = "The page you're looking for doesn't exist, was moved, or you don't have access to it."
+    if detail and detail.lower() not in ("not found", "not found."):
+        message = detail
+    return templates.TemplateResponse(
+        request,
+        "pages/not_found_standalone.html",
+        {
+            "instance_domain": instance_domain,
+            "message": message,
+        },
+        status_code=404,
+    )
+
+
 def api_forbidden(message: str = "Insufficient permissions") -> JSONResponse:
     """Return a 403 response."""
     return api_error(message, status_code=403)
