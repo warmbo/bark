@@ -71,26 +71,6 @@
     }).join('');
   }
 
-  function renderBoosts(b) {
-    var panel = el('panel-boosts');
-    if (panel === null) return;
-    if (!b) { panel.hidden = true; return; }
-    panel.hidden = false;
-    el('boosts-label').textContent = (b.tier || 0) + ' · ' + (b.count || 0) + ' boosts';
-    var fill = el('boost-bar-fill');
-    var meta = el('boost-bar-meta');
-    var nt = b.next_tier;
-    if (nt) {
-      var req = nt.required || 0;
-      var pct = req ? Math.min(100, Math.round(((b.count || 0) / req) * 100)) : 0;
-      if (fill) fill.style.width = pct + '%';
-      meta.innerHTML = '<span>' + (b.count || 0) + ' / ' + req + ' to Tier ' + nt.tier + '</span><span>' + pct + '%</span>';
-    } else {
-      if (fill) fill.style.width = '100%';
-      meta.innerHTML = '<span>Max boost tier reached</span><span>100%</span>';
-    }
-  }
-
   function renderEmojis(emojis) {
     var panel = el('panel-emojis');
     if (panel === null) return;
@@ -107,7 +87,7 @@
   function refreshDashboardVisibility() {
     var wrap = el('dashboard-widgets');
     if (!wrap) return;
-    var hasLive = ['panel-online', 'panel-voice', 'panel-boosts', 'panel-emojis']
+    var hasLive = ['panel-online', 'panel-voice', 'panel-emojis']
       .some(function (id) { var p = document.getElementById(id); return p && !p.hidden; });
     var hasWidget = wrap.querySelector('.dashboard-widget[data-widget]') !== null;
     wrap.hidden = !(hasLive || hasWidget);
@@ -123,7 +103,6 @@
         var d = (raw && (raw.data || raw)) || {};
         renderPresence(d.presence);
         renderVoice(d.voice);
-        renderBoosts(d.boosts);
         renderEmojis(d.emojis);
         refreshDashboardVisibility();
         if (typeof refreshIcons === 'function') refreshIcons();

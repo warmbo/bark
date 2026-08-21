@@ -876,22 +876,6 @@ def _dashboard_live_data(guild) -> dict:
 
     online_total = presence_counts["online"] + presence_counts["idle"] + presence_counts["dnd"]
 
-    # ── Boost progress ─────────────────────────────────────────────────
-    boost_count = 0
-    boost_tier = 0
-    try:
-        boost_count = getattr(guild, "premium_subscriber_count", 0) or 0
-        boost_tier = getattr(guild, "premium_tier", 0) or 0
-    except Exception:
-        pass
-    # Discord boost tier thresholds (boosts required for each tier).
-    _tier_thresholds = {0: 0, 1: 2, 2: 15, 3: 30}
-    next_tier = None
-    for tier in (1, 2, 3):
-        if boost_tier < tier:
-            next_tier = {"tier": tier, "required": _tier_thresholds.get(tier, 0)}
-            break
-
     # ── Emoji wall ─────────────────────────────────────────────────────
     emojis = []
     try:
@@ -928,12 +912,6 @@ def _dashboard_live_data(guild) -> dict:
             "members": online_members,
         },
         "voice": voice,
-        "boosts": {
-            "count": boost_count,
-            "tier": boost_tier,
-            "next_tier": next_tier,
-            "tier_thresholds": _tier_thresholds,
-        },
         "emojis": emojis,
     }
 

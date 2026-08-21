@@ -999,9 +999,6 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     assert data["presence"]["total"] == 0
     assert data["presence"]["members"] == []
     assert data["voice"] == []
-    assert data["boosts"]["count"] == 0
-    assert data["boosts"]["tier"] == 0
-    assert data["boosts"]["next_tier"]["tier"] == 1
     assert data["emojis"] == []
 
 
@@ -1085,11 +1082,6 @@ async def test_dashboard_live_data_breaks_down_presence_voice_emojis(app, monkey
     assert len(data["voice"]) == 1
     assert data["voice"][0]["name"] == "General"
     assert len(data["voice"][0]["members"]) == 2
-
-    # Boosts: count + next tier target.
-    assert data["boosts"]["count"] == 3
-    assert data["boosts"]["tier"] == 1
-    assert data["boosts"]["next_tier"]["required"] == 15
 
     # Emoji wall.
     assert len(data["emojis"]) == 1
