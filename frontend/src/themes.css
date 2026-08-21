@@ -11,14 +11,19 @@
  * Applied by setting data-theme="<name>" on <html> via the per-guild picker.
  */
 
-/* Per-theme background wash: a vivid radial glow in the accent hue layered on
-   the body background (above the solid --background color, below content), so
-   the whole page backdrop tints to match the theme. Each theme sets
-   --theme-glow-a/b to its own hue/chroma. */
+/* Per-theme background: the Bark dark wallpaper is KEPT and simply TINTED with
+   the accent hue. The wallpaper is the bottom background layer; a translucent
+   theme-tint overlay (--theme-glow-a/b) sits on top of it so the image still
+   shows through but is colored toward the theme. The solid --background color
+   (also theme-tinted) is the base underneath. */
 body {
   background-image:
     radial-gradient(ellipse 80% 60% at 50% -10%, var(--theme-glow-a), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 85% 110%, var(--theme-glow-b), transparent 55%);
+    radial-gradient(ellipse 60% 50% at 85% 110%, var(--theme-glow-b), transparent 55%),
+    url('/static/img/bark-wallpaper.png');
+  background-size: auto, auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat, no-repeat, no-repeat;
   background-blend-mode: normal;
 }
 
