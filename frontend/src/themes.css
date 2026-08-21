@@ -1,0 +1,62 @@
+/* Bark theme palettes — per-guild accent schemes.
+ *
+ * Each theme overrides ONLY the accent-family tokens (primary + ring + the
+ * derived accent/sidebar/chart aliases). The dark-navy neutrals
+ * (--background, --card, --foreground, --border, ...) stay constant, so the
+ * whole dashboard re-skins just by changing the accent hue.
+ *
+ * Applied by setting data-theme="<name>" on <html> (e.g. via the per-guild
+ * theme picker). "steel" is the default Bark look and needs no override.
+ */
+[data-theme="steel"],
+:root,
+.dark,
+[data-theme="dark"] {
+  --primary: oklch(0.60 0.07 250);
+  --primary-foreground: oklch(0.98 0.01 82);
+  --ring: oklch(0.62 0.08 250);
+  --sidebar-primary: oklch(0.60 0.07 250);
+  --sidebar-ring: oklch(0.62 0.08 250);
+  --chart-1: oklch(0.62 0.08 250);
+  --accent-hover: oklch(0.36 0.03 250);
+}
+
+[data-theme="emerald"] {
+  --primary: oklch(0.62 0.11 160);
+  --primary-foreground: oklch(0.99 0.01 160);
+  --ring: oklch(0.64 0.12 160);
+  --sidebar-primary: oklch(0.62 0.11 160);
+  --sidebar-ring: oklch(0.64 0.12 160);
+  --chart-1: oklch(0.64 0.12 160);
+  --accent-hover: oklch(0.40 0.06 160);
+}
+
+[data-theme="violet"] {
+  --primary: oklch(0.60 0.10 300);
+  --primary-foreground: oklch(0.98 0.01 300);
+  --ring: oklch(0.62 0.11 300);
+  --sidebar-primary: oklch(0.60 0.10 300);
+  --sidebar-ring: oklch(0.62 0.11 300);
+  --chart-1: oklch(0.62 0.11 300);
+  --accent-hover: oklch(0.40 0.06 300);
+}
+
+[data-theme="amber"] {
+  --primary: oklch(0.70 0.13 70);
+  --primary-foreground: oklch(0.20 0.02 70);
+  --ring: oklch(0.72 0.14 70);
+  --sidebar-primary: oklch(0.70 0.13 70);
+  --sidebar-ring: oklch(0.72 0.14 70);
+  --chart-1: oklch(0.72 0.14 70);
+  --accent-hover: oklch(0.48 0.08 70);
+}
+
+[data-theme="rose"] {
+  --primary: oklch(0.60 0.15 20);
+  --primary-foreground: oklch(0.99 0.01 20);
+  --ring: oklch(0.62 0.16 20);
+  --sidebar-primary: oklch(0.60 0.15 20);
+  --sidebar-ring: oklch(0.62 0.16 20);
+  --chart-1: oklch(0.62 0.16 20);
+  --accent-hover: oklch(0.42 0.08 20);
+}

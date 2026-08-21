@@ -33,6 +33,28 @@
                 </div>
             {% endcall %}
 
+            <!-- Accent Theme -->
+            {% call settings_card("Accent Theme", "Choose the accent color for this server's dashboard. The dark base stays the same — only the highlight color changes.", icon_name="palette", role="server_admin") %}
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label class="form-label" id="theme-label">Color scheme</label>
+                        <div class="theme-picker" id="theme-picker" role="radiogroup" aria-labelledby="theme-label">
+                            {% for t in [("steel","Steel Blue"),("emerald","Emerald"),("violet","Violet"),("amber","Amber"),("rose","Rose")] %}
+                            <button type="button" class="theme-option" data-theme-value="{{ t[0] }}" role="radio" aria-checked="false" aria-label="{{ t[1] }}" title="{{ t[1] }}">
+                                <span class="theme-swatch theme-swatch-{{ t[0] }}" aria-hidden="true"></span>
+                                <span class="theme-name">{{ t[1] }}</span>
+                            </button>
+                            {% endfor %}
+                        </div>
+                        <p class="form-hint">Pick a scheme — it applies to anyone viewing this server.</p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary" id="theme-save">{{ icon("save", 14) }} Save</button>
+                        <span class="form-hint" id="theme-status" role="status"></span>
+                    </div>
+                </div>
+            {% endcall %}
+
             <!-- Dashboard Access -->
             {% call settings_card("Dashboard Access", "Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.", icon_name="shield", role="server_owner") %}
                 <div class="module-info-body">

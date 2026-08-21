@@ -1901,6 +1901,29 @@ textarea:focus-visible,
 .rep-search-input { width: 200px; }/* Auto Voice: name-template preview/help spans the whole config grid row */
 .template-preview, .template-help { grid-column: 1 / -1; }
 
+/* ── Accent Theme picker (Settings → Server) ────────── */
+.theme-picker { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.theme-option {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--glass-tint); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.theme-option:hover { border-color: var(--border-hover); background: var(--glass-tint-strong); }
+.theme-option.active { border-color: var(--primary); background: var(--accent-muted); }
+.theme-swatch {
+  width: 28px; height: 28px; border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+}
+.theme-swatch-steel { background: oklch(0.60 0.07 250); }
+.theme-swatch-emerald { background: oklch(0.62 0.11 160); }
+.theme-swatch-violet { background: oklch(0.60 0.10 300); }
+.theme-swatch-amber { background: oklch(0.70 0.13 70); }
+.theme-swatch-rose { background: oklch(0.60 0.15 20); }
+.theme-name { font-size: 12px; color: var(--text-secondary); }
+.theme-option.active .theme-name { color: var(--text-primary); }
+
 /* ── Live overview panels (online, voice, boosts, emojis) ──────────────
    These share the #dashboard-widgets grid with the add-on module widgets, so
    every box on the front page is a uniform content-card with the same spacing

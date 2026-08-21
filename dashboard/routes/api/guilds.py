@@ -149,14 +149,16 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
     try:
         from services.guild_settings import get_settings
 
-        settings = await get_settings(guild_id, "motd", "banner_url", "slug")
+        settings = await get_settings(guild_id, "motd", "banner_url", "slug", "theme")
         motd = settings.get("motd", "")
         custom_banner_url = settings.get("banner_url", "")
         slug = settings.get("slug", "")
+        theme = settings.get("theme", "") or "steel"
     except Exception:
         motd = ""
         custom_banner_url = ""
         slug = ""
+        theme = "steel"
 
     scheduled_events = []
     try:
@@ -217,6 +219,7 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
         "motd": motd,
         "custom_banner_url": custom_banner_url,
         "slug": slug,
+        "theme": theme,
         "scheduled_events": scheduled_events,
     }
 
@@ -277,6 +280,31 @@ async def set_guild_slug(request: Request, guild_id: int):
 
     await set_setting(guild_id, "slug", slug)
     return api_success({"slug": slug, "url": f"/g/{slug}" if slug else None})
+
+
+# Valid accent themes for the per-guild theme picker.
+VALID_THEMES = {"steel", "emerald", "violet", "amber", "rose"}
+
+
+@router.put("/guilds/{guild_id}/theme")
+async def set_guild_theme(request: Request, guild_id: int):
+    """Set a per-guild accent theme (e.g. /guild/{id} renders with it)."""
+    if getattr(request.state, "guild_viewer", False):
+        return api_forbidden("Insufficient permissions")
+
+    body = await request.json()
+    theme = str((body or {}).get("theme") or "").strip().lower()
+
+    if theme not in VALID_THEMES:
+        return api_error(
+            f"Unknown theme '{theme}'. Valid themes: {', '.join(sorted(VALID_THEMES))}.",
+            status_code=400,
+        )
+
+    from services.guild_settings import set_setting
+
+    await set_setting(guild_id, "theme", theme)
+    return api_success({"theme": theme})
 
 
 @router.put("/guilds/{guild_id}/motd")

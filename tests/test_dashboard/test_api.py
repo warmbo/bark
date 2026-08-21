@@ -1156,6 +1156,63 @@ async def test_set_guild_slug_validates_persists_and_clears(app, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_set_guild_theme_validates_and_persists(app, monkeypatch):
+    """PUT /guilds/{id}/theme sets a valid per-guild accent; invalid -> 400."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+
+    async with session_scope() as s:
+        from sqlalchemy import select
+
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "666666"))).scalars().first():
+            s.add(Guild(discord_id="666666", name="Theme Guild"))
+            await s.commit()
+
+    guild = SimpleNamespace(
+        id=666666, name="Theme Guild", member_count=5, owner_id=1, owner=None,
+        banner=None, icon=None, description=None, premium_tier=0,
+        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
+        channels=[], roles=[], emojis=[], created_at=None,
+        verification_level=None, features=[], scheduled_events=[], members=[],
+        text_channels=[], voice_channels=[],
+    )
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+
+    class _Req(SimpleNamespace):
+        _body = {}
+        async def json(self):
+            return self._body
+
+    import json
+
+    # Valid theme persists and shows in the profile.
+    r = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r._body = {"theme": "emerald"}
+    resp = await guilds.set_guild_theme(r, 666666)
+    assert resp.status_code == 200
+    assert json.loads(resp.body)["data"]["theme"] == "emerald"
+    profile = await guilds.get_guild(request, 666666)
+    assert json.loads(profile.body)["data"]["theme"] == "emerald"
+
+    # Invalid theme -> 400.
+    bad = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    bad._body = {"theme": "hotpink"}
+    resp_bad = await guilds.set_guild_theme(bad, 666666)
+    assert resp_bad.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_guild_slug_serves_pages_directly_without_redirect(client):
     """GET /g/{slug} and /g/{slug}/<page> serve the page directly (no 302 to
     the numeric guild id), and unknown slugs 404."""
