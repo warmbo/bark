@@ -799,9 +799,9 @@ async def get_guild_dashboard(request: Request, guild_id: int):
         cards = []
         modules = []
 
-    # Live panel data: who's online/on voice, boost progress, emoji wall, and a
-    # role spotlight. Never let any of these crash the overview page.
-    live = _dashboard_live_data(guild, modules)
+    # Live panel data: who's online/on voice, boost progress, and the emoji
+    # wall. Never let any of these crash the overview page.
+    live = _dashboard_live_data(guild)
     return api_success(
         {
             "viewer": viewer,
@@ -831,10 +831,10 @@ def _member_brief(member) -> dict:
     }
 
 
-def _dashboard_live_data(guild, modules: list) -> dict:
+def _dashboard_live_data(guild) -> dict:
     """Assemble the 'live' overview panels (online presence, voice, boost,
-    emoji wall, role spotlight, quick commands). Defensive: any failure in a
-    single member/channel never 500s the dashboard."""
+    emoji wall). Defensive: any failure in a single member/channel never 500s
+    the dashboard."""
     # ── Online presence ────────────────────────────────────────────────
     presence_counts = {"online": 0, "idle": 0, "dnd": 0, "offline": 0}
     online_members: list[dict] = []
@@ -913,47 +913,10 @@ def _dashboard_live_data(guild, modules: list) -> dict:
     except Exception:
         emojis = []
 
-    # ── Role spotlight (top hoisted + highest-position roles w/ members) ─
-    roles = []
-    try:
-        for role in getattr(guild, "roles", []) or []:
-            try:
-                if getattr(role, "is_default", None) and role.is_default():
-                    continue
-                if not getattr(role, "hoist", False):
-                    continue
-            except Exception:
-                continue
-            try:
-                count = len(getattr(role, "members", []) or [])
-            except Exception:
-                count = 0
-            roles.append(
-                {
-                    "id": str(getattr(role, "id", "")),
-                    "name": str(getattr(role, "name", "") or "Role"),
-                    "color": (getattr(role, "color", None) and str(getattr(role.color, "value", ""))) or "",
-                    "count": count,
-                }
-            )
-        roles.sort(key=lambda r: r["count"], reverse=True)
-        roles = roles[:8]
-    except Exception:
-        roles = []
-
-    # ── Quick commands (flat list for the command launcher) ────────────
-    quick_commands = []
-    for m in modules:
-        for c in m.get("commands", []):
-            quick_commands.append(
-                {
-                    "module": m.get("title", ""),
-                    "name": c.get("name", ""),
-                    "description": c.get("description", "") or "",
-                    "slash": bool(c.get("slash", False)),
-                }
-            )
-    quick_commands.sort(key=lambda c: c["name"].lower())
+    # ── Quick commands + role spotlight were removed as front-page panels
+    # (2026-08-21, Cody: "Quick Commands seems useless. Roles is useless.").
+    # The enabled-modules summary above still carries command metadata for the
+    # Modules page; we simply don't surface a dedicated front-page launcher.
 
     return {
         "presence": {
@@ -972,8 +935,6 @@ def _dashboard_live_data(guild, modules: list) -> dict:
             "tier_thresholds": _tier_thresholds,
         },
         "emojis": emojis,
-        "roles": roles,
-        "commands": quick_commands,
     }
 
 

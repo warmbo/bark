@@ -1,7 +1,8 @@
 /**
- * Overview "live" panels — who's online, in voice, boosts, emoji wall, role
- * spotlight, and quick commands. Rendered from the aggregate /dashboard
- * endpoint (presence/voice/boosts/emojis/roles/commands fields).
+ * Overview "live" panels — who's online, in voice, boosts, and the emoji wall.
+ * Rendered from the aggregate /dashboard endpoint (presence/voice/boosts/emojis)
+ * into the SAME #dashboard-widgets grid as the add-on module widgets, so every
+ * box on the front page is a uniform content-card with consistent spacing.
  */
 (function () {
   'use strict';
@@ -26,10 +27,12 @@
   }
 
   function renderPresence(p) {
-    if (!p) return;
+    var panel = el('panel-online');
+    if (!p || panel === null) { if (panel) panel.hidden = true; return; }
+    panel.hidden = false;
     el('live-online-total').textContent = (p.total ?? 0) + ' online';
-    const row = el('presence-row');
-    const cells = [
+    var row = el('presence-row');
+    var cells = [
       ['online', p.online, 'Online'],
       ['idle', p.idle, 'Idle'],
       ['dnd', p.dnd, 'DND'],
@@ -39,29 +42,28 @@
       return '<span class="presence-count"><span class="presence-dot presence-' + c[0] + '"></span><strong>' + c[1] + '</strong> ' + c[2] + '</span>';
     }).join('') || '<span class="text-tertiary">No members present</span>';
 
-    const members = p.members || [];
-    const wrap = el('online-members');
+    var members = p.members || [];
+    var wrap = el('online-members');
     if (!members.length) {
       wrap.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>Nobody online right now</strong></div></div>';
       return;
     }
-    wrap.innerHTML = '<div class="member-avatar-grid">' + members.map(function (m) {
+    wrap.innerHTML = members.map(function (m) {
       return '<span class="member-tile" title="' + escHtml(m.name) + ' (' + statusLabel(m.status) + ')">' + avatarHtml(m, 30) + statusDot(m.status) + '</span>';
-    }).join('') + '</div>';
+    }).join('');
   }
 
   function renderVoice(voice) {
-    if (!voice) return;
-    let total = 0;
+    var panel = el('panel-voice');
+    if (panel === null) return;
+    if (!voice || !voice.length) { panel.hidden = true; return; }
+    panel.hidden = false;
+    var total = 0;
     (voice || []).forEach(function (c) { total += (c.members || []).length; });
     el('voice-total').textContent = total + (total === 1 ? ' member' : ' members');
-    const wrap = el('voice-channels');
-    if (!voice || !voice.length) {
-      wrap.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No one in voice</strong><p>When members join a voice channel they\'ll show up here.</p></div></div>';
-      return;
-    }
+    var wrap = el('voice-channels');
     wrap.innerHTML = voice.map(function (ch) {
-      const members = ch.members || [];
+      var members = ch.members || [];
       return '<div class="voice-channel"><div class="voice-channel-head">' + statusDot('online') + '<strong>' + escHtml(ch.name) + '</strong><span class="text-tertiary">' + members.length + '</span></div>' +
         '<div class="voice-member-list">' + members.map(function (m) {
           return '<span class="voice-member" title="' + escHtml(m.name) + '">' + avatarHtml(m, 24) + '<span>' + escHtml(m.name) + '</span></span>';
@@ -70,14 +72,17 @@
   }
 
   function renderBoosts(b) {
-    if (!b) return;
+    var panel = el('panel-boosts');
+    if (panel === null) return;
+    if (!b) { panel.hidden = true; return; }
+    panel.hidden = false;
     el('boosts-label').textContent = (b.tier || 0) + ' · ' + (b.count || 0) + ' boosts';
-    const fill = el('boost-bar-fill');
-    const meta = el('boost-bar-meta');
-    const nt = b.next_tier;
+    var fill = el('boost-bar-fill');
+    var meta = el('boost-bar-meta');
+    var nt = b.next_tier;
     if (nt) {
-      const req = nt.required || 0;
-      const pct = req ? Math.min(100, Math.round(((b.count || 0) / req) * 100)) : 0;
+      var req = nt.required || 0;
+      var pct = req ? Math.min(100, Math.round(((b.count || 0) / req) * 100)) : 0;
       if (fill) fill.style.width = pct + '%';
       meta.innerHTML = '<span>' + (b.count || 0) + ' / ' + req + ' to Tier ' + nt.tier + '</span><span>' + pct + '%</span>';
     } else {
@@ -87,67 +92,27 @@
   }
 
   function renderEmojis(emojis) {
-    if (!emojis) return;
+    var panel = el('panel-emojis');
+    if (panel === null) return;
+    if (!emojis || !emojis.length) { panel.hidden = true; return; }
+    panel.hidden = false;
     el('emoji-total').textContent = emojis.length + (emojis.length === 1 ? ' emoji' : ' emojis');
-    const wrap = el('emoji-wall');
-    if (!emojis.length) {
-      wrap.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No custom emojis</strong></div></div>';
-      return;
-    }
+    var wrap = el('emoji-wall');
     wrap.innerHTML = emojis.map(function (e) {
       return '<span class="emoji-tile" title=":' + escHtml(e.name) + ':" role="img" aria-label="' + escHtml(e.name) + '"><img src="' + escHtml(e.url) + '" alt="' + escHtml(e.name) + '" loading="lazy"></span>';
     }).join('');
   }
 
-  function roleColor(c) {
-    // role.color is a decimal int; render as a hex for the dot.
-    if (!c) return '';
-    let hex = Number(c).toString(16).padStart(6, '0');
-    return '#' + hex;
-  }
-
-  function renderRoles(roles) {
-    if (!roles) return;
-    const wrap = el('role-spotlight');
-    if (!roles.length) {
-      wrap.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No spotlight roles</strong><p>Hoisted roles appear here.</p></div></div>';
-      return;
-    }
-    wrap.innerHTML = roles.map(function (r) {
-      const color = roleColor(r.color);
-      return '<div class="role-row"><span class="role-dot"' + (color ? ' style="background:' + color + '"' : '') + '></span><span class="role-name">' + escHtml(r.name) + '</span><span class="role-count">' + r.count + '</span></div>';
-    }).join('');
-  }
-
-  var allCommands = [];
-
-  function renderCommands(commands) {
-    if (!commands) return;
-    allCommands = commands || [];
-    filterCommands('');
-  }
-
-  function commandRow(c) {
-    const full = '/' + c.name;
-    return '<div class="command-row"><div class="command-name">' + statusDot('online') + '<code>' + escHtml(full) + '</code><span class="command-module">' + escHtml(c.module || '') + '</span></div>' +
-      '<div class="command-desc">' + escHtml(c.description || '') + '</div>' +
-      '<button type="button" class="btn btn-xs btn-accent command-copy" data-cmd="' + escHtml(full) + '" title="Copy to clipboard" aria-label="Copy ' + escHtml(full) + '">' + (typeof getIconSvg === 'function' ? getIconSvg('copy', 12) : '') + ' Copy</button></div>';
-  }
-
-  function filterCommands(q) {
-    const wrap = el('command-list');
+  // Show the shared grid container if any live panel or module widget is visible.
+  function refreshDashboardVisibility() {
+    var wrap = el('dashboard-widgets');
     if (!wrap) return;
-    q = (q || '').toLowerCase().trim();
-    const list = allCommands.filter(function (c) {
-      if (!q) return true;
-      return (c.name + ' ' + (c.module || '')).toLowerCase().indexOf(q) !== -1;
-    });
-    if (!list.length) {
-      wrap.innerHTML = '<div class="state-panel state-empty" role="status"><div><strong>No matching commands</strong></div></div>';
-      return;
-    }
-    wrap.innerHTML = list.map(commandRow).join('');
+    var hasLive = ['panel-online', 'panel-voice', 'panel-boosts', 'panel-emojis']
+      .some(function (id) { var p = document.getElementById(id); return p && !p.hidden; });
+    var hasWidget = wrap.querySelector('.dashboard-widget[data-widget]') !== null;
+    wrap.hidden = !(hasLive || hasWidget);
   }
+  window.refreshDashboardVisibility = refreshDashboardVisibility;
 
   var liveRequestToken = 0;
   function loadLive() {
@@ -156,44 +121,17 @@
       .then(function (raw) {
         if (requestToken !== liveRequestToken) return;
         var d = (raw && (raw.data || raw)) || {};
-        var hasLive = d.presence || d.voice || d.boosts || d.emojis || d.roles || d.commands;
-        var wrap = el('live-panels');
-        if (!wrap) return;
-        if (!hasLive) { wrap.hidden = true; return; }
-        wrap.hidden = false;
         renderPresence(d.presence);
         renderVoice(d.voice);
         renderBoosts(d.boosts);
         renderEmojis(d.emojis);
-        renderRoles(d.roles);
-        renderCommands(d.commands);
+        refreshDashboardVisibility();
         if (typeof refreshIcons === 'function') refreshIcons();
       })
-      .catch(function () { /* non-fatal; panels just stay hidden on error */ });
-  }
-
-  function copyText(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () {
-        if (typeof showToast === 'function') showToast('Copied ' + text, 'success');
-      }).catch(function () { /* ignore */ });
-    } else if (typeof showToast === 'function') {
-      showToast('Press Ctrl+C to copy ' + text, 'info');
-    }
+      .catch(function () { /* non-fatal; panels stay hidden on error */ });
   }
 
   function init() {
-    var search = el('command-search');
-    if (search) {
-      search.addEventListener('input', function () { filterCommands(search.value); });
-    }
-    var list = el('command-list');
-    if (list) {
-      list.addEventListener('click', function (e) {
-        var btn = e.target.closest('.command-copy');
-        if (btn) copyText(btn.dataset.cmd);
-      });
-    }
     loadLive();
   }
 

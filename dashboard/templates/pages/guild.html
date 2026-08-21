@@ -85,65 +85,51 @@
         </div>
     </div>
 
-    <!-- Add-on module dashboard widgets -->
-    <div class="dashboard-widgets" id="dashboard-widgets" hidden></div>
-
-    <!-- Live overview panels: who's online, voice, boosts, emojis, roles, commands -->
-    <div class="live-panels" id="live-panels" hidden>
-        <div class="content-card live-panel online-panel">
+    <!-- Add-on module dashboard widgets + live overview panels share one grid -->
+    <div class="dashboard-widgets" id="dashboard-widgets" hidden>
+        <div class="content-card dashboard-widget live-panel" id="panel-online" hidden>
             <div class="card-header">
                 <h2 class="card-title">{{ icon("activity", 16) }} Online Now</h2>
                 <span class="text-tertiary" id="live-online-total">— online</span>
             </div>
-            <div class="presence-row" id="presence-row"></div>
-            <div class="presence-breakdown" id="presence-breakdown"></div>
-            <div class="online-members" id="online-members"></div>
+            <div class="panel-body">
+                <div class="presence-row" id="presence-row"></div>
+                <div class="presence-breakdown" id="presence-breakdown"></div>
+                <div class="online-scroll" id="online-scroll" tabindex="0" aria-label="Online members">
+                    <div class="member-avatar-grid" id="online-members"></div>
+                </div>
+            </div>
         </div>
 
-        <div class="content-card live-panel voice-panel">
+        <div class="content-card dashboard-widget live-panel" id="panel-voice" hidden>
             <div class="card-header">
                 <h2 class="card-title">{{ icon("volume-2", 16) }} In Voice</h2>
                 <span class="text-tertiary" id="voice-total">—</span>
             </div>
-            <div id="voice-channels"></div>
+            <div class="panel-body" id="voice-channels"></div>
         </div>
 
-        <div class="content-card live-panel boosts-panel">
+        <div class="content-card dashboard-widget live-panel" id="panel-boosts" hidden>
             <div class="card-header">
                 <h2 class="card-title">{{ icon("zap", 16) }} Boosts</h2>
                 <span class="text-tertiary" id="boosts-label">—</span>
             </div>
-            <div class="boost-progress-wrap">
+            <div class="panel-body">
                 <div class="boost-bar"><div class="boost-bar-fill" id="boost-bar-fill"></div></div>
                 <div class="boost-bar-meta" id="boost-bar-meta"></div>
             </div>
         </div>
 
-        <div class="content-card live-panel emoji-panel">
+        <div class="content-card dashboard-widget live-panel" id="panel-emojis" hidden>
             <div class="card-header">
                 <h2 class="card-title">{{ icon("smile", 16) }} Emojis</h2>
                 <span class="text-tertiary" id="emoji-total">—</span>
             </div>
-            <div class="emoji-wall" id="emoji-wall"></div>
-        </div>
-
-        <div class="content-card live-panel roles-panel">
-            <div class="card-header">
-                <h2 class="card-title">{{ icon("tag", 16) }} Roles</h2>
-                <span class="text-tertiary">spotlight</span>
+            <div class="panel-body">
+                <div class="emoji-scroll" id="emoji-scroll" tabindex="0" aria-label="Server emojis">
+                    <div class="emoji-wall" id="emoji-wall"></div>
+                </div>
             </div>
-            <div class="role-spotlight" id="role-spotlight"></div>
-        </div>
-
-        <div class="content-card live-panel commands-panel">
-            <div class="card-header">
-                <h2 class="card-title">{{ icon("terminal", 16) }} Quick Commands</h2>
-                <span class="text-tertiary">copy any</span>
-            </div>
-            <div class="command-search-wrap">
-                <input type="search" class="form-input command-search" id="command-search" name="command_search" placeholder="Search commands…" aria-label="Search commands" autocomplete="off">
-            </div>
-            <div class="command-list" id="command-list"></div>
         </div>
     </div>
 </div>
@@ -306,9 +292,10 @@ function sparklineSvg(values, w, h) {
 function renderWidgets(cards) {
     const wrap = document.getElementById('dashboard-widgets');
     if (!wrap) return;
-    if (!cards || !cards.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
-    wrap.hidden = false;
-    wrap.innerHTML = cards.map(card => {
+    // Remove only previously-rendered module widgets (keep the static live
+    // overview panels that share this grid container).
+    wrap.querySelectorAll('.dashboard-widget[data-widget]').forEach(el => el.remove());
+    const html = (cards || []).map(card => {
         const icon = card.icon ? (typeof getIconSvg === 'function' ? getIconSvg(card.icon, 16) : '') : '';
         const desc = card.description ? '<p class="card-description">' + escHtml(card.description) + '</p>' : '';
         let body = '';
@@ -323,7 +310,9 @@ function renderWidgets(cards) {
         }
         return '<div class="content-card dashboard-widget" data-widget="' + escHtml(card.id) + '"><div class="card-header"><div><h2 class="card-title">' + icon + ' ' + escHtml(card.title) + '</h2>' + desc + '</div></div>' + body + (card.link ? '<div class="widget-footer"><a href="' + escHtml(card.link) + '">View in module</a></div>' : '') + '</div>';
     }).join('');
+    if (html) wrap.insertAdjacentHTML('beforeend', html);
     if (typeof refreshIcons === 'function') refreshIcons();
+    refreshDashboardVisibility();
 }
 
 function renderEvents(events) {

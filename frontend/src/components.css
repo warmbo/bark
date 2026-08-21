@@ -1901,18 +1901,22 @@ textarea:focus-visible,
 .rep-search-input { width: 200px; }/* Auto Voice: name-template preview/help spans the whole config grid row */
 .template-preview, .template-help { grid-column: 1 / -1; }
 
-/* ── Live overview panels (online, voice, boosts, emojis, roles, commands) ── */
-.live-panels {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
-  gap: 16px;
-  margin-top: 18px;
+/* ── Live overview panels (online, voice, boosts, emojis) ──────────────
+   These share the #dashboard-widgets grid with the add-on module widgets, so
+   every box on the front page is a uniform content-card with the same spacing
+   tokens. */
+.live-panel { display: flex; flex-direction: column; min-height: 0; }
+.live-panel .card-header { margin-bottom: 0; }
+.live-panel .panel-body {
+  padding: var(--space-4) var(--card-padding-x) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
 }
-.live-panel { display: flex; flex-direction: column; }
-.live-panel .card-header { margin-bottom: 12px; }
 
 /* Presence summary */
-.presence-row { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+.presence-row { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .presence-count { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
 .presence-count strong { color: var(--text-primary); font-size: 14px; }
 .presence-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
@@ -1921,11 +1925,24 @@ textarea:focus-visible,
 .presence-dnd     { background: var(--red); box-shadow: 0 0 0 2px color-mix(in oklab, var(--red) 25%, transparent); }
 .presence-offline { background: var(--muted-foreground); opacity: .6; }
 
-/* Online member avatar grid (Discord-embed vibe) */
-.online-members { margin-top: 4px; }
-.member-avatar-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.member-tile { position: relative; display: inline-flex; }
-.member-tile .member-avatar { border-radius: var(--radius-full); }
+/* Online member avatar grid — horizontally scrollable, hover zooms */
+.online-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.member-avatar-grid { display: flex; gap: var(--space-3); width: max-content; }
+.member-tile { position: relative; display: inline-flex; flex: 0 0 auto; }
+.member-tile .member-avatar {
+  border-radius: var(--radius-full);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.member-tile:hover .member-avatar {
+  transform: scale(1.35);
+  box-shadow: 0 4px 14px var(--shadow-glow);
+  z-index: 2;
+}
 .member-tile .presence-dot {
   position: absolute; bottom: -1px; right: -1px;
   width: 10px; height: 10px; border: 2px solid var(--bg-card-solid);
@@ -1939,51 +1956,35 @@ textarea:focus-visible,
 }
 
 /* Voice channels */
-.voice-channel { margin-bottom: 12px; }
-.voice-channel:last-child { margin-bottom: 0; }
-.voice-channel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.voice-channel + .voice-channel { margin-top: var(--space-3); }
+.voice-channel-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .voice-channel-head strong { font-size: 13px; color: var(--text-primary); }
 .voice-channel-head .text-tertiary { margin-left: auto; font-size: 12px; }
-.voice-member-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.voice-member-list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .voice-member { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); background: var(--glass-tint); border: 1px solid var(--border-subtle); padding: 3px 8px 3px 3px; border-radius: var(--radius-full); }
 .voice-member .member-avatar { width: 20px; height: 20px; }
 
 /* Boost progress */
-.boost-progress-wrap { margin-top: 4px; }
 .boost-bar { height: 10px; border-radius: var(--radius-full); background: var(--secondary); border: 1px solid var(--border); overflow: hidden; }
 .boost-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hover)); border-radius: var(--radius-full); transition: width 400ms var(--transition-normal); width: 0; }
-.boost-bar-meta { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+.boost-bar-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-tertiary); }
 
-/* Emoji wall */
-.emoji-wall { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Emoji wall — vertically scrollable, hover zooms */
+.emoji-scroll {
+  overflow-y: auto;
+  max-height: 180px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.emoji-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: var(--space-2); }
 .emoji-tile {
   display: inline-flex; align-items: center; justify-content: center;
   width: 40px; height: 40px;
   background: var(--glass-tint); border: 1px solid var(--border-subtle);
   border-radius: var(--radius); cursor: default;
 }
-.emoji-tile img { width: 24px; height: 24px; object-fit: contain; }
-
-/* Role spotlight */
-.role-spotlight { display: flex; flex-direction: column; gap: 6px; }
-.role-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
-.role-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--secondary); flex: 0 0 auto; }
-.role-name { flex: 1; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.role-count { font-size: 12px; color: var(--text-tertiary); }
-
-/* Quick commands */
-.command-search-wrap { margin-bottom: 10px; }
-.command-search { width: 100%; }
-.command-list { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
-.command-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-bottom: 1px solid var(--border-subtle);
+.emoji-tile img {
+  width: 24px; height: 24px; object-fit: contain;
+  transition: transform var(--transition-fast);
 }
-.command-row:last-child { border-bottom: none; }
-.command-row:hover { background: var(--glass-tint); }
-.command-name { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
-.command-name code { font-size: 13px; color: var(--text-primary); }
-.command-name .presence-dot { width: 7px; height: 7px; }
-.command-module { font-size: 11px; color: var(--text-tertiary); }
-.command-desc { flex: 1; font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.command-copy { flex: 0 0 auto; }
+.emoji-tile:hover img { transform: scale(2.2); }

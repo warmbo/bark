@@ -1003,15 +1003,12 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     assert data["boosts"]["tier"] == 0
     assert data["boosts"]["next_tier"]["tier"] == 1
     assert data["emojis"] == []
-    assert data["roles"] == []
-    # The quick-command launcher flattens enabled-module commands.
-    assert any(c["name"] == "rank" for c in data["commands"])
 
 
 @pytest.mark.asyncio
-async def test_dashboard_live_data_breaks_down_presence_voice_roles_emojis(app, monkeypatch):
+async def test_dashboard_live_data_breaks_down_presence_voice_emojis(app, monkeypatch):
     """GET /guilds/{id}/dashboard surfaces online presence, voice members,
-    boost progress, custom emojis, hoisted roles, and quick commands."""
+    boost progress, and custom emojis."""
     from types import SimpleNamespace
 
     import config
@@ -1094,13 +1091,10 @@ async def test_dashboard_live_data_breaks_down_presence_voice_roles_emojis(app, 
     assert data["boosts"]["tier"] == 1
     assert data["boosts"]["next_tier"]["required"] == 15
 
-    # Emoji wall + role spotlight.
+    # Emoji wall.
     assert len(data["emojis"]) == 1
     assert data["emojis"][0]["name"] == "bark"
     assert data["emojis"][0]["url"] == "https://cdn/e.png"
-    assert len(data["roles"]) == 1
-    assert data["roles"][0]["name"] == "Admins"
-    assert data["roles"][0]["count"] == 1
 
 
 @pytest.mark.asyncio
