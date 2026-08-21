@@ -1999,6 +1999,10 @@ textarea:focus-visible,
 .voice-member { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); background: var(--glass-tint); border: 1px solid var(--border-subtle); padding: 3px 8px 3px 3px; border-radius: var(--radius-full); }
 .voice-member .member-avatar { width: 20px; height: 20px; }
 
+/* Recent Activity (overview) — scrollable feed in the live-panel card */
+#panel-activity .activity-feed { max-height: 220px; overflow-y: auto; scrollbar-width: thin; padding-right: 4px; }
+#panel-activity .activity-item { padding: 8px 2px; }
+
 /* Emoji wall — vertically scrollable, hover zooms */
 .emoji-scroll {
   overflow-y: auto;

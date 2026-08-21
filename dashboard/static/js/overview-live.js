@@ -83,11 +83,45 @@
     }).join('');
   }
 
+  function renderActivity(items) {
+    var panel = el('panel-activity');
+    if (panel === null) return;
+    var feed = el('overview-activity-feed');
+    if (!feed) { panel.hidden = true; return; }
+    // If the user lacks moderation.view, /activity 403s — hide the card silently.
+    if (!items || items === 403 || !Array.isArray(items)) { panel.hidden = true; return; }
+    if (!items.length) {
+      panel.hidden = false;
+      feed.innerHTML = '<div class="state-panel state-empty" role="status"><span class="state-panel-icon" aria-hidden="true">' + (typeof getIconSvg === 'function' ? getIconSvg('activity', 18) : '') + '</span><div><strong>No recent activity</strong><p>Notable events will appear here as they happen.</p></div></div>';
+      el('activity-total').textContent = '—';
+      return;
+    }
+    panel.hidden = false;
+    el('activity-total').textContent = items.length + (items.length === 1 ? ' event' : ' events');
+    feed.innerHTML = items.slice(0, 10).map(function (a) {
+      var time = a.timestamp ? timeAgo(a.timestamp) : '';
+      var tsAttr = a.timestamp ? ' data-activity-timestamp="' + escHtml(a.timestamp).replaceAll('"', '&quot;').replaceAll("'", '&#39;') + '"' : '';
+      var reason = a.reason ? '<span class="activity-reason">' + escHtml(a.reason) + '</span>' : '';
+      var meta = '';
+      if (a.moderator && a.moderator !== a.target && a.moderator !== 'Unknown') {
+        meta = '<span class="activity-meta">by ' + escHtml(a.moderator) + '</span>';
+      }
+      var badge = a.category ? '<span class="activity-category cat-' + safeClassToken(a.category, 'activity') + '">' + escHtml(a.category) + '</span>' : '';
+      return '<div class="activity-item type-' + safeClassToken(a.type, 'activity') + '"><span class="activity-icon">' + escHtml(a.icon || '📝') + '</span><span class="activity-desc">' + escHtml(a.description) + meta + '</span>' + reason + badge + '<span class="activity-time"' + tsAttr + '>' + escHtml(time) + '</span></div>';
+    }).join('');
+  }
+
+  function refreshActivityTimes() {
+    document.querySelectorAll('#overview-activity-feed [data-activity-timestamp]').forEach(function (element) {
+      element.textContent = timeAgo(element.dataset.activityTimestamp);
+    });
+  }
+
   // Show the shared grid container if any live panel or module widget is visible.
   function refreshDashboardVisibility() {
     var wrap = el('dashboard-widgets');
     if (!wrap) return;
-    var hasLive = ['panel-online', 'panel-voice', 'panel-emojis']
+    var hasLive = ['panel-online', 'panel-voice', 'panel-emojis', 'panel-activity']
       .some(function (id) { var p = document.getElementById(id); return p && !p.hidden; });
     var hasWidget = wrap.querySelector('.dashboard-widget[data-widget]') !== null;
     wrap.hidden = !(hasLive || hasWidget);
@@ -108,10 +142,27 @@
         if (typeof refreshIcons === 'function') refreshIcons();
       })
       .catch(function () { /* non-fatal; panels stay hidden on error */ });
+
+    // Recent activity — separate call (moderation.view gated; hides if 403).
+    safeFetch('/api/v1/guilds/' + GUILD_ID + '/activity', { cache: 'no-cache' })
+      .then(function (raw) {
+        if (requestToken !== liveRequestToken) return;
+        var items = (raw && (raw.data || raw)) || {};
+        var list = Array.isArray(items) ? items : (items.activity || []);
+        renderActivity(list);
+        refreshDashboardVisibility();
+      })
+      .catch(function (err) {
+        if (requestToken !== liveRequestToken) return;
+        // safeFetch throws a message on 403 (no status property); treat any
+        // permission error as "card hidden" for users without moderation.view.
+        if (err && /permission/i.test(err.message || '')) renderActivity(403);
+      });
   }
 
   function init() {
     loadLive();
+    setInterval(refreshActivityTimes, 60000);
   }
 
   if (document.readyState === 'loading') {

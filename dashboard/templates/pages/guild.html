@@ -120,6 +120,16 @@
                 </div>
             </div>
         </div>
+
+        <div class="content-card dashboard-widget live-panel activity-panel" id="panel-activity" hidden>
+            <div class="card-header">
+                <h2 class="card-title">{{ icon("activity", 16) }} Recent Activity</h2>
+                <span class="text-tertiary" id="activity-total">—</span>
+            </div>
+            <div class="panel-body">
+                <div class="activity-feed" id="overview-activity-feed"></div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
