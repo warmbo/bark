@@ -1925,16 +1925,27 @@ textarea:focus-visible,
 .presence-dnd     { background: var(--red); box-shadow: 0 0 0 2px color-mix(in oklab, var(--red) 25%, transparent); }
 .presence-offline { background: var(--muted-foreground); opacity: .6; }
 
-/* Online member avatar grid — horizontally scrollable, hover zooms */
+/* Online member avatar grid — vertical grid, scrollable, hover zooms
+   (matches the Emojis panel layout) */
 .online-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
+  max-height: 180px;
   /* Buffer so the 1.35x hover zoom isn't clipped by the container edges. */
-  padding: 8px;
+  padding: 10px;
   scrollbar-width: thin;
 }
-.member-avatar-grid { display: flex; gap: var(--space-3); width: max-content; padding: 2px 0; }
-.member-tile { position: relative; display: inline-flex; flex: 0 0 auto; }
+.member-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: var(--space-2);
+}
+.member-tile {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+}
 .member-tile .member-avatar {
   border-radius: var(--radius-full);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
