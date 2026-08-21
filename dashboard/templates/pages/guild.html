@@ -8,8 +8,10 @@
 <div class="page-container">
     <!-- Server profile header -->
     <div class="server-profile">
+        <!-- Banner becomes a dim full-height background of the whole profile -->
         <div class="server-banner" id="server-banner" role="img" aria-label="Server banner">
             {% if guild.banner %}<img src="{{ guild.banner.url }}" data-fallback-src="/static/img/bark-avatar.png" alt="" loading="lazy">{% endif %}
+            <span class="server-banner-scrim" aria-hidden="true"></span>
             <button type="button" class="banner-set-btn" id="banner-set" hidden aria-label="Set custom banner" title="Set a custom banner image">{{ icon("image", 14) }}</button>
             <div class="banner-editor" id="banner-editor" hidden>
                 <div class="banner-editor-row">
