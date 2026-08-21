@@ -2118,10 +2118,11 @@ textarea:focus-visible,
 .online-scroll {
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 4px;
+  /* Buffer so the 1.35x hover zoom isn't clipped by the container edges. */
+  padding: 8px;
   scrollbar-width: thin;
 }
-.member-avatar-grid { display: flex; gap: var(--space-3); width: max-content; }
+.member-avatar-grid { display: flex; gap: var(--space-3); width: max-content; padding: 2px 0; }
 .member-tile { position: relative; display: inline-flex; flex: 0 0 auto; }
 .member-tile .member-avatar {
   border-radius: var(--radius-full);
@@ -2162,7 +2163,8 @@ textarea:focus-visible,
 .emoji-scroll {
   overflow-y: auto;
   max-height: 180px;
-  padding-right: 4px;
+  /* Buffer so the 2.2x hover zoom isn't clipped by the container edges. */
+  padding: 10px;
   scrollbar-width: thin;
 }
 .emoji-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: var(--space-2); }
