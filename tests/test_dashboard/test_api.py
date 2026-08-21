@@ -995,6 +995,113 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     assert rep["commands"][0]["name"] == "rank"
     assert rep["commands"][0]["slash"] is True
 
+    # Live overview panels are included in the same aggregate.
+    assert data["presence"]["total"] == 0
+    assert data["presence"]["members"] == []
+    assert data["voice"] == []
+    assert data["boosts"]["count"] == 0
+    assert data["boosts"]["tier"] == 0
+    assert data["boosts"]["next_tier"]["tier"] == 1
+    assert data["emojis"] == []
+    assert data["roles"] == []
+    # The quick-command launcher flattens enabled-module commands.
+    assert any(c["name"] == "rank" for c in data["commands"])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_live_data_breaks_down_presence_voice_roles_emojis(app, monkeypatch):
+    """GET /guilds/{id}/dashboard surfaces online presence, voice members,
+    boost progress, custom emojis, hoisted roles, and quick commands."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    class _Member(SimpleNamespace):
+        def __init__(self, mid, name, status, avatar=None, display_name=None):
+            super().__init__(id=mid, name=name, display_name=display_name or name)
+            self.status = status
+            self.avatar = avatar
+            self.display_avatar = SimpleNamespace(url=avatar) if avatar else None
+
+    class _VoiceChannel(SimpleNamespace):
+        pass
+
+    import discord
+
+    online = _Member(11, "alice", discord.Status.online, avatar="https://cdn/a.png")
+    idle = _Member(22, "bob", discord.Status.idle)
+    dnd = _Member(33, "cara", discord.Status.dnd)
+    offline = _Member(44, "dave", discord.Status.offline)
+
+    vc = _VoiceChannel(id=5, name="General", members=[online, idle])
+
+    def _is_default():
+        return False
+
+    def _role(mid, name, color, hoist, members):
+        r = SimpleNamespace(id=mid, name=name, hoist=hoist)
+        r.color = SimpleNamespace(value=color)
+        r.members = members
+        r.is_default = _is_default
+        return r
+
+    guild = SimpleNamespace(
+        id=444444, name="Live Guild", member_count=4, owner_id=1, owner=None,
+        banner=None, icon=None, description=None, premium_tier=1,
+        premium_subscription_count=3, premium_subscriber_count=3, max_members=100,
+        channels=[vc], roles=[_role(100, "Admins", 16711680, True, [online])],
+        emojis=[SimpleNamespace(id=7, name="bark", url="https://cdn/e.png", animated=False)],
+        created_at=None, verification_level=None, features=[], scheduled_events=[],
+        members=[online, idle, dnd, offline],
+        text_channels=[], voice_channels=[vc],
+    )
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    bot.modules.get_dashboard_cards = lambda _gid: []
+    bot.modules.get_all_modules = lambda: {}
+    bot.modules.is_enabled_for_guild = lambda _gid, mname: False
+    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+
+    import json
+    resp = await guilds.get_guild_dashboard(request, 444444)
+    assert resp.status_code == 200
+    data = json.loads(resp.body)["data"]
+
+    # Presence: online + idle + dnd = 3, offline excluded; member briefs carry status/avatar.
+    assert data["presence"]["total"] == 3
+    assert data["presence"]["online"] == 1
+    assert data["presence"]["idle"] == 1
+    assert data["presence"]["dnd"] == 1
+    assert data["presence"]["offline"] == 1
+    assert len(data["presence"]["members"]) == 3
+    by_name = {m["name"]: m for m in data["presence"]["members"]}
+    assert by_name["alice"]["avatar_url"] == "https://cdn/a.png"
+    assert by_name["alice"]["status"] == "online"
+    assert all(m["status"] != "offline" for m in data["presence"]["members"])
+
+    # Voice: grouped by channel with member briefs.
+    assert len(data["voice"]) == 1
+    assert data["voice"][0]["name"] == "General"
+    assert len(data["voice"][0]["members"]) == 2
+
+    # Boosts: count + next tier target.
+    assert data["boosts"]["count"] == 3
+    assert data["boosts"]["tier"] == 1
+    assert data["boosts"]["next_tier"]["required"] == 15
+
+    # Emoji wall + role spotlight.
+    assert len(data["emojis"]) == 1
+    assert data["emojis"][0]["name"] == "bark"
+    assert data["emojis"][0]["url"] == "https://cdn/e.png"
+    assert len(data["roles"]) == 1
+    assert data["roles"][0]["name"] == "Admins"
+    assert data["roles"][0]["count"] == 1
+
 
 @pytest.mark.asyncio
 async def test_set_guild_slug_validates_persists_and_clears(app, monkeypatch):

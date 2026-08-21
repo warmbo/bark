@@ -87,10 +87,70 @@
 
     <!-- Add-on module dashboard widgets -->
     <div class="dashboard-widgets" id="dashboard-widgets" hidden></div>
+
+    <!-- Live overview panels: who's online, voice, boosts, emojis, roles, commands -->
+    <div class="live-panels" id="live-panels" hidden>
+        <div class="content-card live-panel online-panel">
+            <div class="card-header">
+                <h2 class="card-title">{{ icon("activity", 16) }} Online Now</h2>
+                <span class="text-tertiary" id="live-online-total">— online</span>
+            </div>
+            <div class="presence-row" id="presence-row"></div>
+            <div class="presence-breakdown" id="presence-breakdown"></div>
+            <div class="online-members" id="online-members"></div>
+        </div>
+
+        <div class="content-card live-panel voice-panel">
+            <div class="card-header">
+                <h2 class="card-title">{{ icon("volume-2", 16) }} In Voice</h2>
+                <span class="text-tertiary" id="voice-total">—</span>
+            </div>
+            <div id="voice-channels"></div>
+        </div>
+
+        <div class="content-card live-panel boosts-panel">
+            <div class="card-header">
+                <h2 class="card-title">{{ icon("zap", 16) }} Boosts</h2>
+                <span class="text-tertiary" id="boosts-label">—</span>
+            </div>
+            <div class="boost-progress-wrap">
+                <div class="boost-bar"><div class="boost-bar-fill" id="boost-bar-fill"></div></div>
+                <div class="boost-bar-meta" id="boost-bar-meta"></div>
+            </div>
+        </div>
+
+        <div class="content-card live-panel emoji-panel">
+            <div class="card-header">
+                <h2 class="card-title">{{ icon("smile", 16) }} Emojis</h2>
+                <span class="text-tertiary" id="emoji-total">—</span>
+            </div>
+            <div class="emoji-wall" id="emoji-wall"></div>
+        </div>
+
+        <div class="content-card live-panel roles-panel">
+            <div class="card-header">
+                <h2 class="card-title">{{ icon("tag", 16) }} Roles</h2>
+                <span class="text-tertiary">spotlight</span>
+            </div>
+            <div class="role-spotlight" id="role-spotlight"></div>
+        </div>
+
+        <div class="content-card live-panel commands-panel">
+            <div class="card-header">
+                <h2 class="card-title">{{ icon("terminal", 16) }} Quick Commands</h2>
+                <span class="text-tertiary">copy any</span>
+            </div>
+            <div class="command-search-wrap">
+                <input type="search" class="form-input command-search" id="command-search" name="command_search" placeholder="Search commands…" aria-label="Search commands" autocomplete="off">
+            </div>
+            <div class="command-list" id="command-list"></div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/overview-live.js?v=1"></script>
 <script>
 const GUILD_ID = '{{ guild.id }}';
 let GUID_VIEWER = true; // set from the manifest once loaded

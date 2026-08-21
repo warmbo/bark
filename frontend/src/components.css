@@ -1900,3 +1900,90 @@ textarea:focus-visible,
   .behavior-guide-grid { grid-template-columns: 1fr; }}/* Reputation thanks search input width */
 .rep-search-input { width: 200px; }/* Auto Voice: name-template preview/help spans the whole config grid row */
 .template-preview, .template-help { grid-column: 1 / -1; }
+
+/* ── Live overview panels (online, voice, boosts, emojis, roles, commands) ── */
+.live-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.live-panel { display: flex; flex-direction: column; }
+.live-panel .card-header { margin-bottom: 12px; }
+
+/* Presence summary */
+.presence-row { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+.presence-count { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.presence-count strong { color: var(--text-primary); font-size: 14px; }
+.presence-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.presence-online  { background: var(--green); box-shadow: 0 0 0 2px color-mix(in oklab, var(--green) 25%, transparent); }
+.presence-idle    { background: var(--yellow); box-shadow: 0 0 0 2px color-mix(in oklab, var(--yellow) 25%, transparent); }
+.presence-dnd     { background: var(--red); box-shadow: 0 0 0 2px color-mix(in oklab, var(--red) 25%, transparent); }
+.presence-offline { background: var(--muted-foreground); opacity: .6; }
+
+/* Online member avatar grid (Discord-embed vibe) */
+.online-members { margin-top: 4px; }
+.member-avatar-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.member-tile { position: relative; display: inline-flex; }
+.member-tile .member-avatar { border-radius: var(--radius-full); }
+.member-tile .presence-dot {
+  position: absolute; bottom: -1px; right: -1px;
+  width: 10px; height: 10px; border: 2px solid var(--bg-card-solid);
+}
+.member-avatar { border-radius: var(--radius-full); object-fit: cover; display: block; background: var(--bg-avatar); }
+.member-avatar-fallback {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--secondary); color: var(--secondary-foreground);
+  font-weight: 600; font-size: 12px;
+}
+
+/* Voice channels */
+.voice-channel { margin-bottom: 12px; }
+.voice-channel:last-child { margin-bottom: 0; }
+.voice-channel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.voice-channel-head strong { font-size: 13px; color: var(--text-primary); }
+.voice-channel-head .text-tertiary { margin-left: auto; font-size: 12px; }
+.voice-member-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.voice-member { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); background: var(--glass-tint); border: 1px solid var(--border-subtle); padding: 3px 8px 3px 3px; border-radius: var(--radius-full); }
+.voice-member .member-avatar { width: 20px; height: 20px; }
+
+/* Boost progress */
+.boost-progress-wrap { margin-top: 4px; }
+.boost-bar { height: 10px; border-radius: var(--radius-full); background: var(--secondary); border: 1px solid var(--border); overflow: hidden; }
+.boost-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hover)); border-radius: var(--radius-full); transition: width 400ms var(--transition-normal); width: 0; }
+.boost-bar-meta { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+
+/* Emoji wall */
+.emoji-wall { display: flex; flex-wrap: wrap; gap: 8px; }
+.emoji-tile {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  background: var(--glass-tint); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); cursor: default;
+}
+.emoji-tile img { width: 24px; height: 24px; object-fit: contain; }
+
+/* Role spotlight */
+.role-spotlight { display: flex; flex-direction: column; gap: 6px; }
+.role-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.role-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--secondary); flex: 0 0 auto; }
+.role-name { flex: 1; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-count { font-size: 12px; color: var(--text-tertiary); }
+
+/* Quick commands */
+.command-search-wrap { margin-bottom: 10px; }
+.command-search { width: 100%; }
+.command-list { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
+.command-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-bottom: 1px solid var(--border-subtle);
+}
+.command-row:last-child { border-bottom: none; }
+.command-row:hover { background: var(--glass-tint); }
+.command-name { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.command-name code { font-size: 13px; color: var(--text-primary); }
+.command-name .presence-dot { width: 7px; height: 7px; }
+.command-module { font-size: 11px; color: var(--text-tertiary); }
+.command-desc { flex: 1; font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-copy { flex: 0 0 auto; }

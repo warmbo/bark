@@ -798,7 +798,183 @@ async def get_guild_dashboard(request: Request, guild_id: int):
     except Exception:
         cards = []
         modules = []
-    return api_success({"viewer": viewer, "guild": profile, "cards": cards, "modules": modules})
+
+    # Live panel data: who's online/on voice, boost progress, emoji wall, and a
+    # role spotlight. Never let any of these crash the overview page.
+    live = _dashboard_live_data(guild, modules)
+    return api_success(
+        {
+            "viewer": viewer,
+            "guild": profile,
+            "cards": cards,
+            "modules": modules,
+            **live,
+        }
+    )
+
+
+def _member_brief(member) -> dict:
+    """Small, JSON-safe profile for an online/voice member."""
+    try:
+        avatar = member.display_avatar.url if getattr(member, "display_avatar", None) else None
+    except Exception:
+        avatar = None
+    try:
+        status = str(member.status).split(".")[-1] if getattr(member, "status", None) else "offline"
+    except Exception:
+        status = "offline"
+    return {
+        "id": str(getattr(member, "id", "")),
+        "name": str(getattr(member, "display_name", None) or getattr(member, "name", "") or "Unknown"),
+        "avatar_url": avatar,
+        "status": status,
+    }
+
+
+def _dashboard_live_data(guild, modules: list) -> dict:
+    """Assemble the 'live' overview panels (online presence, voice, boost,
+    emoji wall, role spotlight, quick commands). Defensive: any failure in a
+    single member/channel never 500s the dashboard."""
+    # ── Online presence ────────────────────────────────────────────────
+    presence_counts = {"online": 0, "idle": 0, "dnd": 0, "offline": 0}
+    online_members: list[dict] = []
+    try:
+        members = list(getattr(guild, "members", []) or [])
+    except Exception:
+        members = []
+    for member in members:
+        try:
+            status = str(getattr(member, "status", None) or discord.Status.offline).split(".")[-1]
+        except Exception:
+            status = "offline"
+        if status not in presence_counts:
+            status = "offline"
+        presence_counts[status] += 1
+        if status != "offline" and len(online_members) < 100:
+            online_members.append(_member_brief(member))
+
+    # ── Voice channels (Discord-embed style: channel -> members) ───────
+    voice: list[dict] = []
+    try:
+        for channel in getattr(guild, "voice_channels", []) or []:
+            channel_members = []
+            try:
+                channel_members = list(getattr(channel, "members", []) or [])
+            except Exception:
+                channel_members = []
+            if not channel_members:
+                continue
+            voice.append(
+                {
+                    "id": str(getattr(channel, "id", "")),
+                    "name": str(getattr(channel, "name", "") or "Voice"),
+                    "members": [_member_brief(m) for m in channel_members[:50]],
+                }
+            )
+    except Exception:
+        voice = []
+
+    online_total = presence_counts["online"] + presence_counts["idle"] + presence_counts["dnd"]
+
+    # ── Boost progress ─────────────────────────────────────────────────
+    boost_count = 0
+    boost_tier = 0
+    try:
+        boost_count = getattr(guild, "premium_subscriber_count", 0) or 0
+        boost_tier = getattr(guild, "premium_tier", 0) or 0
+    except Exception:
+        pass
+    # Discord boost tier thresholds (boosts required for each tier).
+    _tier_thresholds = {0: 0, 1: 2, 2: 15, 3: 30}
+    next_tier = None
+    for tier in (1, 2, 3):
+        if boost_tier < tier:
+            next_tier = {"tier": tier, "required": _tier_thresholds.get(tier, 0)}
+            break
+
+    # ── Emoji wall ─────────────────────────────────────────────────────
+    emojis = []
+    try:
+        for emoji in getattr(guild, "emojis", []) or []:
+            try:
+                url = emoji.url if getattr(emoji, "url", None) else None
+                animated = bool(getattr(emoji, "animated", False))
+            except Exception:
+                url, animated = None, False
+            if url:
+                emojis.append(
+                    {
+                        "id": str(getattr(emoji, "id", "")),
+                        "name": str(getattr(emoji, "name", "") or "emoji"),
+                        "url": url,
+                        "animated": animated,
+                    }
+                )
+    except Exception:
+        emojis = []
+
+    # ── Role spotlight (top hoisted + highest-position roles w/ members) ─
+    roles = []
+    try:
+        for role in getattr(guild, "roles", []) or []:
+            try:
+                if getattr(role, "is_default", None) and role.is_default():
+                    continue
+                if not getattr(role, "hoist", False):
+                    continue
+            except Exception:
+                continue
+            try:
+                count = len(getattr(role, "members", []) or [])
+            except Exception:
+                count = 0
+            roles.append(
+                {
+                    "id": str(getattr(role, "id", "")),
+                    "name": str(getattr(role, "name", "") or "Role"),
+                    "color": (getattr(role, "color", None) and str(getattr(role.color, "value", ""))) or "",
+                    "count": count,
+                }
+            )
+        roles.sort(key=lambda r: r["count"], reverse=True)
+        roles = roles[:8]
+    except Exception:
+        roles = []
+
+    # ── Quick commands (flat list for the command launcher) ────────────
+    quick_commands = []
+    for m in modules:
+        for c in m.get("commands", []):
+            quick_commands.append(
+                {
+                    "module": m.get("title", ""),
+                    "name": c.get("name", ""),
+                    "description": c.get("description", "") or "",
+                    "slash": bool(c.get("slash", False)),
+                }
+            )
+    quick_commands.sort(key=lambda c: c["name"].lower())
+
+    return {
+        "presence": {
+            "total": online_total,
+            "online": presence_counts["online"],
+            "idle": presence_counts["idle"],
+            "dnd": presence_counts["dnd"],
+            "offline": presence_counts["offline"],
+            "members": online_members,
+        },
+        "voice": voice,
+        "boosts": {
+            "count": boost_count,
+            "tier": boost_tier,
+            "next_tier": next_tier,
+            "tier_thresholds": _tier_thresholds,
+        },
+        "emojis": emojis,
+        "roles": roles,
+        "commands": quick_commands,
+    }
 
 
 async def _guild_growth_30d(session, guild_id: int) -> int:
