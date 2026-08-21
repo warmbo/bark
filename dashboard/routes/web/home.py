@@ -5,7 +5,7 @@ Home web routes.
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from services.response import render_not_found
@@ -17,25 +17,21 @@ router = APIRouter(tags=["web-home"])
 
 
 @router.get("/g/{slug}", include_in_schema=False)
-async def guild_slug_redirect(request: Request, slug: str):
-    """Resolve a custom URL slug to the numeric guild page (e.g. /g/my-server)."""
-    from sqlalchemy import select
+async def guild_slug_page(request: Request, slug: str):
+    """Unknown-slug 404.
 
-    from database.engine import session_scope
-    from database.models.guild import GuildSetting
-
-    async with session_scope() as session:
-        row = (
-            await session.execute(
-                select(GuildSetting).where(
-                    GuildSetting.key == "slug",
-                    GuildSetting.value == slug.lower(),
-                )
-            )
-        ).scalars().first()
-    if row is None:
-        return HTMLResponse("Server not found", status_code=404)
-    return RedirectResponse(url=f"/guild/{row.guild_id}", status_code=302)
+    Known slugs are rewritten to ``/guild/{guild_id}`` by the slug rewrite
+    middleware (see ``services/slug_router.py``) BEFORE routing, so this route
+    only ever runs for a slug that resolves to nothing. It exists to render a
+    friendly not-found page instead of a bare 404.
+    """
+    return render_not_found(
+        request, templates,
+        title="Server not found",
+        message="That link isn't available through this dashboard.",
+        hint="The custom link may have been removed or was never set.",
+        back_href="/dashboard",
+    )
 
 
 @router.get("/guild/{guild_id}", response_class=HTMLResponse)

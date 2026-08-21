@@ -31,7 +31,7 @@ function closePalette(e) {
 }
 
 function loadPaletteData() {
-    const guildId = window.location.pathname.match(/\/guild\/(\d+)/)?.[1];
+    const guildId = (typeof currentGuildId === 'function') ? currentGuildId() : window.location.pathname.match(/\/guild\/(\d+)/)?.[1];
     const results = document.getElementById('palette-results');
     if (!guildId) {
         paletteData.items = [{
@@ -50,6 +50,8 @@ function loadPaletteData() {
         })
         .then(raw => {
             const data = raw.data || raw;
+            // Advertise the guild's slug so palette links stay on slug URLs.
+            window.BARK_GUILD_SLUG = data.guild?.slug || null;
             const items = [];
 
             // Add pages
@@ -57,7 +59,7 @@ function loadPaletteData() {
                 items.push({
                     label: p.label,
                     desc: p.category ? `Page in ${p.category}` : 'Dashboard page',
-                    url: p.route,
+                    url: (typeof guildNavHref === 'function') ? guildNavHref(p.route) : p.route,
                     icon: p.icon || 'layout-dashboard',
                     badge: p.category || '',
                     type: 'page',
@@ -69,7 +71,7 @@ function loadPaletteData() {
                 items.push({
                     label: a.label,
                     desc: `Action — ${a.module}`,
-                    url: a.url,
+                    url: (typeof guildNavHref === 'function') ? guildNavHref(a.url) : a.url,
                     icon: 'zap',
                     badge: a.module,
                     type: 'action',
@@ -81,7 +83,7 @@ function loadPaletteData() {
                 items.push({
                     label: m.label,
                     desc: `${m.enabled ? 'Enabled' : 'Disabled'} — ${m.description || 'Module'}`,
-                    url: m.url,
+                    url: (typeof guildNavHref === 'function') ? guildNavHref(m.url) : m.url,
                     icon: 'puzzle',
                     badge: m.actions_count > 0 ? `${m.actions_count} actions` : '',
                     type: 'module',

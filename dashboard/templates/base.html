@@ -25,7 +25,6 @@
     <meta property="og:title" content="{% block og_title %}Bark — {{ self.title() }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}Server management platform for Bark Discord bot{% endblock %}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ config.dashboard.public_url if config is defined else '' }}{{ request.url.path if request else '' }}">
     {% if _avatar %}<meta property="og:image" content="{{ _avatar }}">{% endif %}
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary">
@@ -38,10 +37,25 @@
     {% endif %}
     <!-- Theme -->
     <meta name="theme-color" content="#1e1e2e">
+    {% if request and request.state and request.state.original_path is defined and request.state.original_path %}
+    <meta property="og:url" content="{{ config.dashboard.public_url if config is defined else '' }}{{ request.state.original_path }}">
+    {% else %}
+    <meta property="og:url" content="{{ config.dashboard.public_url if config is defined else '' }}{{ request.url.path if request else '' }}">
+    {% endif %}
 </head>
 <body>
     <!-- Skip to content link for keyboard users -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    {% if guild is defined and guild %}
+    {# Resolve the current guild id (and, on slug URLs, the slug) for the
+       frontend so slug paths (/g/{slug}/...) work without exposing the
+       numeric id and without a redirect. #}
+    <script>
+        window.BARK_GUILD_ID = "{{ guild.id }}";
+        {% if request.state.guild_slug is defined and request.state.guild_slug %}window.BARK_GUILD_SLUG = "{{ request.state.guild_slug }}";{% endif %}
+    </script>
+    {% endif %}
 
     <!-- Bot-disconnected banner: shown while the bot process is up but not
          connected to Discord (e.g. after a failed gateway handshake) so the
@@ -173,10 +187,10 @@
 
     <script src="/static/js/forms.js?v=1"></script>
     <script src="/static/js/image-fallbacks.js?v=1"></script>
-    <script src="/static/js/main.js?v=36"></script>
+    <script src="/static/js/main.js?v=37"></script>
     <script src="/static/js/sidebar-addons-collapse.js?v=1"></script>
     <script src="/static/js/realtime.js?v=5"></script>
-    <script src="/static/js/palette.js?v=5"></script>
+    <script src="/static/js/palette.js?v=6"></script>
     <script src="/static/js/shortcuts.js?v=3"></script>
     <script src="/static/js/lucide.min.js?v=1310" defer></script>
     <script>document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });</script>

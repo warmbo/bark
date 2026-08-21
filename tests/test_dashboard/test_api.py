@@ -1063,52 +1063,36 @@ async def test_set_guild_slug_validates_persists_and_clears(app, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_guild_slug_redirect_resolves_to_numeric_guild(app, monkeypatch):
-    """GET /g/{slug} redirects to the numeric guild page; unknown -> 404."""
-    from types import SimpleNamespace
-
-    import config
-    from dashboard.routes.api import guilds
-    from dashboard.routes.web.home import guild_slug_redirect
-
-    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
-    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
-    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
-
+async def test_guild_slug_serves_pages_directly_without_redirect(client):
+    """GET /g/{slug} and /g/{slug}/<page> serve the page directly (no 302 to
+    the numeric guild id), and unknown slugs 404."""
     from database.engine import session_scope
-    from database.models.guild import Guild
+    from database.models.guild import GuildSetting
 
     async with session_scope() as s:
-        from sqlalchemy import select
+        s.add(GuildSetting(guild_id="1", key="slug", value="my-server"))
+        await s.commit()
 
-        if not (await s.execute(select(Guild).where(Guild.discord_id == "555555"))).scalars().first():
-            s.add(Guild(discord_id="555555", name="Slug Guild"))
-            await s.commit()
+    # Bare slug serves the guild overview directly (200, NOT a redirect).
+    resp = await client.get("/g/my-server", follow_redirects=False)
+    assert resp.status_code == 200
+    assert "location" not in resp.headers
+    # The page is injected with the resolved guild id + slug so the frontend
+    # can operate on slug URLs without the numeric id or a redirect.
+    assert b'window.BARK_GUILD_ID = "1"' in resp.content
+    assert b'window.BARK_GUILD_SLUG = "my-server"' in resp.content
 
-    bot = app.state.bot
-    request = SimpleNamespace(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
-
-    class _Req(SimpleNamespace):
-        _body = {}
-
-        async def json(self):
-            return self._body
-
-    set_req = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
-    set_req._body = {"slug": "my-server"}
-    await guilds.set_guild_slug(set_req, 555555)
-
-    # Known slug -> 302 redirect to /guild/{id}.
-    resp = await guild_slug_redirect(request, "my-server")
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/guild/555555"
+    # Sub-page slugs serve the matching page directly with no id in the URL.
+    resp2 = await client.get("/g/my-server/stats", follow_redirects=False)
+    assert resp2.status_code == 200
+    assert "location" not in resp2.headers
 
     # Slug matching is case-insensitive.
-    resp2 = await guild_slug_redirect(request, "MY-SERVER")
-    assert resp2.status_code == 302
+    resp_case = await client.get("/g/MY-SERVER/stats", follow_redirects=False)
+    assert resp_case.status_code == 200
 
-    # Unknown slug -> 404.
-    resp3 = await guild_slug_redirect(request, "does-not-exist")
+    # Unknown slug -> friendly 404 (the middleware leaves it to the route).
+    resp3 = await client.get("/g/does-not-exist", follow_redirects=False)
     assert resp3.status_code == 404
 
 

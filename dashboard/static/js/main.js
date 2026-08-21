@@ -419,7 +419,33 @@ function refreshIcons() {
 }
 
 function currentGuildId() {
+    if (window.BARK_GUILD_ID) return window.BARK_GUILD_ID;
     return window.location.pathname.match(/\/guild\/(\d+)/)?.[1];
+}
+
+function currentGuildSlug() {
+    return window.BARK_GUILD_SLUG || null;
+}
+
+// Canonical base URL for the current guild's pages: the human-friendly slug
+// when one is set, otherwise the numeric /guild/{id} form. Slug URLs keep the
+// guild id out of the address bar entirely (the slug is resolved server-side,
+// so this works behind any reverse proxy with no rewrite rules).
+function currentGuildUrlBase() {
+    const slug = currentGuildSlug();
+    if (slug) return `/g/${slug}`;
+    return `/guild/${currentGuildId()}`;
+}
+
+// Convert a manifest route (/guild/{id}/...) to the current canonical base so
+// navigation stays on slug URLs instead of exposing the numeric guild id.
+function guildNavHref(route) {
+    return currentGuildUrlBase() + String(route || '').replace(/^\/guild\/\d+/, '');
+}
+
+// Build a user-facing guild page URL from a path suffix (e.g. '/members/123').
+function guildUrl(suffix) {
+    return currentGuildUrlBase() + (suffix || '');
 }
 
 // ── Unified Tab Switching ─────────────────────────
@@ -780,19 +806,19 @@ async function loadSidebarManifest(container) {
         if (cached) return; // cached render is good enough
         // Fallback: render basic nav from current URL
         container.innerHTML = `
-            <a href="/guild/${guildId}" class="nav-item ${activePage === 'overview' ? 'active' : ''}">
+            <a href="${currentGuildUrlBase()}" class="nav-item ${activePage === 'overview' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('layout-dashboard', 16)}</span>
                 <span>Dashboard</span>
             </a>
-            <a href="/guild/${guildId}/members" class="nav-item ${activePage === 'members' ? 'active' : ''}">
+            <a href="${currentGuildUrlBase()}/members" class="nav-item ${activePage === 'members' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('users', 16)}</span>
                 <span>Members</span>
             </a>
-            <a href="/guild/${guildId}/modules" class="nav-item ${activePage === 'modules' ? 'active' : ''}">
+            <a href="${currentGuildUrlBase()}/modules" class="nav-item ${activePage === 'modules' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('puzzle', 16)}</span>
                 <span>Modules</span>
             </a>
-            <a href="/guild/${guildId}/settings" class="nav-item ${activePage === 'settings' ? 'active' : ''}">
+            <a href="${currentGuildUrlBase()}/settings" class="nav-item ${activePage === 'settings' ? 'active' : ''}">
                 <span class="nav-icon">${getIconSvg('settings', 16)}</span>
                 <span>Settings</span>
             </a>`;
@@ -801,6 +827,9 @@ async function loadSidebarManifest(container) {
 }
 
 function renderSidebar(container, data, activePage) {
+    // Advertise the guild's slug (from the manifest) so nav hrefs stay on
+    // slug URLs instead of exposing the numeric id.
+    window.BARK_GUILD_SLUG = data?.guild?.slug || null;
     const categories = data.categories || {};
     const orderedKeys = Object.keys(categories).sort((a, b) => {
         const pa = categories[a].priority ?? 99;
@@ -857,7 +886,7 @@ function renderNavItem(page, activePage) {
     const iconSize = isModule ? 14 : 16;
     const dataModule = isModule ? ` data-module="${escHtml(page.module)}"` : '';
 
-    return `<a href="${pageRoute}" class="${itemClass} ${isActive ? 'active' : ''}"${isActive ? ' aria-current="page"' : ''}${dataModule}>
+    return `<a href="${guildNavHref(pageRoute)}" class="${itemClass} ${isActive ? 'active' : ''}"${isActive ? ' aria-current="page"' : ''}${dataModule}>
         <span class="nav-icon">${getIconSvg(page.icon || 'puzzle', iconSize)}</span>
         <span class="${isModule ? 'nav-module-name' : ''}">${escHtml(page.label)}</span>
     </a>`;
@@ -866,10 +895,10 @@ function renderNavItem(page, activePage) {
 function getActivePageName() {
     const path = window.location.pathname;
     const parts = path.split('/').filter(Boolean);
-    if (parts.length >= 2 && parts[0] === 'guild') {
+    if (parts.length >= 2 && (parts[0] === 'guild' || parts[0] === 'g')) {
         return parts.slice(2).join('/') || 'overview';
     }
-    return path.split('/').filter(Boolean).join('/') || 'dashboard';
+    return parts.join('/') || 'dashboard';
 }
 
 function getIconSvg(name, size) {

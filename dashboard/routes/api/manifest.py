@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 
 from database.engine import session_scope
 from services.response import api_not_found, api_success, get_guild_capabilities
+from services.slug_router import get_guild_slug
 
 router = APIRouter(tags=["api-manifest"])
 
@@ -134,6 +135,7 @@ async def get_guild_manifest(request: Request, guild_id: int):
         "name": guild.name,
         "member_count": guild.member_count,
         "icon_url": guild.icon.url if guild.icon else None,
+        "slug": await get_guild_slug(guild.id),
     }
 
     # View-only members (no admin/moderator rights in this server) get a

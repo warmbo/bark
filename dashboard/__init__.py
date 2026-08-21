@@ -144,6 +144,16 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     app.middleware("http")(dev_overlay_middleware)
 
+    # Slug routing: rewrite /g/{slug}[/<page>] -> /guild/{guild_id}[/<page>]
+    # internally so slug URLs work behind any reverse proxy with no per-host
+    # rewrite rules and never expose the numeric guild id. Registered AFTER the
+    # auth/security middleware so it runs BEFORE them (Starlette runs the last
+    # registered middleware outermost) and they see the canonical /guild/{id}
+    # path with the same gates as a direct id URL.
+    from services.slug_router import slug_rewrite_middleware
+
+    app.middleware("http")(slug_rewrite_middleware)
+
     # Outermost middleware: compresses the final response. Registered last so
     # Starlette runs it first (outermost) — inner middleware (e.g. the dev
     # overlay, which rewrites raw HTML bodies) must see the uncompressed body.
