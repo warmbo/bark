@@ -1211,6 +1211,12 @@ async def test_set_guild_theme_validates_and_persists(app, monkeypatch):
     resp_bad = await guilds.set_guild_theme(bad, 666666)
     assert resp_bad.status_code == 400
 
+    # The extended palette (cyan / teal / orange) is accepted too.
+    for name in ("cyan", "teal", "orange"):
+        r2 = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+        r2._body = {"theme": name}
+        assert (await guilds.set_guild_theme(r2, 666666)).status_code == 200
+
 
 @pytest.mark.asyncio
 async def test_guild_slug_serves_pages_directly_without_redirect(client):
