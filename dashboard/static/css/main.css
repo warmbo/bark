@@ -2426,6 +2426,19 @@ textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in okla
   to { opacity: 1; }
 }
 .tab-panel.active { animation: panel-in 120ms var(--ease-out) both; }
+/* Soft page transitions (2026-08-23): fade in on load, fade out on internal
+   link click (page-transition.js adds .page-leaving). Neutralized to instant
+   under prefers-reduced-motion via the global block. */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+body.page-fade-in { animation: page-fade-in 200ms var(--ease-out) both; }
+body.page-leaving {
+  opacity: 0;
+  transition: opacity 150ms var(--ease-out);
+  pointer-events: none;
+}
 /* Module surface uniformity (remake 2026-08-19): speak phrase editor rows and
    module preview cards follow the canonical data-card/table anatomy. */
 .speak-table-wrap { margin-top: var(--space-2); }
