@@ -1935,6 +1935,7 @@ textarea:focus-visible,
 .theme-swatch-rottweiler { background: oklch(0.68 0.13 50); }
 .theme-swatch-dracula { background: oklch(0.58 0.24 22); }
 .theme-swatch-gold { background: oklch(0.80 0.15 85); }
+.theme-swatch-hud { background: oklch(0.82 0.15 200); }
 .theme-name { font-size: 11px; line-height: 1.1; color: var(--text-secondary); }
 .theme-option.active .theme-name { color: var(--text-primary); }
 
