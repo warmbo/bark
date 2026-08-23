@@ -3017,35 +3017,37 @@ body {
    When the instance owner toggles "Invert wallpaper", <html> carries
    data-wallpaper="invert" and the backdrop becomes a light negative. The
    near-white text tokens from the dark themes would be unreadable on those
-   light surfaces, so this block flips the WHOLE neutral surface + text model
-   to a light scheme (near-black text on translucent light panels). The accent
-   tokens (--primary/--ring/--chart-*) stay per-theme so the chosen hue still
-   colors buttons and highlights. This block is LAST so it wins over every
-   [data-theme] block at equal specificity. */
+   light surfaces, so this block flips the surface + text model to a light
+   scheme. Crucially, the light neutrals are TINTED toward the ACTIVE theme's
+   accent hue via color-mix() on var(--primary)/var(--ring) — so steel stays
+   blue-tinted, synth pink-magenta, acid lime, etc. Light mode keeps each
+   theme's identity instead of collapsing to one generic pale-gray. Accent
+   tokens (--primary/--ring/--chart-*) stay per-theme. This block is LAST so
+   it wins over every [data-theme] block at equal specificity. */
 [data-wallpaper="invert"] {
-  --theme-glow-a: oklch(1 0 250 / 0.30);
-  --theme-glow-b: oklch(1 0 250 / 0.22);
+  --theme-glow-a: color-mix(in oklab, var(--primary) 26%, transparent);
+  --theme-glow-b: color-mix(in oklab, var(--ring) 20%, transparent);
 
-  --background: oklch(0.955 0.010 250);
-  --foreground: oklch(0.20 0.015 250);
-  --card: oklch(0.995 0.004 250 / 0.88);
-  --card-foreground: oklch(0.20 0.015 250);
-  --popover: oklch(0.995 0.004 250 / 0.95);
-  --popover-foreground: oklch(0.20 0.015 250);
-  --secondary: oklch(0.93 0.012 250 / 0.82);
-  --secondary-foreground: oklch(0.24 0.015 250);
-  --muted: oklch(0.94 0.010 250 / 0.82);
-  --muted-foreground: oklch(0.48 0.02 250);
-  --accent: oklch(0.90 0.02 250 / 0.82);
-  --accent-foreground: oklch(0.24 0.015 250);
+  --background: color-mix(in oklab, var(--primary) 7%, oklch(0.975 0.010 250));
+  --foreground: color-mix(in oklab, var(--primary) 28%, oklch(0.20 0.02 250));
+  --card: color-mix(in oklab, var(--primary) 11%, white);
+  --card-foreground: color-mix(in oklab, var(--primary) 28%, oklch(0.20 0.02 250));
+  --popover: color-mix(in oklab, var(--primary) 14%, white);
+  --popover-foreground: color-mix(in oklab, var(--primary) 28%, oklch(0.20 0.02 250));
+  --secondary: color-mix(in oklab, var(--primary) 18%, white);
+  --secondary-foreground: color-mix(in oklab, var(--primary) 34%, oklch(0.22 0.02 250));
+  --muted: color-mix(in oklab, var(--primary) 14%, white);
+  --muted-foreground: color-mix(in oklab, var(--primary) 40%, oklch(0.46 0.02 250));
+  --accent: color-mix(in oklab, var(--primary) 22%, white);
+  --accent-foreground: color-mix(in oklab, var(--primary) 40%, oklch(0.20 0.02 250));
   --destructive: oklch(0.55 0.16 25);
   --destructive-foreground: oklch(0.985 0.005 25);
-  --border: oklch(0.78 0.015 250 / 0.85);
-  --input: oklch(0.92 0.010 250 / 0.9);
-  --sidebar: oklch(0.97 0.008 250 / 0.90);
-  --sidebar-foreground: oklch(0.20 0.015 250);
-  --sidebar-accent: oklch(0.90 0.02 250 / 0.85);
-  --sidebar-accent-foreground: oklch(0.24 0.015 250);
-  --sidebar-border: oklch(0.80 0.015 250 / 0.8);
+  --border: color-mix(in oklab, var(--primary) 30%, oklch(0.88 0.015 250));
+  --input: color-mix(in oklab, var(--primary) 20%, white);
+  --sidebar: color-mix(in oklab, var(--primary) 8%, white);
+  --sidebar-foreground: color-mix(in oklab, var(--primary) 28%, oklch(0.20 0.02 250));
+  --sidebar-accent: color-mix(in oklab, var(--primary) 16%, white);
+  --sidebar-accent-foreground: color-mix(in oklab, var(--primary) 34%, oklch(0.22 0.02 250));
+  --sidebar-border: color-mix(in oklab, var(--primary) 26%, oklch(0.86 0.015 250));
 }
 
