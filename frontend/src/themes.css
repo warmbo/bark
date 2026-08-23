@@ -490,6 +490,7 @@ body {
       var(--wallpaper-url);
     background-size: auto, auto, 28px 28px, 28px 28px, cover;
     animation: hud-grid-pan 9s linear infinite;
+    animation-delay: 260ms;
   }
 
   /* Static CRT scanline texture over everything (overrides v3 opacity:0). */
@@ -521,6 +522,7 @@ body {
     background: linear-gradient(180deg, transparent, rgba(90, 220, 255, 0.06) 45%, rgba(90, 220, 255, 0.12) 50%, rgba(90, 220, 255, 0.06) 55%, transparent);
     height: 220%;
     animation: hud-scan-sweep 8s linear infinite;
+    animation-delay: 260ms;
   }
 
   /* Cards: FPS corner brackets + mouse-tracked 3D tilt + cursor glow.
@@ -635,6 +637,7 @@ body {
   [data-theme="hud"] .module-heading,
   [data-theme="hud"] .landing h1 {
     animation: hud-glitch-split 7s linear infinite;
+    animation-delay: 260ms;
   }
 
   /* ── NAV PANE expansion ─────────────────────────────── */

@@ -2428,12 +2428,15 @@ textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in okla
 .tab-panel.active { animation: panel-in 120ms var(--ease-out) both; }
 /* Soft page transitions (2026-08-23): fade in on load, fade out on internal
    link click (page-transition.js adds .page-leaving). Neutralized to instant
-   under prefers-reduced-motion via the global block. */
+   under prefers-reduced-motion via the global block.
+   The fade-in is short and only fades opacity; the HUD theme's ambient
+   animations (grid pan, scanline, glitch) are delayed ~260ms so they do not
+   "pop" or flicker during the fade. */
 @keyframes page-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-body.page-fade-in { animation: page-fade-in 200ms var(--ease-out) both; }
+body.page-fade-in { animation: page-fade-in 140ms var(--ease-out) both; }
 body.page-leaving {
   opacity: 0;
   transition: opacity 150ms var(--ease-out);
@@ -2530,8 +2533,9 @@ body.page-leaving {
   --space-xl: var(--space-6);
   --content-padding: clamp(20px, 2.35vw, 36px);
   --section-gap: var(--space-6);
-  --card-padding-x: var(--space-5);
-  --card-padding-y: var(--space-4);
+  /* Generous card padding so text/content never touches the box edges. */
+  --card-padding-x: var(--space-6);
+  --card-padding-y: var(--space-5);
 }/* Page shell and section hierarchy */
 .page-container {
   max-width: 1440px;
@@ -3220,6 +3224,7 @@ body {
       var(--wallpaper-url);
     background-size: auto, auto, 28px 28px, 28px 28px, cover;
     animation: hud-grid-pan 9s linear infinite;
+    animation-delay: 260ms;
   }
 
   /* Static CRT scanline texture over everything (overrides v3 opacity:0). */
@@ -3251,6 +3256,7 @@ body {
     background: linear-gradient(180deg, transparent, rgba(90, 220, 255, 0.06) 45%, rgba(90, 220, 255, 0.12) 50%, rgba(90, 220, 255, 0.06) 55%, transparent);
     height: 220%;
     animation: hud-scan-sweep 8s linear infinite;
+    animation-delay: 260ms;
   }
 
   /* Cards: FPS corner brackets + mouse-tracked 3D tilt + cursor glow.
@@ -3365,6 +3371,7 @@ body {
   [data-theme="hud"] .module-heading,
   [data-theme="hud"] .landing h1 {
     animation: hud-glitch-split 7s linear infinite;
+    animation-delay: 260ms;
   }
 
   /* ── NAV PANE expansion ─────────────────────────────── */
