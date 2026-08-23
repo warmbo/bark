@@ -641,9 +641,10 @@ body {
   }
 
   /* ── NAV PANE expansion ─────────────────────────────── */
-  /* Sidebar: corner brackets, an inner scan sweep, and a cyan edge. */
+  /* Sidebar: corner brackets, an inner scan sweep, and a cyan edge. Keep the
+     base position:fixed (do NOT set position:relative here — that would pull
+     the sidebar out of the fixed layout and leave a gap in .main-content). */
   [data-theme="hud"] .sidebar {
-    position: relative;
     overflow: hidden;
     box-shadow:
       inset -1px 0 0 color-mix(in oklab, var(--primary) 25%, transparent),
