@@ -1273,6 +1273,19 @@ class ModerationModule(BarkModule):
             logger.exception("Failed to load ModuleConfig for guild %s", guild_id)
         return result
 
+    async def save_dashboard_config(self, guild_id: int, config: dict) -> None:
+        """Persist config and immediately invalidate the AutoMod caches.
+
+        ``_get_configs`` and ``_get_rulesets_and_rules`` cache their results for
+        30s. Without invalidating here, a dashboard save (rules, word lists,
+        ruleset toggles) would keep enforcing stale rules for up to 30s.
+        """
+        await super().save_dashboard_config(guild_id, config)
+        self._config_cache.pop(guild_id, None)
+        self._cache_ttl.pop(guild_id, None)
+        self._ruleset_cache.pop(guild_id, None)
+        self._ruleset_cache_ttl.pop(guild_id, None)
+
     # ── Legacy flat-config checks (fallback, unchanged) ─────────
 
     async def _check_spam(self, message, config, now):

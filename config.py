@@ -51,7 +51,6 @@ class DashboardConfig:
     public_url: str = "http://127.0.0.1:8090"
     secret_key: str = ""
     session_ttl: int = 2592000  # 30 days — signed session cookie lifetime
-    cors_origins: list[str] = field(default_factory=lambda: ["*"])
     force_https: bool = False
     # Comma-separated IPs/CIDRs allowed to set X-Forwarded-* headers (used for
     # the real client IP and the https scheme when behind a TLS-terminating

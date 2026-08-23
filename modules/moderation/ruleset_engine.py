@@ -545,7 +545,7 @@ async def _effect_kick(message, cfg, reason, module):
     try:
         await message.author.kick(reason=f"[AutoMod] {reason}")
     except Exception:
-        pass
+        logger.exception("AutoMod kick effect failed for %s in %s", message.author, message.guild)
 
 
 async def _effect_kick_purge(message, cfg, reason, module):
@@ -561,7 +561,7 @@ async def _effect_kick_purge(message, cfg, reason, module):
     try:
         await message.author.kick(reason=f"[AutoMod] {reason}")
     except Exception:
-        pass
+        logger.exception("AutoMod kick+purge effect failed to kick %s in %s", message.author, message.guild)
     max_age = cfg.get("max_age_seconds", 120)
     await _purge_user_messages(message, max_age)
 
@@ -603,7 +603,7 @@ async def _effect_ban(message, cfg, reason, module):
     try:
         await message.author.ban(reason=f"[AutoMod] {reason}", delete_message_days=delete_days)
     except Exception:
-        pass
+        logger.exception("AutoMod ban effect failed for %s in %s", message.author, message.guild)
 
 
 async def _effect_send_alert(message, cfg, reason, module):
@@ -644,7 +644,7 @@ async def _effect_send_alert(message, cfg, reason, module):
     try:
         await channel.send(embed=embed)
     except Exception:
-        pass
+        logger.exception("AutoMod alert embed send failed in %s", message.guild)
 
 
 async def _effect_delete_multiple(message, cfg, reason, module):
@@ -662,7 +662,7 @@ async def _effect_delete_multiple(message, cfg, reason, module):
         deleted = await message.channel.purge(limit=count + 10, check=_check)
         logger.info("Bulk-deleted %d messages for %s", len(deleted), message.author)
     except Exception:
-        pass
+        logger.exception("AutoMod bulk-delete effect failed in %s", message.guild)
 
 
 async def _apply_escalation(message, action, strikes, reason, module):
@@ -681,7 +681,7 @@ async def _apply_escalation(message, action, strikes, reason, module):
                 f"👢 {message.author.mention} auto-kicked (strike {strikes})"
             )
     except Exception:
-        pass
+        logger.exception("AutoMod escalation effect (%s) failed for %s", action, message.author)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

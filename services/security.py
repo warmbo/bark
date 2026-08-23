@@ -87,8 +87,6 @@ def _is_public(path: str) -> bool:
         return True
     if path.startswith("/media/"):
         return True
-    if path.startswith("/s/"):
-        return True
     if path.startswith("/auth/share/"):
         return True
     return False

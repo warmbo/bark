@@ -373,7 +373,12 @@ class ModuleManager:
                         try:
                             self._unregister_command(name, cmd_name)
                         except Exception:
-                            pass
+                            logger.debug(
+                                "Could not unregister command %s for module %s",
+                                cmd_name,
+                                name,
+                                exc_info=True,
+                            )
                 self._registered_commands[name].clear()
 
             # Remove prefix (text) commands for this module.
@@ -476,7 +481,7 @@ class ModuleManager:
             if config.bot.sync_guild_id:
                 return discord.Object(id=config.bot.sync_guild_id)
         except Exception:
-            pass
+            logger.debug("Could not resolve sync guild object", exc_info=True)
         return None
 
     @staticmethod
