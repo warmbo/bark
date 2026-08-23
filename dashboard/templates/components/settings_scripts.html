@@ -308,7 +308,7 @@
             });
             if (res.success === false) throw new Error(res.error || 'Update failed');
             try { localStorage.setItem('bark-wallpaper-' + GUILD_ID, invert ? 'invert' : ''); } catch (e) {}
-            showToast(invert ? 'Wallpaper inverted' : 'Wallpaper restored', 'success');
+            showToast(invert ? 'Light mode on' : 'Dark mode on', 'success');
         } catch (error) {
             wallpaperToggle.checked = !invert;
             if (!invert) document.documentElement.setAttribute('data-wallpaper', 'invert');
