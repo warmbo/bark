@@ -6,10 +6,11 @@ message. A dashboard save MUST invalidate those caches immediately, otherwise
 rules keep enforcing stale values for up to 30s.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from modules.moderation.module import ModerationModule
-from types import SimpleNamespace
 
 
 async def _async_noop(*args, **kwargs):
