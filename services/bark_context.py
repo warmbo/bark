@@ -133,7 +133,9 @@ class BarkContext:
         now = monotonic()
         cached = self._module_config_cache.get(key)
         if cached is not None and now - cached[0] < self._CONFIG_CACHE_TTL_SECONDS:
-            return cached[1]
+            # Always return a deep copy so a caller can never corrupt the cached
+            # dict by mutating the value it received.
+            return copy.deepcopy(cached[1])
 
         async with session_scope() as session:
             result = await session.execute(
@@ -152,7 +154,9 @@ class BarkContext:
                 value = {}
         # Store a defensive deep copy; callers must not corrupt the cache.
         self._module_config_cache[key] = (now, copy.deepcopy(value))
-        return value
+        # Return a deep copy (not `value`), symmetric with the cache-hit path, so
+        # callers can never mutate what is stored.
+        return copy.deepcopy(value)
 
     async def save_module_config(self, module_name: str, guild_id: int, config: dict) -> bool:
         from sqlalchemy import select

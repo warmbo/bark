@@ -64,7 +64,13 @@ async def test_get_module_config_returns_copy_not_cache_handle(ctx):
         )
         await session.commit()
 
+    # Cache-miss path returns a defensive copy.
     value = await ctx.get_module_config("reputation", 2)
     value["level_constant"] = 999  # caller mutates the returned dict
     again = await ctx.get_module_config("reputation", 2)
     assert again["level_constant"] == 50, "caller mutation must not corrupt the cache"
+
+    # Cache-hit path (within TTL) must also return a copy, not the cached handle.
+    again["level_constant"] = 12345
+    third = await ctx.get_module_config("reputation", 2)
+    assert third["level_constant"] == 50, "cache-hit mutation must not corrupt the cache"
