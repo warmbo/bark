@@ -33,38 +33,6 @@
                 </div>
             {% endcall %}
 
-            <!-- Accent Theme -->
-            {% call settings_card("Accent Theme", "Choose the accent color and wallpaper treatment for this server's dashboard.", icon_name="palette", role="server_admin") %}
-                <div class="settings-form">
-                    <div class="form-group">
-                        <label class="form-label" id="theme-label">Color scheme</label>
-                        <div class="theme-picker" id="theme-picker" role="radiogroup" aria-labelledby="theme-label">
-                            {% for t in [("steel","Steel"),("emerald","Emerald"),("violet","Violet"),("amber","Amber"),("rose","Rose"),("cyan","Cyan"),("teal","Teal"),("orange","Orange"),("synth","Synth"),("acid","Acid"),("rottweiler","Rottweiler"),("dracula","Dracula"),("gold","Gold"),("hud","HUD")] %}
-                            <button type="button" class="theme-option" data-theme-value="{{ t[0] }}" role="radio" aria-checked="false" aria-label="{{ t[1] }}" title="{{ t[1] }}">
-                                <span class="theme-swatch theme-swatch-{{ t[0] }}" aria-hidden="true"></span>
-                                <span class="theme-name">{{ t[1] }}</span>
-                            </button>
-                            {% endfor %}
-                        </div>
-                        <p class="form-hint">Pick a scheme — it applies to anyone viewing this server.</p>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-label-row">
-                            <label class="form-label" for="wallpaper-invert-toggle">Invert wallpaper</label>
-                            <label class="toggle-switch" aria-label="Toggle wallpaper invert">
-                                <input type="checkbox" id="wallpaper-invert-toggle" name="wallpaper_invert">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <p class="form-hint">Show the wallpaper as a light, negative version. Surfaces are translucent, so this swaps the whole backdrop behind them.</p>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-primary" id="theme-save">{{ icon("save", 14) }} Save</button>
-                        <span class="form-hint" id="theme-status" role="status"></span>
-                    </div>
-                </div>
-            {% endcall %}
-
             <!-- Dashboard Access -->
             {% call settings_card("Dashboard Access", "Who can manage this server in the dashboard. Only the roles set here count — Discord permissions never imply dashboard access.", icon_name="shield", role="server_owner") %}
                 <div class="module-info-body">
@@ -96,6 +64,38 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-primary" id="dashboard-mod-roles-save">{{ icon("save", 14) }} Save</button>
                     <span class="form-hint" id="dashboard-mod-roles-status" role="status"></span>
+                </div>
+            {% endcall %}
+
+            <!-- Accent Theme -->
+            {% call settings_card("Accent Theme", "Choose the accent color and wallpaper treatment for this server's dashboard.", icon_name="palette", role="server_admin") %}
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label class="form-label" id="theme-label">Color scheme</label>
+                        <div class="theme-picker" id="theme-picker" role="radiogroup" aria-labelledby="theme-label">
+                            {% for t in [("steel","Steel"),("emerald","Emerald"),("violet","Violet"),("amber","Amber"),("rose","Rose"),("cyan","Cyan"),("teal","Teal"),("orange","Orange"),("synth","Synth"),("acid","Acid"),("rottweiler","Rottweiler"),("dracula","Dracula"),("gold","Gold"),("hud","HUD")] %}
+                            <button type="button" class="theme-option" data-theme-value="{{ t[0] }}" role="radio" aria-checked="false" aria-label="{{ t[1] }}" title="{{ t[1] }}">
+                                <span class="theme-swatch theme-swatch-{{ t[0] }}" aria-hidden="true"></span>
+                                <span class="theme-name">{{ t[1] }}</span>
+                            </button>
+                            {% endfor %}
+                        </div>
+                        <p class="form-hint">Pick a scheme — it applies to anyone viewing this server.</p>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label class="form-label" for="wallpaper-invert-toggle">Invert wallpaper</label>
+                            <label class="toggle-switch" aria-label="Toggle wallpaper invert">
+                                <input type="checkbox" id="wallpaper-invert-toggle" name="wallpaper_invert">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="form-hint">Show the wallpaper as a light, negative version. Surfaces are translucent, so this swaps the whole backdrop behind them.</p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary" id="theme-save">{{ icon("save", 14) }} Save</button>
+                        <span class="form-hint" id="theme-status" role="status"></span>
+                    </div>
                 </div>
             {% endcall %}
 
@@ -186,6 +186,33 @@
             {% include "components/bot_customization.html" %}
             {% endif %}
 
+            <!-- Hosted Instance Access -->
+            {% if is_owner %}
+            {% call settings_card("Hosted Instance Access", "Create one-time share links for people allowed to add and manage Bark in servers they administer.", icon_name="share-2", id="instance-invites", role="instance_owner") %}
+                <form class="settings-form" id="instance-invite-form">
+                    <div class="form-grid form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label" for="instance-invite-days">Link lifetime</label>
+                            <select class="form-input" id="instance-invite-days" name="expires_in_days">
+                                <option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option>
+                            </select>
+                            <span class="form-hint">Each link can be redeemed once, then grants ongoing access until you revoke it.</span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="instance-invite-note">Note (optional)</label>
+                            <input class="form-input" id="instance-invite-note" name="note" type="text" maxlength="240" placeholder="Who is this for?">
+                        </div>
+                    </div>
+                    <div class="form-actions form-actions-static"><button type="submit" class="btn btn-primary" id="instance-invite-create">{{ icon("link", 16) }} Create secure link</button></div>
+                </form>
+                <div class="form-group" id="instance-invite-result" hidden>
+                    <label class="form-label" for="instance-invite-url">Copy this link now — it is intentionally shown only once.</label>
+                    <div class="input-row"><input class="form-input" id="instance-invite-url" name="share_url" type="url" readonly><button type="button" class="btn" id="instance-invite-copy">Copy</button></div>
+                </div>
+                <div class="workspace-data-card" id="instance-invite-list" aria-live="polite"></div>
+            {% endcall %}
+            {% endif %}
+
         </div>
 
         <!-- Side column: Config Health, Updates, Diagnostics -->
@@ -248,32 +275,6 @@
 
         </div>
     </div>
-
-    {% if is_owner %}
-    {% call settings_card("Hosted Instance Access", "Create one-time share links for people allowed to add and manage Bark in servers they administer.", icon_name="share-2", id="instance-invites", role="instance_owner") %}
-        <form class="settings-form" id="instance-invite-form">
-            <div class="form-grid form-grid-2">
-                <div class="form-group">
-                    <label class="form-label" for="instance-invite-days">Link lifetime</label>
-                    <select class="form-input" id="instance-invite-days" name="expires_in_days">
-                        <option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option>
-                    </select>
-                    <span class="form-hint">Each link can be redeemed once, then grants ongoing access until you revoke it.</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="instance-invite-note">Note (optional)</label>
-                    <input class="form-input" id="instance-invite-note" name="note" type="text" maxlength="240" placeholder="Who is this for?">
-                </div>
-            </div>
-            <div class="form-actions form-actions-static"><button type="submit" class="btn btn-primary" id="instance-invite-create">{{ icon("link", 16) }} Create secure link</button></div>
-        </form>
-        <div class="form-group" id="instance-invite-result" hidden>
-            <label class="form-label" for="instance-invite-url">Copy this link now — it is intentionally shown only once.</label>
-            <div class="input-row"><input class="form-input" id="instance-invite-url" name="share_url" type="url" readonly><button type="button" class="btn" id="instance-invite-copy">Copy</button></div>
-        </div>
-        <div class="workspace-data-card" id="instance-invite-list" aria-live="polite"></div>
-    {% endcall %}
-    {% endif %}
 
 </div>
 
