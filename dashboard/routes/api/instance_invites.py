@@ -10,6 +10,7 @@ from config import config
 from database.engine import session_scope
 from services.instance_invites import (
     create_instance_invite,
+    delete_instance_invite,
     list_instance_access,
     list_instance_invites,
     revoke_instance_access,
@@ -111,6 +112,21 @@ async def revoke_invite(request: Request, invite_id: int):
     if not revoked:
         return api_error("Invite cannot be revoked", status_code=404)
     return api_success({"revoked": True})
+
+
+@router.delete("/instance/invites/{invite_id}/remove")
+async def remove_invite(request: Request, invite_id: int):
+    """Permanently remove an already-dead invite row (revoked / expired /
+    redeemed) from the access list. ``revoke_invite`` above deactivates a still
+    live link; this is the cleanup action that drops the row entirely.
+    """
+    if not _is_owner(request):
+        return api_error("Owner access required", status_code=403)
+    async with session_scope() as session:
+        removed = await delete_instance_invite(session, invite_id)
+    if not removed:
+        return api_error("Invite not found", status_code=404)
+    return api_success({"removed": True})
 
 
 @router.delete("/instance/access/{discord_user_id}")

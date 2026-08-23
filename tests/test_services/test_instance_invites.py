@@ -7,12 +7,14 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from database.engine import session_scope
-from database.models.permissions import DashboardUser
+from database.models.permissions import DashboardUser, InstanceInvite
 from services.instance_invites import (
     create_instance_invite,
+    delete_instance_invite,
     is_instance_user_authorized,
     redeem_instance_invite,
     revoke_instance_access,
+    revoke_instance_invite,
     token_digest,
 )
 
@@ -92,3 +94,74 @@ async def test_revoked_access_is_not_authorized(db):
 
     async with session_scope() as session:
         assert not await is_instance_user_authorized(session, "recipient")
+
+
+@pytest.mark.asyncio
+async def test_delete_invite_removes_revoked_row_but_revoke_refuses(db):
+    """The X action hard-deletes a dead (revoked) invite row, while the Revoke
+    action still refuses to touch one that is already revoked."""
+    async with session_scope() as session:
+        invite, _ = await create_instance_invite(
+            session,
+            created_by_discord_id="owner",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        )
+        assert await revoke_instance_invite(session, invite.id)
+
+    async with session_scope() as session:
+        # Revoke (soft) must refuse an already-revoked invite...
+        assert not await revoke_instance_invite(session, invite.id)
+        # ...but remove (hard) succeeds.
+        assert await delete_instance_invite(session, invite.id)
+
+    async with session_scope() as session:
+        row = await session.get(InstanceInvite, invite.id)
+    assert row is None, "hard delete removed the invite row"
+
+
+@pytest.mark.asyncio
+async def test_delete_invite_removes_expired_row(db):
+    """Expired invites are dead links; the remove action clears them."""
+    async with session_scope() as session:
+        invite, _ = await create_instance_invite(
+            session,
+            created_by_discord_id="owner",
+            expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        )
+
+    async with session_scope() as session:
+        assert await delete_instance_invite(session, invite.id)
+
+    async with session_scope() as session:
+        assert await session.get(InstanceInvite, invite.id) is None
+
+
+@pytest.mark.asyncio
+async def test_delete_invite_removes_redeemed_row(db):
+    """A redeemed (consumed) invite can be tidied off the list too."""
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="recipient", username="Recipient", role="viewer"))
+        invite, token = await create_instance_invite(
+            session,
+            created_by_discord_id="owner",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        )
+        await redeem_instance_invite(session, token=token, discord_user_id="recipient")
+
+    async with session_scope() as session:
+        # redeem_instance_invite runs a bulk UPDATE, so the stale in-memory
+        # `invite` object is not refreshed — verify redemption from the DB.
+        row = await session.get(InstanceInvite, invite.id)
+        assert row is not None and row.redeemed_at is not None
+
+    async with session_scope() as session:
+        assert await delete_instance_invite(session, invite.id)
+
+    async with session_scope() as session:
+        assert await session.get(InstanceInvite, invite.id) is None
+
+
+@pytest.mark.asyncio
+async def test_delete_invite_missing_id_returns_false(db):
+    async with session_scope() as session:
+        assert await delete_instance_invite(session, 999999) is False

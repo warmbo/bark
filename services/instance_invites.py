@@ -6,7 +6,7 @@ import hashlib
 import secrets
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.permissions import InstanceAccess, InstanceInvite
@@ -120,6 +120,22 @@ async def revoke_instance_invite(session: AsyncSession, invite_id: int) -> bool:
     invite.revoked_at = _utc_now()
     await session.flush()
     return True
+
+
+async def delete_instance_invite(session: AsyncSession, invite_id: int) -> bool:
+    """Permanently remove an invite row so it stops cluttering the access list.
+
+    Unlike ``revoke_instance_invite`` (which deactivates a still-live link and
+    leaves a "Revoked" record), this hard-deletes the row entirely. It is the
+    "remove from list" action for invites that are already dead — revoked,
+    expired, or redeemed. The token is hashed-only, so deleting the row also
+    destroys the digest; nothing can be re-derived from it.
+    """
+    result = await session.execute(
+        delete(InstanceInvite).where(InstanceInvite.id == invite_id)
+    )
+    await session.flush()
+    return _affected_rows(result) == 1
 
 
 async def list_instance_invites(session: AsyncSession) -> list[InstanceInvite]:
