@@ -533,7 +533,8 @@ body {
   [data-theme="hud"] .stat-card,
   [data-theme="hud"] .server-profile,
   [data-theme="hud"] .workspace-data-card,
-  [data-theme="hud"] .action-card {
+  [data-theme="hud"] .action-card,
+  [data-theme="hud"] .feature-item {
     position: relative;
     border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
     transform-style: preserve-3d;

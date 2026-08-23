@@ -14,7 +14,7 @@
 
   var CARD_SELECTOR =
     '.content-card, .guild-card, .module-card, .dashboard-widget, .stat-card, ' +
-    '.server-profile, .workspace-data-card, .action-card';
+    '.server-profile, .workspace-data-card, .action-card, .feature-item';
 
   var reducedMotion =
     window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
