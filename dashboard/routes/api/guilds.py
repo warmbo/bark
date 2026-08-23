@@ -149,16 +149,18 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
     try:
         from services.guild_settings import get_settings
 
-        settings = await get_settings(guild_id, "motd", "banner_url", "slug", "theme")
+        settings = await get_settings(guild_id, "motd", "banner_url", "slug", "theme", "wallpaper_invert")
         motd = settings.get("motd", "")
         custom_banner_url = settings.get("banner_url", "")
         slug = settings.get("slug", "")
         theme = settings.get("theme", "") or "steel"
+        wallpaper_invert = settings.get("wallpaper_invert", "0") == "1"
     except Exception:
         motd = ""
         custom_banner_url = ""
         slug = ""
         theme = "steel"
+        wallpaper_invert = False
 
     scheduled_events = []
     try:
@@ -220,6 +222,7 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
         "custom_banner_url": custom_banner_url,
         "slug": slug,
         "theme": theme,
+        "wallpaper_invert": wallpaper_invert,
         "scheduled_events": scheduled_events,
     }
 
@@ -305,6 +308,21 @@ async def set_guild_theme(request: Request, guild_id: int):
 
     await set_setting(guild_id, "theme", theme)
     return api_success({"theme": theme})
+
+
+@router.put("/guilds/{guild_id}/wallpaper_invert")
+async def set_guild_wallpaper_invert(request: Request, guild_id: int):
+    """Set whether this server's wallpaper is shown inverted (light-mode negative)."""
+    if getattr(request.state, "guild_viewer", False):
+        return api_forbidden("Insufficient permissions")
+
+    body = await request.json()
+    invert = bool((body or {}).get("invert", False))
+
+    from services.guild_settings import set_setting
+
+    await set_setting(guild_id, "wallpaper_invert", "1" if invert else "0")
+    return api_success({"wallpaper_invert": invert})
 
 
 @router.put("/guilds/{guild_id}/motd")

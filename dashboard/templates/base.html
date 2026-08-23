@@ -1,7 +1,7 @@
 {% from "components/icons.html" import icon %}
 {% from "components/primitives.html" import role_pill %}
 <!DOCTYPE html>
-<html lang="en" data-theme="dark"{% if wallpaper_invert() %} data-wallpaper="invert"{% endif %}>
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,22 +13,25 @@
     {% if _path.startswith('/guild/') %}
     {% set _gid = _path.split('/')[2] %}
     <script>
-        // Apply the per-guild accent theme before first paint so it persists
-        // across every page of this guild. The theme is stored in localStorage
-        // (set by the Settings picker and the overview) and mirrored on
-        // documentElement.
+        // Apply the per-guild accent theme + wallpaper treatment before first
+        // paint so they persist across every page of this guild. Both are stored
+        // in localStorage (set by the Settings picker and the overview) and
+        // mirrored on documentElement.
         (function () {
             try {
                 var gid = '{{ _gid }}';
                 if (!gid) return;
                 var saved = localStorage.getItem('bark-theme-' + gid);
                 if (saved) document.documentElement.setAttribute('data-theme', saved);
+                if (localStorage.getItem('bark-wallpaper-' + gid) === 'invert') {
+                    document.documentElement.setAttribute('data-wallpaper', 'invert');
+                }
             } catch (e) {}
         })();
     </script>
     {% endif %}
     <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/css/main.css?v=347">
+    <link rel="stylesheet" href="/static/css/main.css?v=348">
     {% block head %}{% endblock %}
     {% if request and request.app and request.app.state.bot is defined %}
     {% set _bot = request.app.state.bot %}

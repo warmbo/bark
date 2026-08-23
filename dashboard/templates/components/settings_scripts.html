@@ -233,6 +233,12 @@
                 setThemeSelection(theme);
                 document.documentElement.setAttribute('data-theme', theme);
                 try { localStorage.setItem('bark-theme-' + GUILD_ID, theme); } catch (e) {}
+                // Reflect the per-server wallpaper invert treatment too.
+                const wInv = !!(d.guild && d.guild.wallpaper_invert);
+                const wToggle = document.getElementById('wallpaper-invert-toggle');
+                if (wToggle) wToggle.checked = wInv;
+                document.documentElement.toggleAttribute('data-wallpaper', wInv);
+                try { localStorage.setItem('bark-wallpaper-' + GUILD_ID, wInv ? 'invert' : ''); } catch (e) {}
             })
             .catch(() => {});
         // Live preview: hover/click a swatch updates the accent immediately.
@@ -281,6 +287,30 @@
     }
 
     themeSaveBtn?.addEventListener('click', saveTheme);
+
+    // Wallpaper invert (per-server) — live preview + auto-save on toggle.
+    const wallpaperToggle = document.getElementById('wallpaper-invert-toggle');
+    wallpaperToggle?.addEventListener('change', async () => {
+        const invert = wallpaperToggle.checked;
+        wallpaperToggle.disabled = true;
+        document.documentElement.toggleAttribute('data-wallpaper', invert);
+        try {
+            const res = await safeFetch(`/api/v1/guilds/${GUILD_ID}/wallpaper_invert`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ invert }),
+            });
+            if (res.success === false) throw new Error(res.error || 'Update failed');
+            try { localStorage.setItem('bark-wallpaper-' + GUILD_ID, invert ? 'invert' : ''); } catch (e) {}
+            showToast(invert ? 'Wallpaper inverted' : 'Wallpaper restored', 'success');
+        } catch (error) {
+            wallpaperToggle.checked = !invert;
+            document.documentElement.toggleAttribute('data-wallpaper', !invert);
+            showToast(error.message || 'Failed to update wallpaper', 'error');
+        } finally {
+            wallpaperToggle.disabled = false;
+        }
+    });
 
     loadDashboardModRoles();
 
@@ -781,9 +811,6 @@
             const nameInput = document.getElementById('bot-activity-name');
             if (typeSelect && data.activity_type) typeSelect.value = data.activity_type;
             if (nameInput && data.activity_name) nameInput.value = data.activity_name;
-            // Wallpaper invert
-            const invertToggle = document.getElementById('wallpaper-invert-toggle');
-            if (invertToggle) invertToggle.checked = !!data.wallpaper_invert;
         } catch (error) {
             const errBox = document.getElementById('bot-custom-error');
             const msgEl = document.getElementById('bot-custom-error-message');
@@ -907,28 +934,6 @@
     });
 
     // Wallpaper invert toggle (live feedback + persist)
-    const wallpaperToggle = document.getElementById('wallpaper-invert-toggle');
-    wallpaperToggle?.addEventListener('change', async () => {
-        const invert = wallpaperToggle.checked;
-        wallpaperToggle.disabled = true;
-        document.documentElement.toggleAttribute('data-wallpaper', invert);
-        try {
-            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/bot/appearance/wallpaper`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({invert}),
-            });
-            if (result.success === false) throw new Error(result.error || 'Update failed');
-            showToast(invert ? 'Wallpaper inverted' : 'Wallpaper restored', 'success');
-        } catch (error) {
-            wallpaperToggle.checked = !invert;
-            document.documentElement.toggleAttribute('data-wallpaper', !invert);
-            showToast(error.message || 'Failed to update wallpaper', 'error');
-        } finally {
-            wallpaperToggle.disabled = false;
-        }
-    });
-
     const inviteForm = document.getElementById('instance-invite-form');
     const inviteList = document.getElementById('instance-invite-list');
     async function loadInstanceInvites() {

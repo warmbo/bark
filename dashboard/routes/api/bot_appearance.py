@@ -76,12 +76,10 @@ async def get_bot_appearance(request: Request, guild_id: str):
 
     from config import config
     from services.presence_store import load_presence
-    from services.wallpaper_store import load_wallpaper
 
     bot = request.state.bot
     user = bot.user
     presence = load_presence(config.data_dir)
-    wallpaper = load_wallpaper(config.data_dir)
 
     data: dict[str, Any] = {
         "avatar_url": user.display_avatar.url if user else None,
@@ -91,7 +89,6 @@ async def get_bot_appearance(request: Request, guild_id: str):
         "discriminator": user.discriminator if user and hasattr(user, "discriminator") else None,
         "activity_type": presence.get("activity_type", "playing"),
         "activity_name": presence.get("activity_name", ""),
-        "wallpaper_invert": wallpaper.get("invert", False),
     }
 
     data["banner_url"] = await _bot_banner_url(bot)
@@ -223,23 +220,6 @@ async def update_banner(request: Request, guild_id: str, file: UploadFile = File
     except Exception:
         logger.exception("Failed to update banner")
         return api_error("Failed to update banner")
-
-
-@router.put("/guilds/{guild_id}/bot/appearance/wallpaper")
-async def update_wallpaper(request: Request, guild_id: str):
-    """Toggle the instance wallpaper invert treatment (owner-only)."""
-    denied = _owner_or_forbidden(request)
-    if denied:
-        return denied
-
-    from config import config
-    from services.wallpaper_store import save_wallpaper
-
-    body = await request.json()
-    invert = bool((body or {}).get("invert", False))
-    save_wallpaper(config.data_dir, invert)
-    logger.info("Wallpaper invert set to %s", invert)
-    return api_success({"message": f"Wallpaper invert {'enabled' if invert else 'disabled'}", "wallpaper_invert": invert})
 
 
 @router.put("/guilds/{guild_id}/bot/appearance/name")

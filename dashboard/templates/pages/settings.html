@@ -34,7 +34,7 @@
             {% endcall %}
 
             <!-- Accent Theme -->
-            {% call settings_card("Accent Theme", "Choose the accent color for this server's dashboard. The dark base stays the same — only the highlight color changes.", icon_name="palette", role="server_admin") %}
+            {% call settings_card("Accent Theme", "Choose the accent color and wallpaper treatment for this server's dashboard.", icon_name="palette", role="server_admin") %}
                 <div class="settings-form">
                     <div class="form-group">
                         <label class="form-label" id="theme-label">Color scheme</label>
@@ -47,6 +47,16 @@
                             {% endfor %}
                         </div>
                         <p class="form-hint">Pick a scheme — it applies to anyone viewing this server.</p>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label class="form-label" for="wallpaper-invert-toggle">Invert wallpaper</label>
+                            <label class="toggle-switch" aria-label="Toggle wallpaper invert">
+                                <input type="checkbox" id="wallpaper-invert-toggle" name="wallpaper_invert">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="form-hint">Show the wallpaper as a light, negative version. Surfaces are translucent, so this swaps the whole backdrop behind them.</p>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-primary" id="theme-save">{{ icon("save", 14) }} Save</button>

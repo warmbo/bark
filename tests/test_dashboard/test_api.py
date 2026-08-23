@@ -1219,6 +1219,70 @@ async def test_set_guild_theme_validates_and_persists(app, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_set_guild_wallpaper_invert_persists(app, monkeypatch):
+    """PUT /guilds/{id}/wallpaper_invert toggles the per-guild wallpaper treatment."""
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+
+    async with session_scope() as s:
+        from sqlalchemy import select
+
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "666666"))).scalars().first():
+            s.add(Guild(discord_id="666666", name="Theme Guild"))
+            await s.commit()
+
+    guild = SimpleNamespace(
+        id=666666, name="Theme Guild", member_count=5, owner_id=1, owner=None,
+        banner=None, icon=None, description=None, premium_tier=0,
+        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
+        channels=[], roles=[], emojis=[], created_at=None,
+        verification_level=None, features=[], scheduled_events=[], members=[],
+        text_channels=[], voice_channels=[],
+    )
+    bot = app.state.bot
+    bot.get_guild = lambda _gid: guild
+    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+
+    class _Req(SimpleNamespace):
+        _body = {}
+        async def json(self):
+            return self._body
+
+    import json as _json
+
+    # Viewer is denied.
+    viewer = _Req(state=SimpleNamespace(bot=bot, guild_viewer=True), session={"role": "viewer"}, url=SimpleNamespace(path="/x"))
+    viewer._body = {"invert": True}
+    assert (await guilds.set_guild_wallpaper_invert(viewer, 666666)).status_code == 403
+
+    # Invert on -> reflected in the profile.
+    r = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r._body = {"invert": True}
+    resp = await guilds.set_guild_wallpaper_invert(r, 666666)
+    assert resp.status_code == 200
+    assert _json.loads(resp.body)["data"]["wallpaper_invert"] is True
+    profile = await guilds.get_guild(request, 666666)
+    assert _json.loads(profile.body)["data"]["wallpaper_invert"] is True
+
+    # Invert off -> default.
+    r2 = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r2._body = {"invert": False}
+    resp2 = await guilds.set_guild_wallpaper_invert(r2, 666666)
+    assert resp2.status_code == 200
+    profile2 = await guilds.get_guild(request, 666666)
+    assert _json.loads(profile2.body)["data"]["wallpaper_invert"] is False
+
+
+@pytest.mark.asyncio
 async def test_guild_slug_serves_pages_directly_without_redirect(client):
     """GET /g/{slug} and /g/{slug}/<page> serve the page directly (no 302 to
     the numeric guild id), and unknown slugs 404."""
