@@ -3138,6 +3138,12 @@ body {
   --sidebar: oklch(0.11 0.04 220 / 0.80);
   --sidebar-accent: oklch(0.22 0.045 220 / 0.74);
   --sidebar-border: oklch(0.31 0.05 200 / 0.55);
+
+  /* Mouse-tracked 3D tilt position (0..1), written by hud-theme.js. Declared
+     here so the CSS contract passes and cards start at a neutral (centered)
+     tilt before the pointer moves. */
+  --hud-tilt-x: 0.5;
+  --hud-tilt-y: 0.5;
 }
 
 /* ── HUD motion: background, scanlines, brackets, 3D tilt ─────────────── */
@@ -3146,34 +3152,48 @@ body {
   100% { background-position: 56px 56px; }
 }
 @keyframes hud-scan-sweep {
-  0% { transform: translateY(-10%); opacity: 0; }
-  8% { opacity: 0.5; }
-  92% { opacity: 0.5; }
-  100% { transform: translateY(110%); opacity: 0; }
+  0% { transform: translateY(-12%); opacity: 0; }
+  6% { opacity: 0.55; }
+  94% { opacity: 0.55; }
+  100% { transform: translateY(112%); opacity: 0; }
 }
 @keyframes hud-glow-pulse {
   0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.65; }
+  50% { opacity: 0.7; }
 }
 @keyframes hud-btn-sheen {
   0% { transform: translateX(-130%); }
   60%, 100% { transform: translateX(130%); }
 }
+/* Breathing equalizer line — animates transform (scaleX), NOT width, so it
+   never reflows / shifts the text below it. */
 @keyframes hud-bar-pulse {
-  0%, 100% { width: 30%; opacity: 0.7; }
-  50% { width: 100%; opacity: 1; }
-}
-@keyframes hud-flicker {
-  0%, 100% { opacity: 1; }
-  92% { opacity: 1; }
-  93% { opacity: 0.7; }
-  94% { opacity: 1; }
-  96% { opacity: 0.85; }
-  97% { opacity: 1; }
+  0%, 100% { transform: scaleX(0.3); opacity: 0.7; }
+  50% { transform: scaleX(1); opacity: 1; }
 }
 @keyframes hud-underline {
   0% { transform: scaleX(0); transform-origin: left; }
   100% { transform: scaleX(1); transform-origin: left; }
+}
+/* Cyberpunk / glitch effects. */
+@keyframes hud-glitch-split {
+  0%, 91%, 100% { text-shadow: 0 0 14px color-mix(in oklab, var(--primary) 55%, transparent); }
+  92% { text-shadow: -2px 0 var(--ring), 2px 0 var(--primary), 0 0 16px var(--primary); transform: translateX(0); }
+  93% { text-shadow: 2px 1px var(--ring), -2px -1px var(--primary); transform: translateX(1px); }
+  94% { text-shadow: -1px 1px var(--ring), 1px -1px var(--primary); transform: translateX(-1px); }
+  95% { text-shadow: 0 0 14px color-mix(in oklab, var(--primary) 55%, transparent); transform: translateX(0); }
+}
+@keyframes hud-nav-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+@keyframes hud-sidebar-scan {
+  0% { transform: translateY(-120%); }
+  100% { transform: translateY(120%); }
+}
+@keyframes hud-status-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -3189,6 +3209,24 @@ body {
     animation: hud-grid-pan 9s linear infinite;
   }
 
+  /* Static CRT scanline texture over everything (overrides v3 opacity:0). */
+  [data-theme="hud"] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    z-index: 9998;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.14) 0px,
+      rgba(0, 0, 0, 0.14) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    opacity: 0.22;
+  }
+
   /* Slow-sweeping scanline ribbon across the viewport. */
   [data-theme="hud"] body::after {
     content: '';
@@ -3202,7 +3240,9 @@ body {
     animation: hud-scan-sweep 8s linear infinite;
   }
 
-  /* Cards: FPS corner brackets + 3D perspective tilt + border glow. */
+  /* Cards: FPS corner brackets + mouse-tracked 3D tilt + cursor glow.
+     hud-theme.js writes --hud-tilt-x/y (0..1) from the pointer; the tilt is
+     computed from those so the card follows the mouse in 3D. */
   [data-theme="hud"] .content-card,
   [data-theme="hud"] .guild-card,
   [data-theme="hud"] .module-card,
@@ -3214,8 +3254,27 @@ body {
     position: relative;
     border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
     transform-style: preserve-3d;
-    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    transform: perspective(900px)
+      rotateX(calc((var(--hud-tilt-y, 0.5) - 0.5) * -16deg))
+      rotateY(calc((var(--hud-tilt-x, 0.5) - 0.5) * 16deg))
+      translateY(calc((var(--hud-tilt-y, 0.5) - 0.5) * -4px));
+    background:
+      radial-gradient(circle at calc(var(--hud-tilt-x, 0.5) * 100%) calc(var(--hud-tilt-y, 0.5) * 100%), color-mix(in oklab, var(--primary) 12%, transparent), transparent 62%),
+      var(--card);
+    transition: transform 140ms ease-out, box-shadow 180ms ease, border-color 180ms ease;
+    will-change: transform;
   }
+  [data-theme="hud"] .content-card:hover,
+  [data-theme="hud"] .guild-card:hover,
+  [data-theme="hud"] .module-card:hover,
+  [data-theme="hud"] .dashboard-widget:hover,
+  [data-theme="hud"] .stat-card:hover,
+  [data-theme="hud"] .server-profile:hover {
+    border-color: var(--primary);
+    box-shadow: 0 16px 48px -14px color-mix(in oklab, var(--primary) 50%, transparent);
+  }
+  /* Corner brackets (skip server-profile/action-card: they have their own
+     ::before/::after uses). */
   [data-theme="hud"] .content-card::before,
   [data-theme="hud"] .content-card::after,
   [data-theme="hud"] .guild-card::before,
@@ -3249,15 +3308,6 @@ body {
     bottom: -1px; right: -1px;
     border-left: none; border-top: none;
   }
-  [data-theme="hud"] .content-card:hover,
-  [data-theme="hud"] .guild-card:hover,
-  [data-theme="hud"] .module-card:hover,
-  [data-theme="hud"] .dashboard-widget:hover,
-  [data-theme="hud"] .stat-card:hover {
-    transform: perspective(900px) rotateX(2deg) rotateY(-2deg) translateY(-2px);
-    box-shadow: 0 12px 40px -12px color-mix(in oklab, var(--primary) 45%, transparent);
-    border-color: var(--primary);
-  }
 
   /* Primary buttons: pulsing glow + sweeping sheen highlight. */
   [data-theme="hud"] .btn-primary {
@@ -3278,41 +3328,124 @@ body {
     animation: hud-btn-sheen 0.9s ease;
   }
 
-  /* Animated accent bar under cards/sections (HUD equalizer). */
+  /* Breathing equalizer line under card headers. Positioned absolutely and
+     animated with scaleX so it NEVER shifts the text below. */
+  [data-theme="hud"] .card-header {
+    position: relative;
+  }
   [data-theme="hud"] .card-header::after {
     content: '';
-    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
     height: 2px;
+    transform-origin: left;
     background: linear-gradient(90deg, var(--primary), transparent);
     animation: hud-bar-pulse 4s ease-in-out infinite;
   }
 
-  /* Nav items: cyan underline that draws in on hover. */
-  [data-theme="hud"] .nav-item::after,
-  [data-theme="hud"] .module-nav-item::after {
-    content: '';
-    display: block;
-    height: 2px;
-    background: var(--primary);
-    transform: scaleX(0);
-  }
-  [data-theme="hud"] .nav-item:hover::after,
-  [data-theme="hud"] .module-nav-item:hover::after {
-    animation: hud-underline 220ms ease forwards;
-  }
-
-  /* Headings get a subtle HUD glow + faint CRT flicker. */
+  /* Headings: cyberpunk RGB-split glitch (occasional) + glow. */
   [data-theme="hud"] .page-title,
   [data-theme="hud"] .card-title,
   [data-theme="hud"] .module-heading,
   [data-theme="hud"] .landing h1 {
-    text-shadow: 0 0 14px color-mix(in oklab, var(--primary) 55%, transparent);
-    animation: hud-flicker 6s linear infinite;
+    animation: hud-glitch-split 7s linear infinite;
   }
 
-  /* Sidebar: subtle inner glow pulse. */
+  /* ── NAV PANE expansion ─────────────────────────────── */
+  /* Sidebar: corner brackets, an inner scan sweep, and a cyan edge. */
   [data-theme="hud"] .sidebar {
-    box-shadow: inset -1px 0 0 color-mix(in oklab, var(--primary) 20%, transparent);
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      inset -1px 0 0 color-mix(in oklab, var(--primary) 25%, transparent),
+      0 0 40px -18px color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  [data-theme="hud"] .sidebar::before,
+  [data-theme="hud"] .sidebar::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+    border: 2px solid var(--primary);
+    z-index: 2;
+  }
+  [data-theme="hud"] .sidebar::before {
+    top: 6px; left: 6px;
+    border-right: none; border-bottom: none;
+  }
+  [data-theme="hud"] .sidebar::after {
+    bottom: 6px; left: 6px;
+    border-right: none; border-top: none;
+  }
+  /* A faint light sweep traveling down the sidebar. */
+  [data-theme="hud"] .sidebar .sidebar-scan,
+  [data-theme="hud"] .sidebar-nav-items::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--primary) 8%, transparent), transparent);
+    pointer-events: none;
+    animation: hud-sidebar-scan 7s linear infinite;
+  }
+
+  /* Nav items: cyan left marker on the active page, glow on hover, and the
+     icon pulses subtly. */
+  [data-theme="hud"] .nav-item {
+    position: relative;
+  }
+  [data-theme="hud"] .nav-item::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 30%;
+    bottom: 30%;
+    width: 3px;
+    border-radius: 0;
+    background: var(--primary);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 160ms ease;
+    box-shadow: 0 0 8px var(--primary);
+  }
+  [data-theme="hud"] .nav-item:hover::after,
+  [data-theme="hud"] .nav-item.active::after {
+    transform: scaleY(1);
+  }
+  [data-theme="hud"] .nav-item.active {
+    box-shadow: inset 0 0 18px -8px color-mix(in oklab, var(--primary) 45%, transparent);
+  }
+  [data-theme="hud"] .nav-item .nav-icon {
+    filter: drop-shadow(0 0 5px color-mix(in oklab, var(--primary) 60%, transparent));
+  }
+  [data-theme="hud"] .nav-item:hover .nav-icon {
+    animation: hud-nav-pulse 1s ease-in-out infinite;
+  }
+  [data-theme="hud"] .nav-section-label {
+    color: color-mix(in oklab, var(--primary) 70%, var(--muted-foreground));
+    letter-spacing: 0.08em;
+  }
+
+  /* Sidebar footer: a live 'SYSTEM ONLINE' status line that blinks. */
+  [data-theme="hud"] .sidebar-footer {
+    border-top-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+  }
+  [data-theme="hud"] .sidebar-footer .status-dot.online {
+    box-shadow: 0 0 8px var(--primary);
+    animation: hud-status-blink 2s ease-in-out infinite;
+  }
+
+  /* Popovers/dropdowns get the HUD border + glow too. */
+  [data-theme="hud"] .popover,
+  [data-theme="hud"] .dropdown,
+  [data-theme="hud"] .palette-overlay,
+  [data-theme="hud"] [role="menu"] {
+    border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+    box-shadow: 0 0 24px -10px color-mix(in oklab, var(--primary) 50%, transparent);
   }
 }
 
