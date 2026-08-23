@@ -74,11 +74,9 @@ async def list_guilds(request: Request):
 
         async with session_scope() as session:
             access = await get_user_guild_access(session, user["id"])
-            guild_ids = (row.guild_id for row in access)
+            guild_ids = [row.guild_id for row in access]
             moderator_roles = await get_dashboard_moderator_roles(session, guild_ids)
-            admin_roles = await get_dashboard_admin_role(
-                session, (row.guild_id for row in access)
-            )
+            admin_roles = await get_dashboard_admin_role(session, guild_ids)
         return api_success(
             {
                 "guilds": build_guild_catalog(

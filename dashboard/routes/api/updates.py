@@ -67,7 +67,7 @@ async def perform_update(request: Request, payload: dict):
         )
 
     # Respond first, then apply + exit in the background so systemd restarts us.
-    asyncio.get_event_loop().create_task(apply_update_async(channel))
+    asyncio.create_task(apply_update_async(channel))
     return api_success(
         {
             "message": f"Update to '{channel}' started — the instance will restart shortly",
