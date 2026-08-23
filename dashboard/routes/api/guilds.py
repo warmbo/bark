@@ -282,6 +282,11 @@ async def set_guild_slug(request: Request, guild_id: int):
             return api_error("That slug is already in use by another server.", status_code=409)
 
     await set_setting(guild_id, "slug", slug)
+    # The slug caches (resolve + manifest) must not serve the old mapping for
+    # the next TTL window.
+    from services.slug_router import invalidate_slug_cache
+
+    invalidate_slug_cache()
     return api_success({"slug": slug, "url": f"/g/{slug}" if slug else None})
 
 

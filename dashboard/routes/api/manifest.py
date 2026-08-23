@@ -168,15 +168,9 @@ async def get_guild_manifest(request: Request, guild_id: int):
     pages_list: list[dict[str, object]] = [
         {**page, "route": page["route"].replace("{guild_id}", str(guild_id))} for page in CORE_PAGES
     ]
-    if getattr(request.app.state, "is_bark_dev", False):
-        pages_list.append(
-            {
-                "route": f"/guild/{guild_id}/plugins",
-                "label": "Plugin Catalog",
-                "icon": "package",
-                "category": "settings",
-            }
-        )
+    # The Plugin Catalog lives at /guild/{id}/plugins and is linked from the
+    # Modules page; the former `is_bark_dev` nav branch was dead code (the
+    # app.state attribute was never set anywhere), so it was removed.
     modules_list: list[dict[str, object]] = []
     actions_list: list[dict[str, object]] = []
 

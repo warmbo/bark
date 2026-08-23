@@ -266,6 +266,14 @@ class BarkBot(commands.Bot):
         if self._data_collector is not None:
             await self._data_collector.stop()
             self._data_collector = None
+        # Flush coalesced stats counters so at most FLUSH_SECONDS of activity
+        # can be lost on a clean shutdown (crash loss stays bounded by design).
+        try:
+            from services.stats_recorder import flush_stats
+
+            await flush_stats()
+        except Exception:
+            logger.debug("Stats flush on shutdown failed", exc_info=True)
         await self.modules.disable_all()
         await super().close()
         logger.info("Bot disconnected")

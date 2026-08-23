@@ -30,9 +30,35 @@ logger = logging.getLogger("bark.slug")
 # leading "/g" must be a slash, so "guild" never matches).
 _SLUG_PATH = re.compile(r"^/g/(?P<slug>[^/]+)(?P<rest>/.*)?$")
 
+# Slug ↔ guild-id mappings change only via PUT /guilds/{id}/slug, so a small
+# TTL cache removes a DB query from every /g/* request and every manifest
+# fetch without any staleness that matters in practice.
+_CACHE_TTL_SECONDS = 60.0
+_slug_to_id: dict[str, tuple[float, int]] = {}
+_id_to_slug: dict[str, tuple[float, str | None]] = {}
+
+
+def invalidate_slug_cache(guild_id: int | str | None = None) -> None:
+    """Drop cached slug mapping(s). Called after slug writes."""
+    if guild_id is None:
+        _slug_to_id.clear()
+        _id_to_slug.clear()
+    else:
+        _id_to_slug.pop(str(guild_id), None)
+        # A stale forward mapping can only be fixed wholesale — cheap either way.
+        _slug_to_id.clear()
+
 
 async def resolve_slug(slug: str) -> int | None:
     """Return the guild id for a slug (case-insensitive), or None if unknown."""
+    import time
+
+    key = slug.lower()
+    now = time.monotonic()
+    cached = _slug_to_id.get(key)
+    if cached is not None and (now - cached[0]) < _CACHE_TTL_SECONDS:
+        return cached[1]
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -43,15 +69,25 @@ async def resolve_slug(slug: str) -> int | None:
             await session.execute(
                 select(GuildSetting).where(
                     GuildSetting.key == "slug",
-                    GuildSetting.value == slug.lower(),
+                    GuildSetting.value == key,
                 )
             )
         ).scalars().first()
-    return int(row.guild_id) if row is not None else None
+    guild_id = int(row.guild_id) if row is not None else None
+    _slug_to_id[key] = (now, guild_id) if guild_id is not None else (now, -1)
+    return guild_id
 
 
 async def get_guild_slug(guild_id: int) -> str | None:
     """Return the slug for a guild id, or None if it has none."""
+    import time
+
+    key = str(guild_id)
+    now = time.monotonic()
+    cached = _id_to_slug.get(key)
+    if cached is not None and (now - cached[0]) < _CACHE_TTL_SECONDS:
+        return cached[1]
+
     from sqlalchemy import select
 
     from database.engine import session_scope
@@ -66,7 +102,9 @@ async def get_guild_slug(guild_id: int) -> str | None:
                 )
             )
         ).scalars().first()
-    return (row.value or None) if row is not None else None
+    slug = (row.value or None) if row is not None else None
+    _id_to_slug[key] = (now, slug)
+    return slug
 
 
 async def slug_rewrite_middleware(request: Request, call_next):

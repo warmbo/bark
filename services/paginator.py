@@ -10,6 +10,7 @@ click so they can be pressed repeatedly.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import discord
@@ -19,12 +20,28 @@ logger = logging.getLogger("bark.paginator")
 EMOJI_PREV = "◀"
 EMOJI_NEXT = "▶"
 
+# Paginated menus are guidance embeds — nobody pages through them hours later.
+# Sessions older than this are evicted so the tracking dict cannot grow without
+# bound on long-running instances (``close`` is only called explicitly, and
+# nothing calls it today).
+SESSION_TTL_SECONDS = 3600.0
+
 
 class ReactionPaginator:
     """Tracks paginated messages and drives them from raw arrow reactions."""
 
     def __init__(self) -> None:
         self._sessions: dict[int, dict[str, Any]] = {}
+
+    def _prune_expired(self) -> None:
+        now = time.monotonic()
+        expired = [
+            mid
+            for mid, s in self._sessions.items()
+            if now - s.get("created", now) > SESSION_TTL_SECONDS
+        ]
+        for mid in expired:
+            del self._sessions[mid]
 
     async def send(
         self,
@@ -49,9 +66,11 @@ class ReactionPaginator:
         except Exception:
             logger.debug("response already used; sending paginated menu as followup")
             msg = await interaction.followup.send(**kwargs)
+        self._prune_expired()
         self._sessions[msg.id] = {
             "pages": pages,
             "index": 0,
+            "created": time.monotonic(),
             "author_id": author_id or getattr(getattr(interaction, "user", None), "id", None),
         }
         # Only arm navigation when there's actually something to page through.
@@ -66,6 +85,7 @@ class ReactionPaginator:
         """Handle a ◀ ▶ reaction on a tracked paginated message."""
         if getattr(user, "bot", False):
             return
+        self._prune_expired()
         session = self._sessions.get(reaction.message.id)
         if session is None:
             return
