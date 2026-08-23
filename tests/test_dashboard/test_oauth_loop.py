@@ -113,3 +113,104 @@ async def test_callback_denied_redirects_to_landing(oauth_app):
         )
     assert response.status_code == 302
     assert response.headers["location"] == "/?auth_error=denied"
+
+
+@pytest.mark.asyncio
+async def test_login_refresh_uses_silent_reauth_and_bypasses_short_circuit(oauth_app, monkeypatch):
+    """?refresh=1 must re-fire Discord authorize (bypassing the already-logged-in
+    short-circuit) and add prompt=none so it runs silently."""
+    import base64
+    import json
+
+    from itsdangerous import TimestampSigner
+
+    import config
+
+    secret_key = config.config.dashboard.secret_key or "test_secret_key"
+    payload = base64.b64encode(
+        json.dumps({"user": {"id": "42", "username": "Cody"}, "role": "admin"}).encode()
+    )
+    cookie = TimestampSigner(secret_key).sign(payload).decode()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=oauth_app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        response = await client.get("/auth/login?refresh=1", follow_redirects=False)
+    assert response.status_code == 302
+    loc = response.headers["location"]
+    assert loc.startswith("https://discord.com/api/oauth2/authorize?")
+    assert "prompt=none" in loc
+
+
+@pytest.mark.asyncio
+async def test_refresh_denied_keeps_session_and_returns_to_dashboard(oauth_app, monkeypatch):
+    """A failed silent refresh (Discord prompt=none needs a new sign-in) must NOT
+    log the user out or land on the public landing page — return to /dashboard
+    with a refresh_error so their existing session is preserved."""
+    import base64
+    import json
+
+    from itsdangerous import TimestampSigner
+
+    import config
+
+    secret_key = config.config.dashboard.secret_key or "test_secret_key"
+
+    async with AsyncClient(
+        transport=ASGITransport(app=oauth_app), base_url="http://test"
+    ) as client:
+        # Establish a session + the oauth_refresh flag as /auth/login?refresh=1 sets.
+        session_payload = {
+            "user": {"id": "42", "username": "Cody"},
+            "role": "admin",
+            "oauth_state": "abc",
+            "oauth_refresh": True,
+        }
+        session_payload_enc = base64.b64encode(json.dumps(session_payload).encode())
+        cookie = TimestampSigner(secret_key).sign(session_payload_enc).decode()
+
+        response = await client.get(
+            "/auth/callback?error=access_denied&state=abc",
+            follow_redirects=False,
+            cookies={"session": cookie},
+        )
+    assert response.status_code == 302
+    assert response.headers["location"] == "/dashboard?refresh_error=needs_login"
+
+
+@pytest.mark.asyncio
+async def test_refresh_state_mismatch_returns_to_dashboard(oauth_app):
+    """A refresh whose Discord state doesn't match should return to /dashboard
+    (preserving the session) rather than the landing page, since the user is
+    already authenticated and we don't want to bounce them out."""
+    import base64
+    import json
+
+    from itsdangerous import TimestampSigner
+
+    import config
+
+    secret_key = config.config.dashboard.secret_key or "test_secret_key"
+    session_payload = {
+        "user": {"id": "42", "username": "Cody"},
+        "role": "admin",
+        "oauth_state": "correct_state",
+        "oauth_refresh": True,
+    }
+    session_payload_enc = base64.b64encode(json.dumps(session_payload).encode())
+    cookie = TimestampSigner(secret_key).sign(session_payload_enc).decode()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=oauth_app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        response = await client.get(
+            "/auth/callback?code=x&state=wrong_state",
+            follow_redirects=False,
+            cookies={"session": cookie},
+        )
+    assert response.status_code == 302
+    assert response.headers["location"] == "/dashboard?refresh_error=expired"

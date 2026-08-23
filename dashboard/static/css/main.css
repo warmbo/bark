@@ -656,7 +656,9 @@ textarea:focus-visible,
     font: 500 11px/1.4 var(--font-mono);
     text-align: center;
     margin-left: auto;
-}.guild-grid {
+}.server-group-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }.server-group-actions .server-group-count { margin-left: 0; }.server-group-actions .btn-sm { white-space: nowrap; }
+/* ── Auth / refresh error banner (shared across pages) ─────────────── */
+.auth-error-banner { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 20px; padding: 12px 14px; background: color-mix(in oklab, var(--destructive) 12%, transparent); border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent); border-radius: 0; color: var(--destructive); font-size: 14px; line-height: 1.5; text-align: left; }.guild-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 10px;

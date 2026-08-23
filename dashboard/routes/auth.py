@@ -71,30 +71,46 @@ def _auth_error_redirect(code: str) -> RedirectResponse:
 
 @router.get("/login")
 async def login(request: Request):
-    """Redirect user to Discord OAuth2 authorize URL."""
+    """Redirect user to Discord OAuth2 authorize URL.
+
+    ``?refresh=1`` performs a SILENT re-auth (``prompt=none``): Discord returns
+    a code immediately if the user is still signed in, the callback re-fetches
+    their current guild list and re-syncs the dashboard snapshot, then returns
+    them to /dashboard. This is how the dashboard "Refresh" button picks up a
+    server the user created or joined since their last login without a manual
+    log-out/in. A normal (non-refresh) login still short-circuits when the
+    session already has a user.
+    """
     if not _oauth_enabled():
         logger.warning("OAuth2 login attempted but not configured")
         return RedirectResponse(url="/dashboard")
 
+    refresh = request.query_params.get("refresh") == "1"
     # Already authenticated — never re-fire the Discord authorize flow (a
     # logged-in user hitting /auth/login would otherwise loop through Discord).
-    if request.session.get("user"):
+    # A refresh is the explicit exception: it re-authorizes silently to sync.
+    if request.session.get("user") and not refresh:
         return RedirectResponse(url="/dashboard", status_code=302)
 
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
+    if refresh:
+        request.session["oauth_refresh"] = True
 
-    params = urllib.parse.urlencode(
-        {
-            "response_type": "code",
-            "client_id": config.oauth2.client_id,
-            "redirect_uri": config.oauth2.redirect_uri,
-            "scope": SCOPES,
-            "state": state,
-        }
-    )
-    redirect_url = f"{DISCORD_AUTHORIZE_URL}?{params}"
-    return RedirectResponse(url=redirect_url)
+    params = {
+        "response_type": "code",
+        "client_id": config.oauth2.client_id,
+        "redirect_uri": config.oauth2.redirect_uri,
+        "scope": SCOPES,
+        "state": state,
+    }
+    if refresh:
+        # Silent re-auth: no consent screen if the user has an active Discord
+        # session. Fails fast (error=login_required) otherwise, which we
+        # surface on the landing page rather than looping.
+        params["prompt"] = "none"
+    redirect_url = f"{DISCORD_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 @router.get("/callback")
@@ -108,15 +124,26 @@ async def callback(
     # Check for error from Discord
     if error:
         logger.warning("Discord OAuth error: %s", error)
+        # A failed silent refresh (e.g. prompt=none needs the user to sign in
+        # again) must keep their existing dashboard session — return to it.
+        if request.session.pop("oauth_refresh", False):
+            return RedirectResponse(url="/dashboard?refresh_error=needs_login", status_code=302)
         return _auth_error_redirect("denied")
 
     # Validate state (constant-time — avoids timing oracles on the token)
     saved_state = request.session.pop("oauth_state", None)
+    # A silent refresh must keep the user's existing session if Discord rejects
+    # it (e.g. prompt=none failed) — capture the flag before session.clear().
+    is_refresh = bool(request.session.pop("oauth_refresh", False))
     if not state or not saved_state or not hmac.compare_digest(state, saved_state):
         logger.warning("OAuth state mismatch")
+        if is_refresh:
+            return RedirectResponse(url="/dashboard?refresh_error=expired", status_code=302)
         return _auth_error_redirect("invalid_state")
 
     if not code:
+        if is_refresh:
+            return RedirectResponse(url="/dashboard?refresh_error=failed", status_code=302)
         return _auth_error_redirect("no_code")
 
     # Exchange code for token. Timeout is essential — a hung Discord call

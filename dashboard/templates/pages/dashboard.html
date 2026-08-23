@@ -124,7 +124,10 @@
         <section class="server-group" data-server-group>
             <header class="server-group-header">
                 <div><h2>Available to add {{ role_pill('server_mod') }}</h2><p>Servers where you can manage Bark</p></div>
-                <span class="server-group-count">{{ manageable | length }}</span>
+                <span class="server-group-actions">
+                    <button type="button" class="btn btn-sm" id="guild-refresh-btn" title="Check for servers you created or joined since signing in">{{ icon("refresh-cw", 14) }} Refresh</button>
+                    <span class="server-group-count">{{ manageable | length }}</span>
+                </span>
             </header>
             <div class="guild-grid">{% for guild in manageable %}{{ server_card(guild) }}{% endfor %}</div>
         </section>
@@ -178,5 +181,42 @@ document.getElementById('server-search')?.addEventListener('input', (event) => {
     });
     document.getElementById('server-search-empty').hidden = visible !== 0;
 });
+
+// Refresh button: silently re-auth with Discord so newly created / joined
+// servers appear under "Available to add" without a manual log-out/in. The
+// OAuth callback re-fetches the guild list, re-syncs the snapshot, and returns
+// to /dashboard. OAuth-gated instances only.
+const refreshBtn = document.getElementById('guild-refresh-btn');
+refreshBtn?.addEventListener('click', () => {
+    if (refreshBtn.dataset.busy) return;
+    refreshBtn.dataset.busy = '1';
+    refreshBtn.disabled = true;
+    const orig = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = 'Refreshing…';
+    // Navigate through the silent OAuth flow; on success (or graceful failure
+    // that preserves the session) we land back here via the callback.
+    window.location.href = '/auth/login?refresh=1';
+    // Restore the label if the flow bounces back synchronously (unlikely but
+    // harmless) — not reached on a normal redirect.
+    setTimeout(() => { refreshBtn.dataset.busy = ''; refreshBtn.disabled = false; refreshBtn.innerHTML = orig; }, 2000);
+});
+
+// Surface a refresh error banner (Discord sign-in needed, expired state, etc.)
+const refreshError = new URLSearchParams(window.location.search).get('refresh_error');
+if (refreshError) {
+    const msg = refreshError === 'needs_login'
+        ? 'Discord needs you to sign in again to refresh. Please sign out and back in to add Bark to new servers.'
+        : 'Could not refresh your servers — please try again.';
+    const banner = document.createElement('div');
+    banner.className = 'auth-error-banner';
+    banner.setAttribute('role', 'alert');
+    banner.textContent = msg;
+    const container = document.querySelector('.page-container') || document.body;
+    container.insertBefore(banner, container.firstChild);
+    // Drop the query param so the banner doesn't persist on every reload.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('refresh_error');
+    window.history.replaceState({}, '', url);
+}
 </script>
 {% endblock %}
