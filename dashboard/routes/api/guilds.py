@@ -1526,3 +1526,36 @@ async def get_guild_activity(request: Request, guild_id: int):
     # Sort all by timestamp descending, take top 40
     items.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
     return api_success({"activity": items[:40]})
+
+
+@router.get("/guilds/{guild_id}/emojis")
+async def list_guild_emojis(request: Request, guild_id: int):
+    """Return the server's custom emojis for use in composers (e.g. the
+    Announcements message box). Any member of the server may read them — the
+    same visibility the dashboard already exposes via the emoji wall."""
+    bot = request.state.bot
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return api_not_found("Guild")
+
+    emojis = []
+    try:
+        for emoji in getattr(guild, "emojis", []) or []:
+            try:
+                url = str(getattr(emoji, "url", "") or "")
+                animated = bool(getattr(emoji, "animated", False))
+            except Exception:
+                url, animated = "", False
+            if url:
+                emojis.append(
+                    {
+                        "id": str(getattr(emoji, "id", "") or ""),
+                        "name": str(getattr(emoji, "name", "") or "emoji"),
+                        "url": url,
+                        "animated": animated,
+                    }
+                )
+    except Exception:
+        emojis = []
+    emojis.sort(key=lambda e: e["name"].lower())
+    return api_success({"emojis": emojis})

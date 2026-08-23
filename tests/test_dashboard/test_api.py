@@ -751,6 +751,31 @@ def test_resolve_custom_emoji_to_cdn_url():
 
 
 @pytest.mark.asyncio
+async def test_list_guild_emojis_returns_sorted_custom_emojis(client, app):
+    """GET /guilds/{id}/emojis returns the server's custom emojis (id/name/url/
+    animated), sorted by name, for use in the Announcements composer. Read is
+    available to members (permissive in tests); no OAuth override needed."""
+    from types import SimpleNamespace
+
+    def _emoji(eid, name, url, animated):
+        return SimpleNamespace(id=eid, name=name, url=url, animated=animated)
+
+    guild = app.state.bot.get_guild(1)
+    guild.emojis = [
+        _emoji(2, "zen", "https://cdn.discordapp.com/emojis/2.png", False),
+        _emoji(1, "bark", "https://cdn.discordapp.com/emojis/1.gif", True),
+    ]
+
+    resp = await client.get("/api/v1/guilds/1/emojis")
+    assert resp.status_code == 200
+    emojis = resp.json()["data"]["emojis"]
+    assert [e["name"] for e in emojis] == ["bark", "zen"], "sorted alphabetically"
+    assert emojis[0]["animated"] is True
+    assert emojis[0]["url"].endswith(".gif")
+    assert emojis[1]["id"] == "2"
+
+
+@pytest.mark.asyncio
 async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeypatch):
     """The Statistics page reads entirely from the persisted daily stats tables
     (source of truth) — even with no in-memory live counters (a fresh restart),

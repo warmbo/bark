@@ -2077,3 +2077,47 @@ textarea:focus-visible,
   transition: transform var(--transition-fast);
 }
 .emoji-tile:hover img { transform: scale(2.2); }
+/* Announcements server-emoji picker */
+.announce-emoji-btn { font-size: 14px; line-height: 1; padding: 3px 6px; }
+.announce-emoji-picker {
+  position: absolute; bottom: 40px; right: 8px; z-index: 30;
+  width: 260px; max-height: 300px; overflow-y: auto;
+  background: var(--bg-card-solid); border: 1px solid var(--border-card);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-2);
+}
+.announce-emoji-picker-head {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-tertiary); padding: 2px 4px 6px;
+}
+.announce-emoji-picker-grid {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px;
+}
+.announce-emoji-item {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 100
+/* Announcements server-emoji picker */
+.announce-emoji-btn { font-size: 14px; line-height: 1; padding: 3px 6px; }
+.announce-emoji-picker {
+  position: absolute; bottom: 40px; right: 8px; z-index: 30;
+  width: 260px; max-height: 300px; overflow-y: auto;
+  background: var(--bg-card-solid); border: 1px solid var(--border-card);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-2);
+}
+.announce-emoji-picker-head {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-tertiary); padding: 2px 4px 6px;
+}
+.announce-emoji-picker-grid {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px;
+}
+.announce-emoji-item {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 100%; aspect-ratio: 1; padding: 0; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+.announce-emoji-item:hover, .announce-emoji-item:focus-visible {
+  transform: scale(1.15); background: var(--glass-tint); border-color: var(--border-hover);
+}
+.announce-emoji-item img { width: 22px; height: 22px; object-fit: contain; pointer-events: none; }
+.announce-emoji-empty { padding: 8px 4px; color: var(--text-tertiary); font-size: 12px; }

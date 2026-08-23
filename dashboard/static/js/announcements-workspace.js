@@ -286,5 +286,113 @@
   // it dispatches bark:media-changed so the preview stays in sync.
   picker?.addEventListener('bark:media-changed', updatePreview);
 
+  // ── Server emoji picker ───────────────────────────────────────────────
+  // Inserts a custom emoji (:name:) into the message at the caret. Fetches the
+  // server's emojis from the guilds emojis API on first open and caches them.
+  if (messageInput) {
+    const emojiBtn = document.createElement('button');
+    emojiBtn.type = 'button';
+    emojiBtn.className = 'btn btn-xs announce-emoji-btn';
+    emojiBtn.title = 'Insert server emoji';
+    emojiBtn.setAttribute('aria-label', 'Insert server emoji');
+    emojiBtn.textContent = '🙂';
+    emojiBtn.style.position = 'absolute';
+    emojiBtn.style.right = '8px';
+    emojiBtn.style.bottom = '8px';
+    emojiBtn.style.zIndex = '2';
+
+    const pickerWrap = document.createElement('div');
+    pickerWrap.className = 'announce-emoji-picker';
+    pickerWrap.hidden = true;
+    pickerWrap.innerHTML =
+      '<div class="announce-emoji-picker-head">Server emojis</div>' +
+      '<div class="announce-emoji-picker-grid" role="listbox" aria-label="Server emojis"></div>';
+
+    // Position the picker over the textarea (the message field wrapper).
+    const fieldWrap = messageInput.closest('.form-group') || messageInput.parentElement;
+    fieldWrap.style.position = 'relative';
+    fieldWrap.appendChild(emojiBtn);
+    fieldWrap.appendChild(pickerWrap);
+
+    let emojisCache = null;
+    let loading = false;
+
+    async function loadEmojis() {
+      if (emojisCache) return emojisCache;
+      if (loading) return [];
+      loading = true;
+      try {
+        const guildId = window.currentGuildId ? window.currentGuildId() : null;
+        if (!guildId) return [];
+        const res = await (window.safeFetch || fetch)(`/api/v1/guilds/${guildId}/emojis`);
+        // safeFetch returns the parsed JSON body; a bare fetch returns a Response.
+        const data = res && typeof res.json === 'function' ? await res.json() : res;
+        emojisCache = (data && data.data && data.data.emojis) || [];
+      } catch {
+        emojisCache = [];
+      } finally {
+        loading = false;
+      }
+      return emojisCache;
+    }
+
+    function insertEmoji(name) {
+      const start = messageInput.selectionStart ?? messageInput.value.length;
+      const end = messageInput.selectionEnd ?? messageInput.value.length;
+      const token = `:${name}:`;
+      messageInput.value = messageInput.value.slice(0, start) + token + messageInput.value.slice(end);
+      const newPos = Math.min(start + token.length, messageInput.value.length);
+      messageInput.setSelectionRange(newPos, newPos);
+      messageInput.focus();
+      messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    async function openPicker() {
+      const grid = pickerWrap.querySelector('.announce-emoji-picker-grid');
+      const emojis = await loadEmojis();
+      if (!emojis.length) {
+        grid.innerHTML = '<div class="announce-emoji-empty">No custom emojis on this server.</div>';
+      } else {
+        grid.innerHTML = emojis.map((e) =>
+          `<button type="button" class="announce-emoji-item" data-name="${esc(e.name)}" title=":${esc(e.name)}:" role="option">` +
+            `<img src="${esc(e.url)}" alt=":${esc(e.name)}:" loading="lazy">` +
+          `</button>`
+        ).join('');
+      }
+      pickerWrap.hidden = false;
+      emojiBtn.setAttribute('aria-expanded', 'true');
+      grid.querySelector('.announce-emoji-item')?.focus();
+    }
+
+    function closePicker() {
+      pickerWrap.hidden = true;
+      emojiBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    emojiBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (pickerWrap.hidden) openPicker();
+      else closePicker();
+    });
+
+    pickerWrap.querySelector('.announce-emoji-picker-grid')?.addEventListener('click', (e) => {
+      const item = e.target.closest('.announce-emoji-item');
+      if (!item) return;
+      insertEmoji(item.dataset.name);
+      closePicker();
+    });
+
+    // Close the picker on outside click / Escape.
+    document.addEventListener('click', (e) => {
+      if (!pickerWrap.hidden && !pickerWrap.contains(e.target) && e.target !== emojiBtn) closePicker();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !pickerWrap.hidden) closePicker();
+    });
+
+    // Keep the picker above the preview toggle button if one exists.
+    updatePreview();
+  }
+
   updatePreview();
 })();
