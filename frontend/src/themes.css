@@ -249,3 +249,39 @@ body {
   --sidebar-accent: oklch(0.24 0.036 55 / 0.74);
   --sidebar-border: oklch(0.32 0.038 55 / 0.55);
 }
+
+/* ── LIGHT MODE (inverted wallpaper) ────────────────────────────────────
+   When the instance owner toggles "Invert wallpaper", <html> carries
+   data-wallpaper="invert" and the backdrop becomes a light negative. The
+   near-white text tokens from the dark themes would be unreadable on those
+   light surfaces, so this block flips the WHOLE neutral surface + text model
+   to a light scheme (near-black text on translucent light panels). The accent
+   tokens (--primary/--ring/--chart-*) stay per-theme so the chosen hue still
+   colors buttons and highlights. This block is LAST so it wins over every
+   [data-theme] block at equal specificity. */
+[data-wallpaper="invert"] {
+  --theme-glow-a: oklch(1 0 250 / 0.30);
+  --theme-glow-b: oklch(1 0 250 / 0.22);
+
+  --background: oklch(0.955 0.010 250);
+  --foreground: oklch(0.20 0.015 250);
+  --card: oklch(0.995 0.004 250 / 0.88);
+  --card-foreground: oklch(0.20 0.015 250);
+  --popover: oklch(0.995 0.004 250 / 0.95);
+  --popover-foreground: oklch(0.20 0.015 250);
+  --secondary: oklch(0.93 0.012 250 / 0.82);
+  --secondary-foreground: oklch(0.24 0.015 250);
+  --muted: oklch(0.94 0.010 250 / 0.82);
+  --muted-foreground: oklch(0.48 0.02 250);
+  --accent: oklch(0.90 0.02 250 / 0.82);
+  --accent-foreground: oklch(0.24 0.015 250);
+  --destructive: oklch(0.55 0.16 25);
+  --destructive-foreground: oklch(0.985 0.005 25);
+  --border: oklch(0.78 0.015 250 / 0.85);
+  --input: oklch(0.92 0.010 250 / 0.9);
+  --sidebar: oklch(0.97 0.008 250 / 0.90);
+  --sidebar-foreground: oklch(0.20 0.015 250);
+  --sidebar-accent: oklch(0.90 0.02 250 / 0.85);
+  --sidebar-accent-foreground: oklch(0.24 0.015 250);
+  --sidebar-border: oklch(0.80 0.015 250 / 0.8);
+}
