@@ -2192,6 +2192,21 @@ async def test_manifest_hides_disabled_addons_from_sidebar(client, app):
     assert data["stats"]["modules_enabled"] == 1
 
 
+@pytest.mark.asyncio
+async def test_plugin_catalog_route_not_shadowed_by_guilds(client, monkeypatch):
+    """GET /guilds/plugin-catalog must resolve to the plugin catalog handler,
+    NOT be shadowed by /guilds/{guild_id} (which would 422 on int parsing).
+    Regression: the manifest router was registered AFTER the guilds router, so
+    FastAPI matched 'plugin-catalog' against the int-typed guild_id and returned
+    422, breaking the plugin catalog page."""
+    from dashboard.routes.api import manifest
+
+    monkeypatch.setattr(manifest, "_repo_plugin_entries", lambda: [{"name": "fun"}])
+    resp = await client.get("/api/v1/guilds/plugin-catalog")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["plugins"] == [{"name": "fun"}]
+
+
 def test_repo_plugin_catalog_only_lists_installable_plugins(monkeypatch):
     """The plugin catalog parses the bark-plugins README and must surface
     ONLY rows whose File cell links to a real plugins/*.py file — planned
