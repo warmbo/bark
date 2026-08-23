@@ -237,7 +237,8 @@
                 const wInv = !!(d.guild && d.guild.wallpaper_invert);
                 const wToggle = document.getElementById('wallpaper-invert-toggle');
                 if (wToggle) wToggle.checked = wInv;
-                document.documentElement.toggleAttribute('data-wallpaper', wInv);
+                if (wInv) document.documentElement.setAttribute('data-wallpaper', 'invert');
+                else document.documentElement.removeAttribute('data-wallpaper');
                 try { localStorage.setItem('bark-wallpaper-' + GUILD_ID, wInv ? 'invert' : ''); } catch (e) {}
             })
             .catch(() => {});
@@ -293,7 +294,8 @@
     wallpaperToggle?.addEventListener('change', async () => {
         const invert = wallpaperToggle.checked;
         wallpaperToggle.disabled = true;
-        document.documentElement.toggleAttribute('data-wallpaper', invert);
+        if (invert) document.documentElement.setAttribute('data-wallpaper', 'invert');
+        else document.documentElement.removeAttribute('data-wallpaper');
         try {
             const res = await safeFetch(`/api/v1/guilds/${GUILD_ID}/wallpaper_invert`, {
                 method: 'PUT',
@@ -305,7 +307,8 @@
             showToast(invert ? 'Wallpaper inverted' : 'Wallpaper restored', 'success');
         } catch (error) {
             wallpaperToggle.checked = !invert;
-            document.documentElement.toggleAttribute('data-wallpaper', !invert);
+            if (!invert) document.documentElement.setAttribute('data-wallpaper', 'invert');
+            else document.documentElement.removeAttribute('data-wallpaper');
             showToast(error.message || 'Failed to update wallpaper', 'error');
         } finally {
             wallpaperToggle.disabled = false;

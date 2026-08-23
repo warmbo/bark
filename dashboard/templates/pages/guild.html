@@ -410,7 +410,8 @@ async function loadGuildProfile() {
         // Persist so the theme survives navigation to every other guild page.
         try { localStorage.setItem('bark-theme-' + GUILD_ID, theme); } catch (e) {}
         // Apply the per-guild wallpaper invert treatment (light-mode negative).
-        document.documentElement.toggleAttribute('data-wallpaper', !!g.wallpaper_invert);
+        if (g.wallpaper_invert) document.documentElement.setAttribute('data-wallpaper', 'invert');
+        else document.documentElement.removeAttribute('data-wallpaper');
         try { localStorage.setItem('bark-wallpaper-' + GUILD_ID, g.wallpaper_invert ? 'invert' : ''); } catch (e) {}
     } catch (e) {
         if (requestToken !== guildProfileRequestToken) return;

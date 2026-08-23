@@ -1212,7 +1212,7 @@ async def test_set_guild_theme_validates_and_persists(app, monkeypatch):
     assert resp_bad.status_code == 400
 
     # The extended palette (cyan / teal / orange) is accepted too.
-    for name in ("cyan", "teal", "orange"):
+    for name in ("cyan", "teal", "orange", "synth", "acid"):
         r2 = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
         r2._body = {"theme": name}
         assert (await guilds.set_guild_theme(r2, 666666)).status_code == 200

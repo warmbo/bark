@@ -1924,6 +1924,8 @@ textarea:focus-visible,
 .theme-swatch-cyan { background: oklch(0.70 0.14 220); }
 .theme-swatch-teal { background: oklch(0.67 0.13 190); }
 .theme-swatch-orange { background: oklch(0.68 0.15 55); }
+.theme-swatch-synth { background: oklch(0.66 0.24 340); }
+.theme-swatch-acid { background: oklch(0.87 0.24 130); }
 .theme-name { font-size: 12px; color: var(--text-secondary); }
 .theme-option.active .theme-name { color: var(--text-primary); }
 
