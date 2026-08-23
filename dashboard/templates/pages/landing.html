@@ -310,6 +310,39 @@
             line-height: 1.4;
         }
 
+        /* ── "You're not in a Bark server yet" invite panel ── */
+        .auth-error-invite {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 18px 20px;
+            margin: 0 auto 28px;
+            max-width: 520px;
+            background: color-mix(in oklab, var(--accent) 14%, transparent);
+            border: 1px solid var(--border);
+            color: var(--foreground);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+        .auth-error-invite .auth-error-icon {
+            font-size: 28px;
+            line-height: 1;
+        }
+        .auth-error-invite .auth-error-body strong {
+            display: block;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        .auth-error-invite .auth-error-body p {
+            margin: 0 0 14px;
+            color: var(--text-secondary);
+        }
+        .auth-error-invite .auth-error-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         /* ── Mobile ── */
         @media (max-width: 480px) {
             .landing {
@@ -329,9 +362,20 @@
     <canvas id="shader-canvas"></canvas>
     <div class="landing">
         {% if auth_error %}
-        <div class="auth-error-banner" role="alert">
+        <div class="auth-error-banner{% if auth_error_code == 'no_shared_guild' %} auth-error-invite{% endif %}" role="alert">
+            {% if auth_error_code == 'no_shared_guild' %}
+            <span class="auth-error-icon">🐕</span>
+            <div class="auth-error-body">
+                <strong>You're not in a Bark server yet</strong>
+                <p>You need to be a member of a server where Bark is installed to use the dashboard. Invite Bark to your own server and you'll be ready to manage it from the dashboard.</p>
+                {% if config.dashboard.invite_url %}
+                <a href="{{ config.dashboard.invite_url }}" target="_blank" rel="noopener" class="btn btn-primary auth-error-cta"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg> Invite Bark to your server</a>
+                {% endif %}
+            </div>
+            {% else %}
             <span class="auth-error-icon">⚠️</span>
             <span>{{ auth_error }}</span>
+            {% endif %}
         </div>
         {% endif %}
         {% if avatar_url %}

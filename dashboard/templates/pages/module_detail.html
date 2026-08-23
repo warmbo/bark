@@ -169,7 +169,7 @@
     </div>
   </section>{% endif %}
 
-  {% for tab in module_data.extra_tabs %}<section class="tab-panel {{ 'active' if default_extra_tab and loop.first else '' }}" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" {{ 'hidden' if not (default_extra_tab and loop.first) else '' }}>{% if tab.template %}{% include tab.template %}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
+  {% for tab in module_data.extra_tabs %}<section class="tab-panel {{ 'active' if default_extra_tab and loop.first else '' }}" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="workspace-tab-{{ tab.id }}" tabindex="0" {{ 'hidden' if not (default_extra_tab and loop.first) else '' }}>{% if tab.template %}{% include tab.template %}{% elif tab.html %}{{ tab.html }}{% else %}{{ state_panel('error', 'Tab unavailable', 'This module did not provide a trusted template.') }}{% endif %}</section>{% endfor %}
 
   <section class="tab-panel {{ 'active' if no_primary_tab and not default_extra_tab else '' }}" id="tab-about" role="tabpanel" aria-labelledby="workspace-tab-about" tabindex="0" {{ 'hidden' if not (no_primary_tab and not default_extra_tab) else '' }}>
     <div class="about-grid">

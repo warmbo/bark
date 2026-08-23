@@ -285,6 +285,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
                 "config": config,
                 "avatar_url": avatar_url,
                 "auth_error": auth_error,
+                "auth_error_code": auth_error_code,
             },
         )
 

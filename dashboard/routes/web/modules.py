@@ -178,14 +178,26 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
     current_role = request.session.get("role", "admin")
     can_manage_module = role_rank.get(current_role, -1) >= role_rank[minimum_role]
 
-    # Extra tabs render via ``{% include tab.template %}`` — a plugin may
-    # declare a tab whose template file is missing, which would 500 the page.
-    # Module tabs now resolve from the module's own ``templates/`` directory
-    # (self-contained per-module UI) with no shared ``module_tabs/`` coupling;
-    # only keep tabs whose template exists on disk.
+    # Extra tabs render via ``{% include tab.template %}`` OR an inline
+    # ``tab.html`` string (for single-file plugins that ship no template dir).
+    # A plugin may declare a template whose file is missing, which would 500 the
+    # page — only keep tabs whose template exists on disk, or that carry inline
+    # html (rendered as a Jinja string, see module_detail.html).
     extra_tabs = []
     for tab in module.get_extra_tabs():
-        template = (tab or {}).get("template")
+        tab = dict(tab or {})
+        if tab.get("html"):
+            # Plugin-supplied inline html is trusted UI (it is authored by the
+            # plugin author, not the end user) and is rendered by the module
+            # page. Mark it as safe Markup so Jinja does not double-escape it
+            # while still escaping any user-controlled strings the plugin
+            # interpolates.
+            from markupsafe import Markup
+
+            tab["html"] = Markup(tab["html"])
+            extra_tabs.append(tab)
+            continue
+        template = tab.get("template")
         if not template:
             continue
         if _resolve_module_template(template).is_file():
