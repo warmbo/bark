@@ -103,14 +103,31 @@
     const rowH = 26;
     const hasAvatars = rows.some(r => r.avatar);
     const hasEmoji = rows.some(r => r.emoji);
-    // Reserve enough room for real Discord channel/emoji names and for the
-    // value after a full-width bar. The former fixed 42px gutter clipped both.
+    // Reserve enough room for the image + a gap + the full label + the value
+    // after a full-width bar. The label is placed to the RIGHT of the image so
+    // the two never overlap, and it is TRUNCATED to fit the gutter so a very
+    // long name can never spill over the bar/value.
+    const imgW = hasEmoji ? 16 : (hasAvatars ? 13.2 : 0);
+    const imgGap = imgW ? 6 : 0;
     const longestLabel = rows.reduce((n, row) => Math.max(n, String(row.label || '').length), 0);
-    const gutterBase = hasAvatars ? 76 : (hasEmoji ? 66 : 64);
-    const gutterExtra = hasAvatars ? 12 : (hasEmoji ? 22 : 0);
+    // Approx label pixel width at 12px font (~6.5px/char) + a small stub.
+    const labelW = longestLabel * 6.5 + 12;
+    const gutterBase = hasEmoji ? 70 : (hasAvatars ? 76 : 64);
     const barPad = {
-      left: Math.min(160, Math.max(gutterBase, longestLabel * 6.5 + 12 + gutterExtra)),
+      left: Math.min(170, Math.max(gutterBase, imgW + imgGap + labelW)),
       right: 36,
+    };
+    // Max label length that fits between the image and the bar (avoid overlap).
+    // The image is anchored at the LEFT of the gutter; the label fills the
+    // space between the image's right edge and the bar. Use a conservative
+    // ~7.2px/char so wide glyphs never spill over the bar/value.
+    const imgX = 2;                                  // left gutter origin for the image
+    const labelStart = imgX + imgW + imgGap;         // where the label text begins
+    const labelArea = barPad.left - labelStart - 4;  // px available for the label
+    const maxLabelChars = Math.max(4, Math.floor(labelArea / 7.2));
+    const clipLabel = (s) => {
+      const str = String(s == null ? '' : s);
+      return str.length > maxLabelChars ? str.slice(0, maxLabelChars - 1) + '…' : str;
     };
     const iw = W - barPad.left - barPad.right;
     const chartH = rows.length * rowH;
@@ -124,25 +141,29 @@
     rows.forEach((r, i) => {
       const y = i * rowH;
       const bw = (r.value / max) * iw;
-      let textX = barPad.left - 7;
+      let labelX = barPad.left - 7;
+      let anchor = 'end';
       if (r.emoji) {
-        // Custom guild emoji: render the actual emoji image in the label gutter
-        // (square, from the Discord CDN) instead of showing the raw id string.
-        const emX = barPad.left - 20;
+        // Emoji image at the left of the gutter, then the label to its right
+        // (start-anchored) so the name never draws over the emoji.
+        const emX = imgX;
         const emY = y + (rowH - 16) / 2;
         html += '<image x="' + emX + '" y="' + emY + '" width="16" height="16" preserveAspectRatio="xMidYMid meet" href="' + esc(r.emoji) + '"></image>';
-        textX = barPad.left - 1;
+        labelX = labelStart;
+        anchor = 'start';
       } else if (r.avatar) {
-        // Avatar (circular clip) when present; the label then shifts right.
+        // Avatar (circular clip) at the left of the gutter, then the label
+        // to its right (start-anchored).
         const clipId = 'clip-' + i + '-' + (r.id || i);
-        const avX = barPad.left - 17;
+        const avX = imgX + 6.6;
         const avY = y + rowH / 2;
         html += '<circle cx="' + avX + '" cy="' + avY + '" r="7.5" fill="var(--bg-card-solid)" stroke="' + baseColor + '" stroke-width="1"></circle>';
         html += '<defs><clipPath id="' + esc(clipId) + '"><circle cx="' + avX + '" cy="' + avY + '" r="6.6"></circle></clipPath></defs>';
         html += '<image x="' + (avX - 6.6) + '" y="' + (avY - 6.6) + '" width="13.2" height="13.2" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + esc(clipId) + ')" href="' + esc(r.avatar) + '"></image>';
-        textX = barPad.left - 11;
+        labelX = labelStart;
+        anchor = 'start';
       }
-      html += '<text x="' + textX + '" y="' + (y + rowH / 2 + 3.5) + '" text-anchor="end" font-size="12" font-weight="500" fill="var(--text-secondary)">' + esc(r.label) + '</text>';
+      html += '<text x="' + labelX + '" y="' + (y + rowH / 2 + 3.5) + '" text-anchor="' + anchor + '" font-size="12" font-weight="500" fill="var(--text-secondary)">' + esc(clipLabel(r.label)) + '</text>';
       html += '<rect x="' + barPad.left + '" y="' + (y + 4) + '" width="' + Math.max(2, bw.toFixed(1)) + '" height="' + (rowH - 8) + '" rx="3.5" fill="url(#' + gradId + ')" opacity="0.92"><title>' + esc(r.label) + ': ' + esc(r.value) + '</title></rect>';
       html += '<text x="' + (barPad.left + bw + 7) + '" y="' + (y + rowH / 2 + 3.5) + '" font-size="12" font-weight="700" fill="var(--text-primary)">' + esc(r.value) + '</text>';
     });
