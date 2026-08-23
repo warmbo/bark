@@ -174,8 +174,11 @@ textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in okla
   from { opacity: 0; }
   to { opacity: 1; }
 }
-body.page-fade-in { animation: page-fade-in 140ms var(--ease-out) both; }
-body.page-leaving {
+/* The fade applies ONLY to the main content area, never the sidebar/nav pane:
+   .main-content animates in/out while the fixed sidebar stays solid (it has
+   view-transition-name: sidebar and is excluded from the crossfade). */
+body.page-fade-in .main-content { animation: page-fade-in 140ms var(--ease-out) both; }
+body.page-leaving .main-content {
   opacity: 0;
   transition: opacity 150ms var(--ease-out);
   pointer-events: none;

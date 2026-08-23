@@ -71,7 +71,9 @@ textarea:focus-visible,
 
 .app-shell {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
 }/* ── Sidebar ──────────────────────────────────────────── */
 
 .sidebar {
@@ -261,7 +263,11 @@ textarea:focus-visible,
     flex: 1;
     margin-left: var(--sidebar-width);
     min-width: 0;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
 }.page-container {
     max-width: var(--content-max-width);
     margin: 0 auto;

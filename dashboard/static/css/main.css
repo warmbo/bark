@@ -260,7 +260,9 @@ textarea:focus-visible,
 
 .app-shell {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
 }/* ── Sidebar ──────────────────────────────────────────── */
 
 .sidebar {
@@ -450,7 +452,11 @@ textarea:focus-visible,
     flex: 1;
     margin-left: var(--sidebar-width);
     min-width: 0;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
 }.page-container {
     max-width: var(--content-max-width);
     margin: 0 auto;
@@ -2436,8 +2442,11 @@ textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in okla
   from { opacity: 0; }
   to { opacity: 1; }
 }
-body.page-fade-in { animation: page-fade-in 140ms var(--ease-out) both; }
-body.page-leaving {
+/* The fade applies ONLY to the main content area, never the sidebar/nav pane:
+   .main-content animates in/out while the fixed sidebar stays solid (it has
+   view-transition-name: sidebar and is excluded from the crossfade). */
+body.page-fade-in .main-content { animation: page-fade-in 140ms var(--ease-out) both; }
+body.page-leaving .main-content {
   opacity: 0;
   transition: opacity 150ms var(--ease-out);
   pointer-events: none;
