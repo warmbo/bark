@@ -3387,11 +3387,11 @@ body {
     z-index: 2;
   }
   [data-theme="hud"] .sidebar::before {
-    top: 6px; left: 6px;
+    top: 0; left: 0;
     border-right: none; border-bottom: none;
   }
   [data-theme="hud"] .sidebar::after {
-    bottom: 6px; left: 6px;
+    bottom: 0; left: 0;
     border-right: none; border-top: none;
   }
   /* A faint light sweep traveling down the sidebar. */
