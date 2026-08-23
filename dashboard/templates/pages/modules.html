@@ -154,8 +154,9 @@
             location.reload();
         } catch (error) {
             showToast(error.message || 'Install failed', 'error');
+            // Re-enable so the user can retry the same file without re-picking it.
+            pluginInstallBtn.disabled = false;
         } finally {
-            pluginInstallBtn.disabled = true;
             pluginInstallBtn.innerHTML = '{{ icon("package-plus", 14) }} Install';
             refreshIcons();
         }

@@ -262,9 +262,11 @@ async function saveBanner(url) {
         } else if (!target && bannerUrl && bannerUrl.value.trim()) {
             target = bannerUrl.value.trim();
         }
-        if (!target) return;
+        // An explicit empty url (from the Remove button) means CLEAR the custom
+        // banner, so send the clear request instead of bailing out early.
+        if (!target && url === '') target = '';
         await safeFetch(`/api/v1/guilds/${GUILD_ID}/banner`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({banner_url: target})});
-        hasCustomBanner = true;
+        hasCustomBanner = url !== '';
         renderBanner(target);
         if (bannerFile) bannerFile.value = '';
         if (bannerUrl) bannerUrl.value = '';

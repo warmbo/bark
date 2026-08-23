@@ -242,12 +242,15 @@
                 try { localStorage.setItem('bark-wallpaper-' + GUILD_ID, wInv ? 'invert' : ''); } catch (e) {}
             })
             .catch(() => {});
-        // Live preview: hover/click a swatch updates the accent immediately.
+        // Live preview: click a swatch updates the accent immediately.
         themePicker.addEventListener('click', (e) => {
             const btn = e.target.closest('.theme-option');
-            if (btn) setThemeSelection(btn.dataset.themeValue);
+            if (btn) {
+                setThemeSelection(btn.dataset.themeValue);
+                document.documentElement.setAttribute('data-theme', btn.dataset.themeValue);
+            }
         });
-        // Keyboard: arrow keys move focus between options.
+        // Keyboard: arrow keys move focus between options (live preview too).
         themePicker.addEventListener('keydown', (e) => {
             if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
             e.preventDefault();
@@ -256,6 +259,7 @@
             const next = (idx + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1) + opts.length) % opts.length;
             opts[next].focus();
             setThemeSelection(opts[next].dataset.themeValue);
+            document.documentElement.setAttribute('data-theme', opts[next].dataset.themeValue);
         });
     }
 
@@ -570,11 +574,6 @@
             updateResult.innerHTML = `<div class="state-panel state-error"><div><strong>Update failed</strong><p>${escHtml(error.message || 'Could not start the update')}</p></div></div>`;
         }
     });
-
-    // Fire the status fetch AFTER the consts above are initialized — calling
-    // loadUpdateStatus() earlier (top-level, pre-declaration) hit the
-    // temporal-dead-zone and aborted the whole settings script (P0, 2026-08-09).
-    loadUpdateStatus();
 
     // ── Diagnostics ──────────────────────────────────
 

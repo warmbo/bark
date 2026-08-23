@@ -21,9 +21,18 @@ router = APIRouter(tags=["instance-invites"])
 
 
 def _is_owner(request: Request) -> bool:
-    """Resolve ownership from the configured Discord IDs, not a stale session role."""
-    user = request.session.get("user") or {}
-    return user.get("id") in config.oauth2.owner_discord_ids
+    """Resolve instance ownership consistently with every other owner-gated route.
+
+    Delegate to ``can_manage_instance`` (services/instance_auth.py) so the
+    gate matches how the Settings page renders this card: owner-only when
+    OAuth is configured, permissive when OAuth is disabled (mock/dev harness).
+    Without this, the Hosted Instance Access card rendered but every action
+    403'd in permissive mode (page gated by can_manage_instance, API by a
+    stricter owner-ID check).
+    """
+    from services.instance_auth import can_manage_instance
+
+    return can_manage_instance(request)
 
 
 def _serialize_invite(invite) -> dict:
