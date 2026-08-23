@@ -306,6 +306,91 @@ body {
   --sidebar-border: oklch(0.30 0.045 140 / 0.55);
 }
 
+/* ── Rottweiler (black + tan, the dog) ───────────────────────────────── */
+/* True to the breed: jet-black surfaces with warm rust/tan primary and a
+   tan glow — black body, tan markings. A two-tone scheme that is unmistakable. */
+[data-theme="rottweiler"] {
+  --primary: oklch(0.68 0.13 50);
+  --primary-foreground: oklch(0.20 0.03 50);
+  --ring: oklch(0.62 0.11 45);
+  --sidebar-primary: oklch(0.68 0.13 50);
+  --sidebar-ring: oklch(0.62 0.11 45);
+  --chart-1: oklch(0.70 0.12 45);
+  --accent-hover: oklch(0.46 0.08 50);
+
+  --theme-glow-a: oklch(0.42 0.10 50 / 0.38);
+  --theme-glow-b: oklch(0.30 0.04 45 / 0.34);
+
+  --background: oklch(0.145 0.014 45);
+  --card: oklch(0.195 0.018 45 / 0.8);
+  --popover: oklch(0.18 0.016 45 / 0.84);
+  --secondary: oklch(0.24 0.016 45 / 0.74);
+  --muted: oklch(0.22 0.015 45 / 0.74);
+  --accent: oklch(0.29 0.03 45 / 0.78);
+  --border: oklch(0.32 0.02 45 / 0.6);
+  --input: oklch(0.26 0.018 45 / 0.8);
+  --sidebar: oklch(0.115 0.013 45 / 0.78);
+  --sidebar-accent: oklch(0.22 0.015 45 / 0.74);
+  --sidebar-border: oklch(0.30 0.018 45 / 0.55);
+}
+
+/* ── Dracula (crimson red + violet) ──────────────────────────────────── */
+/* Gothic blood-red primary over deep violet-black surfaces with a violet
+   glow — a two-tone scheme distinct from rose's pink and steel's blue. */
+[data-theme="dracula"] {
+  --primary: oklch(0.58 0.24 22);
+  --primary-foreground: oklch(0.985 0.005 22);
+  --ring: oklch(0.58 0.20 300);
+  --sidebar-primary: oklch(0.58 0.24 22);
+  --sidebar-ring: oklch(0.58 0.20 300);
+  --chart-1: oklch(0.62 0.20 300);
+  --accent-hover: oklch(0.40 0.18 22);
+
+  --theme-glow-a: oklch(0.40 0.16 22 / 0.42);
+  --theme-glow-b: oklch(0.34 0.14 300 / 0.38);
+
+  --background: oklch(0.15 0.05 300);
+  --card: oklch(0.20 0.05 300 / 0.8);
+  --popover: oklch(0.185 0.05 300 / 0.84);
+  --secondary: oklch(0.25 0.045 300 / 0.74);
+  --muted: oklch(0.23 0.045 300 / 0.74);
+  --accent: oklch(0.30 0.07 300 / 0.78);
+  --border: oklch(0.32 0.06 300 / 0.6);
+  --input: oklch(0.26 0.05 300 / 0.8);
+  --sidebar: oklch(0.115 0.042 300 / 0.78);
+  --sidebar-accent: oklch(0.23 0.045 300 / 0.74);
+  --sidebar-border: oklch(0.31 0.05 300 / 0.55);
+}
+
+/* ── Gold (metallic gold + warm charcoal) ────────────────────────────── */
+/* Rich metallic-gold primary with a champagne-bronze glow over warm
+   charcoal surfaces — brighter and more saturated than amber, reads as
+   precious metal rather than a traffic-light hue. */
+[data-theme="gold"] {
+  --primary: oklch(0.80 0.15 85);
+  --primary-foreground: oklch(0.20 0.04 85);
+  --ring: oklch(0.76 0.13 80);
+  --sidebar-primary: oklch(0.80 0.15 85);
+  --sidebar-ring: oklch(0.76 0.13 80);
+  --chart-1: oklch(0.78 0.13 80);
+  --accent-hover: oklch(0.56 0.11 85);
+
+  --theme-glow-a: oklch(0.48 0.12 85 / 0.42);
+  --theme-glow-b: oklch(0.36 0.09 75 / 0.36);
+
+  --background: oklch(0.16 0.025 80);
+  --card: oklch(0.205 0.028 80 / 0.8);
+  --popover: oklch(0.19 0.026 80 / 0.84);
+  --secondary: oklch(0.25 0.024 80 / 0.74);
+  --muted: oklch(0.23 0.024 80 / 0.74);
+  --accent: oklch(0.30 0.035 80 / 0.78);
+  --border: oklch(0.33 0.028 80 / 0.6);
+  --input: oklch(0.27 0.026 80 / 0.8);
+  --sidebar: oklch(0.12 0.021 80 / 0.78);
+  --sidebar-accent: oklch(0.23 0.024 80 / 0.74);
+  --sidebar-border: oklch(0.31 0.026 80 / 0.55);
+}
+
 /* ── LIGHT MODE (inverted wallpaper) ────────────────────────────────────
    When the instance owner toggles "Invert wallpaper", <html> carries
    data-wallpaper="invert" and the backdrop becomes a light negative. The

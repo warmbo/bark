@@ -286,7 +286,7 @@ async def set_guild_slug(request: Request, guild_id: int):
 
 
 # Valid accent themes for the per-guild theme picker.
-VALID_THEMES = {"steel", "emerald", "violet", "amber", "rose", "cyan", "teal", "orange", "synth", "acid"}
+VALID_THEMES = {"steel", "emerald", "violet", "amber", "rose", "cyan", "teal", "orange", "synth", "acid", "rottweiler", "dracula", "gold"}
 
 
 @router.put("/guilds/{guild_id}/theme")
