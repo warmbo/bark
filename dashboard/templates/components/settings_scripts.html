@@ -781,6 +781,9 @@
             const nameInput = document.getElementById('bot-activity-name');
             if (typeSelect && data.activity_type) typeSelect.value = data.activity_type;
             if (nameInput && data.activity_name) nameInput.value = data.activity_name;
+            // Wallpaper invert
+            const invertToggle = document.getElementById('wallpaper-invert-toggle');
+            if (invertToggle) invertToggle.checked = !!data.wallpaper_invert;
         } catch (error) {
             const errBox = document.getElementById('bot-custom-error');
             const msgEl = document.getElementById('bot-custom-error-message');
@@ -900,6 +903,29 @@
             btn.disabled = false;
             btn.innerHTML = '{{ icon("save", 16) }} Update presence';
             refreshIcons();
+        }
+    });
+
+    // Wallpaper invert toggle (live feedback + persist)
+    const wallpaperToggle = document.getElementById('wallpaper-invert-toggle');
+    wallpaperToggle?.addEventListener('change', async () => {
+        const invert = wallpaperToggle.checked;
+        wallpaperToggle.disabled = true;
+        document.documentElement.toggleAttribute('data-wallpaper', invert);
+        try {
+            const result = await safeFetch(`/api/v1/guilds/${GUILD_ID}/bot/appearance/wallpaper`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({invert}),
+            });
+            if (result.success === false) throw new Error(result.error || 'Update failed');
+            showToast(invert ? 'Wallpaper inverted' : 'Wallpaper restored', 'success');
+        } catch (error) {
+            wallpaperToggle.checked = !invert;
+            document.documentElement.toggleAttribute('data-wallpaper', !invert);
+            showToast(error.message || 'Failed to update wallpaper', 'error');
+        } finally {
+            wallpaperToggle.disabled = false;
         }
     });
 

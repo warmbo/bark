@@ -18,8 +18,11 @@ from services.response import (
     set_cached_module_min_role,
 )
 
+from services.template_globals import install
+
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+install(templates)
 router = APIRouter(tags=["web-modules"])
 
 # Module-specific tab templates now live in each module's own ``templates/``

@@ -21,6 +21,7 @@ from config import config
 from dashboard.app import DashboardApp
 from dashboard.middleware.compression import SafeGzipMiddleware
 from services.security import AuthMiddleware, SecurityMiddleware, trusted_origin_hosts
+from services.template_globals import install
 
 if TYPE_CHECKING:
     from bot.client import BarkBot
@@ -82,6 +83,9 @@ def create_app(bot: BarkBot) -> DashboardApp:
     repo_root = TEMPLATES_DIR.parent.parent
     templates.env.loader.searchpath.append(str(repo_root))
     templates.env.globals.setdefault("config", config)
+    # Instance wallpaper invert: fresh on every render so toggling it in Bot
+    # Customization reflects immediately (incl. the public landing page).
+    install(templates)
 
     # Every API error goes through the standard envelope. FastAPI's default
     # HTTPException handler returns {"detail": ...}, the one non-{success,error}

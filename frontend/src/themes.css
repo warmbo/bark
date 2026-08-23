@@ -20,11 +20,23 @@ body {
   background-image:
     radial-gradient(ellipse 80% 60% at 50% -10%, var(--theme-glow-a), transparent 60%),
     radial-gradient(ellipse 60% 50% at 85% 110%, var(--theme-glow-b), transparent 55%),
-    url('/static/img/bark-wallpaper.png');
+    var(--wallpaper-url);
   background-size: auto, auto, cover;
   background-position: center, center, center;
   background-repeat: no-repeat, no-repeat, no-repeat;
   background-blend-mode: normal;
+}
+
+/* Wallpaper source. The base image is MONOCHROME; when the instance owner
+   enables the "Invert wallpaper" appearance option, <html> carries
+   data-wallpaper="invert" and the CSS swaps to the inverted (negative)
+   monochrome variant. All wallpaper background layers reference
+   var(--wallpaper-url), so the choice applies everywhere at once. */
+:root {
+  --wallpaper-url: url('/static/img/bark-wallpaper.png');
+}
+[data-wallpaper="invert"] {
+  --wallpaper-url: url('/static/img/bark-wallpaper-inverted.png');
 }
 
 /* ── Steel (default) ───────────────────────────────────────────────── */

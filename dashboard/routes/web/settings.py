@@ -11,8 +11,11 @@ from fastapi.templating import Jinja2Templates
 from config import config
 from services.response import render_not_found
 
+from services.template_globals import install
+
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+install(templates)
 
 router = APIRouter(tags=["web-settings"])
 
