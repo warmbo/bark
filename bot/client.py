@@ -10,8 +10,6 @@ See docs/architecture-overview.md#startup-flow for lifecycle documentation.
 from __future__ import annotations
 
 import logging
-from collections import defaultdict, deque
-from datetime import date
 from typing import TYPE_CHECKING
 
 import discord
@@ -64,36 +62,7 @@ class BarkBot(commands.Bot):
         from services.paginator import ReactionPaginator
 
         self.paginator = ReactionPaginator()
-        # Bounded in-memory ring of recent Discord server events (member join /
-        # leave) per guild, surfaced on the dashboard "Server Events" section.
-        # Newest first; maxlen bounds memory regardless of activity.
-        self._server_events: dict[int, deque] = defaultdict(lambda: deque(maxlen=60))
-        self._message_stats: dict[int, dict] = {}
         self._install_tree_error_handler()
-
-    def record_server_event(
-        self, guild_id: int, event_type: str, member, guild_name: str | None = None
-    ) -> None:
-        """Record a Discord server event (member join/leave) for the dashboard feed."""
-        from datetime import datetime, timezone
-
-        self._server_events[guild_id].appendleft(
-            {
-                "type": event_type,
-                "user_id": str(getattr(member, "id", "")),
-                "user_name": getattr(member, "display_name", None) or str(member),
-                "tag": str(member),
-                "avatar_url": getattr(member, "display_avatar", None).url
-                if getattr(member, "display_avatar", None)
-                else None,
-                "guild_name": guild_name,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        )
-
-    def recent_server_events(self, guild_id: int, limit: int = 25) -> list[dict]:
-        """Return the most recent server events for a guild (newest first)."""
-        return list(self._server_events.get(guild_id, []))[:limit]
 
     # ── Properties ────────────────────────────────────
 
@@ -388,10 +357,6 @@ class BarkBot(commands.Bot):
             return
         if message.guild:
             try:
-                self.record_message(message.guild.id, message.channel)
-            except Exception:
-                logger.debug("Could not record message stats", exc_info=True)
-            try:
                 from services.stats_recorder import record_message as _persist_message
 
                 await _persist_message(message.guild.id, message.channel)
@@ -401,82 +366,10 @@ class BarkBot(commands.Bot):
         bus = self.modules.event_bus
         await bus.emit("discord_message", message=message)
 
-    def _ensure_message_stats(self, guild_id: int) -> dict:
-        today = date.today().isoformat()
-        stats = self._message_stats.get(guild_id)
-        if stats is None or stats.get("date") != today:
-            prev = stats
-            if prev is not None and prev.get("date") != today:
-                # Roll yesterday's channel counts into the daily history window.
-                hist = prev.setdefault("history", deque(maxlen=31))
-                if prev.get("channels"):
-                    hist.append({"date": prev["date"], "channels": prev["channels"]})
-            stats = {
-                "date": today,
-                "messages": 0,
-                "channels": {},
-                "emojis": {},
-                "emoji_total": (prev.get("emoji_total", {}) if prev else {}),
-                "history": (prev.get("history", deque(maxlen=31)) if prev else deque(maxlen=31)),
-            }
-            self._message_stats[guild_id] = stats
-        return stats
-
-    def record_message(self, guild_id: int, channel) -> None:
-        """Count a non-bot message for today's server stats."""
-        stats = self._ensure_message_stats(guild_id)
-        stats["messages"] += 1
-        ch_id = str(getattr(channel, "id", "unknown"))
-        name = getattr(channel, "name", None) or ch_id
-        entry = stats["channels"].setdefault(ch_id, {"name": name, "count": 0})
-        entry["count"] += 1
-        entry["name"] = name
-
-    def record_reaction(self, guild_id: int, emoji) -> None:
-        """Count an emoji reaction for today's + all-time server stats."""
-        stats = self._ensure_message_stats(guild_id)
-        key = str(emoji)
-        if getattr(emoji, "is_unicode_emoji", lambda: False)():
-            key = emoji.name  # unicode: show the glyph name
-        stats["emojis"][key] = stats["emojis"].get(key, 0) + 1
-        stats["emoji_total"][key] = stats["emoji_total"].get(key, 0) + 1
-
-    def top_channels(self, guild_id: int, days: int, limit: int = 5) -> list[dict]:
-        """Aggregate channel message counts over the trailing N days (incl today)."""
-        stats = self._ensure_message_stats(guild_id)
-        by_channel: dict[str, dict] = {}
-        # Include today's live counts.
-        for ch_id, entry in stats["channels"].items():
-            agg = by_channel.setdefault(ch_id, {"name": entry["name"], "count": 0})
-            agg["count"] += entry["count"]
-        # Include the trailing (days-1) completed days from history.
-        recent: list[dict] = []
-        if days > 1:
-            recent = list(stats.get("history", []))[-(days - 1):]
-        for day in recent:
-            for ch_id, entry in day["channels"].items():
-                agg = by_channel.setdefault(ch_id, {"name": entry["name"], "count": 0})
-                agg["count"] += entry["count"]
-                agg["name"] = entry["name"]
-        return sorted(by_channel.values(), key=lambda c: c["count"], reverse=True)[:limit]
-
-    def message_stats(self, guild_id: int) -> dict:
-        """Today's + history + all-time message/emoji counters for statistics."""
-        stats = self._ensure_message_stats(guild_id)
-        return {
-            "date": stats["date"],
-            "messages": stats["messages"],
-            "channels": stats["channels"],
-            "emojis": stats["emojis"],
-            "emoji_total": stats.get("emoji_total", {}),
-            "history": list(stats.get("history", [])),
-        }
-
     async def on_reaction_add(self, reaction: discord.Reaction, user) -> None:
         """Drive ◀ ▶ navigation on paginated guidance menus + count emoji stats."""
         try:
             if reaction.message and reaction.message.guild and not getattr(user, "bot", False):
-                self.record_reaction(reaction.message.guild.id, reaction.emoji)
                 from services.stats_recorder import record_reaction as _persist_reaction
 
                 await _persist_reaction(reaction.message.guild.id, reaction.emoji)
@@ -497,12 +390,10 @@ class BarkBot(commands.Bot):
         await bus.emit("discord_message_delete", message=message)
 
     async def on_member_join(self, member: discord.Member) -> None:
-        self.record_server_event(member.guild.id, "member_join", member, member.guild.name)
         bus = self.modules.event_bus
         await bus.emit("discord_member_join", member=member)
 
     async def on_member_remove(self, member: discord.Member) -> None:
-        self.record_server_event(member.guild.id, "member_leave", member, member.guild.name)
         bus = self.modules.event_bus
         await bus.emit("discord_member_remove", member=member)
         # A user removed from a server must lose dashboard access to it
