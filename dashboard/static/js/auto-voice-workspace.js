@@ -63,6 +63,14 @@
       '{username}': 'alex',
       '{guild}': guildName,
     };
+    if (caseFlags?.acronym) {
+      // Match the bot: acronym dynamic values at substitution time so
+      // template structure (#num, brackets) survives intact.
+      const acro = (v) => v.split(' ').filter(Boolean).map((w) => w.charAt(0)).join('');
+      for (const token of ['@@game_name@@', '{game}', '{guild}', '{username}', '{display_name}']) {
+        replacements[token] = acro(replacements[token]);
+      }
+    }
     let rendered = template || '## [@@game_name@@]';
     for (const [token, value] of Object.entries(replacements)) {
       rendered = rendered.split(token).join(value);
@@ -130,12 +138,14 @@
     document.getElementById('config-channel-name_uppercase') || document.getElementById('config-name_uppercase'),
     document.getElementById('config-channel-name_lowercase') || document.getElementById('config-name_lowercase'),
     document.getElementById('config-channel-name_titlecase') || document.getElementById('config-name_titlecase'),
+    document.getElementById('config-channel-name_acronym') || document.getElementById('config-name_acronym'),
   ].filter(Boolean);
 
   const readCaseFlags = () => ({
     uppercase: caseInputs[0]?.checked ?? false,
     lowercase: caseInputs[1]?.checked ?? false,
     titlecase: caseInputs[2]?.checked ?? false,
+    acronym: caseInputs[3]?.checked ?? false,
   });
 
   const updatePreview = () => {

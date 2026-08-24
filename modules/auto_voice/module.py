@@ -42,6 +42,7 @@ CONFIG_GROUPS: dict[str, list[str]] = {
         "name_uppercase",
         "name_lowercase",
         "name_titlecase",
+        "name_acronym",
     ],
     "limits": ["user_limit", "bitrate_kbps", "max_channels_per_user"],
     "access": [
@@ -87,7 +88,7 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     legacy_naming = raw.get("naming")
     if isinstance(legacy_naming, dict):
         channel = grouped.setdefault("channel", {})
-        for key in ("name_uppercase", "name_lowercase", "name_titlecase"):
+        for key in ("name_uppercase", "name_lowercase", "name_titlecase", "name_acronym"):
             if key in legacy_naming:
                 channel[key] = legacy_naming[key]
     result = dict(raw)
@@ -136,7 +137,7 @@ class AutoVoiceModule(BarkModule):
             if isinstance(section, dict) and key in section:
                 return section[key]
         # Legacy "naming" group (pre-consolidation) for the casing keys.
-        if key in ("name_uppercase", "name_lowercase", "name_titlecase"):
+        if key in ("name_uppercase", "name_lowercase", "name_titlecase", "name_acronym"):
             legacy = config.get("naming")
             if isinstance(legacy, dict) and key in legacy:
                 return legacy[key]
@@ -252,6 +253,15 @@ class AutoVoiceModule(BarkModule):
                             "type": "boolean",
                             "title": "Title Case",
                             "description": "Force the finished channel name to Title Case.",
+                            "default": False,
+                        },
+                        "name_acronym": {
+                            "type": "boolean",
+                            "title": "Acronym",
+                            "description": (
+                                "Collapse every word to its initials — "
+                                "\u201cCounter Strike 2\u201d becomes \u201cCS2\u201d. Applied before the case toggles."
+                            ),
                             "default": False,
                         },
                     },
@@ -780,6 +790,14 @@ class AutoVoiceModule(BarkModule):
             "{username}": str(member.name),
             "{guild}": str(member.guild.name),
         }
+        if self._cfg(config, "name_acronym"):
+            # Acronym the dynamic values at substitution time so template
+            # structure (#num, brackets) survives intact — "Counter Strike 2"
+            # becomes "CS2" wherever @@game_name@@/{game}/{guild} appear.
+            acronym = lambda value: "".join(word[0] for word in str(value).split() if word)
+            for token in ("@@game_name@@", "{game}", "{guild}", "{username}", "{display_name}"):
+                if token in replacements:
+                    replacements[token] = acronym(replacements[token])
         for token, value in replacements.items():
             template = template.replace(token, value)
         template = self._apply_avc_transforms(template)

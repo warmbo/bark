@@ -448,6 +448,27 @@ def test_name_case_flags_transform_finished_name():
     )
 
 
+def test_name_acronym_collapses_to_initials():
+    """The Acronym toggle collapses every word to its initial, applied before
+    the case toggles so they style the acronym itself (2026-08-24 request)."""
+    ctx, _guild, member, *_ = _voice_fixture({"channel_name_template": "## [@@game_name@@]"})
+    member.activities = [SimpleNamespace(name="Counter Strike 2")]
+    module = AutoVoiceModule(ctx)
+    base = {"channel_name_template": "## [@@game_name@@]", "index_hint": None}
+
+    assert (
+        module._render_name(member, {**base, "name_acronym": True}, index=1)
+        == "#1 [CS2]"
+    )
+    # Case toggles style the acronym.
+    assert (
+        module._render_name(
+            member, {**base, "name_acronym": True, "name_lowercase": True}, index=1
+        )
+        == "#1 [cs2]"
+    )
+
+
 def test_name_uppercase_wins_over_lowercase():
     ctx, _guild, member, *_ = _voice_fixture({"channel_name_template": "## room"})
     module = AutoVoiceModule(ctx)
