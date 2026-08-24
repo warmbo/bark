@@ -1070,12 +1070,18 @@ textarea:focus-visible,
 .config-layout-columns {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 20px;
     align-items: start;
 }.config-layout-columns .config-subsection { margin-bottom: 0; }
-/* The global 3-col form grid collapses inside these narrow subsections;
-   stack fields vertically there instead (2026-08-24 Auto Voice pass). */
-.config-layout-columns .form-grid { grid-template-columns: 1fr; }@media (max-width: 900px) {
+/* Columnar config subsections get room to breathe: real padding, spaced
+   fields, and single-column field stacking (2026-08-24 layout rework). */
+.config-layout-columns .config-subsection { padding: 24px 26px; }
+.config-layout-columns .config-subsection-title { margin-bottom: 6px; }
+.config-layout-columns .config-subsection-desc { margin-bottom: 18px; }
+.config-layout-columns .form-grid { grid-template-columns: 1fr; gap: 22px; }
+.config-layout-columns .form-group { margin-bottom: 0; }
+/* Label/control pairs read as distinct rows, not a compressed list. */
+.config-layout-columns .form-label-row { margin-bottom: 8px; min-height: 24px; }@media (max-width: 900px) {
     .config-layout-columns { grid-template-columns: 1fr; }}.config-subsection-title {
     font-size: 15px;
     font-weight: 700;
@@ -2000,7 +2006,7 @@ textarea:focus-visible,
 .bot-offline-banner { position: sticky; top: 0; z-index: var(--z-banner); display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--c-discord-warn-bg); border-bottom: 1px solid var(--c-discord-warn-alpha); color: var(--c-discord-warn-text); font-size: 15px; }.bot-offline-banner code { background: var(--c-shadow-35b); padding: 1px 6px; border-radius: var(--radius); font-family: var(--font-mono, monospace); }.bot-offline-banner[hidden] { display: none; }/* ── Dashboard getting-started guide ─────────────────── */
 .getting-started { margin: 0 0 18px; border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--bg-card); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); overflow: hidden; }.getting-started summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 14px 18px; font-weight: 600; list-style: none; color: var(--text-primary); }.getting-started summary::-webkit-details-marker { display: none; }.getting-started summary:hover { background: var(--c-glass-faint); }.getting-started-toggle { margin-left: auto; display: inline-flex; transition: transform .2s ease; }.getting-started[open] .getting-started-toggle { transform: rotate(180deg); }.getting-started-list { margin: 0; padding: 2px 18px 16px 36px; display: grid; gap: 8px; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }.getting-started-list code { background: var(--c-glass-08); padding: 1px 6px; border-radius: var(--radius); font-family: var(--font-mono, monospace); font-size: 15px; }.getting-started-list a { color: var(--accent); }/* ── Accessible dialog ─────────────────────────────── */
 .dialog-overlay { position: fixed; inset: 0; z-index: var(--z-dialog); display: grid; place-items: center; padding: 24px; background: var(--c-scrim-74); backdrop-filter: var(--glass-blur-light); }.app-dialog { width: min(460px, 100%); display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 22px; border: 1px solid var(--border-hover); background: var(--bg-card-solid); box-shadow: var(--shadow-lg); }.app-dialog h2 { margin-bottom: 6px; font-size: 18px; }.app-dialog p { color: var(--text-secondary); }.dialog-icon { color: var(--yellow); }.dialog-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }.dialog-input-wrap { grid-column: 1 / -1; }.dialog-input-wrap .form-input { width: 100%; padding: 10px 12px; font-size: 15px; }.dialog-grid-wrap { grid-column: 1 / -1; }.dialog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 320px; overflow-y: auto; }.dialog-grid-cell { position: relative; padding: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; background: var(--bg-elevated); cursor: pointer; }.dialog-grid-cell:hover { border-color: var(--blue-semantic); }.dialog-grid-cell img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }.dialog-grid-delete { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: var(--c-red-deep90); color: var(--c-white); font-size: 15px; line-height: 1; cursor: pointer; }.dialog-grid-delete:hover { background: var(--c-red-deep); }/* ── Native module workspaces ──────────────────────── */
-.module-workspace { container-type: inline-size; }.module-workspace-header { margin-bottom: 14px; }.module-health-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; border: 1px solid var(--border-card); background: var(--bg-elevated); }.module-health-strip > div { min-width: 0; padding: 12px 14px; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 7px; border-right: 1px solid var(--border-subtle); }.module-health-strip > div:last-child { border-right: 0; }.health-label { display: block; color: var(--text-tertiary); font-size: 15px; text-transform: uppercase; letter-spacing: .06em; }.module-health-strip strong { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }.workspace-tabs { position: sticky; top: 42px; z-index: 20; margin-bottom: 16px; overflow-x: auto; overscroll-behavior-inline: contain; background: var(--c-scrim-96); }.workspace-form-card { max-width: none; }.form-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0 16px; }.operation-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; align-items: start; }/* A lone action card (e.g. Announcements "Post announcement") should span the
+.module-workspace { container-type: inline-size; }.module-workspace-header { margin-bottom: 22px; }.module-health-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; border: 1px solid var(--border-card); background: var(--bg-elevated); }.module-health-strip > div { min-width: 0; padding: 12px 14px; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 7px; border-right: 1px solid var(--border-subtle); }.module-health-strip > div:last-child { border-right: 0; }.health-label { display: block; color: var(--text-tertiary); font-size: 15px; text-transform: uppercase; letter-spacing: .06em; }.module-health-strip strong { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }.workspace-tabs { position: sticky; top: 42px; z-index: 20; margin-bottom: 16px; overflow-x: auto; overscroll-behavior-inline: contain; background: var(--c-scrim-96); }.workspace-form-card { max-width: none; }.form-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0 16px; }.operation-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; align-items: start; }/* A lone action card (e.g. Announcements "Post announcement") should span the
    full workspace instead of being stranded in one grid column. */
 .operation-grid:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }.definition-list > div { display: grid; grid-template-columns: 90px 1fr; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); }.definition-list dt { color: var(--text-tertiary); }.guild-icon-small, .guild-bar-icon, .guild-card-icon img { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
 /* Five desktop workspace tiers: compact, standard, large, wide, ultrawide. */
@@ -2542,12 +2548,12 @@ body.page-leaving .main-content {
    primary column + sticky contextual side column. */
 .workspace-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
-  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap: var(--space-6);
   align-items: start;
 }
-.workspace-split-main { min-width: 0; display: grid; gap: var(--space-4); align-content: start; }
-.workspace-split-side { min-width: 0; position: sticky; top: 76px; display: grid; gap: var(--space-4); align-content: start; }
+.workspace-split-main { min-width: 0; display: grid; gap: var(--space-5); align-content: start; }
+.workspace-split-side { min-width: 0; position: sticky; top: 76px; display: grid; gap: var(--space-5); align-content: start; }
 /* Modules without a contextual side surface collapse to full-width single column. */
 .workspace-split:has(.workspace-split-side:empty) { grid-template-columns: minmax(0, 1fr); }
 .workspace-split:has(.workspace-split-side:empty) .workspace-split-side { display: none; }

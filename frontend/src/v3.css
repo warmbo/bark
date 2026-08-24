@@ -194,12 +194,12 @@ body.page-leaving .main-content {
    primary column + sticky contextual side column. */
 .workspace-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
-  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap: var(--space-6);
   align-items: start;
 }
-.workspace-split-main { min-width: 0; display: grid; gap: var(--space-4); align-content: start; }
-.workspace-split-side { min-width: 0; position: sticky; top: 76px; display: grid; gap: var(--space-4); align-content: start; }
+.workspace-split-main { min-width: 0; display: grid; gap: var(--space-5); align-content: start; }
+.workspace-split-side { min-width: 0; position: sticky; top: 76px; display: grid; gap: var(--space-5); align-content: start; }
 /* Modules without a contextual side surface collapse to full-width single column. */
 .workspace-split:has(.workspace-split-side:empty) { grid-template-columns: minmax(0, 1fr); }
 .workspace-split:has(.workspace-split-side:empty) .workspace-split-side { display: none; }
