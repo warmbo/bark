@@ -69,14 +69,19 @@ await copyFile(
   join(root, "dashboard/static/js/lucide.min.js"),
 );
 const vendorDir = join(root, "dashboard/static/js/vendor");
+const threeVersion = "0.185.1";
 await mkdir(vendorDir, { recursive: true });
-await copyFile(
+const threeModule = await readFile(
   join(here, "node_modules/three/build/three.module.min.js"),
-  join(vendorDir, "three.module.min.js"),
+  "utf8",
+);
+await writeFile(
+  join(vendorDir, `three.module.${threeVersion}.min.js`),
+  threeModule.replace("./three.core.min.js", `./three.core.${threeVersion}.min.js`),
 );
 await copyFile(
   join(here, "node_modules/three/build/three.core.min.js"),
-  join(vendorDir, "three.core.min.js"),
+  join(vendorDir, `three.core.${threeVersion}.min.js`),
 );
 
 process.stdout.write(`Built ${output} with pinned Tailwind/shadcn tokens and local assets.\n`);

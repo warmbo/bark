@@ -49,9 +49,9 @@
 }
 [data-advanced-theme] body { isolation: isolate; }
 [data-advanced-theme] .app-shell,
-[data-advanced-theme] .bot-offline-banner,
-[data-advanced-theme] .palette-overlay,
-[data-advanced-theme] .dialog-overlay { position: relative; z-index: 1; }
+[data-advanced-theme] .bot-offline-banner { position: relative; z-index: 1; }
+[data-advanced-theme] .palette-overlay { z-index: var(--z-overlay); }
+[data-advanced-theme] .dialog-overlay { z-index: var(--z-dialog); }
 [data-advanced-theme] .sidebar { z-index: 110; }
 [data-advanced-theme] .context-bar { z-index: 100; }
 [data-advanced-theme] .main-content { perspective: 1400px; }
@@ -325,7 +325,7 @@
   position: fixed;
   left: 18px;
   top: 18px;
-  z-index: 2147482000;
+  z-index: 1700;
   display: none;
   min-height: 42px;
   padding: 8px 14px;
@@ -356,7 +356,7 @@
   content: 'PAUSED';
   position: fixed;
   inset: 0;
-  z-index: 199;
+  z-index: 1500;
   display: grid;
   place-items: center;
   background: #100c20d9;
@@ -370,7 +370,7 @@
   visibility: visible;
   pointer-events: auto;
   transform: translate(-50%, -50%) rotate(-1deg) scale(1);
-  z-index: 220;
+  z-index: 1600;
 }
 .graffiti-theme .sidebar .nav-item { font: 650 14px/1.2 "Unbounded Advanced", sans-serif; text-transform: uppercase; border: 2px solid transparent; }
 .graffiti-theme .sidebar .nav-item:hover,
@@ -400,10 +400,11 @@
   [data-theme="graffiti"] :is(.page-title, .module-heading) { animation: graffiti-wobble 3.6s steps(2, end) infinite; }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .advanced-theme-canvas { opacity: .58; }
   [data-advanced-theme] :is(.content-card, .dashboard-widget, .stat-card, .server-profile, .workspace-data-card, .action-card) { backdrop-filter: blur(16px) saturate(130%); }
   .graffiti-theme .main-content { padding: 76px 14px 20px; }
-  .graffiti-theme .context-bar { left: 0; padding-left: 100px; }
-  .graffiti-pause-button { left: 12px; top: 12px; }
+  .graffiti-theme .context-bar { left: 0; padding-left: 14px; padding-right: 100px; }
+  .graffiti-theme .menu-toggle { display: none !important; }
+  .graffiti-pause-button { left: auto; right: 12px; top: 12px; }
 }

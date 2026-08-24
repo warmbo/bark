@@ -1,4 +1,4 @@
-import * as THREE from '/static/js/vendor/three.module.min.js';
+import * as THREE from '/static/js/vendor/three.module.0.185.1.min.js';
 
 /**
  * Bark Advanced Themes runtime.
@@ -329,6 +329,16 @@ function ensureCanvas() {
   canvas = document.createElement('canvas');
   canvas.className = 'advanced-theme-canvas';
   canvas.setAttribute('aria-hidden', 'true');
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    cancelAnimationFrame(frame);
+    frame = 0;
+    document.documentElement.classList.add('advanced-theme-fallback');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    document.documentElement.classList.remove('advanced-theme-fallback');
+    initScene(activeTheme);
+  });
   document.body.prepend(canvas);
 }
 
@@ -381,8 +391,12 @@ function initScene(theme) {
     renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: 'low-power' });
   } catch (error) {
     document.documentElement.classList.add('advanced-theme-fallback');
+    canvas?.remove();
+    canvas = null;
+    renderer = null;
     return;
   }
+  document.documentElement.classList.remove('advanced-theme-fallback');
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
   renderer.setClearColor(0x000000, 0);
   scene = new THREE.Scene();
@@ -430,25 +444,42 @@ function applyTheme() {
   const theme = document.documentElement.getAttribute('data-theme') || 'steel';
   if (theme === activeTheme) return;
   activeTheme = theme;
-  document.documentElement.toggleAttribute('data-advanced-theme', ADVANCED.has(theme) || theme === 'hud');
+  document.documentElement.toggleAttribute('data-advanced-theme', ADVANCED.has(theme));
   document.documentElement.setAttribute('data-advanced-name', theme);
   setupGraffitiMenu(theme);
   initScene(theme);
 }
 
+let pointerFrame = 0;
+let nextPointerX = 0;
+let nextPointerY = 0;
 document.addEventListener('pointermove', (event) => {
-  pointer.x = (event.clientX / Math.max(innerWidth, 1)) * 2 - 1;
-  pointer.y = -((event.clientY / Math.max(innerHeight, 1)) * 2 - 1);
-  document.documentElement.style.setProperty('--advanced-pointer-x', `${event.clientX}px`);
-  document.documentElement.style.setProperty('--advanced-pointer-y', `${event.clientY}px`);
+  if (!ADVANCED.has(activeTheme)) return;
+  nextPointerX = event.clientX;
+  nextPointerY = event.clientY;
+  if (pointerFrame) return;
+  pointerFrame = requestAnimationFrame(() => {
+    pointerFrame = 0;
+    pointer.x = (nextPointerX / Math.max(innerWidth, 1)) * 2 - 1;
+    pointer.y = -((nextPointerY / Math.max(innerHeight, 1)) * 2 - 1);
+    document.documentElement.style.setProperty('--advanced-pointer-x', `${nextPointerX}px`);
+    document.documentElement.style.setProperty('--advanced-pointer-y', `${nextPointerY}px`);
+  });
 }, { passive: true });
 window.addEventListener('resize', resize, { passive: true });
-document.addEventListener('visibilitychange', () => { visible = !document.hidden; });
+document.addEventListener('visibilitychange', () => {
+  visible = !document.hidden;
+  if (visible) clock = new THREE.Clock();
+});
 document.addEventListener('keydown', (event) => {
-  if (activeTheme === 'graffiti' && event.key === 'Escape') {
-    event.preventDefault();
-    toggleGraffitiMenu();
-  }
+  if (activeTheme !== 'graffiti' || event.key !== 'Escape') return;
+  if (!document.body.classList.contains('graffiti-menu-open')) return;
+  const modalOpen = document.querySelector(
+    '.palette-overlay[aria-hidden="false"], .dialog-overlay:not([hidden]), [aria-modal="true"]:focus-within',
+  );
+  if (modalOpen) return;
+  event.preventDefault();
+  toggleGraffitiMenu(false);
 });
 reduced.addEventListener('change', () => initScene(activeTheme));
 new MutationObserver(applyTheme).observe(document.documentElement, {
