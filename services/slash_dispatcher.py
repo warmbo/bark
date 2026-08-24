@@ -335,22 +335,56 @@ class SlashDispatcher:
             if self._path_enabled(guild_id, leaf)
         ]
 
-    @staticmethod
-    def _chunk_by_module(leaves: list[Leaf], max_fields: int = 6) -> list[list[tuple[str, list[Leaf]]]]:
-        """Group leaves by module into page-chunks of at most ``max_fields``."""
+    def _chunk_by_module(
+        self, leaves: list[Leaf], max_fields: int = 6, max_chars: int = 1000
+    ) -> list[list[tuple[str, list[Leaf]]]]:
+        """Group leaves by module into page-chunks of at most ``max_fields``
+        fields AND at most ``max_chars`` rendered characters per field.
+
+        Discord rejects any embed field whose value exceeds 1024 chars
+        (error 50035), so a single command-heavy module must split across
+        pages instead of emitting one oversized field (2026-08-24 incident:
+        Moderation's joined lines hit exactly 1025).
+        """
         by_module: dict[str, list[Leaf]] = {}
         for leaf in leaves:
             by_module.setdefault(leaf.module_name, []).append(leaf)
+
+        def render(ls: list[Leaf]) -> str:
+            return "\n".join(self._command_line(leaf) for leaf in ls)
+
         pages: list[list[tuple[str, list[Leaf]]]] = []
         current: list[tuple[str, list[Leaf]]] = []
         for module_name in sorted(by_module):
-            if current and len(current) >= max_fields:
-                pages.append(current)
-                current = []
-            current.append((module_name, sorted(by_module[module_name], key=lambda leaf: leaf.path)))
+            ls = sorted(by_module[module_name], key=lambda leaf: leaf.path)
+            # A single command-heavy module can exceed the embed-field cap on
+            # its own — split it into sub-groups that each render under limit.
+            for group in self._split_by_char_limit(ls, lambda g: len(render(g)), max_chars):
+                if current and len(current) >= max_fields:
+                    pages.append(current)
+                    current = []
+                current.append((module_name, group))
         if current:
             pages.append(current)
         return pages
+
+    @staticmethod
+    def _split_by_char_limit(ls: list[Leaf], length_of, limit: int) -> list[list[Leaf]]:
+        """Split ``ls`` into consecutive groups whose rendered length stays
+        under ``limit``. A single item longer than the limit becomes its own
+        group (nothing more we can do without truncating its text)."""
+        groups: list[list[Leaf]] = []
+        group: list[Leaf] = []
+        for leaf in ls:
+            candidate = [*group, leaf]
+            if group and length_of(candidate) > limit:
+                groups.append(group)
+                group = [leaf]
+            else:
+                group = candidate
+        if group:
+            groups.append(group)
+        return groups
 
     @staticmethod
     def _set_footers(pages: list[discord.Embed]) -> None:
