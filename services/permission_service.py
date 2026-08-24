@@ -67,6 +67,7 @@ class PermissionService:
         # (names, limits, cleanup), not instance security — moderators may
         # save it, matching the module's own "Manage Auto Voice Channels"
         # declaration. Lifecycle (enable/disable/reload) stays admin.
+        "auto_voice.access": "viewer",
         "auto_voice.configure": "moderator",
         "roles.manage": "admin",
     }

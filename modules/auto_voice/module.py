@@ -182,9 +182,6 @@ class AutoVoiceModule(BarkModule):
     def get_permissions(self) -> list[PermissionDefinition]:
         return [
             PermissionDefinition(
-                name="auto_voice.access", label="View Auto Voice Settings"
-            ),
-            PermissionDefinition(
                 name="auto_voice.manage", label="Manage Auto Voice Channels"
             ),
             PermissionDefinition(
