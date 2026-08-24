@@ -133,7 +133,7 @@ Supporting pieces:
 
 Modules declare granular permissions via `BarkModule.get_permissions()` (`modules/base.py`). Each permission is a `PermissionDefinition(name, label, description)`.
 
-During module discovery, `ModuleManager.discover()` calls `PermissionService.discover_module_permissions(modules)`, which iterates every module and calls `register_module_permissions()`. Unknown module permissions default to `admin` unless they match a key in `CORE_ACTIONS`.
+During module discovery, `ModuleManager.discover()` calls `PermissionService.discover_module_permissions(modules)`, which iterates every module and calls `register_module_permissions()`. Each module permission's default role is taken from `CORE_ACTIONS` (or `admin` if it is not listed there) — this declared role is the module's effective minimum when no per-guild override exists.
 
 ## Permission Check Flow
 
@@ -155,7 +155,8 @@ check_api_permission(request, action, guild_id)
     ├─ action was declared by a module (or has a module prefix)?
     │     → resolve the declaring module from PermissionService
     │     → lookup _module_role_cache[(guild_id, module_name)]
-    │     → required = cached min_role or "admin"
+    │     → required = cached min_role if an override is set,
+    │       otherwise the module's declared role (CORE_ACTIONS / get_permissions())
     │
     ├─ no module prefix?
     │     → required = PermissionService.get_required_role_for_action(action)
@@ -235,9 +236,9 @@ Per-guild, per-module minimum role overrides stored in `ModuleRoleAccess` (`data
 API endpoints to manage overrides:
 - `GET /api/v1/guilds/{guild_id}/modules/role-access` (requires `modules.manage`)
 - `PATCH /api/v1/guilds/{guild_id}/modules/{module_name}/role-access` (requires `modules.manage`)
-- `DELETE /api/v1/guilds/{guild_id}/modules/{module_name}/role-access` (restores admin default)
+- `DELETE /api/v1/guilds/{guild_id}/modules/{module_name}/role-access` (restores the module's declared default)
 
-When no override exists, modules require `admin` role (enforced via `_module_role_cache.get(key, "admin")`).
+When no override exists, a module action requires its **declared** role (from `CORE_ACTIONS` / `get_permissions()`), not a blanket `admin`. An explicit override to a higher role still wins, so an admin can always tighten a module above its declared minimum.
 
 ## SessionMiddleware
 

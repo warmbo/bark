@@ -131,7 +131,19 @@ def check_api_permission(request, action: str, guild_id=None) -> bool:
         guild_id = _guild_id_from_path(path)
     module_name = _module_name_for_action(request, action, guild_id)
     if module_name is not None:
-        required = _module_role_cache.get((str(guild_id), module_name), "admin") or "admin"
+        # The per-guild ModuleRoleAccess override wins when explicitly set.
+        # When unset, fall back to the module's *declared* action role
+        # (CORE_ACTIONS / get_permissions()) instead of silently demanding
+        # admin — otherwise a module that declares its config action as
+        # "moderator" is unreachable for moderators until an admin manually
+        # adds an override row. An explicit override to "admin" still wins,
+        # so tightening a module above its declared role is always possible.
+        override = _module_role_cache.get((str(guild_id), module_name), None)
+        required = (
+            override
+            if override is not None
+            else _permission_service.get_required_role_for_action(action)
+        )
     else:
         required = _permission_service.get_required_role_for_action(action)
     result = _permission_service.role_has_access(user_role, required)

@@ -422,7 +422,14 @@ async def test_saving_fresh_module_config_preserves_default_enabled_state(client
 
 @pytest.mark.asyncio
 async def test_module_role_access_override_enforces_and_resets_default(client, app, monkeypatch):
-    """Moderator access follows the override and reset restores admin-only."""
+    """Moderator access follows the declared default and any explicit override.
+
+    Unset module actions default to their *declared* role (moderation.warn is
+    moderator), not a blanket admin lock — otherwise a module that declares a
+    moderator action is unreachable until an admin adds an override row. An
+    explicit override to a higher role (admin) still wins, and deleting the
+    override restores the declared default.
+    """
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 
@@ -455,6 +462,7 @@ async def test_module_role_access_override_enforces_and_resets_default(client, a
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
     request.session["role"] = "moderator"
     await get_module_min_role("moderation", 1)
+    # Declared default (moderator) lets a moderator act with no override set.
     assert check_api_permission(request, "moderation.warn", guild_id=1)
 
     # API writes remain permissive only while OAuth is disabled for this test.
@@ -466,6 +474,7 @@ async def test_module_role_access_override_enforces_and_resets_default(client, a
     assert response.status_code == 200
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
     await get_module_min_role("moderation", 1)
+    # Explicit admin override still wins over the declared moderator default.
     assert not check_api_permission(request, "moderation.warn", guild_id=1)
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "")
@@ -473,7 +482,8 @@ async def test_module_role_access_override_enforces_and_resets_default(client, a
     assert response.status_code == 200
     monkeypatch.setattr(config.config.oauth2, "client_id", "123")
     assert await get_module_min_role("moderation", 1) is None
-    assert not check_api_permission(request, "moderation.warn", guild_id=1)
+    # Reset restores the declared default (moderator), not a blanket admin lock.
+    assert check_api_permission(request, "moderation.warn", guild_id=1)
 
 
 @pytest.mark.asyncio
@@ -503,7 +513,10 @@ async def test_guild_capabilities_match_module_role_enforcement(client, app, mon
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
 
     default_capabilities = await get_guild_capabilities(request, 1)
-    assert default_capabilities["moderation.warn"] is False
+    # Default (no override) follows each action's declared role:
+    # moderation.warn is declared moderator -> a moderator can act by default;
+    # automod.configure is declared admin -> a moderator cannot.
+    assert default_capabilities["moderation.warn"] is True
     assert default_capabilities["automod.configure"] is False
 
     monkeypatch.setattr(config.config.oauth2, "client_id", "")
