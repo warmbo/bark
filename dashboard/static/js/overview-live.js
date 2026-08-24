@@ -164,7 +164,15 @@
 
   function init() {
     loadLive();
-    setInterval(refreshActivityTimes, 60000);
+    let timesTimer = setInterval(refreshActivityTimes, 60000);
+    // bfcache lifecycle: stop the timer when cached, restart on restore
+    // (audit 2026-08-24: timers cleared on pagehide were never re-created).
+    window.addEventListener('pagehide', () => clearInterval(timesTimer));
+    window.addEventListener('pageshow', (event) => {
+      if (!event.persisted) return;
+      refreshActivityTimes();
+      timesTimer = setInterval(refreshActivityTimes, 60000);
+    });
   }
 
   if (document.readyState === 'loading') {

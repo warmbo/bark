@@ -215,7 +215,10 @@ function escHtml(t) {
     if (t == null) return '';
     const d = document.createElement('div');
     d.textContent = String(t);
-    return d.innerHTML;
+    // Also escape double quotes so the result is safe inside double-quoted
+    // HTML attributes (audit 2026-08-24 HIGH: `data-user-name="${escHtml(...)}"`
+    // with an unescaped quote allowed attribute injection from Discord names).
+    return d.innerHTML.replace(/"/g, '&quot;');
 }
 
 /**
@@ -555,6 +558,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Stop polling when the page is cached by bfcache (so the interval
         // doesn't keep firing across restores) and restart on pageshow.
         window.addEventListener('pagehide', () => clearInterval(healthTimer));
+        window.addEventListener('pageshow', (event) => {
+            if (!event.persisted) return;
+            checkBotHealth();
+            healthTimer = setInterval(checkBotHealth, 30000);
+        });
     }
 
     // ── Load Manifest & Build Sidebar ─────────────────

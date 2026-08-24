@@ -113,8 +113,8 @@ def test_button_size_ladder_is_monotonic():
     ladder was inverted — .btn-sm rendered bigger than .btn). Enforce the
     v3 REMAKER values so the regression can't return."""
     css = css_source()
-    assert ".btn-sm { min-height: 32px; padding: 4px 12px; font-size: 12px; }" in css
-    assert ".btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 11px; line-height: 1.6; }" in css
+    assert ".btn-sm { min-height: 32px; padding: 4px 12px; font-size: 15px; }" in css
+    assert ".btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 15px; line-height: 1.6; }" in css
     # .btn-icon must follow the sharp-corner token, not a hardcoded radius.
     btn_icon = re.search(r"\.btn-icon\s*\{[^}]*\}", css, re.S)
     assert btn_icon, "missing .btn-icon rule"

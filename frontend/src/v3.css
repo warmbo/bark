@@ -129,7 +129,7 @@
   transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }.btn:hover,
 .context-palette-button:hover,
-.pagination-btn:hover { background: var(--accent); color: var(--accent-foreground); border-color: var(--accent); transform: none; box-shadow: none; }.btn-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--primary-foreground); }.btn-danger { background: var(--destructive); color: var(--destructive-foreground); border-color: var(--destructive); }.btn-sm { min-height: 32px; padding: 4px 12px; font-size: 12px; }.btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 11px; line-height: 1.6; }.btn:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }/* shadcn Field / Input / Select / Textarea */
+.pagination-btn:hover { background: var(--accent); color: var(--accent-foreground); border-color: var(--accent); transform: none; box-shadow: none; }.btn-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--primary-foreground); }.btn-danger { background: var(--destructive); color: var(--destructive-foreground); border-color: var(--destructive); }.btn-sm { min-height: 32px; padding: 4px 12px; font-size: 15px; }.btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 15px; line-height: 1.6; }.btn:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }/* shadcn Field / Input / Select / Textarea */
 .form-input,
 .form-select,
 .form-textarea,
@@ -148,7 +148,7 @@ textarea {
 .form-textarea:focus,
 input:focus,
 select:focus,
-textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in oklab, var(--ring) 32%, transparent); outline-offset: -1px; box-shadow: none; }.form-label { color: var(--foreground); font-size: .875rem; font-weight: 550; }.toggle-slider { border-radius: var(--radius-full); background: var(--input); border: 1px solid var(--border); }.toggle-switch input:checked + .toggle-slider { background: var(--primary); }/* Module config forms: numeric inputs don't need full width, and boolean
+textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in oklab, var(--ring) 32%, transparent); outline-offset: -1px; box-shadow: none; }.form-label { color: var(--foreground); font-size: 1rem; font-weight: 550; }.toggle-slider { border-radius: var(--radius-full); background: var(--input); border: 1px solid var(--border); }.toggle-switch input:checked + .toggle-slider { background: var(--primary); }/* Module config forms: numeric inputs don't need full width, and boolean
    toggles in a grid align to the label row (audit 2026-08-19 module pass). */
 .form-input[type="number"] { max-width: 180px; }
 .form-grid .form-group, .form-grid-2 .form-group, .form-grid-3 .form-group { align-self: start; }
@@ -209,7 +209,7 @@ body.page-leaving .main-content {
 }
 .auto-voice-preview-card .template-preview { margin-bottom: var(--space-4); }
 .template-preview { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--muted); border: 1px solid var(--border); }
-.template-preview-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); flex-shrink: 0; }
+.template-preview-label { font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); flex-shrink: 0; }
 .template-preview-name { font-family: var(--font-mono); font-size: 15px; color: var(--foreground); }
 /* Empty/error states inside full-width module cards should read as centered
    intent, not a left-aligned orphan (audit round 7: help/logging looked like
@@ -296,7 +296,7 @@ body.page-leaving .main-content {
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }.back-link { margin-bottom: var(--space-3); }/* Member detail uses the standard page-header rhythm (border + spacing) with a
    back link in place of the title block. (audit 2026-08-19: header rhythm fix) */
@@ -324,7 +324,7 @@ textarea.form-input { min-height: 96px; }.form-grid { gap: 0 var(--space-4); }.f
 }.config-subsection-title { margin-bottom: var(--space-2); }.config-subsection-desc { margin-bottom: var(--space-4); }.config-layout-columns { gap: var(--space-4); }/* Tables and list rows */
 .data-table th { padding: 10px var(--space-4); }.data-table td { padding: var(--space-3) var(--space-4); }.activity-item, .note-item, .module-nav-item, .info-row, .command-item, .definition-list > div { padding: var(--space-3) var(--space-4); }
 .module-nav-item { gap: var(--space-3); }.commands-list,
-.notes-list { padding: var(--space-2) 0; }.pagination { padding: var(--space-3) var(--space-4); gap: var(--space-1); }.member-cell-age .join-ago { display: block; margin-top: 2px; font-size: 11px; }.th-sort { min-height: 32px; }.member-grid { overscroll-behavior-inline: contain; scrollbar-width: thin; }/* Tabs and workspace composition */
+.notes-list { padding: var(--space-2) 0; }.pagination { padding: var(--space-3) var(--space-4); gap: var(--space-1); }.member-cell-age .join-ago { display: block; margin-top: 2px; font-size: 15px; }.th-sort { min-height: 32px; }.member-grid { overscroll-behavior-inline: contain; scrollbar-width: thin; }/* Tabs and workspace composition */
 .tabs,
 .workspace-tabs { margin-bottom: var(--space-5); padding: var(--space-1); gap: var(--space-1); }.tab { min-height: 36px; padding: 7px var(--space-3); }.module-workspace-header { margin-bottom: var(--space-5); }.module-health-strip { margin-bottom: var(--space-5); }.module-health-strip > div { padding: var(--space-3) var(--space-4); }.operation-grid, .detail-grid { gap: var(--space-4); }
 .module-workspace .content-card { margin-bottom: var(--space-4); }.module-workspace .card-header { padding: var(--space-3) var(--space-4); }.module-workspace .config-body { padding: var(--space-4); }.module-workspace .config-subsection { padding: var(--space-3) var(--space-4); }/* Dashboard, statistics, module catalog, and reusable grids */

@@ -172,10 +172,6 @@ function fmtDateTime(iso) {
     if (isNaN(d.getTime())) return '';
     return d.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
 }
-function setChip(id, html) {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = html;
-}
 
 function renderServerProfile(g) {
     document.getElementById('info-members').innerHTML = '<span>' + getIconSvg('users', 14) + '</span> <span>' + escHtml(g.member_count ?? '—') + ' members</span>';

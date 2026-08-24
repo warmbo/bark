@@ -459,7 +459,17 @@
     }
   }
   activityLoadMore?.addEventListener('click', () => { activityPage += 1; renderActivityPage(); });
-  if (activityFeedEl) { loadActivity(); setInterval(refreshActivityTimes, 60000); }
+  if (activityFeedEl) {
+    loadActivity();
+    let timesTimer = setInterval(refreshActivityTimes, 60000);
+    // bfcache lifecycle: stop when cached, restart on restore (audit 2026-08-24).
+    window.addEventListener('pagehide', () => clearInterval(timesTimer));
+    window.addEventListener('pageshow', (event) => {
+      if (!event.persisted) return;
+      refreshActivityTimes();
+      timesTimer = setInterval(refreshActivityTimes, 60000);
+    });
+  }
 
   document.addEventListener('click', (event) => {
     const target = event.target.closest('button'); if (!target || !root.contains(target) && !target.closest('.workspace-modal, .workspace-drawer-overlay')) return;

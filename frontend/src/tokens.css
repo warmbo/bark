@@ -62,7 +62,7 @@
     --radius-full: 999px;  /* pills, avatars, scrollbar thumbs — not a control corner */
     --control-height-sm: 34px;
     --control-height: 44px;
-    --font-size-caption: 14px;
+    --font-size-caption: 15px;
     --font-size-body: 16px;
     --font-size-title: clamp(28px, 2.5vw, 36px);
     --ease-out: cubic-bezier(.16, 1, .3, 1);
