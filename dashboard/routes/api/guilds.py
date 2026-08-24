@@ -292,7 +292,7 @@ async def set_guild_slug(request: Request, guild_id: int):
 VALID_THEMES = {
     "steel", "emerald", "violet", "amber", "rose", "cyan", "teal", "orange",
     "synth", "acid", "rottweiler", "dracula", "gold", "hud",
-    "aurora", "neon", "ocean", "sunset", "forest", "candy", "slate", "crimson", "honey", "deepspace",
+    "aurora", "neon", "ocean", "sunset", "forest", "candy", "slate", "crimson", "honey", "deepspace", "graffiti",
 }
 
 

@@ -73,14 +73,22 @@
                     <div class="form-group">
                         <label class="form-label" id="theme-label">Color scheme</label>
                         <div class="theme-picker" id="theme-picker" role="radiogroup" aria-labelledby="theme-label">
-                            {% for t in [("steel","Steel"),("emerald","Emerald"),("violet","Violet"),("amber","Amber"),("rose","Rose"),("cyan","Cyan"),("teal","Teal"),("orange","Orange"),("synth","Synth"),("acid","Acid"),("rottweiler","Rottweiler"),("dracula","Dracula"),("gold","Gold"),("hud","HUD"),("aurora","Aurora"),("neon","Midnight Neon"),("ocean","Ocean"),("sunset","Sunset"),("forest","Forest"),("candy","Candy"),("slate","Slate"),("crimson","Crimson"),("honey","Honey"),("deepspace","Deep Space")] %}
+                            <div class="theme-group-heading" role="presentation">Classic themes</div>
+                            {% for t in [("steel","Steel"),("emerald","Emerald"),("violet","Violet"),("amber","Amber"),("rose","Rose"),("cyan","Cyan"),("teal","Teal"),("orange","Orange"),("synth","Synth"),("acid","Acid"),("rottweiler","Rottweiler"),("dracula","Dracula"),("gold","Gold")] %}
                             <button type="button" class="theme-option" data-theme-value="{{ t[0] }}" role="radio" aria-checked="false" aria-label="{{ t[1] }}" title="{{ t[1] }}">
                                 <span class="theme-swatch theme-swatch-{{ t[0] }}" aria-hidden="true"></span>
                                 <span class="theme-name">{{ t[1] }}</span>
                             </button>
                             {% endfor %}
+                            <div class="theme-group-heading" role="presentation">Advanced themes</div>
+                            {% for t in [("hud","HUD"),("aurora","Aurora"),("neon","Midnight Neon"),("ocean","Ocean"),("sunset","Sunset"),("forest","Forest"),("candy","Candy"),("slate","Fluent"),("crimson","Crimson"),("honey","Honey"),("deepspace","Deep Space"),("graffiti","Graffiti")] %}
+                            <button type="button" class="theme-option" data-theme-value="{{ t[0] }}" data-advanced="true" role="radio" aria-checked="false" aria-label="{{ t[1] }} — Advanced theme" title="{{ t[1] }} — Advanced">
+                                <span class="theme-swatch theme-swatch-{{ t[0] }}" aria-hidden="true"></span>
+                                <span class="theme-name">{{ t[1] }}</span>
+                            </button>
+                            {% endfor %}
                         </div>
-                        <p class="form-hint">Pick a scheme — it applies to anyone viewing this server.</p>
+                        <p class="form-hint">Classic themes are lightweight color systems. Advanced themes add custom typography, animated environments, and richer interactive surfaces.</p>
                     </div>
                     <div class="form-group">
                         <div class="form-label-row">

@@ -1952,6 +1952,7 @@ textarea:focus-visible,
 .theme-swatch-crimson { background: oklch(0.62 0.19 25); }
 .theme-swatch-honey { background: oklch(0.76 0.14 80); }
 .theme-swatch-deepspace { background: oklch(0.70 0.12 290); }
+.theme-swatch-graffiti { background: linear-gradient(135deg, #ffef38 0 34%, #ff3e9d 34% 67%, #45f7ff 67%); }
 .theme-name { font-size: 11px; line-height: 1.1; color: var(--text-secondary); }
 .theme-option.active .theme-name { color: var(--text-primary); }
 

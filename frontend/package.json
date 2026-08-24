@@ -4,13 +4,19 @@
   "version": "0.3.0",
   "scripts": {
     "build": "node build.mjs",
-    "check": "npm run build && git -C .. diff --exit-code -- dashboard/static/css/main.css dashboard/static/fonts dashboard/static/js/lucide.min.js"
+    "check": "npm run build && git -C .. diff --exit-code -- dashboard/static/css/main.css dashboard/static/fonts dashboard/static/js/lucide.min.js dashboard/static/js/vendor"
   },
   "devDependencies": {
+    "@fontsource-variable/cormorant": "5.3.0",
+    "@fontsource-variable/space-grotesk": "5.3.0",
+    "@fontsource-variable/syne": "5.3.0",
+    "@fontsource-variable/unbounded": "5.3.0",
+    "@fontsource/cinzel": "5.3.0",
     "@fontsource/inter": "5.3.0",
     "@fontsource/jetbrains-mono": "5.3.0",
     "@tailwindcss/cli": "4.3.3",
     "lucide": "1.31.0",
-    "tailwindcss": "4.3.3"
+    "tailwindcss": "4.3.3",
+    "three": "0.185.1"
   }
 }
