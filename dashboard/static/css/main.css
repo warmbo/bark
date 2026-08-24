@@ -2131,6 +2131,16 @@ textarea:focus-visible,
 .theme-swatch-dracula { background: oklch(0.58 0.24 22); }
 .theme-swatch-gold { background: oklch(0.80 0.15 85); }
 .theme-swatch-hud { background: oklch(0.82 0.15 200); }
+.theme-swatch-aurora { background: oklch(0.72 0.15 175); }
+.theme-swatch-neon { background: oklch(0.70 0.18 300); }
+.theme-swatch-ocean { background: oklch(0.66 0.12 215); }
+.theme-swatch-sunset { background: oklch(0.72 0.15 60); }
+.theme-swatch-forest { background: oklch(0.68 0.13 145); }
+.theme-swatch-candy { background: oklch(0.74 0.17 350); }
+.theme-swatch-slate { background: oklch(0.68 0.05 250); }
+.theme-swatch-crimson { background: oklch(0.62 0.19 25); }
+.theme-swatch-honey { background: oklch(0.76 0.14 80); }
+.theme-swatch-deepspace { background: oklch(0.70 0.12 290); }
 .theme-name { font-size: 11px; line-height: 1.1; color: var(--text-secondary); }
 .theme-option.active .theme-name { color: var(--text-primary); }
 
@@ -2266,25 +2276,6 @@ textarea:focus-visible,
   transition: transform var(--transition-fast);
 }
 .emoji-tile:hover img { transform: scale(2.2); }
-/* Announcements server-emoji picker */
-.announce-emoji-btn { font-size: 14px; line-height: 1; padding: 3px 6px; }
-.announce-emoji-picker {
-  position: absolute; bottom: 40px; right: 8px; z-index: 30;
-  width: 260px; max-height: 300px; overflow-y: auto;
-  background: var(--bg-card-solid); border: 1px solid var(--border-card);
-  border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-2);
-}
-.announce-emoji-picker-head {
-  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--text-tertiary); padding: 2px 4px 6px;
-}
-.announce-emoji-picker-grid {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px;
-}
-.announce-emoji-item {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 100
-/* Announcements server-emoji picker */
 .announce-emoji-btn { font-size: 14px; line-height: 1; padding: 3px 6px; }
 .announce-emoji-picker {
   position: absolute; bottom: 40px; right: 8px; z-index: 30;
@@ -2803,15 +2794,32 @@ body::before, body::after { opacity: 0; }/* Sidebar: translucent frosted surface
    the accent hue. The wallpaper is the bottom background layer; a translucent
    theme-tint overlay (--theme-glow-a/b) sits on top of it so the image still
    shows through but is colored toward the theme. The solid --background color
-   (also theme-tinted) is the base underneath. */
+   (also theme-tinted) is the base underneath.
+
+   Each theme may ALSO layer up to three semi-transparent background IMAGES
+   (--theme-art-1/2/3) on top of the glows — orb glows, bokeh, aurora ribbons,
+   code rain, scanlines, etc. — so the backdrop carries the theme's identity.
+   Defaults to none for themes that don't opt in. The HUD theme animates its
+   own layered background under prefers-reduced-motion: no-preference. */
 body {
   background-image:
+    var(--theme-art-3, none),
+    var(--theme-art-2, none),
+    var(--theme-art-1, none),
     radial-gradient(ellipse 80% 60% at 50% -10%, var(--theme-glow-a), transparent 60%),
     radial-gradient(ellipse 60% 50% at 85% 110%, var(--theme-glow-b), transparent 55%),
     var(--wallpaper-url);
-  background-size: auto, auto, cover;
-  background-position: center, center, center;
-  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-size:
+    var(--theme-art-3-size, auto),
+    var(--theme-art-2-size, auto),
+    var(--theme-art-1-size, auto),
+    auto, auto, cover;
+  background-position:
+    var(--theme-art-3-pos, center),
+    var(--theme-art-2-pos, center),
+    var(--theme-art-1-pos, center),
+    center, center, center;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   background-blend-mode: normal;
 }
 
@@ -2822,6 +2830,18 @@ body {
    var(--wallpaper-url), so the choice applies everywhere at once. */
 :root {
   --wallpaper-url: url('/static/img/bark-wallpaper.png');
+  /* Default (empty) background-art layers; themes override these to add
+     layered semi-transparent background imagery. Declared on :root so the
+     references in the body rule are always defined. */
+  --theme-art-1: none;
+  --theme-art-1-size: auto;
+  --theme-art-1-pos: center;
+  --theme-art-2: none;
+  --theme-art-2-size: auto;
+  --theme-art-2-pos: center;
+  --theme-art-3: none;
+  --theme-art-3-size: auto;
+  --theme-art-3-pos: center;
 }
 [data-wallpaper="invert"] {
   --wallpaper-url: url('/static/img/bark-wallpaper-inverted.png');
@@ -3177,6 +3197,326 @@ body {
   --sidebar: oklch(0.12 0.021 80 / 0.78);
   --sidebar-accent: oklch(0.23 0.024 80 / 0.74);
   --sidebar-border: oklch(0.31 0.026 80 / 0.55);
+}
+
+/* ── Aurora ────────────────────────────────────────────────────
+   Polar borealis: teal-green + violet aurora ribbons over a deep polar night. */
+[data-theme="aurora"] {
+  --primary: oklch(0.72 0.15 175);
+  --primary-foreground: oklch(0.98 0.01 175);
+  --ring: oklch(0.66 0.13 300);
+  --sidebar-primary: oklch(0.72 0.15 175);
+  --sidebar-ring: oklch(0.66 0.13 300);
+  --chart-1: oklch(0.74 0.15 175);
+  --chart-2: oklch(0.66 0.13 300);
+  --accent-hover: oklch(0.48 0.12 175);
+
+  --theme-glow-a: oklch(0.40 0.13 175 / 0.40);
+  --theme-glow-b: oklch(0.34 0.12 300 / 0.34);
+
+  --background: oklch(0.15 0.03 190);
+  --card: oklch(0.20 0.04 190 / 0.8);
+  --popover: oklch(0.185 0.04 190 / 0.84);
+  --secondary: oklch(0.25 0.036 190 / 0.74);
+  --muted: oklch(0.23 0.036 190 / 0.74);
+  --accent: oklch(0.30 0.06 190 / 0.78);
+  --border: oklch(0.33 0.048 190 / 0.6);
+  --input: oklch(0.26 0.04 190 / 0.8);
+  --sidebar: oklch(0.12 0.03 190 / 0.78);
+  --sidebar-accent: oklch(0.23 0.036 190 / 0.74);
+  --sidebar-border: oklch(0.31 0.044 190 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22120%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2214%22%2F%3E%3C%2Ffilter%3E%3Cpath%20d%3D%22M-10%2060%20Q50%2010%20100%2055%20T210%2045%22%20stroke%3D%22%232dd4bf%22%20stroke-width%3D%2218%22%20fill%3D%22none%22%20opacity%3D%22.45%22%20filter%3D%22url%28%23g%29%22%2F%3E%3Cpath%20d%3D%22M-10%2080%20Q60%2030%20110%2070%20T220%2060%22%20stroke%3D%22%23a78bfa%22%20stroke-width%3D%2213%22%20fill%3D%22none%22%20opacity%3D%22.34%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 120% 60%; --theme-art-1-pos: center top;
+  --theme-art-2: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22120%22%3E%3Ccircle%20cx%3D%2290%22%20cy%3D%2225%22%20r%3D%2218%22%20fill%3D%22%23e8f4f2%22%20opacity%3D%22.10%22%2F%3E%3Ccircle%20cx%3D%2225%22%20cy%3D%2295%22%20r%3D%2212%22%20fill%3D%22%23fff%22%20opacity%3D%22.08%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-2-size: auto; --theme-art-2-pos: center;
+}
+
+/* ── Neon ──────────────────────────────────────────────────────
+   Midnight city: pink/indigo/cyan bokeh lights over a deep indigo night. */
+[data-theme="neon"] {
+  --primary: oklch(0.70 0.18 300);
+  --primary-foreground: oklch(0.98 0.01 300);
+  --ring: oklch(0.74 0.16 220);
+  --sidebar-primary: oklch(0.70 0.18 300);
+  --sidebar-ring: oklch(0.74 0.16 220);
+  --chart-1: oklch(0.74 0.16 220);
+  --chart-2: oklch(0.70 0.18 300);
+  --accent-hover: oklch(0.48 0.15 300);
+
+  --theme-glow-a: oklch(0.42 0.16 300 / 0.44);
+  --theme-glow-b: oklch(0.34 0.14 220 / 0.40);
+
+  --background: oklch(0.14 0.05 290);
+  --card: oklch(0.19 0.06 290 / 0.82);
+  --popover: oklch(0.175 0.05 290 / 0.86);
+  --secondary: oklch(0.24 0.05 290 / 0.74);
+  --muted: oklch(0.22 0.05 290 / 0.74);
+  --accent: oklch(0.30 0.09 290 / 0.78);
+  --border: oklch(0.33 0.08 290 / 0.6);
+  --input: oklch(0.26 0.06 290 / 0.8);
+  --sidebar: oklch(0.11 0.04 290 / 0.80);
+  --sidebar-accent: oklch(0.22 0.05 290 / 0.74);
+  --sidebar-border: oklch(0.31 0.06 290 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22240%22%20height%3D%22140%22%3E%3Cfilter%20id%3D%22b%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2210%22%2F%3E%3C%2Ffilter%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%22110%22%20r%3D%2230%22%20fill%3D%22%23ff5f8f%22%20opacity%3D%22.42%22%20filter%3D%22url%28%23b%29%22%2F%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%22120%22%20r%3D%2236%22%20fill%3D%22%237c6cff%22%20opacity%3D%22.46%22%20filter%3D%22url%28%23b%29%22%2F%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22112%22%20r%3D%2228%22%20fill%3D%22%2322d3ee%22%20opacity%3D%22.40%22%20filter%3D%22url%28%23b%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 70%; --theme-art-1-pos: center bottom;
+  --theme-art-2: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22120%22%3E%3Crect%20x%3D%228%22%20y%3D%228%22%20width%3D%223%22%20height%3D%223%22%20fill%3D%22%23fff%22%20opacity%3D%22.4%22%2F%3E%3Crect%20x%3D%2260%22%20y%3D%2240%22%20width%3D%222%22%20height%3D%222%22%20fill%3D%22%23fff%22%20opacity%3D%22.3%22%2F%3E%3Crect%20x%3D%2290%22%20y%3D%2290%22%20width%3D%223%22%20height%3D%223%22%20fill%3D%22%23fff%22%20opacity%3D%22.5%22%2F%3E%3Crect%20x%3D%2230%22%20y%3D%2280%22%20width%3D%222%22%20height%3D%222%22%20fill%3D%22%23fff%22%20opacity%3D%22.25%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-2-size: auto; --theme-art-2-pos: center;
+}
+
+/* ── Ocean ─────────────────────────────────────────────────────
+   Deep sea: layered teal-blue waves and light shafts under the surface. */
+[data-theme="ocean"] {
+  --primary: oklch(0.66 0.12 215);
+  --primary-foreground: oklch(0.98 0.01 215);
+  --ring: oklch(0.70 0.12 200);
+  --sidebar-primary: oklch(0.66 0.12 215);
+  --sidebar-ring: oklch(0.70 0.12 200);
+  --chart-1: oklch(0.70 0.12 200);
+  --accent-hover: oklch(0.44 0.09 215);
+
+  --theme-glow-a: oklch(0.36 0.10 215 / 0.40);
+  --theme-glow-b: oklch(0.28 0.08 190 / 0.34);
+
+  --background: oklch(0.15 0.035 220);
+  --card: oklch(0.20 0.04 220 / 0.8);
+  --popover: oklch(0.185 0.04 220 / 0.84);
+  --secondary: oklch(0.25 0.036 220 / 0.74);
+  --muted: oklch(0.23 0.036 220 / 0.74);
+  --accent: oklch(0.30 0.055 220 / 0.78);
+  --border: oklch(0.33 0.046 220 / 0.6);
+  --input: oklch(0.26 0.04 220 / 0.8);
+  --sidebar: oklch(0.12 0.03 220 / 0.78);
+  --sidebar-accent: oklch(0.23 0.036 220 / 0.74);
+  --sidebar-border: oklch(0.31 0.042 220 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22120%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2212%22%2F%3E%3C%2Ffilter%3E%3Cpath%20d%3D%22M-10%20100%20Q30%2070%2070%20100%20T150%20100%20T230%20100%22%20stroke%3D%22%2322d3ee%22%20stroke-width%3D%228%22%20fill%3D%22none%22%20opacity%3D%22.35%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 50%; --theme-art-1-pos: center bottom;
+}
+
+/* ── Sunset ────────────────────────────────────────────────────
+   Dusk horizon: warm orange-to-magenta glow over a deep twilight sky. */
+[data-theme="sunset"] {
+  --primary: oklch(0.72 0.15 60);
+  --primary-foreground: oklch(0.18 0.03 60);
+  --ring: oklch(0.68 0.17 15);
+  --sidebar-primary: oklch(0.72 0.15 60);
+  --sidebar-ring: oklch(0.68 0.17 15);
+  --chart-1: oklch(0.70 0.16 30);
+  --chart-2: oklch(0.72 0.15 60);
+  --accent-hover: oklch(0.50 0.12 60);
+
+  --theme-glow-a: oklch(0.44 0.14 45 / 0.42);
+  --theme-glow-b: oklch(0.38 0.15 10 / 0.36);
+
+  --background: oklch(0.16 0.04 40);
+  --card: oklch(0.21 0.045 40 / 0.8);
+  --popover: oklch(0.195 0.04 40 / 0.84);
+  --secondary: oklch(0.26 0.038 40 / 0.74);
+  --muted: oklch(0.24 0.038 40 / 0.74);
+  --accent: oklch(0.31 0.06 40 / 0.78);
+  --border: oklch(0.34 0.05 40 / 0.6);
+  --input: oklch(0.27 0.042 40 / 0.8);
+  --sidebar: oklch(0.13 0.034 40 / 0.78);
+  --sidebar-accent: oklch(0.24 0.038 40 / 0.74);
+  --sidebar-border: oklch(0.32 0.042 40 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22140%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2216%22%2F%3E%3C%2Ffilter%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22125%22%20r%3D%2245%22%20fill%3D%22%23ff9e47%22%20opacity%3D%22.4%22%20filter%3D%22url%28%23g%29%22%2F%3E%3Cpath%20d%3D%22M-10%20140%20Q50%2095%20110%20135%20T230%20130%22%20stroke%3D%22%23ff4d6d%22%20stroke-width%3D%2210%22%20fill%3D%22none%22%20opacity%3D%22.3%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 70%; --theme-art-1-pos: center bottom;
+}
+
+/* ── Forest ────────────────────────────────────────────────────
+   Deep woodland: rich green canopy with dappled light and leaf silhouettes. */
+[data-theme="forest"] {
+  --primary: oklch(0.68 0.13 145);
+  --primary-foreground: oklch(0.98 0.01 145);
+  --ring: oklch(0.72 0.12 120);
+  --sidebar-primary: oklch(0.68 0.13 145);
+  --sidebar-ring: oklch(0.72 0.12 120);
+  --chart-1: oklch(0.72 0.12 120);
+  --accent-hover: oklch(0.46 0.10 145);
+
+  --theme-glow-a: oklch(0.38 0.10 145 / 0.40);
+  --theme-glow-b: oklch(0.30 0.08 120 / 0.34);
+
+  --background: oklch(0.15 0.035 150);
+  --card: oklch(0.20 0.04 150 / 0.8);
+  --popover: oklch(0.185 0.04 150 / 0.84);
+  --secondary: oklch(0.25 0.036 150 / 0.74);
+  --muted: oklch(0.23 0.036 150 / 0.74);
+  --accent: oklch(0.30 0.055 150 / 0.78);
+  --border: oklch(0.33 0.046 150 / 0.6);
+  --input: oklch(0.26 0.04 150 / 0.8);
+  --sidebar: oklch(0.12 0.03 150 / 0.78);
+  --sidebar-accent: oklch(0.23 0.036 150 / 0.74);
+  --sidebar-border: oklch(0.31 0.042 150 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22140%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2210%22%2F%3E%3C%2Ffilter%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%2240%22%20fill%3D%22%2334d399%22%20opacity%3D%22.14%22%20filter%3D%22url%28%23g%29%22%2F%3E%3Ccircle%20cx%3D%22170%22%20cy%3D%22110%22%20r%3D%2250%22%20fill%3D%22%2320c997%22%20opacity%3D%22.12%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 100%; --theme-art-1-pos: center;
+}
+
+/* ── Candy ─────────────────────────────────────────────────────
+   Playful candy: pastel pink/purple with soft confetti sparkles. */
+[data-theme="candy"] {
+  --primary: oklch(0.74 0.17 350);
+  --primary-foreground: oklch(0.99 0.01 350);
+  --ring: oklch(0.72 0.14 320);
+  --sidebar-primary: oklch(0.74 0.17 350);
+  --sidebar-ring: oklch(0.72 0.14 320);
+  --chart-1: oklch(0.76 0.15 320);
+  --chart-2: oklch(0.74 0.17 350);
+  --accent-hover: oklch(0.52 0.13 350);
+
+  --theme-glow-a: oklch(0.46 0.14 350 / 0.40);
+  --theme-glow-b: oklch(0.40 0.12 320 / 0.34);
+
+  --background: oklch(0.17 0.045 350);
+  --card: oklch(0.22 0.05 350 / 0.8);
+  --popover: oklch(0.205 0.045 350 / 0.84);
+  --secondary: oklch(0.27 0.042 350 / 0.74);
+  --muted: oklch(0.25 0.042 350 / 0.74);
+  --accent: oklch(0.32 0.07 350 / 0.78);
+  --border: oklch(0.35 0.06 350 / 0.6);
+  --input: oklch(0.28 0.05 350 / 0.8);
+  --sidebar: oklch(0.14 0.04 350 / 0.78);
+  --sidebar-accent: oklch(0.25 0.042 350 / 0.74);
+  --sidebar-border: oklch(0.33 0.05 350 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22120%22%3E%3Ccircle%20cx%3D%2225%22%20cy%3D%2230%22%20r%3D%2210%22%20fill%3D%22%23ff9ecd%22%20opacity%3D%22.5%22%2F%3E%3Ccircle%20cx%3D%2295%22%20cy%3D%2285%22%20r%3D%228%22%20fill%3D%22%23b39ddb%22%20opacity%3D%22.5%22%2F%3E%3Ccircle%20cx%3D%2270%22%20cy%3D%2225%22%20r%3D%226%22%20fill%3D%22%23fff%22%20opacity%3D%22.35%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 90px 90px; --theme-art-1-pos: 15% 20%;
+}
+
+/* ── Slate ─────────────────────────────────────────────────────
+   Cool monochrome slate: clean blue-gray with a subtle sheen. */
+[data-theme="slate"] {
+  --primary: oklch(0.68 0.05 250);
+  --primary-foreground: oklch(0.98 0.01 250);
+  --ring: oklch(0.72 0.05 250);
+  --sidebar-primary: oklch(0.68 0.05 250);
+  --sidebar-ring: oklch(0.72 0.05 250);
+  --chart-1: oklch(0.72 0.05 250);
+  --accent-hover: oklch(0.46 0.04 250);
+
+  --theme-glow-a: oklch(0.40 0.04 250 / 0.40);
+  --theme-glow-b: oklch(0.32 0.03 250 / 0.34);
+
+  --background: oklch(0.16 0.02 250);
+  --card: oklch(0.21 0.02 250 / 0.8);
+  --popover: oklch(0.195 0.02 250 / 0.84);
+  --secondary: oklch(0.26 0.02 250 / 0.74);
+  --muted: oklch(0.24 0.02 250 / 0.74);
+  --accent: oklch(0.31 0.03 250 / 0.78);
+  --border: oklch(0.34 0.026 250 / 0.6);
+  --input: oklch(0.27 0.024 250 / 0.8);
+  --sidebar: oklch(0.13 0.018 250 / 0.78);
+  --sidebar-accent: oklch(0.24 0.02 250 / 0.74);
+  --sidebar-border: oklch(0.32 0.024 250 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2220%22%2F%3E%3C%2Ffilter%3E%3Ccircle%20cx%3D%2260%22%20cy%3D%2240%22%20r%3D%2260%22%20fill%3D%22%238b9bb4%22%20opacity%3D%22.12%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 100%; --theme-art-1-pos: center;
+}
+
+/* ── Crimson ───────────────────────────────────────────────────
+   Deep crimson: rich red-black with a dark burgundy glow. */
+[data-theme="crimson"] {
+  --primary: oklch(0.62 0.19 25);
+  --primary-foreground: oklch(0.98 0.01 25);
+  --ring: oklch(0.66 0.16 20);
+  --sidebar-primary: oklch(0.62 0.19 25);
+  --sidebar-ring: oklch(0.66 0.16 20);
+  --chart-1: oklch(0.66 0.16 20);
+  --accent-hover: oklch(0.42 0.15 25);
+
+  --theme-glow-a: oklch(0.38 0.16 25 / 0.42);
+  --theme-glow-b: oklch(0.30 0.10 15 / 0.36);
+
+  --background: oklch(0.15 0.05 25);
+  --card: oklch(0.20 0.05 25 / 0.8);
+  --popover: oklch(0.185 0.05 25 / 0.84);
+  --secondary: oklch(0.25 0.045 25 / 0.74);
+  --muted: oklch(0.23 0.045 25 / 0.74);
+  --accent: oklch(0.30 0.07 25 / 0.78);
+  --border: oklch(0.33 0.06 25 / 0.6);
+  --input: oklch(0.26 0.05 25 / 0.8);
+  --sidebar: oklch(0.12 0.04 25 / 0.78);
+  --sidebar-accent: oklch(0.23 0.045 25 / 0.74);
+  --sidebar-border: oklch(0.31 0.05 25 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22140%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2216%22%2F%3E%3C%2Ffilter%3E%3Cpath%20d%3D%22M-10%20120%20Q40%2070%20100%20115%20T220%20110%22%20stroke%3D%22%23ff2d55%22%20stroke-width%3D%2212%22%20fill%3D%22none%22%20opacity%3D%22.28%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 70%; --theme-art-1-pos: center bottom;
+}
+
+/* ── Honey ─────────────────────────────────────────────────────
+   Warm honey: golden amber with a rich honeycomb glow. */
+[data-theme="honey"] {
+  --primary: oklch(0.76 0.14 80);
+  --primary-foreground: oklch(0.18 0.04 80);
+  --ring: oklch(0.72 0.12 75);
+  --sidebar-primary: oklch(0.76 0.14 80);
+  --sidebar-ring: oklch(0.72 0.12 75);
+  --chart-1: oklch(0.74 0.13 80);
+  --accent-hover: oklch(0.52 0.10 80);
+
+  --theme-glow-a: oklch(0.46 0.12 80 / 0.42);
+  --theme-glow-b: oklch(0.36 0.08 70 / 0.36);
+
+  --background: oklch(0.17 0.03 80);
+  --card: oklch(0.22 0.034 80 / 0.8);
+  --popover: oklch(0.205 0.032 80 / 0.84);
+  --secondary: oklch(0.27 0.03 80 / 0.74);
+  --muted: oklch(0.25 0.03 80 / 0.74);
+  --accent: oklch(0.31 0.042 80 / 0.78);
+  --border: oklch(0.34 0.036 80 / 0.6);
+  --input: oklch(0.27 0.032 80 / 0.8);
+  --sidebar: oklch(0.13 0.026 80 / 0.78);
+  --sidebar-accent: oklch(0.25 0.03 80 / 0.74);
+  --sidebar-border: oklch(0.32 0.03 80 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2218%22%2F%3E%3C%2Ffilter%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22120%22%20r%3D%2270%22%20fill%3D%22%23ffb02e%22%20opacity%3D%22.18%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 100%; --theme-art-1-pos: center;
+}
+
+/* ── Deepspace ─────────────────────────────────────────────────
+   Deep space: dark indigo-violet void with scattered stars and nebulae. */
+[data-theme="deepspace"] {
+  --primary: oklch(0.70 0.12 290);
+  --primary-foreground: oklch(0.98 0.01 290);
+  --ring: oklch(0.64 0.16 310);
+  --sidebar-primary: oklch(0.70 0.12 290);
+  --sidebar-ring: oklch(0.64 0.16 310);
+  --chart-1: oklch(0.68 0.14 300);
+  --accent-hover: oklch(0.46 0.10 290);
+
+  --theme-glow-a: oklch(0.36 0.12 300 / 0.42);
+  --theme-glow-b: oklch(0.30 0.10 320 / 0.36);
+
+  --background: oklch(0.13 0.04 280);
+  --card: oklch(0.18 0.045 280 / 0.8);
+  --popover: oklch(0.165 0.04 280 / 0.84);
+  --secondary: oklch(0.23 0.04 280 / 0.74);
+  --muted: oklch(0.21 0.04 280 / 0.74);
+  --accent: oklch(0.29 0.06 280 / 0.78);
+  --border: oklch(0.32 0.05 280 / 0.6);
+  --input: oklch(0.25 0.045 280 / 0.8);
+  --sidebar: oklch(0.11 0.035 280 / 0.78);
+  --sidebar-accent: oklch(0.21 0.04 280 / 0.74);
+  --sidebar-border: oklch(0.30 0.045 280 / 0.55);
+
+
+  --theme-art-1: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2220%22%2F%3E%3C%2Ffilter%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%2250%22%20r%3D%2245%22%20fill%3D%22%239b6cff%22%20opacity%3D%22.18%22%20filter%3D%22url%28%23g%29%22%2F%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%22160%22%20r%3D%2235%22%20fill%3D%22%234fc3f7%22%20opacity%3D%22.14%22%20filter%3D%22url%28%23g%29%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-1-size: 100% 100%; --theme-art-1-pos: center;
+  --theme-art-2: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20x%3D%2220%22%20y%3D%2230%22%20width%3D%222%22%20height%3D%222%22%20fill%3D%22%23fff%22%20opacity%3D%22.6%22%2F%3E%3Crect%20x%3D%22140%22%20y%3D%2290%22%20width%3D%222%22%20height%3D%222%22%20fill%3D%22%23fff%22%20opacity%3D%22.4%22%2F%3E%3Crect%20x%3D%2290%22%20y%3D%22170%22%20width%3D%223%22%20height%3D%223%22%20fill%3D%22%23fff%22%20opacity%3D%22.5%22%2F%3E%3Crect%20x%3D%2260%22%20y%3D%22120%22%20width%3D%221%22%20height%3D%221%22%20fill%3D%22%23fff%22%20opacity%3D%22.7%22%2F%3E%3Crect%20x%3D%22175%22%20y%3D%2220%22%20width%3D%222%22%20height%3D%222%22%20fill%3D%22%23fff%22%20opacity%3D%22.5%22%2F%3E%3C%2Fsvg%3E');
+  --theme-art-2-size: auto; --theme-art-2-pos: center;
 }
 
 /* ── HUD (game-console menu / FPS heads-up display) ─────────────────────
