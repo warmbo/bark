@@ -63,6 +63,11 @@ class PermissionService:
         "moderation.notes.view": "moderator",
         "moderation.notes.delete": "moderator",
         "logging.configure": "moderator",
+        # Auto Voice channel configuration is day-to-day community management
+        # (names, limits, cleanup), not instance security — moderators may
+        # save it, matching the module's own "Manage Auto Voice Channels"
+        # declaration. Lifecycle (enable/disable/reload) stays admin.
+        "auto_voice.configure": "moderator",
         "roles.manage": "admin",
     }
 

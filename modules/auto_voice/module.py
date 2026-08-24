@@ -180,7 +180,16 @@ class AutoVoiceModule(BarkModule):
         ]
 
     def get_permissions(self) -> list[PermissionDefinition]:
-        return [PermissionDefinition(name="auto_voice.manage", label="Manage Auto Voice Channels")]
+        return [
+            PermissionDefinition(
+                name="auto_voice.manage", label="Manage Auto Voice Channels"
+            ),
+            PermissionDefinition(
+                name="auto_voice.configure",
+                label="Configure Auto Voice Settings",
+                description="Save Auto Voice channel naming, limits, and cleanup settings.",
+            ),
+        ]
 
     def get_about(self) -> list[dict]:
         return [
@@ -794,10 +803,13 @@ class AutoVoiceModule(BarkModule):
             # Acronym the dynamic values at substitution time so template
             # structure (#num, brackets) survives intact — "Counter Strike 2"
             # becomes "CS2" wherever @@game_name@@/{game}/{guild} appear.
-            acronym = lambda value: "".join(word[0] for word in str(value).split() if word)
+
+            def _acronym(value: str) -> str:
+                return "".join(word[0] for word in str(value).split() if word)
+
             for token in ("@@game_name@@", "{game}", "{guild}", "{username}", "{display_name}"):
                 if token in replacements:
-                    replacements[token] = acronym(replacements[token])
+                    replacements[token] = _acronym(replacements[token])
         for token, value in replacements.items():
             template = template.replace(token, value)
         template = self._apply_avc_transforms(template)
