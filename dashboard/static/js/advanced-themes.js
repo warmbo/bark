@@ -13,6 +13,7 @@ const ADVANCED = new Set([
   'aurora', 'neon', 'ocean', 'sunset', 'forest', 'candy', 'slate',
   'crimson', 'honey', 'deepspace', 'graffiti',
 ]);
+const ANIMATED = new Set([...ADVANCED].filter((theme) => theme !== 'slate'));
 
 const palette = {
   aurora: ['#31f5c5', '#9b7bff', '#6ae7ff'],
@@ -39,7 +40,6 @@ let updaters = [];
 let pointer = new THREE.Vector2(0, 0);
 let reduced = matchMedia('(prefers-reduced-motion: reduce)');
 let visible = !document.hidden;
-let graffitiButton = null;
 let renderScale = 1;
 
 function color(theme, index) {
@@ -77,26 +77,58 @@ function luminousMaterial(theme, index, opacity = 0.26, wireframe = true) {
 
 function makeAurora() {
   const group = new THREE.Group();
-  for (let band = 0; band < 5; band++) {
-    const points = [];
-    for (let i = 0; i < 34; i++) {
-      const x = -6 + i * 0.38;
-      points.push(new THREE.Vector3(x, Math.sin(i * 0.43 + band) * 0.45 + band * 0.18 - 0.5, -2 - band * 0.18));
-    }
-    const curve = new THREE.CatmullRomCurve3(points);
-    const tube = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, 96, 0.035 + band * 0.008, 6, false),
-      luminousMaterial('aurora', band, 0.22, false),
-    );
-    group.add(tube);
+  for (let band = 0; band < 4; band++) {
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uBand: { value: band },
+        uColorA: { value: color('aurora', band) },
+        uColorB: { value: color('aurora', band + 1) },
+        uPointer: { value: pointer },
+      },
+      vertexShader: `
+        uniform float uTime;
+        uniform float uBand;
+        uniform vec2 uPointer;
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          vec3 p = position;
+          p.y += sin(p.x * .55 + uTime * .24 + uBand * 1.7) * .38;
+          p.y += sin(p.x * 1.15 - uTime * .16 + uBand) * .16;
+          p.y += uPointer.y * .12;
+          p.z += sin(p.x * .4 + uTime * .12 + uBand) * .22;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uColorA;
+        uniform vec3 uColorB;
+        varying vec2 vUv;
+        void main() {
+          float edge = smoothstep(0.0, .12, vUv.x) * smoothstep(0.0, .12, 1.0 - vUv.x);
+          float curtain = pow(sin(3.14159265 * vUv.y), 1.35);
+          float texture = .78 + .22 * sin(vUv.x * 19.0 + vUv.y * 4.0 + uTime * .18);
+          vec3 spectral = mix(uColorA, uColorB, clamp(vUv.x + sin(vUv.y * 5.0) * .08, 0.0, 1.0));
+          gl_FragColor = vec4(spectral, edge * curtain * texture * .31);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(15, 2.5, 96, 12), material);
+    ribbon.position.set(0, .75 + band * .42, -4.1 - band * .38);
+    ribbon.rotation.z = -.045 + band * .018;
+    group.add(ribbon);
   }
-  group.rotation.z = -0.08;
-  group.userData.baseY = 1.35;
   scene.add(group);
-  const dust = addPoints('aurora', 160, 12, 0.025, 0.42);
+  const dust = addPoints('aurora', 120, 13, 0.025, 0.34);
   updaters.push((t) => {
-    group.rotation.y = Math.sin(t * 0.12) * 0.08 + pointer.x * 0.06;
-    group.position.y = group.userData.baseY + Math.sin(t * 0.28) * 0.16 + pointer.y * 0.1;
+    group.children.forEach((ribbon) => { ribbon.material.uniforms.uTime.value = t; });
+    group.rotation.y = Math.sin(t * .1) * .045 + pointer.x * .04;
     dust.rotation.z = t * 0.008;
   });
 }
@@ -110,11 +142,23 @@ function makeNeon() {
       luminousMaterial('neon', i, 0.22, true),
     );
     box.position.set(-5.4 + i * 0.42, -2.6 + h / 2, -2.5 - Math.random() * 2);
+    box.userData.baseY = box.position.y;
+    box.userData.baseZ = box.position.z;
+    box.userData.phase = Math.random() * Math.PI * 2;
+    box.userData.speed = .18 + Math.random() * .28;
     city.add(box);
   }
   scene.add(city);
   const bokeh = addPoints('neon', 110, 11, 0.09, 0.5);
   updaters.push((t) => {
+    city.children.forEach((box) => {
+      const wave = Math.sin(t * box.userData.speed + box.userData.phase);
+      box.position.y = box.userData.baseY + wave * .16;
+      box.position.z = box.userData.baseZ + Math.cos(t * box.userData.speed * .7 + box.userData.phase) * .14;
+      box.rotation.y = wave * .08;
+      box.scale.y = 1 + wave * .055;
+      box.material.opacity = .18 + (wave + 1) * .035;
+    });
     city.rotation.y = pointer.x * 0.07;
     city.position.x = pointer.x * -0.25;
     bokeh.rotation.z = Math.sin(t * 0.07) * 0.12;
@@ -123,7 +167,7 @@ function makeNeon() {
 }
 
 function makeOcean() {
-  const geometry = new THREE.PlaneGeometry(15, 9, 54, 34);
+  const geometry = new THREE.PlaneGeometry(22, 13, 64, 40);
   const base = geometry.attributes.position.array.slice();
   const material = new THREE.MeshBasicMaterial({
     color: color('ocean', 0), wireframe: true, transparent: true, opacity: 0.14,
@@ -131,14 +175,14 @@ function makeOcean() {
   });
   const water = new THREE.Mesh(geometry, material);
   water.rotation.x = -Math.PI * 0.58;
-  water.position.set(0, -3.15, -3.8);
+  water.position.set(0, -2.65, -4.2);
   scene.add(water);
   const bubbles = addPoints('ocean', 95, 10, 0.04, 0.38);
   updaters.push((t) => {
     const pos = geometry.attributes.position.array;
     for (let i = 0; i < pos.length; i += 3) {
       const x = base[i]; const y = base[i + 1];
-      pos[i + 2] = Math.sin(x * 1.2 + t * 0.7) * 0.18 + Math.cos(y * 1.5 - t * 0.55) * 0.13;
+      pos[i + 2] = Math.sin(x * 1.05 + t * .7) * .27 + Math.cos(y * 1.3 - t * .55) * .19;
     }
     geometry.attributes.position.needsUpdate = true;
     water.rotation.z = pointer.x * 0.025;
@@ -181,13 +225,27 @@ function makeForest() {
     );
     leaf.position.set((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 7, -2 - Math.random() * 4);
     leaf.rotation.z = Math.random() * Math.PI;
+    leaf.userData.baseX = leaf.position.x;
+    leaf.userData.baseY = leaf.position.y;
+    leaf.userData.baseRotation = leaf.rotation.z;
+    leaf.userData.phase = Math.random() * Math.PI * 2;
+    leaf.userData.speed = .18 + Math.random() * .42;
+    leaf.userData.sway = .18 + Math.random() * .42;
+    leaf.userData.direction = Math.random() > .5 ? 1 : -1;
     canopy.add(leaf);
   }
   scene.add(canopy);
   const fireflies = addPoints('forest', 95, 10, 0.055, 0.65);
   updaters.push((t) => {
-    canopy.rotation.z = Math.sin(t * 0.08) * 0.04;
-    canopy.position.x = pointer.x * 0.22;
+    const gust = Math.sin(t * .17) * .24 + Math.sin(t * .071) * .12;
+    canopy.children.forEach((leaf) => {
+      const { baseX, baseY, baseRotation, phase, speed, sway, direction } = leaf.userData;
+      leaf.position.x = baseX + Math.sin(t * speed + phase) * sway + gust;
+      leaf.position.y = baseY + Math.sin(t * speed * .63 + phase * 1.7) * .22;
+      leaf.rotation.z = baseRotation + Math.sin(t * speed * 1.3 + phase) * .5 + t * .025 * direction;
+      leaf.rotation.y = Math.sin(t * speed + phase) * .55;
+    });
+    canopy.position.x = pointer.x * .16;
     fireflies.rotation.y = t * 0.025;
     fireflies.material.opacity = 0.45 + Math.sin(t * 1.6) * 0.18;
   });
@@ -200,9 +258,14 @@ function makeCandy() {
       ? new THREE.TorusKnotGeometry(0.17, 0.055, 40, 7)
       : new THREE.IcosahedronGeometry(0.16 + Math.random() * 0.18, 0);
     const mesh = new THREE.Mesh(geometry, luminousMaterial('candy', i, 0.34, i % 2 === 0));
-    mesh.position.set((Math.random() - 0.5) * 11, (Math.random() - 0.5) * 7, -2 - Math.random() * 4);
+    mesh.position.set((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 9, -2 - Math.random() * 5);
     mesh.userData.spin = 0.15 + Math.random() * 0.45;
+    mesh.userData.baseX = mesh.position.x;
     mesh.userData.baseY = mesh.position.y;
+    mesh.userData.baseZ = mesh.position.z;
+    mesh.userData.phase = Math.random() * Math.PI * 2;
+    mesh.userData.drift = .14 + Math.random() * .24;
+    mesh.userData.range = .45 + Math.random() * .5;
     sweets.add(mesh);
   }
   scene.add(sweets);
@@ -210,50 +273,24 @@ function makeCandy() {
     sweets.children.forEach((m, i) => {
       m.rotation.x = t * m.userData.spin;
       m.rotation.y = t * m.userData.spin * 0.7;
-      m.position.y = m.userData.baseY + Math.sin(t * 0.7 + i) * 0.08;
+      m.position.x = m.userData.baseX + Math.sin(t * m.userData.drift + m.userData.phase) * m.userData.range;
+      m.position.y = m.userData.baseY + Math.cos(t * m.userData.drift * .77 + m.userData.phase) * m.userData.range * .72;
+      m.position.z = m.userData.baseZ + Math.sin(t * m.userData.drift * .51 + i) * .28;
     });
     sweets.rotation.z = pointer.x * 0.03;
   });
 }
 
-function makeSlate() {
-  const panes = new THREE.Group();
-  for (let i = 0; i < 9; i++) {
-    const pane = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.7 + (i % 3) * 0.35, 1 + (i % 2) * 0.4),
-      new THREE.MeshBasicMaterial({
-        color: color('slate', i), transparent: true, opacity: 0.055 + i * 0.008,
-        side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
-      }),
-    );
-    pane.position.set((i % 3 - 1) * 3.1, (Math.floor(i / 3) - 1) * 2.05, -2.5 - i * 0.22);
-    pane.rotation.z = (i % 2 ? -1 : 1) * 0.035;
-    pane.userData.baseZ = pane.position.z;
-    panes.add(pane);
-    const edge = new THREE.LineSegments(
-      new THREE.EdgesGeometry(pane.geometry),
-      new THREE.LineBasicMaterial({ color: color('slate', i), transparent: true, opacity: 0.17 }),
-    );
-    pane.add(edge);
-  }
-  scene.add(panes);
-  updaters.push((t) => {
-    panes.rotation.x = pointer.y * -0.025;
-    panes.rotation.y = pointer.x * 0.045;
-    panes.children.forEach((p, i) => { p.position.z = p.userData.baseZ + Math.sin(t * 0.24 + i) * 0.08; });
-  });
-}
-
 function makeCrimson() {
   const knot = new THREE.Mesh(
-    new THREE.TorusKnotGeometry(1.8, 0.22, 180, 14, 2, 5),
-    luminousMaterial('crimson', 0, 0.14, true),
+    new THREE.TorusKnotGeometry(2.6, 0.3, 220, 16, 2, 5),
+    luminousMaterial('crimson', 0, 0.2, true),
   );
-  knot.position.set(4.25, -0.35, -6.2);
+  knot.position.set(3.25, -0.15, -6.5);
   scene.add(knot);
   const pulse = new THREE.Mesh(
-    new THREE.TorusGeometry(2.45, 0.035, 8, 120),
-    luminousMaterial('crimson', 2, 0.2, false),
+    new THREE.TorusGeometry(3.35, 0.045, 8, 144),
+    luminousMaterial('crimson', 2, 0.28, false),
   );
   pulse.position.copy(knot.position);
   scene.add(pulse);
@@ -330,7 +367,7 @@ function makeGraffiti() {
 
 const builders = {
   aurora: makeAurora, neon: makeNeon, ocean: makeOcean, sunset: makeSunset,
-  forest: makeForest, candy: makeCandy, slate: makeSlate, crimson: makeCrimson,
+  forest: makeForest, candy: makeCandy, crimson: makeCrimson,
   honey: makeHoney, deepspace: makeDeepSpace, graffiti: makeGraffiti,
 };
 
@@ -399,7 +436,7 @@ function animate() {
 
 function initScene(theme) {
   disposeScene();
-  if (!ADVANCED.has(theme) || reduced.matches) {
+  if (!ANIMATED.has(theme) || reduced.matches) {
     document.documentElement.classList.remove('advanced-theme-live');
     return;
   }
@@ -446,66 +483,12 @@ function initScene(theme) {
   if (visible) frame = requestAnimationFrame(animate);
 }
 
-function setupGraffitiMenu(theme) {
-  const enabled = theme === 'graffiti';
-  document.body.classList.toggle('graffiti-theme', enabled);
-  if (!enabled) {
-    graffitiButton?.remove();
-    graffitiButton = null;
-    document.body.classList.remove('graffiti-menu-open');
-    document.querySelectorAll('.main-content, .context-bar').forEach((element) => {
-      element.inert = false;
-    });
-    const sidebar = document.querySelector('#sidebar');
-    if (sidebar) {
-      sidebar.toggleAttribute('inert', innerWidth <= 768 && !sidebar.classList.contains('open'));
-    }
-    return;
-  }
-  if (!graffitiButton) {
-    graffitiButton = document.createElement('button');
-    graffitiButton.type = 'button';
-    graffitiButton.className = 'graffiti-pause-button';
-    graffitiButton.setAttribute('aria-controls', 'sidebar');
-    graffitiButton.setAttribute('aria-expanded', 'false');
-    graffitiButton.innerHTML = '<span aria-hidden="true">Ⅱ</span> PAUSE';
-    graffitiButton.addEventListener('click', () => toggleGraffitiMenu());
-    document.body.append(graffitiButton);
-  }
-  document.querySelector('#sidebar')?.setAttribute('inert', '');
-}
-
-function toggleGraffitiMenu(force) {
-  if (!document.body.classList.contains('graffiti-theme')) return;
-  const open = force ?? !document.body.classList.contains('graffiti-menu-open');
-  document.body.classList.toggle('graffiti-menu-open', open);
-  graffitiButton?.setAttribute('aria-expanded', String(open));
-  if (graffitiButton) {
-    graffitiButton.innerHTML = open
-      ? '<span aria-hidden="true">▶</span> RESUME'
-      : '<span aria-hidden="true">Ⅱ</span> PAUSE';
-    graffitiButton.setAttribute('aria-label', open ? 'Resume dashboard' : 'Pause and open navigation');
-  }
-  document.querySelectorAll('.main-content, .context-bar').forEach((element) => {
-    element.inert = open;
-  });
-  document.querySelector('#sidebar')?.toggleAttribute('inert', !open);
-  if (open) {
-    window.setTimeout(() => {
-      document.querySelector('#sidebar .nav-item, #sidebar a, #sidebar button')?.focus({ preventScroll: true });
-    }, 50);
-  } else {
-    graffitiButton?.focus({ preventScroll: true });
-  }
-}
-
 function applyTheme() {
   const theme = document.documentElement.getAttribute('data-theme') || 'steel';
   if (theme === activeTheme) return;
   activeTheme = theme;
   document.documentElement.toggleAttribute('data-advanced-theme', ADVANCED.has(theme));
   document.documentElement.setAttribute('data-advanced-name', theme);
-  setupGraffitiMenu(theme);
   initScene(theme);
 }
 
@@ -535,16 +518,6 @@ document.addEventListener('visibilitychange', () => {
   }
   timer = new THREE.Timer();
   if (renderer && !frame) frame = requestAnimationFrame(animate);
-});
-document.addEventListener('keydown', (event) => {
-  if (activeTheme !== 'graffiti' || event.key !== 'Escape') return;
-  if (!document.body.classList.contains('graffiti-menu-open')) return;
-  const modalOpen = document.querySelector(
-    '.palette-overlay[aria-hidden="false"], .dialog-overlay:not([hidden]), [aria-modal="true"]:focus-within',
-  );
-  if (modalOpen) return;
-  event.preventDefault();
-  toggleGraffitiMenu(false);
 });
 reduced.addEventListener('change', () => initScene(activeTheme));
 new MutationObserver(applyTheme).observe(document.documentElement, {

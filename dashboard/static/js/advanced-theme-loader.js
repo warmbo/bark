@@ -1,10 +1,11 @@
 (() => {
   'use strict';
 
-  const THREE_THEMES = new Set([
+  const ADVANCED_THEMES = new Set([
     'aurora', 'neon', 'ocean', 'sunset', 'forest', 'candy', 'slate',
     'crimson', 'honey', 'deepspace', 'graffiti',
   ]);
+  const THREE_THEMES = new Set([...ADVANCED_THEMES].filter((theme) => theme !== 'slate'));
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let loading = null;
   let hardwareWebGL = null;
@@ -33,7 +34,7 @@
 
   function maybeLoad() {
     const theme = document.documentElement.getAttribute('data-theme') || 'steel';
-    const enabled = THREE_THEMES.has(theme);
+    const enabled = ADVANCED_THEMES.has(theme);
     document.documentElement.toggleAttribute('data-advanced-theme', enabled);
     document.documentElement.setAttribute('data-advanced-name', theme);
     if (!enabled) {
@@ -41,13 +42,13 @@
       delete document.documentElement.dataset.advancedQuality;
       return;
     }
-    if (reducedMotion.matches || loading) return;
+    if (!THREE_THEMES.has(theme) || reducedMotion.matches || loading) return;
     if (!canAnimateWithWebGL()) {
       document.documentElement.classList.add('advanced-theme-fallback');
       document.documentElement.dataset.advancedQuality = 'static';
       return;
     }
-    loading = import('/static/js/advanced-themes.js?v=7').catch((error) => {
+    loading = import('/static/js/advanced-themes.js?v=8').catch((error) => {
       loading = null;
       document.documentElement.classList.add('advanced-theme-fallback');
       console.error('Advanced theme runtime failed to load', error);
