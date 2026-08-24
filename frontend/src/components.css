@@ -883,7 +883,10 @@ textarea:focus-visible,
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
     align-items: start;
-}.config-layout-columns .config-subsection { margin-bottom: 0; }@media (max-width: 900px) {
+}.config-layout-columns .config-subsection { margin-bottom: 0; }
+/* The global 3-col form grid collapses inside these narrow subsections;
+   stack fields vertically there instead (2026-08-24 Auto Voice pass). */
+.config-layout-columns .form-grid { grid-template-columns: 1fr; }@media (max-width: 900px) {
     .config-layout-columns { grid-template-columns: 1fr; }}.config-subsection-title {
     font-size: 15px;
     font-weight: 700;
@@ -912,7 +915,47 @@ textarea:focus-visible,
 .content-card > .config-health {
     margin-top: 0;
     border-top: 0;
-}.config-health-label { font-size: 15px; font-weight: 600; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }.config-health-status { font-size: 15px; font-weight: 500; }.config-health-status.status-good { color: var(--green); }.config-health-status.status-bad { color: var(--red); }.config-health-issue { font-size: 15px; color: var(--yellow); padding: 2px 0; }.config-health-issues { margin-top: var(--space-xs); }/* ── Form Controls ─────────────────────────────────────── */
+}.config-health-label { font-size: 15px; font-weight: 600; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }.config-health-status { font-size: 15px; font-weight: 500; }.config-health-status.status-good { color: var(--green); }.config-health-status.status-bad { color: var(--red); }.config-health-issue { font-size: 15px; color: var(--yellow); padding: 2px 0; }.config-health-issues { margin-top: var(--space-xs); }/* ── Field help tooltips ─────────────────────────────────
+   Long schema descriptions collapse into an inline help button beside the
+   field label; the popover opens on click/Enter and closes on Escape,
+   outside click, or re-click. Keeps dense config forms scannable. */
+.form-label-row .form-label { flex: 1 1 auto; min-width: 0; margin-right: 8px; }.field-help { position: relative; display: inline-flex; flex-shrink: 0; }
+.field-help-trigger {
+    display: inline-grid;
+    place-items: center;
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: help;
+}.field-help-trigger:hover, .field-help-trigger[aria-expanded="true"] { color: var(--accent); }
+.field-help-pop {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: -8px;
+    z-index: 2000;
+    width: min(300px, 78vw);
+    max-width: none;
+    padding: 10px 12px;
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius-lg, 8px);
+    /* Opaque surface — a translucent pop over glass cards reads as broken. */
+    background: color-mix(in srgb, var(--popover, #1a1f2b) 100%, transparent);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    color: var(--text-secondary, inherit);
+    box-shadow: var(--shadow-lg, 0 12px 32px rgb(0 0 0 / .35));
+    font-size: 15px;
+    line-height: 1.5;
+    text-align: left;
+    white-space: normal;
+}
+.field-help-pop[data-align="left"] { right: auto; left: -8px; }
+@media (max-width: 480px) { .field-help-pop { position: fixed; top: auto; inset-inline: 12px; } }
+/* ── Form Controls ─────────────────────────────────────── */
 
 .form-group {
     margin-bottom: 12px;

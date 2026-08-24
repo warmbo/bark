@@ -82,8 +82,8 @@
   const previewCard = document.createElement('article');
   previewCard.className = 'content-card workspace-data-card auto-voice-preview-card';
   previewCard.innerHTML =
-    '<div class="card-header"><div><h2 class="card-title">' + (typeof getIconSvg === 'function' ? getIconSvg('mic', 16) : '') + ' Channel Name Preview</h2>' +
-    '<p class="card-description">How Bark will name new voice channels, updating live from the template above.</p></div></div>' +
+    '<div class="card-header"><div><h2 class="card-title">' + (typeof getIconSvg === 'function' ? getIconSvg('mic', 16) : '') + ' Name Preview</h2>' +
+    '<p class="card-description">Live from the template field.</p></div></div>' +
     '<div class="config-body"></div>';
   const formCard = document.querySelector('.workspace-form-card');
   (formCard || templateInput.closest('.content-card'))?.after(previewCard);

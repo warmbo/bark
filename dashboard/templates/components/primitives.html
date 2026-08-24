@@ -101,6 +101,15 @@
 <div class="form-group">
   <div class="form-label-row">
     <label class="form-label" for="{{ field_id }}">{{ prop.title | default(name | replace('_', ' ') | title) }}</label>
+    {# Long descriptions move into a help tooltip instead of printing under the
+       control — keeps dense config forms readable (2026-08-24 Auto Voice pass). #}
+    {% if prop.description %}
+    <span class="field-help">
+      <button type="button" class="field-help-trigger" aria-expanded="false" aria-controls="{{ field_id }}-help"
+              aria-label="About {{ prop.title | default(name | replace('_', ' ') | title) }}">{{ icon('info', 13) }}</button>
+      <span class="field-help-pop" id="{{ field_id }}-help" role="tooltip" hidden>{{ prop.description }}</span>
+    </span>
+    {% endif %}
     {% if prop.type == 'boolean' %}
     <label class="toggle-switch" aria-label="Toggle {{ prop.title | default(name) }}">
       <input id="{{ field_id }}" type="checkbox" name="{{ name }}" data-schema-type="boolean" {{ 'checked' if value else '' }}>
@@ -118,7 +127,7 @@
     {% elif prop.enum %}
     <select id="{{ field_id }}" class="form-select" name="{{ name }}">{% for option in prop.enum %}<option value="{{ option }}" {{ 'selected' if value == option else '' }}>{{ option | replace('_', ' ') | title }}</option>{% endfor %}</select>
     {% elif prop.type == 'array' %}
-    <textarea id="{{ field_id }}" class="form-input" name="{{ name }}" rows="3" data-schema-type="array"{% if prop.description %} aria-describedby="{{ field_id }}-hint"{% endif %}>{{ value | default([]) | tojson }}</textarea>
+    <textarea id="{{ field_id }}" class="form-input" name="{{ name }}" rows="3" data-schema-type="array">{{ value | default([]) | tojson }}</textarea>
     {% elif prop.format == 'textarea' %}
     {% if prop.format_toolbar %}
     {% include "components/discord_toolbar.html" %}
@@ -130,7 +139,6 @@
     <input id="{{ field_id }}" class="form-input" type="{{ 'url' if prop.format == 'url' else 'text' }}" name="{{ name }}" value="{{ value | default(prop.default, true) | default('', true) }}">
     {% endif %}
   {% endif %}
-  {% if prop.description %}<p class="form-hint" id="{{ field_id }}-hint">{{ prop.description }}</p>{% endif %}
   <p class="field-error" id="{{ field_id }}-error" hidden></p>
 </div>
 {%- endmacro %}

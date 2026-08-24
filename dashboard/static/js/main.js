@@ -357,6 +357,79 @@ function initCopyButtons() {
     });
 }
 
+// ── Field help tooltips (delegated — works for late-rendered forms too) ──
+// One listener pair handles every .field-help-trigger on the page, including
+// module config forms rendered after initial load.
+function closeAllFieldHelp(except = null) {
+    document.querySelectorAll('.field-help-trigger[aria-expanded="true"]').forEach((btn) => {
+        if (btn === except) return;
+        const pop = document.getElementById(btn.getAttribute('aria-controls'));
+        if (pop) pop.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+    });
+}
+
+function positionFieldHelpPop(btn, pop) {
+    // Render anchored to the trigger via fixed positioning so no ancestor
+    // overflow/stacking context can clip it (config cards clip absolutely
+    // positioned children).
+    const r = btn.getBoundingClientRect();
+    pop.style.position = 'fixed';
+    const width = Math.min(300, innerWidth - 24);
+    let left = r.left;                        // prefer left-aligned under the icon
+    if (left + width > innerWidth - 12) left = r.right - width;
+    left = Math.max(12, Math.min(left, innerWidth - 12 - width));
+    pop.style.left = `${left}px`;
+    pop.style.top = `${Math.min(r.bottom + 8, innerHeight - 80)}px`;
+    pop.style.width = `${width}px`;
+}
+
+function placeOpenFieldHelp() {
+    const btn = document.querySelector('.field-help-trigger[aria-expanded="true"]');
+    if (!btn) return;
+    const pop = document.getElementById(btn.getAttribute('aria-controls'));
+    if (pop) positionFieldHelpPop(btn, pop);
+}
+
+function toggleFieldHelp(btn) {
+    const pop = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!pop) return;
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    closeAllFieldHelp(open ? btn : null);
+    // Re-parent to body so ancestor overflow cannot clip the popover.
+    if (pop.parentElement !== document.body) {
+        pop._home = pop.parentElement;
+        document.body.appendChild(pop);
+    }
+    if (open) {
+        pop.hidden = false;
+        positionFieldHelpPop(btn, pop);
+    } else {
+        pop.hidden = true;
+        if (pop._home) { pop._home.appendChild(pop); pop._home = null; }
+    }
+    btn.setAttribute('aria-expanded', String(open));
+}
+window.addEventListener('resize', () => {
+    if (document.querySelector('.field-help-trigger[aria-expanded="true"]')) placeOpenFieldHelp();
+}, { passive: true });
+window.addEventListener('scroll', () => {
+    if (document.querySelector('.field-help-trigger[aria-expanded="true"]')) closeAllFieldHelp();
+}, { passive: true });
+
+document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('.field-help-trigger');
+    if (trigger) { toggleFieldHelp(trigger); return; }
+    if (!event.target.closest('.field-help')) closeAllFieldHelp();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const openBtn = document.querySelector('.field-help-trigger[aria-expanded="true"]');
+    if (!openBtn) return;
+    closeAllFieldHelp();
+    openBtn.focus();
+});
+
 function showSkeleton(container, count = 3, type = 'card') {
     let html = '';
     for (let i = 0; i < count; i++) {
