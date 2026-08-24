@@ -12,7 +12,7 @@ PIN = ROOT / "frontend/shadcn-pin.md"
 SETTINGS = ROOT / "dashboard/templates/pages/settings.html"
 ADVANCED_JS = ROOT / "dashboard/static/js/advanced-themes.js"
 ADVANCED_CSS = ROOT / "frontend/src/advanced-themes.css"
-THREE = ROOT / "dashboard/static/js/vendor/three.module.0.185.1.min.js"
+THREE = ROOT / "dashboard/static/js/vendor/three.module.0.185.1-bark2.min.js"
 
 
 def test_v030_uses_local_assets_only():
@@ -128,9 +128,14 @@ def test_advanced_themes_are_local_labeled_and_motion_safe():
 
     assert THREE.is_file()
     assert THREE.stat().st_size > 100_000
+    three_module = THREE.read_text()
+    assert 'from"./three.core.min.js"' not in three_module
+    assert three_module.count('three.core.0.185.1-bark2.min.js') == 2
     assert 'src="/static/js/advanced-theme-loader.js?v=' in base
-    assert "import('/static/js/advanced-themes.js?v=2')" in (ROOT / "dashboard/static/js/advanced-theme-loader.js").read_text()
-    assert "from '/static/js/vendor/three.module.0.185.1.min.js'" in runtime
+    loader = (ROOT / "dashboard/static/js/advanced-theme-loader.js").read_text()
+    assert "import('/static/js/advanced-themes.js?v=7')" in loader
+    assert "prefers-reduced-motion" in loader
+    assert "from '/static/js/vendor/three.module.0.185.1-bark2.min.js'" in runtime
     assert "https://" not in runtime and "http://" not in runtime
     assert "Advanced themes" in settings
     for theme in (

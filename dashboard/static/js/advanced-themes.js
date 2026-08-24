@@ -1,4 +1,4 @@
-import * as THREE from '/static/js/vendor/three.module.0.185.1.min.js';
+import * as THREE from '/static/js/vendor/three.module.0.185.1-bark2.min.js';
 
 /**
  * Bark Advanced Themes runtime.
@@ -34,12 +34,13 @@ let camera = null;
 let canvas = null;
 let activeTheme = '';
 let frame = 0;
-let clock = new THREE.Clock();
+let timer = new THREE.Timer();
 let updaters = [];
 let pointer = new THREE.Vector2(0, 0);
 let reduced = matchMedia('(prefers-reduced-motion: reduce)');
 let visible = !document.hidden;
 let graffitiButton = null;
+let renderScale = 1;
 
 function color(theme, index) {
   return new THREE.Color(palette[theme][index % palette[theme].length]);
@@ -90,11 +91,12 @@ function makeAurora() {
     group.add(tube);
   }
   group.rotation.z = -0.08;
+  group.userData.baseY = 1.35;
   scene.add(group);
   const dust = addPoints('aurora', 160, 12, 0.025, 0.42);
   updaters.push((t) => {
     group.rotation.y = Math.sin(t * 0.12) * 0.08 + pointer.x * 0.06;
-    group.position.y = Math.sin(t * 0.28) * 0.2 + pointer.y * 0.12;
+    group.position.y = group.userData.baseY + Math.sin(t * 0.28) * 0.16 + pointer.y * 0.1;
     dust.rotation.z = t * 0.008;
   });
 }
@@ -124,12 +126,12 @@ function makeOcean() {
   const geometry = new THREE.PlaneGeometry(15, 9, 54, 34);
   const base = geometry.attributes.position.array.slice();
   const material = new THREE.MeshBasicMaterial({
-    color: color('ocean', 0), wireframe: true, transparent: true, opacity: 0.19,
+    color: color('ocean', 0), wireframe: true, transparent: true, opacity: 0.14,
     blending: THREE.AdditiveBlending, depthWrite: false,
   });
   const water = new THREE.Mesh(geometry, material);
   water.rotation.x = -Math.PI * 0.58;
-  water.position.set(0, -2.7, -3.6);
+  water.position.set(0, -3.15, -3.8);
   scene.add(water);
   const bubbles = addPoints('ocean', 95, 10, 0.04, 0.38);
   updaters.push((t) => {
@@ -193,13 +195,14 @@ function makeForest() {
 
 function makeCandy() {
   const sweets = new THREE.Group();
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 14; i++) {
     const geometry = i % 3 === 0
       ? new THREE.TorusKnotGeometry(0.17, 0.055, 40, 7)
       : new THREE.IcosahedronGeometry(0.16 + Math.random() * 0.18, 0);
-    const mesh = new THREE.Mesh(geometry, luminousMaterial('candy', i, 0.42, i % 2 === 0));
+    const mesh = new THREE.Mesh(geometry, luminousMaterial('candy', i, 0.34, i % 2 === 0));
     mesh.position.set((Math.random() - 0.5) * 11, (Math.random() - 0.5) * 7, -2 - Math.random() * 4);
     mesh.userData.spin = 0.15 + Math.random() * 0.45;
+    mesh.userData.baseY = mesh.position.y;
     sweets.add(mesh);
   }
   scene.add(sweets);
@@ -207,7 +210,7 @@ function makeCandy() {
     sweets.children.forEach((m, i) => {
       m.rotation.x = t * m.userData.spin;
       m.rotation.y = t * m.userData.spin * 0.7;
-      m.position.y += Math.sin(t * 0.7 + i) * 0.0009;
+      m.position.y = m.userData.baseY + Math.sin(t * 0.7 + i) * 0.08;
     });
     sweets.rotation.z = pointer.x * 0.03;
   });
@@ -225,26 +228,32 @@ function makeSlate() {
     );
     pane.position.set((i % 3 - 1) * 3.1, (Math.floor(i / 3) - 1) * 2.05, -2.5 - i * 0.22);
     pane.rotation.z = (i % 2 ? -1 : 1) * 0.035;
+    pane.userData.baseZ = pane.position.z;
     panes.add(pane);
+    const edge = new THREE.LineSegments(
+      new THREE.EdgesGeometry(pane.geometry),
+      new THREE.LineBasicMaterial({ color: color('slate', i), transparent: true, opacity: 0.17 }),
+    );
+    pane.add(edge);
   }
   scene.add(panes);
   updaters.push((t) => {
     panes.rotation.x = pointer.y * -0.025;
     panes.rotation.y = pointer.x * 0.045;
-    panes.children.forEach((p, i) => { p.position.z += Math.sin(t * 0.24 + i) * 0.0007; });
+    panes.children.forEach((p, i) => { p.position.z = p.userData.baseZ + Math.sin(t * 0.24 + i) * 0.08; });
   });
 }
 
 function makeCrimson() {
   const knot = new THREE.Mesh(
     new THREE.TorusKnotGeometry(1.8, 0.22, 180, 14, 2, 5),
-    luminousMaterial('crimson', 0, 0.2, true),
+    luminousMaterial('crimson', 0, 0.14, true),
   );
-  knot.position.set(3.4, -0.2, -5.5);
+  knot.position.set(4.25, -0.35, -6.2);
   scene.add(knot);
   const pulse = new THREE.Mesh(
     new THREE.TorusGeometry(2.45, 0.035, 8, 120),
-    luminousMaterial('crimson', 2, 0.3, false),
+    luminousMaterial('crimson', 2, 0.2, false),
   );
   pulse.position.copy(knot.position);
   scene.add(pulse);
@@ -299,20 +308,21 @@ function makeDeepSpace() {
 
 function makeGraffiti() {
   const chaos = new THREE.Group();
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < 24; i++) {
     const geometry = i % 2
       ? new THREE.TetrahedronGeometry(0.12 + Math.random() * 0.24)
       : new THREE.TorusGeometry(0.18 + Math.random() * 0.16, 0.045, 6, 16);
-    const mesh = new THREE.Mesh(geometry, luminousMaterial('graffiti', i, 0.48, i % 3 === 0));
+    const mesh = new THREE.Mesh(geometry, luminousMaterial('graffiti', i, 0.4, i % 3 === 0));
     mesh.position.set((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 7, -2 - Math.random() * 4);
     mesh.userData.rate = 0.2 + Math.random() * 0.8;
+    mesh.userData.baseY = mesh.position.y;
     chaos.add(mesh);
   }
   scene.add(chaos);
   updaters.push((t) => {
     chaos.children.forEach((m, i) => {
       m.rotation.z = t * m.userData.rate;
-      m.position.y += Math.sin(t * 1.1 + i) * 0.0012;
+      m.position.y = m.userData.baseY + Math.sin(t * 1.1 + i) * 0.1;
     });
     chaos.rotation.z = Math.sin(t * 0.14) * 0.05;
   });
@@ -356,27 +366,34 @@ function disposeScene() {
   scene = null;
   renderer?.dispose?.();
   renderer = null;
+  renderScale = 1;
+  delete document.documentElement.dataset.advancedQuality;
   canvas?.remove();
   canvas = null;
 }
 
 function resize() {
   if (!renderer || !camera) return;
-  renderer.setSize(innerWidth, innerHeight, false);
+  renderer.setSize(
+    Math.max(1, Math.round(innerWidth * renderScale)),
+    Math.max(1, Math.round(innerHeight * renderScale)),
+    false,
+  );
   camera.aspect = innerWidth / Math.max(innerHeight, 1);
   camera.updateProjectionMatrix();
 }
 
 function animate() {
+  frame = 0;
   if (!renderer || !scene || !camera) return;
-  const t = clock.getElapsedTime();
-  if (visible) {
-    updaters.forEach((update) => update(t));
-    camera.position.x += (pointer.x * 0.18 - camera.position.x) * 0.025;
-    camera.position.y += (pointer.y * 0.12 - camera.position.y) * 0.025;
-    camera.lookAt(0, 0, -3);
-    renderer.render(scene, camera);
-  }
+  if (!visible) return;
+  timer.update();
+  const t = timer.getElapsed();
+  updaters.forEach((update) => update(t));
+  camera.position.x += (pointer.x * 0.18 - camera.position.x) * 0.025;
+  camera.position.y += (pointer.y * 0.12 - camera.position.y) * 0.025;
+  camera.lookAt(0, 0, -3);
+  renderer.render(scene, camera);
   frame = requestAnimationFrame(animate);
 }
 
@@ -397,17 +414,36 @@ function initScene(theme) {
     return;
   }
   document.documentElement.classList.remove('advanced-theme-fallback');
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
+  const gl = renderer.getContext();
+  const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  const rendererName = debugInfo
+    ? String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL))
+    : String(gl.getParameter(gl.RENDERER) || '');
+  const software = /swiftshader|llvmpipe|software/i.test(rendererName);
+  if (software) {
+    // Software WebGL can block the main thread for 60–120ms per frame. Keep
+    // Bark responsive and use the theme's layered CSS artwork instead.
+    renderer.dispose();
+    renderer = null;
+    canvas?.remove();
+    canvas = null;
+    document.documentElement.classList.add('advanced-theme-fallback');
+    document.documentElement.dataset.advancedQuality = 'static';
+    return;
+  }
+  renderScale = innerWidth <= 768 ? 0.82 : 1;
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth <= 768 ? 1.25 : 1.5));
+  document.documentElement.dataset.advancedQuality = 'full';
   renderer.setClearColor(0x000000, 0);
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(48, innerWidth / Math.max(innerHeight, 1), 0.1, 50);
   camera.position.set(0, 0, 7.5);
-  clock = new THREE.Clock();
+  timer = new THREE.Timer();
   builders[theme]?.();
   resize();
   document.documentElement.classList.add('advanced-theme-live');
   renderer.render(scene, camera);
-  animate();
+  if (visible) frame = requestAnimationFrame(animate);
 }
 
 function setupGraffitiMenu(theme) {
@@ -417,6 +453,13 @@ function setupGraffitiMenu(theme) {
     graffitiButton?.remove();
     graffitiButton = null;
     document.body.classList.remove('graffiti-menu-open');
+    document.querySelectorAll('.main-content, .context-bar').forEach((element) => {
+      element.inert = false;
+    });
+    const sidebar = document.querySelector('#sidebar');
+    if (sidebar) {
+      sidebar.toggleAttribute('inert', innerWidth <= 768 && !sidebar.classList.contains('open'));
+    }
     return;
   }
   if (!graffitiButton) {
@@ -429,6 +472,7 @@ function setupGraffitiMenu(theme) {
     graffitiButton.addEventListener('click', () => toggleGraffitiMenu());
     document.body.append(graffitiButton);
   }
+  document.querySelector('#sidebar')?.setAttribute('inert', '');
 }
 
 function toggleGraffitiMenu(force) {
@@ -436,8 +480,23 @@ function toggleGraffitiMenu(force) {
   const open = force ?? !document.body.classList.contains('graffiti-menu-open');
   document.body.classList.toggle('graffiti-menu-open', open);
   graffitiButton?.setAttribute('aria-expanded', String(open));
-  if (open) document.querySelector('#sidebar .nav-item, #sidebar a, #sidebar button')?.focus();
-  else graffitiButton?.focus();
+  if (graffitiButton) {
+    graffitiButton.innerHTML = open
+      ? '<span aria-hidden="true">▶</span> RESUME'
+      : '<span aria-hidden="true">Ⅱ</span> PAUSE';
+    graffitiButton.setAttribute('aria-label', open ? 'Resume dashboard' : 'Pause and open navigation');
+  }
+  document.querySelectorAll('.main-content, .context-bar').forEach((element) => {
+    element.inert = open;
+  });
+  document.querySelector('#sidebar')?.toggleAttribute('inert', !open);
+  if (open) {
+    window.setTimeout(() => {
+      document.querySelector('#sidebar .nav-item, #sidebar a, #sidebar button')?.focus({ preventScroll: true });
+    }, 50);
+  } else {
+    graffitiButton?.focus({ preventScroll: true });
+  }
 }
 
 function applyTheme() {
@@ -469,7 +528,13 @@ document.addEventListener('pointermove', (event) => {
 window.addEventListener('resize', resize, { passive: true });
 document.addEventListener('visibilitychange', () => {
   visible = !document.hidden;
-  if (visible) clock = new THREE.Clock();
+  if (!visible) {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    return;
+  }
+  timer = new THREE.Timer();
+  if (renderer && !frame) frame = requestAnimationFrame(animate);
 });
 document.addEventListener('keydown', (event) => {
   if (activeTheme !== 'graffiti' || event.key !== 'Escape') return;

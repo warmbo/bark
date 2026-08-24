@@ -69,7 +69,9 @@ await copyFile(
   join(root, "dashboard/static/js/lucide.min.js"),
 );
 const vendorDir = join(root, "dashboard/static/js/vendor");
-const threeVersion = "0.185.1";
+// Include Bark's wrapper revision: the module import specifier is rewritten to
+// the fingerprinted core filename, so changing that wrapper must change URLs.
+const threeVersion = "0.185.1-bark2";
 await mkdir(vendorDir, { recursive: true });
 const threeModule = await readFile(
   join(here, "node_modules/three/build/three.module.min.js"),
@@ -77,7 +79,7 @@ const threeModule = await readFile(
 );
 await writeFile(
   join(vendorDir, `three.module.${threeVersion}.min.js`),
-  threeModule.replace("./three.core.min.js", `./three.core.${threeVersion}.min.js`),
+  threeModule.replaceAll("./three.core.min.js", `./three.core.${threeVersion}.min.js`),
 );
 await copyFile(
   join(here, "node_modules/three/build/three.core.min.js"),
