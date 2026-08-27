@@ -215,7 +215,7 @@ async def callback(
     # grants remain a fallback admission path.
     role = "viewer"
     async with session_scope() as session:
-        is_owner = user["id"] in config.oauth2.owner_discord_ids
+        is_owner = str(user["id"]) in {str(oid) for oid in config.oauth2.owner_discord_ids}
         invite_token = request.session.pop("instance_invite_token", None)
         shared_guild_ids = {str(g.get("id")) for g in guilds} & bot_guild_ids
         if not is_owner and not shared_guild_ids and not await authorize_instance_user(

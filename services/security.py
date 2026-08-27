@@ -262,7 +262,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # access revocation still takes effect on the next request.
         if (
             config.oauth2.owner_discord_ids
-            and user.get("id") not in config.oauth2.owner_discord_ids
+            and str(user.get("id")) not in {str(oid) for oid in config.oauth2.owner_discord_ids}
         ):
             from database.engine import session_scope
             from services.dashboard_access import user_shares_guild_with_bot

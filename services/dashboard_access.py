@@ -263,7 +263,9 @@ def resolve_dashboard_role(
     existing_role: str | None,
 ) -> str:
     """Resolve dashboard role without allowing a first-login owner claim."""
-    if discord_user_id in owner_discord_ids:
+    # Discord snowflakes may deserialize as int while owner ids are strings;
+    # normalize both sides so a real owner isn't demoted by a type mismatch.
+    if str(discord_user_id) in {str(oid) for oid in owner_discord_ids}:
         return "owner"
     if not owner_discord_ids and existing_role == "owner":
         return "owner"

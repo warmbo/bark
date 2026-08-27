@@ -27,5 +27,12 @@ def can_manage_instance(request: Request) -> bool:
         if not ids:
             return False
         user = request.session.get("user") or {}
-        return user.get("id") in ids
+        user_id = user.get("id")
+        if user_id is None:
+            return False
+        # Discord snowflakes are large integers that some session/proxy layers
+        # may deserialize as int while owner_discord_ids are parsed as strings.
+        # Normalize both sides so an owner is never mis-gated by a type mismatch
+        # (reported live: owner's bot says "You do not have permission to update").
+        return str(user_id) in {str(oid) for oid in ids}
     return True
