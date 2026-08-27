@@ -246,3 +246,80 @@ async def test_guild_diagnostics_endpoint_returns_report(db, monkeypatch):
     assert "OTHER BARK INSTANCES IN THIS SERVER" in body
     assert "reputation" in body
     assert "attachment" in resp.headers.get("content-disposition", "")
+
+
+def test_reputation_diagnose_reports_rejection_ledger_and_issues(monkeypatch):
+    """Reputation.diagnose() surfaces silently-swallowed Discord rejections and
+    permission/misconfiguration gaps."""
+    import asyncio
+
+    from modules.reputation.module import ReputationModule
+    from services.bark_context import BarkContext
+
+    our = _fake_bot_user(111, "Bark", bot=True)
+    guild = _fake_guild(1, "Clean Server", 50, "9", [our])
+    bot = SimpleNamespace(
+        user=our,
+        guilds=[guild],
+        get_guild=lambda gid: guild if int(gid) == 1 else None,
+        modules=SimpleNamespace(should_run_globally=lambda n: True),
+    )
+    ctx = BarkContext(bot, SimpleNamespace())
+    module = ReputationModule(ctx)
+
+    async def _cfg(name, gid):
+        return {"leaderboard_size": 10, "enabled_sources": {"messages": True}, "showoff_channel_id": ""}
+
+    monkeypatch.setattr(ctx, "get_module_config", _cfg)
+
+    # Simulate a showoff rejection that the code silently swallowed.
+    module._record_rejection(1, "showoff_forbidden", "no permission to send to channel 999")
+    result = asyncio.run(module.diagnose(1))
+    assert result["status"] == "attention"
+    assert result["recent_rejections"] == [
+        {"ts": result["recent_rejections"][0]["ts"], "kind": "showoff_forbidden", "detail": "no permission to send to channel 999"}
+    ]
+    assert any("showoff_forbidden" in i for i in result["issues"])
+
+
+def test_reputation_diagnose_flags_bot_cannot_send_to_showoff(monkeypatch):
+    """When the bot can't send to the configured showoff channel, diagnose()
+    reports the permission gap."""
+    import asyncio
+
+    from modules.reputation.module import ReputationModule
+    from services.bark_context import BarkContext
+
+    our = _fake_bot_user(111, "Bark", bot=True)
+    # Channel the bot can VIEW but NOT send to.
+    chan_perms = SimpleNamespace(view_channel=True, send_messages=False)
+    channel = SimpleNamespace(
+        id=999,
+        permissions_for=lambda member: chan_perms,
+    )
+    guild = SimpleNamespace(
+        id=1,
+        name="Clean Server",
+        member_count=50,
+        owner_id="9",
+        members=[our],
+        users=[our],
+        me=our,
+        get_channel=lambda cid: channel if cid == 999 else None,
+    )
+    bot = SimpleNamespace(
+        user=our,
+        guilds=[guild],
+        get_guild=lambda gid: guild if int(gid) == 1 else None,
+        modules=SimpleNamespace(should_run_globally=lambda n: True),
+    )
+    ctx = BarkContext(bot, SimpleNamespace())
+    module = ReputationModule(ctx)
+
+    async def _cfg(name, gid):
+        return {"leaderboard_size": 10, "showoff_channel_id": "999"}
+
+    monkeypatch.setattr(ctx, "get_module_config", _cfg)
+    result = asyncio.run(module.diagnose(1))
+    assert result["showoff_channel"]["bot_can_send"] is False
+    assert any("cannot send messages" in i for i in result["issues"])

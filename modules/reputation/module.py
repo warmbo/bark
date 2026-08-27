@@ -108,6 +108,24 @@ class ReputationModule(BarkModule):
         # (avoids one Discord REST fetch_message per reaction). Bounded LRU.
         self._reaction_author_cache: OrderedDict[int, int] = OrderedDict()
         self._reaction_author_cache_max = 2048
+        # Rejection ledger for diagnostics: records recent Discord-side failures
+        # (showoff send denied, tier role assign denied) with a timestamp and
+        # reason. Bounded deque per guild so we never grow unbounded. Surfaced
+        # by ``diagnose()`` so a silently-swallowed Forbidden (which the code
+        # currently logs but the owner never sees) becomes visible in a report.
+        self._rejections: dict[int, list[dict]] = defaultdict(list)
+        self._rejections_max_per_guild = 20
+
+    def _record_rejection(self, guild_id: int, kind: str, detail: str) -> None:
+        """Append a bounded diagnostic entry for a Discord-side rejection."""
+        self._rejections[guild_id].append(
+            {
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "kind": kind,
+                "detail": detail[:300],
+            }
+        )
+        del self._rejections[guild_id][: -self._rejections_max_per_guild]
 
     def _score_lock(self, guild_id: int, user_id: int) -> asyncio.Lock:
         key = (int(guild_id), int(user_id))
@@ -253,6 +271,7 @@ class ReputationModule(BarkModule):
             return info
 
         # Per-guild config (redacted: no secrets, just keys + scalar values).
+        cfg: dict = {}
         try:
             cfg = await self.ctx.get_module_config(self.name, guild_id)
             info["config"] = {k: cfg.get(k) for k in ("leaderboard_size", "enabled_sources", "weights")}
@@ -260,27 +279,59 @@ class ReputationModule(BarkModule):
         except Exception as exc:  # config load failure is itself diagnostic
             info["config"] = f"(failed to load: {exc!r})"
             info["status"] = "error"
+            cfg = {}
 
-        # Showoff channel reachability.
+        # Showoff channel reachability + bot permission gaps.
+        issues: list[str] = []
         try:
             showoff_id = (cfg or {}).get("showoff_channel_id")
             guild = getattr(getattr(self.ctx, "bot", None), "get_guild", lambda _g: None)(guild_id)
             if not showoff_id:
                 info["showoff_channel"] = {"configured": False}
             elif guild is None:
-                info["showoff_channel"] = {"configured": True, "channel_id": str(showoff_id), "guild_visible": False}
+                info["showoff_channel"] = {
+                    "configured": True,
+                    "channel_id": str(showoff_id),
+                    "guild_visible": False,
+                    "issue": "bot is not in this guild",
+                }
+                issues.append("bot is not a member of this guild")
             else:
                 chan = guild.get_channel(int(showoff_id)) if hasattr(guild, "get_channel") else None
-                info["showoff_channel"] = {
+                entry: dict[str, Any] = {
                     "configured": True,
                     "channel_id": str(showoff_id),
                     "found": chan is not None,
                     "guild_visible": True,
                 }
+                if chan is None:
+                    entry["issue"] = "configured showoff channel not found in guild"
+                    issues.append("showoff channel not found")
+                else:
+                    perms = getattr(chan, "permissions_for", None)
+                    our_member = guild.me if hasattr(guild, "me") else None
+                    if perms is not None and our_member is not None:
+                        try:
+                            chan_perms = perms(our_member)
+                            entry["bot_can_view"] = bool(
+                                getattr(chan_perms, "view_channel", True)
+                            )
+                            entry["bot_can_send"] = bool(
+                                getattr(chan_perms, "send_messages", True)
+                            )
+                            if not entry["bot_can_view"]:
+                                issues.append("bot cannot view the showoff channel")
+                            if not entry["bot_can_send"]:
+                                issues.append("bot cannot send messages to the showoff channel")
+                        except Exception:
+                            entry["bot_can_view"] = entry["bot_can_send"] = None
+                info["showoff_channel"] = entry
         except Exception as exc:
             info["showoff_channel"] = f"(check failed: {exc!r})"
 
-        # Recent scoring activity (counts only — no content) over the last 24h.
+        # Recent scoring activity (counts only — no content) + event-type
+        # breakdown over the last 24h, so "scores aren't being recorded" shows up
+        # as zero events rather than as a mystery.
         try:
             from datetime import timedelta, timezone as _tz
 
@@ -299,12 +350,36 @@ class ReputationModule(BarkModule):
                         ReputationEvent.created_at >= since,
                     )
                 )
+                event_types = (
+                    await session.execute(
+                        select(ReputationEvent.event_type, func.count())
+                        .where(
+                            ReputationEvent.guild_id == str(guild_id),
+                            ReputationEvent.created_at >= since,
+                        )
+                        .group_by(ReputationEvent.event_type)
+                    )
+                ).all()
                 info["recent_score_activity"] = {
                     "profiles_total": int(total or 0),
                     "events_last_24h": int(recent or 0),
+                    "events_last_24h_by_type": {
+                        str(et): int(c) for et, c in event_types
+                    },
                 }
+                if int(recent or 0) == 0 and int(total or 0) > 0:
+                    issues.append("no reputation events recorded in the last 24h")
         except Exception as exc:
             info["recent_score_activity"] = f"(query failed: {exc!r})"
+
+        # Rejection ledger (showoff/tier-role Discord denials the code swallowed).
+        try:
+            ledger = list(self._rejections.get(int(guild_id), []))
+            info["recent_rejections"] = ledger
+            for entry in ledger[-5:]:
+                issues.append(f"{entry['kind']}: {entry['detail']}")
+        except Exception:
+            info["recent_rejections"] = []
 
         # Multi-instance conflict detection (the reported failure mode).
         try:
@@ -322,6 +397,10 @@ class ReputationModule(BarkModule):
         except Exception as exc:
             info["other_bark_instances"] = f"(detection failed: {exc!r})"
 
+        if issues:
+            info["issues"] = issues
+            if info.get("status") in (None, "ok"):
+                info["status"] = "attention"
         return info
 
     async def _coop_leaderboard(self, guild_id: int) -> dict | None:
@@ -1849,9 +1928,15 @@ class ReputationModule(BarkModule):
                             remove_role, reason="Bark Reputation: tier update"
                         )
             await member.add_roles(role, reason="Bark Reputation: tier achieved")
-        except (discord.Forbidden, discord.HTTPException):
+        except (discord.Forbidden, discord.HTTPException) as exc:
             self._logger.exception(
                 "Failed to assign tier role for user %s in guild %s", user_id, guild_id
+            )
+            self._record_rejection(
+                guild_id,
+                "tier_role_denied",
+                f"could not assign tier role {role_id} to user {user_id}: "
+                f"{getattr(exc, 'status', '?')} {type(exc).__name__}",
             )
 
     async def _check_rewards(
@@ -1985,8 +2070,29 @@ class ReputationModule(BarkModule):
         embed.set_footer(text=f"Total Score: {profile.total_score:.0f}")
         try:
             await channel.send(embed=embed)
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        except discord.Forbidden:
+            self._logger.warning(
+                "Showoff denied: bot lacks permission to send to channel %s in guild %s",
+                channel_id,
+                guild_id,
+            )
+            self._record_rejection(
+                guild_id,
+                "showoff_forbidden",
+                f"no permission to send to channel {channel_id} (showoff)",
+            )
+        except discord.HTTPException as exc:
+            self._logger.warning(
+                "Showoff send failed (HTTP %s) to channel %s in guild %s",
+                getattr(exc, "status", "?"),
+                channel_id,
+                guild_id,
+            )
+            self._record_rejection(
+                guild_id,
+                "showoff_http_error",
+                f"send to channel {channel_id} failed: {exc}",
+            )
 
     async def _send_showoff_text(
         self,

@@ -111,3 +111,28 @@ def test_render_report_plaintext_shape():
     # Missing refs are flagged loudly (the "can't find branch on remote" case).
     assert "github/main      ABSENT" in text
     assert "origin/main      present" in text
+
+
+def test_report_builds_when_git_and_systemctl_are_unavailable(monkeypatch):
+    """Termux / minimal installs without systemctl (or git off PATH) must not
+    crash the diagnostic report — helpers degrade to '' instead of raising."""
+    import services.diagnostics as d
+    import services.update_service as us
+
+    def _missing_binary(cmd, *args, **kwargs):
+        raise FileNotFoundError(cmd[0] if cmd else "binary")
+
+    monkeypatch.setattr(us, "_run", _missing_binary)
+
+    # These helpers must not raise when the binary is absent.
+    assert d._git("rev-parse", "HEAD") == ""
+    assert d._systemctl(["is-active", "bark.service"]) == ""
+    assert d._systemd_active() is False
+    assert d._running_unit()  # falls back to a non-empty service name
+
+    # The full report still builds and renders.
+    report = build_diagnostics_report()
+    assert report["bark"]["commit"]  # falls back to "unknown" or similar
+    text = render_report(report)
+    assert "Bark diagnostic report" in text
+

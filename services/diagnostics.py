@@ -54,8 +54,44 @@ def repo_root() -> Path:
 
 
 def _git(*args: str) -> str:
-    result = update_service._run(["git", *args])
-    return result.stdout.strip() if result.returncode == 0 else ""
+    """Run a git subprocess safely; return stdout (or '') without raising.
+
+    Termux and other minimal installs may not have ``systemctl``, and even git
+    may live off PATH or be unavailable mid-boot. A diagnostic report must
+    never 500 because a helper binary is missing — capture that as a string
+    result instead so the section can still render.
+    """
+    try:
+        result = update_service._run(["git", *args])
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception as exc:  # FileNotFoundError, OSError, etc.
+        logger.debug("git helper unavailable (%s): %s", exc.__class__.__name__, exc)
+        return ""
+
+
+def _safe_update_call(fn, fallback):
+    """Call a git-dependent update_service function, returning ``fallback`` on
+    any failure (e.g. git missing on Termux). Keeps the report buildable."""
+    try:
+        result = fn()
+        return result if result not in (None, "") else fallback
+    except Exception as exc:
+        logger.debug("update_service call failed (%s): %s", fn.__name__, exc)
+        return fallback
+
+
+def _systemctl(args: list[str]) -> str:
+    """Run ``systemctl ...`` safely; '' on any failure (incl. no systemd).
+
+    Termux has no systemd; returning '' lets callers fall back to manual
+    install detection instead of crashing the report.
+    """
+    try:
+        result = update_service._run(["systemctl", *args])
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception as exc:  # FileNotFoundError, OSError
+        logger.debug("systemctl unavailable (%s): %s", exc.__class__.__name__, exc)
+        return ""
 
 
 def _systemd_active() -> bool:
@@ -268,9 +304,9 @@ def build_diagnostics_report() -> dict:
     return {
         "bark": {
             "version": __version__,
-            "commit": update_service.current_commit(),
-            "branch": update_service.current_branch(),
-            "update_channel": update_service.get_channel(),
+            "commit": _safe_update_call(update_service.current_commit, "unknown"),
+            "branch": _safe_update_call(update_service.current_branch, ""),
+            "update_channel": _safe_update_call(update_service.get_channel, "unknown"),
         },
         "environment": {
             "platform": platform.platform(),
@@ -560,6 +596,12 @@ def render_report(report: dict) -> str:
                     act = rep.get("recent_score_activity")
                     if act is not None:
                         lines.append(f"        score_activity: {act}")
+                    rej = rep.get("recent_rejections")
+                    if isinstance(rej, list) and rej:
+                        lines.append(f"        ⚠ RECENT REJECTIONS: {rej}")
+                    iss = rep.get("issues")
+                    if isinstance(iss, list) and iss:
+                        lines.append(f"        ⚠ issues: {iss}")
                     obi = rep.get("other_bark_instances")
                     if isinstance(obi, list) and obi:
                         lines.append(f"        ⚠ OTHER BARK INSTANCES: {obi}")
