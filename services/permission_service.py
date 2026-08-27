@@ -68,12 +68,34 @@ class PermissionService:
         "moderation.notes.view": "moderator",
         "moderation.notes.delete": "moderator",
         "logging.configure": "moderator",
+        "logging.view": "viewer",
+        "logging.files": "viewer",
         # Auto Voice channel configuration is day-to-day community management
         # (names, limits, cleanup), not instance security — moderators may
         # save it, matching the module's own "Manage Auto Voice Channels"
         # declaration. Lifecycle (enable/disable/reload) stays admin.
         "auto_voice.access": "viewer",
         "auto_voice.configure": "moderator",
+        # Reputation is day-to-day community management (levels, thanks,
+        # leaderboards) — any server manager (admin or moderator tier, i.e.
+        # owner / Discord ADMINISTRATOR / MANAGE_GUILD / configured staff
+        # role) can enable, configure, and view it. Previously these were
+        # undeclared and fell back to admin, so only the owner / full Discord
+        # admin could control the module.
+        "reputation.manage": "moderator",
+        "reputation.configure": "moderator",
+        "reputation.view": "viewer",
+        # Welcome messages and announcements are community-facing posts any
+        # manager may set up; viewing is open to every member.
+        "welcome.manage": "moderator",
+        "welcome.view": "viewer",
+        "announcements.post": "moderator",
+        "announcements.view": "viewer",
+        # AutoMod rules are safety-critical; only admins configure them.
+        "automod.configure": "admin",
+        # Assigning roles is a privilege-escalation action — always admin.
+        "role_manager.manage": "admin",
+        "role_manager.view": "viewer",
         "roles.manage": "admin",
     }
 

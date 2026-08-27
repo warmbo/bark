@@ -44,7 +44,7 @@ def test_auto_voice_configure_is_registered_and_moderator_gated():
     assert svc.get_required_role_for_action("auto_voice.manage") == "admin"
 
 
-def test_check_api_permission_module_action_defaults_to_declared_role():
+def test_check_api_permission_module_action_defaults_to_declared_role(monkeypatch):
     """Unset module actions fall back to the declared role, not admin-only.
 
     Reproduces the incident: a moderator (no per-guild ModuleRoleAccess
@@ -62,10 +62,11 @@ def test_check_api_permission_module_action_defaults_to_declared_role():
     svc = get_permission_service()
     svc.discover_module_permissions({"auto_voice": _auto_voice_module()})
 
-    # Force OAuth-enabled so the gate is actually evaluated.
-    config.config.oauth2.client_id = "123"
-    config.config.oauth2.client_secret = "secret"
-    config.config.oauth2.redirect_uri = "http://test/auth/callback"
+    # Force OAuth-enabled so the gate is actually evaluated. monkeypatch
+    # restores the config so a later auth-dependent test isn't polluted.
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
 
     request = SimpleNamespace(
         session={"role": "moderator"},
