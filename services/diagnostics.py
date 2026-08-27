@@ -16,6 +16,7 @@ import platform
 import shutil
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from bark_version import __version__
 from config import config
@@ -302,6 +303,142 @@ def build_diagnostics_report() -> dict:
     }
 
 
+def build_runtime_diagnostics(bot) -> dict:
+    """Gather live bot/module/guild state for the diagnostic report.
+
+    This is the "EVERYTHING WE CAN" section: it enumerates every discovered
+    module (capabilities + a per-guild ``diagnose()`` self-report), every guild
+    the bot is in (identity, size, our permission summary, enabled modules, and
+    any other Bark-like bot sharing the server — the classic cause of modules
+    like Reputation silently failing to post a leaderboard or scores).
+
+    Must be called from an async context with the live ``bot`` object (e.g.
+    ``request.app.state.bot``). Failures are captured per-section so one broken
+    module or guild can't blank the whole report. No secrets, tokens, or message
+    content are ever included.
+    """
+    # Imported lazily so this module stays importable in stripped-down test/dev
+    # contexts where the bot package isn't fully wired.
+    modules_mgr = getattr(bot, "modules", None)
+    guilds = list(getattr(bot, "guilds", []) or [])
+
+    modules_section: dict[str, Any] = {"count": 0, "items": [], "errors": []}
+    if modules_mgr is not None:
+        try:
+            all_modules = modules_mgr.get_all_modules() or {}
+            modules_section["count"] = len(all_modules)
+            for name, module in all_modules.items():
+                try:
+                    entry = {
+                        "name": name,
+                        "version": getattr(module, "version", None),
+                        "enabled_globally": None,
+                        "commands": [c.name for c in module.get_commands()],
+                        "events": [e.event_name for e in module.get_events()],
+                        "dashboard_pages": [p.route for p in module.get_dashboard_pages()],
+                        "permissions": [p.name for p in module.get_permissions()],
+                        "schema_keys": list(
+                            (module.get_settings_schema() or {}).get("properties", {}).keys()
+                        ),
+                    }
+                    if hasattr(modules_mgr, "should_run_globally"):
+                        try:
+                            entry["enabled_globally"] = modules_mgr.should_run_globally(name)
+                        except Exception:
+                            entry["enabled_globally"] = None
+                    # Per-guild self-report (the high-value part).
+                    per_guild = []
+                    for guild in guilds:
+                        gid = getattr(guild, "id", None)
+                        if gid is None:
+                            continue
+                        try:
+                            enabled = (
+                                modules_mgr.is_enabled_for_guild(int(gid), name)
+                                if hasattr(modules_mgr, "is_enabled_for_guild")
+                                else None
+                            )
+                        except Exception:
+                            enabled = None
+                        if not enabled:
+                            continue
+                        try:
+                            report = module.diagnose(int(gid))
+                            per_guild.append({"guild_id": str(gid), "report": report})
+                        except Exception as exc:  # module diagnose shouldn't crash the report
+                            per_guild.append(
+                                {"guild_id": str(gid), "error": f"{type(exc).__name__}: {exc}"}
+                            )
+                    if per_guild:
+                        entry["per_guild"] = per_guild
+                    modules_section["items"].append(entry)
+                except Exception as exc:
+                    modules_section["errors"].append(f"{name}: {type(exc).__name__}: {exc}")
+        except Exception as exc:
+            modules_section["errors"].append(f"module enumeration: {type(exc).__name__}: {exc}")
+
+    guilds_section: dict[str, Any] = {"count": len(guilds), "items": [], "errors": []}
+    multi_instance: list[dict[str, Any]] = []
+    for guild in guilds:
+        gid = getattr(guild, "id", None)
+        if gid is None:
+            continue
+        item: dict[str, Any] = {
+            "id": str(gid),
+            "name": getattr(guild, "name", None),
+            "member_count": getattr(guild, "member_count", None),
+            "owner_id": str(getattr(guild, "owner_id", "") or ""),
+            "enabled_modules": [],
+            "other_bark_instances": [],
+        }
+        # Our permission summary (public bitfield names, no secrets).
+        me = getattr(guild, "me", None) or getattr(bot, "user", None)
+        perms = getattr(me, "guild_permissions", None) if me is not None else None
+        if perms is not None:
+            item["our_permissions"] = [p for p in dir(perms) if not p.startswith("_") and getattr(perms, p) is True]
+        # Enabled modules for this guild.
+        if modules_mgr is not None and hasattr(modules_mgr, "is_enabled_for_guild"):
+            try:
+                item["enabled_modules"] = [
+                    name
+                    for name in (modules_mgr.get_all_modules() or {})
+                    if modules_mgr.is_enabled_for_guild(int(gid), name)
+                ]
+            except Exception:
+                item["enabled_modules"] = []
+        # Other Bark-like bots in the same server.
+        others = []
+        members = getattr(guild, "members", None) or getattr(guild, "users", None) or []
+        self_id = getattr(getattr(bot, "user", None), "id", None)
+        for member in members:
+            bot_flag = getattr(member, "bot", getattr(member, "bot", False))
+            if not bot_flag:
+                continue
+            uid = getattr(member, "id", None)
+            uname = getattr(member, "name", "") or ""
+            if uid == self_id or "bark" not in uname.lower():
+                continue
+            others.append({"id": str(uid), "name": uname, "bot": True})
+        item["other_bark_instances"] = others
+        if others:
+            multi_instance.append(
+                {"guild_id": str(gid), "guild_name": item["name"], "bots": others}
+            )
+        guilds_section["items"].append(item)
+
+    return {
+        "runtime": {
+            "available": True,
+            "bot_user": getattr(getattr(bot, "user", None), "name", None),
+            "guild_count": len(guilds),
+            "latency_ms": None,
+            "modules": modules_section,
+            "guilds": guilds_section,
+            "multi_instance_conflicts": multi_instance,
+        }
+    }
+
+
 def render_report(report: dict) -> str:
     """Flatten the structured report into a paste-friendly text document."""
 
@@ -389,6 +526,82 @@ def render_report(report: dict) -> str:
         lines.append(f"  {entry}")
     if not report["logs"]["bark_log_tail"]:
         lines.append("  (no log found)")
+    lines.append("")
+
+    # ── Live runtime (modules / guilds / multi-instance) ──
+    runtime = report.get("runtime") if isinstance(report.get("runtime"), dict) else None
+    if runtime is not None:
+        lines.append("[Live runtime]")
+        lines.append(f"  bot user      : {runtime.get('bot_user', '(unknown)')}")
+        lines.append(f"  guild count   : {runtime.get('guild_count', 0)}")
+        lines.append("")
+        lines.append("[Modules]")
+        mods = runtime.get("modules", {})
+        lines.append(f"  discovered    : {mods.get('count', 0)}")
+        for entry in mods.get("items", []):
+            lines.append(f"  - {entry['name']} (v{entry.get('version') or '?'})")
+            eg = entry.get("enabled_globally")
+            lines.append(f"      enabled_globally: {eg}")
+            lines.append(f"      commands: {', '.join(entry.get('commands', [])) or '(none)'}")
+            lines.append(f"      events:    {', '.join(entry.get('events', [])) or '(none)'}")
+            lines.append(f"      pages:     {', '.join(entry.get('dashboard_pages', [])) or '(none)'}")
+            lines.append(f"      perms:     {', '.join(entry.get('permissions', [])) or '(none)'}")
+            for pg in entry.get("per_guild", []):
+                gid = pg.get("guild_id")
+                rep = pg.get("report")
+                if isinstance(rep, dict):
+                    lines.append(f"      guild {gid}: status={rep.get('status', '?')}")
+                    cfg = rep.get("config")
+                    if isinstance(cfg, dict):
+                        lines.append(f"        config: {cfg}")
+                    so = rep.get("showoff_channel")
+                    if so is not None:
+                        lines.append(f"        showoff_channel: {so}")
+                    act = rep.get("recent_score_activity")
+                    if act is not None:
+                        lines.append(f"        score_activity: {act}")
+                    obi = rep.get("other_bark_instances")
+                    if isinstance(obi, list) and obi:
+                        lines.append(f"        ⚠ OTHER BARK INSTANCES: {obi}")
+                elif "error" in pg:
+                    lines.append(f"      guild {gid}: diagnose error: {pg['error']}")
+        for err in mods.get("errors", []):
+            lines.append(f"  ⚠ module error: {err}")
+        lines.append("")
+
+        lines.append("[Guilds]")
+        gsec = runtime.get("guilds", {})
+        lines.append(f"  count         : {gsec.get('count', 0)}")
+        for g in gsec.get("items", []):
+            lines.append(f"  - {g.get('name')} ({g.get('id')}) members={g.get('member_count')}")
+            lines.append(f"      owner_id: {g.get('owner_id')}")
+            lines.append(f"      enabled_modules: {', '.join(g.get('enabled_modules', [])) or '(none)'}")
+            perms = g.get("our_permissions")
+            if perms:
+                lines.append(f"      our_perms: {', '.join(perms)}")
+            obi = g.get("other_bark_instances") or []
+            if obi:
+                lines.append(f"      ⚠ OTHER BARK INSTANCES SHARING THIS SERVER: {obi}")
+        for err in gsec.get("errors", []):
+            lines.append(f"  ⚠ guild error: {err}")
+
+        conflicts = runtime.get("multi_instance_conflicts") or []
+        lines.append("")
+        lines.append("[Multi-instance conflicts]")
+        if conflicts:
+            for c in conflicts:
+                lines.append(
+                    f"  ⚠ guild {c.get('guild_name')} ({c.get('guild_id')}): "
+                    f"other Bark bots = {c.get('bots')}"
+                )
+            lines.append(
+                "  ↑ These servers have more than one Bark bot. Modules that post to "
+                "channels (Reputation leaderboard/showoff, Welcome, Logging) may "
+                "double-post, double-count, or suppress output."
+            )
+        else:
+            lines.append("  (none detected)")
+
     lines.append("")
     lines.append("--- end of report ---")
     return "\n".join(lines)

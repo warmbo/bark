@@ -14,7 +14,11 @@ import logging
 from fastapi import APIRouter, Request, Response
 
 from config import config
-from services.diagnostics import build_diagnostics_report, render_report
+from services.diagnostics import (
+    build_diagnostics_report,
+    build_runtime_diagnostics,
+    render_report,
+)
 from services.instance_auth import can_manage_instance
 from services.response import api_error, api_success
 from services.update_service import (
@@ -91,13 +95,23 @@ async def instance_diagnostics(request: Request):
     """Download a redacted diagnostic report for remote support (owner-only).
 
     Includes version, install method, environment/hardware, git + remote state,
-    the last update-check error, and recent logs — with secrets removed. Users
-    running Bark on their own hardware can download this and paste it back so
-    we can diagnose issues without shell access.
+    the last update-check error, recent logs — and (when the bot is live) a full
+    runtime section enumerating every module, guild, and any server that has more
+    than one Bark bot (the classic cause of modules like Reputation silently
+    failing to post a leaderboard or scores). Secrets are redacted. Users running
+    Bark on their own hardware can download this and paste it back so we can
+    diagnose issues without shell access.
     """
     if not can_manage_instance(request):
         return api_error("Owner access required", status_code=403)
     report = await asyncio.to_thread(build_diagnostics_report)
+    bot = getattr(request.app.state, "bot", None)
+    if bot is not None:
+        try:
+            runtime = await build_runtime_diagnostics(bot)
+            report.update(runtime)
+        except Exception as exc:  # runtime is best-effort; never break the report
+            logger.warning("build_runtime_diagnostics failed: %s", exc)
     text = render_report(report)
     version = report["bark"]["version"]
     return Response(

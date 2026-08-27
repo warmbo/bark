@@ -6,8 +6,9 @@ import re
 from datetime import datetime, timezone
 
 import discord
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
+from services.instance_auth import can_manage_instance
 from services.response import (
     api_error,
     api_forbidden,
@@ -243,6 +244,112 @@ async def set_guild_banner(request: Request, guild_id: int):
 
     await set_setting(guild_id, "banner_url", url)
     return api_success({"banner_url": url})
+
+
+@router.get("/guilds/{guild_id}/diagnostics")
+async def guild_diagnostics(request: Request, guild_id: int):
+    """Focused diagnostic report for ONE server (owner or guild admin).
+
+    Unlike the instance-wide download, this is scoped to a single guild and is
+    meant for "give me a report about this server" — it lists the guild's
+    identity, our permission summary, every enabled module's self-reported
+    health (via each module's ``diagnose()`` hook, e.g. Reputation flagging that
+    it shares the server with another Bark instance), and any multi-instance
+    conflicts. Secrets/message content are never included.
+
+    Gated to instance owners (``can_manage_instance``) or guild admins
+    (``guild.manage``) — the same bar as other sensitive guild settings.
+    """
+    if not (
+        can_manage_instance(request)
+        or check_api_permission(request, "guild.manage", guild_id)
+    ):
+        return api_forbidden("Owner or guild admin access required")
+
+    bot = getattr(request.app.state, "bot", None)
+    if bot is None:
+        return api_error("Bot is not running", status_code=503)
+
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return api_not_found("Guild not found or bot is not a member")
+
+    from services.diagnostics import render_report
+
+    # Build a focused, guild-scoped runtime report.
+    modules_mgr = getattr(bot, "modules", None)
+    lines: list[str] = []
+    lines.append(f"Bark guild diagnostic report — guild {guild_id}")
+    lines.append("=" * 60)
+    lines.append(f"Guild        : {getattr(guild, 'name', None)} ({guild_id})")
+    lines.append(f"Members      : {getattr(guild, 'member_count', None)}")
+    lines.append(f"Owner ID     : {getattr(guild, 'owner_id', '') or '(unknown)'}")
+    me = getattr(guild, "me", None) or getattr(bot, "user", None)
+    perms = getattr(me, "guild_permissions", None) if me is not None else None
+    if perms is not None:
+        lines.append(
+            "Our perms    : "
+            + ", ".join(p for p in dir(perms) if not p.startswith("_") and getattr(perms, p) is True)
+        )
+    # Other Bark-like bots sharing this server.
+    self_id = getattr(getattr(bot, "user", None), "id", None)
+    others = []
+    members = getattr(guild, "members", None) or getattr(guild, "users", None) or []
+    for member in members:
+        if not getattr(member, "bot", getattr(member, "bot", False)):
+            continue
+        uid = getattr(member, "id", None)
+        uname = getattr(member, "name", "") or ""
+        if uid == self_id or "bark" not in uname.lower():
+            continue
+        others.append({"id": str(uid), "name": uname, "bot": True})
+    if others:
+        lines.append(f"⚠ OTHER BARK INSTANCES IN THIS SERVER: {others}")
+        lines.append(
+            "  Modules that post to channels (Reputation showoff/leaderboard, "
+            "Welcome, Logging) may double-post, double-count, or suppress output."
+        )
+    lines.append("")
+    lines.append("[Enabled modules — self-reported health]")
+    if modules_mgr is not None:
+        try:
+            enabled = [
+                name
+                for name in (modules_mgr.get_all_modules() or {})
+                if modules_mgr.is_enabled_for_guild(int(guild_id), name)
+            ]
+        except Exception:
+            enabled = []
+        if not enabled:
+            lines.append("  (no modules enabled)")
+        for name in enabled:
+            module = modules_mgr.get_module(name)
+            if module is None:
+                continue
+            lines.append(f"- {name}")
+            try:
+                rep = await module.diagnose(int(guild_id))
+                # Render the structured report compactly.
+                text = render_report({"runtime": {"modules": {"items": [{"name": name, "version": getattr(module, "version", None), "enabled_globally": None, "commands": [], "events": [], "dashboard_pages": [], "permissions": [], "per_guild": [{"guild_id": str(guild_id), "report": rep}]}]}, "guilds": {"count": 0, "items": []}, "multi_instance_conflicts": []}})
+                # The render puts the module block under [Modules]; trim to just
+                # the per-guild lines for readability.
+                for line in text.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("guild ") or "OTHER BARK" in stripped or stripped.startswith("⚠") or stripped.startswith("config:") or stripped.startswith("showoff") or stripped.startswith("score_activity") or stripped.startswith("status="):
+                        lines.append(f"    {stripped}")
+                    elif "double-count" in stripped:
+                        lines.append(f"    {stripped}")
+            except Exception as exc:
+                lines.append(f"    diagnose error: {type(exc).__name__}: {exc}")
+    lines.append("")
+    lines.append("--- end of guild report ---")
+    return Response(
+        content="\n".join(lines),
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": f'attachment; filename="bark-guild-{guild_id}-diagnostics.txt"'
+        },
+    )
 
 
 @router.put("/guilds/{guild_id}/slug")

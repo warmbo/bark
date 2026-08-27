@@ -214,6 +214,82 @@ class BarkModule(abc.ABC):
         """
         return []
 
+    # ── Diagnostics (self-reporting health hook) ──────
+
+    async def diagnose(self, guild_id: int | None = None) -> dict[str, Any]:
+        """Optional health-report hook used by the diagnostics tool.
+
+        Override in a module to surface module-specific issues (e.g. Reputation
+        reporting that it shares a server with another Bark instance, or that its
+        announce channel is unreachable). The default returns a generic
+        capability summary safe to include in a redacted support report.
+
+        Implementations MUST NOT include user message content, tokens, or secrets.
+        """
+        info: dict[str, Any] = {
+            "module": self.name,
+            "enabled_globally": None,
+            "commands": [c.name for c in self.get_commands()],
+            "events": [e.event_name for e in self.get_events()],
+            "dashboard_pages": [p.route for p in self.get_dashboard_pages()],
+            "permissions": [p.name for p in self.get_permissions()],
+            "schema_keys": list(
+                (self.get_settings_schema() or {}).get("properties", {}).keys()
+            ),
+        }
+        manager = getattr(getattr(self.ctx, "bot", None), "modules", None)
+        if manager is not None and hasattr(manager, "should_run_globally"):
+            try:
+                info["enabled_globally"] = manager.should_run_globally(self.name)
+            except Exception:
+                info["enabled_globally"] = None
+        if guild_id is not None:
+            try:
+                info["enabled_for_guild"] = (
+                    manager.is_enabled_for_guild(guild_id, self.name)
+                    if manager is not None
+                    else None
+                )
+            except Exception:
+                info["enabled_for_guild"] = None
+        return info
+
+    def detect_other_bark_instances(self, guild: "Any") -> list[dict[str, Any]]:
+        """Return other bots in ``guild`` that look like a Bark instance.
+
+        Used by module ``diagnose()`` overrides to flag the "two Bark bots in
+        one server" conflict (e.g. Reputation double-counting or refusing to
+        post a leaderboard). A bot matches when it is not *this* bot and its
+        username contains "bark" (case-insensitive) — the strongest public
+        signal that a second Bark deployment shares the server.
+
+        Never includes user message content; only public bot identity fields.
+        """
+        self_user = getattr(getattr(self.ctx, "bot", None), "user", None)
+        self_id = getattr(self_user, "id", None)
+        others: list[dict[str, Any]] = []
+        members = getattr(guild, "members", None) or getattr(guild, "users", None) or []
+        for member in members:
+            user = member
+            # discord.Member; bot flag lives on the user.
+            bot_flag = getattr(member, "bot", getattr(user, "bot", False))
+            if not bot_flag:
+                continue
+            uid = getattr(user, "id", None)
+            uname = getattr(user, "name", "") or ""
+            if uid == self_id:
+                continue
+            if "bark" not in uname.lower():
+                continue
+            others.append(
+                {
+                    "id": str(uid) if uid is not None else None,
+                    "name": uname,
+                    "bot": True,
+                }
+            )
+        return others
+
     # ── Module Stats (backup/export support) ──────────
 
     async def export_stats(self, guild_id: int) -> dict[str, Any]:

@@ -224,7 +224,108 @@ class ReputationModule(BarkModule):
             },
         ]
 
+    async def diagnose(self, guild_id: int | None = None) -> dict[str, Any]:
+        """Self-report reputation health for the diagnostics tool.
+
+        Flags the "two Bark instances in one server" conflict (which makes scores
+        double-count and can stop leaderboard/showoff posting), reports whether
+        the showoff announce channel is configured and reachable, and summarizes
+        recent scoring activity. Never includes message content or secrets.
+        """
+        info: dict[str, Any] = {
+            "module": self.name,
+            "enabled_globally": None,
+            "config": None,
+            "scoring_sources": None,
+            "showoff_channel": None,
+            "recent_score_activity": None,
+            "other_bark_instances": None,
+            "status": "ok",
+        }
+        manager = getattr(getattr(self.ctx, "bot", None), "modules", None)
+        if manager is not None and hasattr(manager, "should_run_globally"):
+            try:
+                info["enabled_globally"] = manager.should_run_globally(self.name)
+            except Exception:
+                info["enabled_globally"] = None
+
+        if guild_id is None:
+            return info
+
+        # Per-guild config (redacted: no secrets, just keys + scalar values).
+        try:
+            cfg = await self.ctx.get_module_config(self.name, guild_id)
+            info["config"] = {k: cfg.get(k) for k in ("leaderboard_size", "enabled_sources", "weights")}
+            info["scoring_sources"] = (cfg.get("enabled_sources") or {})
+        except Exception as exc:  # config load failure is itself diagnostic
+            info["config"] = f"(failed to load: {exc!r})"
+            info["status"] = "error"
+
+        # Showoff channel reachability.
+        try:
+            showoff_id = (cfg or {}).get("showoff_channel_id")
+            guild = getattr(getattr(self.ctx, "bot", None), "get_guild", lambda _g: None)(guild_id)
+            if not showoff_id:
+                info["showoff_channel"] = {"configured": False}
+            elif guild is None:
+                info["showoff_channel"] = {"configured": True, "channel_id": str(showoff_id), "guild_visible": False}
+            else:
+                chan = guild.get_channel(int(showoff_id)) if hasattr(guild, "get_channel") else None
+                info["showoff_channel"] = {
+                    "configured": True,
+                    "channel_id": str(showoff_id),
+                    "found": chan is not None,
+                    "guild_visible": True,
+                }
+        except Exception as exc:
+            info["showoff_channel"] = f"(check failed: {exc!r})"
+
+        # Recent scoring activity (counts only — no content) over the last 24h.
+        try:
+            from datetime import timedelta, timezone as _tz
+
+            from sqlalchemy import func, select
+
+            since = datetime.now(_tz.utc) - timedelta(hours=24)
+            async with session_scope() as session:
+                total = await session.scalar(
+                    select(func.count()).select_from(ReputationProfile).where(
+                        ReputationProfile.guild_id == str(guild_id)
+                    )
+                )
+                recent = await session.scalar(
+                    select(func.count()).select_from(ReputationEvent).where(
+                        ReputationEvent.guild_id == str(guild_id),
+                        ReputationEvent.created_at >= since,
+                    )
+                )
+                info["recent_score_activity"] = {
+                    "profiles_total": int(total or 0),
+                    "events_last_24h": int(recent or 0),
+                }
+        except Exception as exc:
+            info["recent_score_activity"] = f"(query failed: {exc!r})"
+
+        # Multi-instance conflict detection (the reported failure mode).
+        try:
+            guild = getattr(getattr(self.ctx, "bot", None), "get_guild", lambda _g: None)(guild_id)
+            if guild is not None:
+                others = self.detect_other_bark_instances(guild)
+                info["other_bark_instances"] = others
+                if others:
+                    info["status"] = "conflict"
+                    info["note"] = (
+                        "Another Bark-like bot shares this server. Scores may "
+                        "double-count and leaderboard/showoff posting can be "
+                        "suppressed or duplicated."
+                    )
+        except Exception as exc:
+            info["other_bark_instances"] = f"(detection failed: {exc!r})"
+
+        return info
+
     async def _coop_leaderboard(self, guild_id: int) -> dict | None:
+
         """Optional data provider: a 'Top Members' leaderboard card (or None)."""
         try:
             from sqlalchemy import desc, select
