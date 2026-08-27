@@ -984,6 +984,65 @@ async def test_set_guild_banner_persists_and_clears(app, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_set_guild_banner_is_admin_only(app, monkeypatch):
+    """The header banner is admin-only to change; moderators and viewers are blocked.
+
+    The banner stays readable by every role (GET returns custom_banner_url with
+    no capability check), but only an admin may write it — a moderator who can
+    otherwise manage the server must not be able to rebrand its header.
+    """
+    from types import SimpleNamespace
+
+    import config
+    from dashboard.routes.api import guilds
+
+    monkeypatch.setattr(config.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from sqlalchemy import select
+
+    async with session_scope() as s:
+        if not (await s.execute(select(Guild).where(Guild.discord_id == "222222"))).scalars().first():
+            s.add(Guild(discord_id="222222", name="Banner Guild"))
+            await s.commit()
+
+    bot = app.state.bot
+
+    class _Req(SimpleNamespace):
+        _body = {}
+
+        async def json(self):
+            return self._body
+
+    def _req(role: str) -> _Req:
+        r = _Req(
+            state=SimpleNamespace(bot=bot, guild_viewer=False),
+            session={"role": role},
+            url=SimpleNamespace(path="/x"),
+        )
+        return r
+
+    # Moderator is blocked (was previously allowed via the guild_viewer check).
+    mod = _req("moderator")
+    mod._body = {"banner_url": "https://example.com/banner.png"}
+    resp = await guilds.set_guild_banner(mod, 222222)
+    assert resp.status_code == 403
+
+    # Viewer is blocked too.
+    viewer = _req("viewer")
+    viewer._body = {"banner_url": "https://example.com/banner.png"}
+    assert (await guilds.set_guild_banner(viewer, 222222)).status_code == 403
+
+    # Admin succeeds.
+    admin = _req("admin")
+    admin._body = {"banner_url": "https://example.com/banner.png"}
+    assert (await guilds.set_guild_banner(admin, 222222)).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     """GET /guilds/{id}/dashboard is a single aggregate: profile + viewer + cards."""
     from types import SimpleNamespace

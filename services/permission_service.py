@@ -45,6 +45,11 @@ class PermissionService:
         "modules.manage": "admin",
         "modules.configure": "admin",
         "dashboard.users": "admin",
+        # The dashboard header/banner image is visible to every role that can
+        # view the server, but only admins may change it — community managers
+        # (moderators) can see and use the dashboard without being able to
+        # rebrand the server's header.
+        "dashboard.banner": "admin",
         # Moderation work is available to moderators; destructive case removal
         # and all configuration remain administrator-only.
         "moderation.warn": "moderator",

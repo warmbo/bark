@@ -228,8 +228,12 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
 
 @router.put("/guilds/{guild_id}/banner")
 async def set_guild_banner(request: Request, guild_id: int):
-    """Set a custom banner image (URL) shown on the dashboard profile."""
-    if getattr(request.state, "guild_viewer", False):
+    """Set a custom banner image (URL) shown on the dashboard profile.
+
+    The banner is readable by every dashboard role, but only admins may
+    change it (see ``dashboard.banner`` capability).
+    """
+    if not check_api_permission(request, "dashboard.banner", guild_id):
         return api_forbidden("Insufficient permissions")
 
     body = await request.json()
