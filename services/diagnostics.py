@@ -263,6 +263,44 @@ def _redacted_config() -> dict[str, str]:
     }
 
 
+def _config_warnings() -> list[str]:
+    """Config-level problems that commonly break a self-hosted instance,
+    surfaced in the report even on a minimal Termux box (no bot runtime).
+
+    The big one: OAuth redirect_uri / public_url scheme must match what the
+    browser and the Discord app use. A mismatch (http config vs https site)
+    makes Discord reject the callback with redirect_uri_mismatch, so the owner
+    can never complete login — and therefore can never reach owner-gated pages
+    like Settings → Update.
+    """
+    warnings: list[str] = []
+    pub = (config.dashboard.public_url or "").strip().rstrip("/")
+    redirect = (config.oauth2.redirect_uri or "").strip().rstrip("/")
+
+    if config.oauth2.enabled:
+        if redirect and not redirect.endswith("/auth/callback"):
+            warnings.append(
+                f"OAuth redirect_uri does not end in /auth/callback ({redirect})"
+            )
+        for label, url in (("public_url", pub), ("redirect_uri", redirect)):
+            if url and url.startswith("http://"):
+                warnings.append(
+                    f"{label} uses http:// ({url}) — if the dashboard is served "
+                    "over https, Discord OAuth will reject the callback "
+                    "(redirect_uri_mismatch) and login will fail."
+                )
+        if config.oauth2.enabled and not config.oauth2.owner_discord_ids:
+            warnings.append("OAuth enabled but BARK_OWNER_DISCORD_IDS is empty")
+    else:
+        warnings.append("OAuth is disabled — the dashboard runs public (no login)")
+
+    if pub and redirect and pub != redirect.rsplit("/auth/callback", 1)[0].rstrip("/"):
+        warnings.append(
+            f"public_url ({pub}) does not match the host of redirect_uri ({redirect})"
+        )
+    return warnings
+
+
 def build_diagnostics_report() -> dict:
     """Gather everything into a structured (redacted) diagnostic bundle."""
     root = repo_root()
@@ -322,6 +360,7 @@ def build_diagnostics_report() -> dict:
             "disk_total_bytes": disk_total,
         },
         "config": _redacted_config(),
+        "config_warnings": _config_warnings(),
         "intents": dict(_INTENTS),
         "git": {
             "update_remote": config.instance.update_remote,
@@ -532,6 +571,12 @@ def render_report(report: dict) -> str:
     lines.append("[Config (redacted)]")
     for key, value in report["config"].items():
         lines.append(f"  {key}: {value}")
+    warnings = report.get("config_warnings") or []
+    if warnings:
+        lines.append("")
+        lines.append("[Config warnings]")
+        for w in warnings:
+            lines.append(f"  ⚠ {w}")
     lines.append("")
     lines.append("[Intents requested]")
     for name, on in report["intents"].items():
