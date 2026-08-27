@@ -278,3 +278,39 @@ async def test_diagnostics_endpoint_downloads_plaintext_report(app):
     assert 'filename="bark-diagnostics-' in response.headers.get("content-disposition", "")
     assert "Bark diagnostic report" in response.text
     assert "[Config (redacted)]" in response.text
+
+
+def _session_cookie_with_role(user_id: str, role: str) -> str:
+    session = {"user": {"id": user_id, "username": "Auditor"}, "role": role}
+    payload = base64.b64encode(json.dumps(session).encode("utf-8"))
+    return TimestampSigner("test_secret_key").sign(payload).decode("utf-8")
+
+
+@pytest.mark.asyncio
+async def test_instance_owner_with_non_admin_session_can_update(app, monkeypatch):
+    """Regression: an instance owner who isn't a Discord server admin (session
+    role below admin) must still be able to update — the guild mutation
+    middleware used to 403 instance routes because it mapped them to
+    ``guild.manage`` (admin) instead of letting the route's owner check decide.
+
+    Live report: Richard, owner of bark.richard.works, got 'You do not have
+    permission to perform this action' on Update & Restart despite being the
+    configured owner.
+    """
+    started = []
+
+    async def fake_apply(branch):
+        started.append(branch)
+
+    monkeypatch.setattr(updates_api, "apply_update_async", fake_apply)
+    # Owner is user "42"; session role is "viewer" (not a guild admin).
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies=dict(session=_session_cookie_with_role("42", "viewer")),
+    ) as client:
+        response = await client.post(
+            "/api/v1/instance/update", json={"branch": "main"}
+        )
+    assert response.status_code == 200, response.text
+    assert started == ["main"]

@@ -135,6 +135,13 @@ def mutation_capability(method: str, path: str) -> str | None:
     """
     if method.upper() in _SAFE_METHODS or not path.startswith("/api/"):
         return None
+    # Instance-management routes (updates, backups, plugins, instance settings)
+    # are owner-gated by their own handlers via ``can_manage_instance``. They are
+    # NOT guild mutations, so the fail-closed default below (guild.manage = admin)
+    # would wrongly 403 an instance owner who isn't a Discord server admin. Let
+    # the route's owner check be the single authority for these paths.
+    if path.startswith("/api/v1/instance/"):
+        return None
     path_match = _API_GUILD_MUTATION_PATH.match(path)
     if not path_match:
         return "guild.manage"
