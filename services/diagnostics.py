@@ -390,8 +390,25 @@ def build_runtime_diagnostics(bot) -> dict:
     Must be called from an async context with the live ``bot`` object (e.g.
     ``request.app.state.bot``). Failures are captured per-section so one broken
     module or guild can't blank the whole report. No secrets, tokens, or message
-    content are ever included.
+    content are ever included. Pass ``bot=None`` to get a runtime section that
+    says the bot runtime is unavailable (e.g. a dashboard process without a
+    wired bot), so the report still renders a [Live runtime] block.
     """
+    if bot is None:
+        return {
+            "runtime": {
+                "available": False,
+                "bot_user": None,
+                "bot_id": "",
+                "guild_count": 0,
+                "latency_ms": None,
+                "is_ready": None,
+                "is_connected": None,
+                "modules": {"count": 0, "items": [], "errors": []},
+                "guilds": {"count": 0, "items": [], "errors": []},
+                "multi_instance_conflicts": [],
+            }
+        }
     # Imported lazily so this module stays importable in stripped-down test/dev
     # contexts where the bot package isn't fully wired.
     modules_mgr = getattr(bot, "modules", None)
@@ -505,13 +522,33 @@ def build_runtime_diagnostics(bot) -> dict:
         "runtime": {
             "available": True,
             "bot_user": getattr(getattr(bot, "user", None), "name", None),
+            "bot_id": str(getattr(getattr(bot, "user", None), "id", "") or ""),
             "guild_count": len(guilds),
-            "latency_ms": None,
+            "latency_ms": _safe_number(getattr(bot, "latency", None)),
+            "is_ready": _safe_bool(getattr(bot, "is_ready", None)),
+            "is_connected": _safe_bool(getattr(bot, "is_connected", None)),
             "modules": modules_section,
             "guilds": guilds_section,
             "multi_instance_conflicts": multi_instance,
         }
     }
+
+
+def _safe_bool(fn) -> bool | None:
+    """Call a bot predicate safely; None on any failure (bot not fully wired)."""
+    try:
+        return bool(fn()) if callable(fn) else None
+    except Exception:
+        return None
+
+
+def _safe_number(value) -> int | float | None:
+    """Return a numeric value if sensible, else None (e.g. bot not connected)."""
+    try:
+        v = float(value)
+        return int(v) if v.is_integer() else round(v, 3)
+    except (TypeError, ValueError):
+        return None
 
 
 def render_report(report: dict) -> str:
@@ -613,8 +650,22 @@ def render_report(report: dict) -> str:
     runtime = report.get("runtime") if isinstance(report.get("runtime"), dict) else None
     if runtime is not None:
         lines.append("[Live runtime]")
-        lines.append(f"  bot user      : {runtime.get('bot_user', '(unknown)')}")
+        if runtime.get("available") is False:
+            lines.append("  ⚠ bot runtime unavailable — no bot is wired to this dashboard")
+            lines.append("    (modules/guilds not enumerated; bot may not be running)")
+        lines.append(f"  bot user      : {runtime.get('bot_user', '(unknown)')} (id {runtime.get('bot_id', '')})")
+        ready = runtime.get("is_ready")
+        connected = runtime.get("is_connected")
+        lines.append(f"  connected     : {('yes' if ready else 'no') if ready is not None else '(unknown)'}")
+        if connected is not None:
+            lines.append(f"  gateway       : {'connected' if connected else 'DISCONNECTED'}")
+        latency = runtime.get("latency_ms")
+        if latency is not None:
+            lines.append(f"  latency       : {latency} ms")
         lines.append(f"  guild count   : {runtime.get('guild_count', 0)}")
+        if ready is False or connected is False:
+            lines.append("  ⚠ BOT IS NOT CONNECTED — no events are being processed; "
+                         "modules cannot post or score. Check the token/intents on Discord.")
         lines.append("")
         lines.append("[Modules]")
         mods = runtime.get("modules", {})

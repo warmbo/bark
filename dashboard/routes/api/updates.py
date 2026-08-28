@@ -106,12 +106,15 @@ async def instance_diagnostics(request: Request):
         return api_error("Owner access required", status_code=403)
     report = await asyncio.to_thread(build_diagnostics_report)
     bot = getattr(request.app.state, "bot", None)
-    if bot is not None:
-        try:
-            runtime = await build_runtime_diagnostics(bot)
-            report.update(runtime)
-        except Exception as exc:  # runtime is best-effort; never break the report
-            logger.warning("build_runtime_diagnostics failed: %s", exc)
+    # Always include a [Live runtime] block — even when the bot isn't wired
+    # (e.g. a dashboard-only process or Termux), so a pasted report shows the
+    # bot connection status / "runtime unavailable" rather than silently
+    # omitting the module+guild diagnostics.
+    try:
+        runtime = await build_runtime_diagnostics(bot)
+        report.update(runtime)
+    except Exception as exc:  # runtime is best-effort; never break the report
+        logger.warning("build_runtime_diagnostics failed: %s", exc)
     text = render_report(report)
     version = report["bark"]["version"]
     return Response(

@@ -283,6 +283,18 @@ class ReputationModule(BarkModule):
 
         # Showoff channel reachability + bot permission gaps.
         issues: list[str] = []
+        # Config drift: module enabled but every scoring source turned off means
+        # no points will ever accrue — a silent "reputation isn't working".
+        try:
+            sources = info.get("scoring_sources") or {}
+            if isinstance(sources, dict) and sources and not any(sources.values()):
+                issues.append(
+                    "all scoring sources are disabled — no reputation points "
+                    "can be earned (check enabled_sources)"
+                )
+        except Exception:
+            pass
+
         try:
             showoff_id = (cfg or {}).get("showoff_channel_id")
             guild = getattr(getattr(self.ctx, "bot", None), "get_guild", lambda _g: None)(guild_id)

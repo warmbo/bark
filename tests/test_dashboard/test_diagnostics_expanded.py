@@ -323,3 +323,80 @@ def test_reputation_diagnose_flags_bot_cannot_send_to_showoff(monkeypatch):
     result = asyncio.run(module.diagnose(1))
     assert result["showoff_channel"]["bot_can_send"] is False
     assert any("cannot send messages" in i for i in result["issues"])
+
+
+def test_reputation_diagnose_flags_all_sources_disabled(monkeypatch):
+    """When every scoring source is off, diagnose() flags the config drift so
+    'reputation isn't working' is explained (no points can accrue)."""
+    import asyncio
+
+    from modules.reputation.module import ReputationModule
+    from services.bark_context import BarkContext
+
+    our = _fake_bot_user(111, "Bark", bot=True)
+    guild = _fake_guild(1, "Clean Server", 50, "9", [our])
+    bot = SimpleNamespace(
+        user=our,
+        guilds=[guild],
+        get_guild=lambda gid: guild if int(gid) == 1 else None,
+        modules=SimpleNamespace(should_run_globally=lambda n: True),
+    )
+    ctx = BarkContext(bot, SimpleNamespace())
+    module = ReputationModule(ctx)
+
+    async def _cfg(name, gid):
+        return {
+            "leaderboard_size": 10,
+            "enabled_sources": {"messages": False, "reactions": False, "voice": False},
+            "showoff_channel_id": "",
+        }
+
+    monkeypatch.setattr(ctx, "get_module_config", _cfg)
+    result = asyncio.run(module.diagnose(1))
+    assert any("scoring sources are disabled" in i for i in result["issues"])
+
+
+def test_runtime_diagnostics_handles_none_bot():
+    """A report must still render a [Live runtime] block when no bot is wired."""
+    report = build_runtime_diagnostics(None)
+    rt = report["runtime"]
+    assert rt["available"] is False
+    assert rt["guild_count"] == 0
+    # Render a full-shaped report with the runtime.
+    full = {
+        "bark": {"version": "0.2.1", "commit": "abc", "branch": "main", "update_channel": "stable"},
+        "environment": {
+            "platform": "Linux", "machine": "x86_64", "python_version": "3.13",
+            "hostname": "host", "install_dir": "/x", "install_method": "manual",
+            "systemd_active": False, "tmp_writable": True,
+            "disk_free_bytes": 1024, "disk_total_bytes": 2048,
+        },
+        "config": {"dashboard_host": "127.0.0.1", "oauth_enabled": "False"},
+        "intents": {"message_content": True},
+        "git": {"update_remote": "github", "stable_branch": "main", "remotes": [], "refs": {}},
+        "update": {"last_check_error": "", "log_tail": []},
+        "logs": {"log_path": "", "bark_log_tail": []},
+        **report,
+    }
+    text = render_report(full)
+    assert "[Live runtime]" in text
+    assert "bot runtime unavailable" in text
+
+
+def test_runtime_diagnostics_reports_bot_connection_status():
+    """The runtime section surfaces connection state so a pasted report shows
+    whether the bot is online (which gates whether modules can post/score)."""
+    bot = SimpleNamespace(
+        user=SimpleNamespace(id=111, name="Bark"),
+        guilds=[],
+        modules=SimpleNamespace(get_all_modules=lambda: {}),
+        is_ready=lambda: False,
+        is_connected=lambda: False,
+        latency=12.3,
+    )
+    report = build_runtime_diagnostics(bot)
+    rt = report["runtime"]
+    assert rt["is_ready"] is False
+    assert rt["is_connected"] is False
+    assert rt["latency_ms"] == 12.3
+    assert rt["bot_id"] == "111"
