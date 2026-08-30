@@ -51,7 +51,11 @@ class PermissionService:
         # rebrand the server's header.
         "dashboard.banner": "admin",
         # Moderation work is available to moderators; destructive case removal
-        # and all configuration remain administrator-only.
+        # and all configuration remain administrator-only. Viewing records must
+        # be at least as permissive as creating them — a moderator who can warn
+        # must be able to open the case list (moderation.view was undeclared and
+        # fell back to admin, locking moderators out of reads they need).
+        "moderation.view": "moderator",
         "moderation.warn": "moderator",
         "moderation.timeout": "moderator",
         "moderation.kick": "moderator",
