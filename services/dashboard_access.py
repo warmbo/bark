@@ -447,18 +447,24 @@ def build_bot_invite_url(client_id: str, guild_id: str) -> str:
     the UI surfaces: the user-facing invite link is always the branded
     ``{public_url}/invite`` (see ``build_guild_catalog`` and
     ``config.dashboard.invite_url``), which resolves here via the /invite page.
+
+    ``guild_id`` is optional: when provided the install targets that server and
+    ``disable_guild_select`` is set so Discord doesn't ask which server. When
+    empty (the generic /invite link), ``disable_guild_select`` MUST be omitted —
+    otherwise Discord gets contradictory params (skip the picker but no guild to
+    target) and the install fails.
     """
     if not client_id:
         return ""
-    query = urllib.parse.urlencode(
-        {
-            "client_id": client_id,
-            "scope": "bot applications.commands",
-            "permissions": "8",
-            "guild_id": guild_id,
-            "disable_guild_select": "true",
-        }
-    )
+    params = {
+        "client_id": client_id,
+        "scope": "bot applications.commands",
+        "permissions": "8",
+    }
+    if guild_id:
+        params["guild_id"] = guild_id
+        params["disable_guild_select"] = "true"
+    query = urllib.parse.urlencode(params)
     return f"https://discord.com/oauth2/authorize?{query}"
 
 
