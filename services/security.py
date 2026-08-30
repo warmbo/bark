@@ -509,14 +509,22 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
 
 def _apply_security_headers(response: Response, config) -> None:
-    """Harden every response with CSP and related security headers."""
+    """Harden every response with CSP and related security headers.
+
+    Fonts are self-hosted and no page loads scripts/styles from external CDNs,
+    so the CSP allows none of them (no unpkg/googleapis/fonts allowances) —
+    that removes an entire class of supply-chain / XSS-via-CDN attack surface.
+    ``cdn.discordapp.com`` stays for avatars/banners/emojis and ``ws:``/``wss:``
+    for the realtime bridge. ``'unsafe-inline'`` is kept only because the
+    dashboard uses inline template scripts + inline styles (self-hosted).
+    """
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://unpkg.com https://*.googleapis.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; "
         "img-src 'self' https://cdn.discordapp.com data:; "
-        "connect-src 'self' ws: wss: https://unpkg.com; "
+        "connect-src 'self' ws: wss:; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self'"

@@ -37,7 +37,7 @@
             <form id="setup-form">
                 {{ input_field('token', 'Discord bot token', type='password', id='setup-token', placeholder='MTEz...xxxx.yyyy-zzzz', description='From the Discord Developer Portal → your application → Bot → Reset Token.', required=true, autocomplete='off') }}
 
-                {{ input_field('public_url', 'Public dashboard URL', type='url', value=public_url, id='setup-public-url', placeholder='https://bark.example.com', description='The address users will open to reach this dashboard.', required=true) }}
+                {{ input_field('public_url', 'Public dashboard URL', type='url', value=public_url, id='setup-public-url', placeholder='https://bark.example.com', description='The address users open to reach this dashboard. Use https:// when the dashboard is served over HTTPS (required for Discord OAuth on production).', required=true) }}
 
                 <hr class="setup-divider">
 

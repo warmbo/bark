@@ -8,6 +8,7 @@ from services.security import (
     AuthMiddleware,
     RateLimiter,
     SecurityMiddleware,
+    _apply_security_headers,
     _module_action_from_path,
     mutation_capability,
     rate_limit_identity,
@@ -305,3 +306,31 @@ async def test_authenticated_request_renews_sliding_session(monkeypatch):
     unsigned = TimestampSigner("test-secret").unsign(raw, max_age=3600)
     decoded = json.loads(base64.b64decode(unsigned))
     assert "_renewed" in decoded
+
+
+def test_csp_allows_no_unused_external_cdns():
+    """The CSP must not allow unused external script/style/font CDNs (unpkg,
+    googleapis, fonts). Removing them eliminates a supply-chain / XSS-via-CDN
+    class of risk since no page loads from them."""
+    from types import SimpleNamespace
+
+    from fastapi.responses import Response
+
+    resp = Response()
+    cfg = SimpleNamespace(dashboard=SimpleNamespace(secure_cookies=False))
+    _apply_security_headers(resp, cfg)
+    csp = resp.headers["Content-Security-Policy"]
+
+    # Must NOT allow the stale external CDNs.
+    for forbidden in ("unpkg.com", "googleapis.com", "fonts.gstatic.com", "fonts.googleapis.com"):
+        assert forbidden not in csp, f"CSP still allows unused CDN: {forbidden}"
+
+    # Must keep self + discord CDN (avatars/banners/emojis) + realtime ws.
+    assert "default-src 'self'" in csp
+    assert "https://cdn.discordapp.com" in csp
+    assert "ws:" in csp and "wss:" in csp
+    assert "frame-ancestors 'none'" in csp
+    # Related hardening headers.
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    assert resp.headers["X-Frame-Options"] == "DENY"
+
