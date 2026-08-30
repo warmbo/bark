@@ -32,6 +32,12 @@ _OPTION_LABELS: dict[AppCommandOptionType, str] = {
     AppCommandOptionType.attachment: "attachment",
 }
 
+# Moderation-record commands that expose *other members'* disciplinary history
+# (warning reasons, moderator IDs, case targets). These stay member-readable
+# but must never be broadcast publicly — they have no hide/public toggle.
+_ALWAYS_PRIVATE_PATHS = {"cases", "warnings"}
+
+
 # A Discord Permissions bitfield -> the role tier that can run the command.
 _MODERATOR_BITS = (
     "moderate_members",
@@ -92,6 +98,7 @@ def _command_dict(leaf: Any) -> dict[str, Any]:
         "description": getattr(cmd, "description", "") if cmd else "",
         "parameters": [_parameter_dict(p) for p in params],
         "required_role": _required_role(default_permissions),
+        "always_private": getattr(leaf, "path", "") in _ALWAYS_PRIVATE_PATHS,
     }
 
 

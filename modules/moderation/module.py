@@ -633,22 +633,16 @@ class ModerationModule(BarkModule):
 
     def _make_cases_command(self):
         @discord.app_commands.command(name="cases", description="View recent moderation cases")
-        @discord.app_commands.describe(
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
-        )
-        async def cases(interaction: discord.Interaction, limit: int = 10, hide: bool = True):
-            await self._cmd_cases(interaction, limit, hide)
+        async def cases(interaction: discord.Interaction, limit: int = 10):
+            await self._cmd_cases(interaction, limit)
 
         return cases
 
     def _make_warnings_command(self):
         @discord.app_commands.command(name="warnings", description="View warnings for a member")
-        @discord.app_commands.describe(
-            member="The member to check",
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone.",
-        )
-        async def warnings(interaction: discord.Interaction, member: discord.Member, hide: bool = True):
-            await self._cmd_warnings(interaction, member, hide)
+        @discord.app_commands.describe(member="The member to check")
+        async def warnings(interaction: discord.Interaction, member: discord.Member):
+            await self._cmd_warnings(interaction, member)
 
         return warnings
 
@@ -1869,10 +1863,10 @@ class ModerationModule(BarkModule):
         )
         await interaction.followup.send(f"✅ Unbanned {user.mention} | Case #{case}")
 
-    async def _cmd_cases(self, interaction: discord.Interaction, limit: int, hide: bool = True) -> None:
+    async def _cmd_cases(self, interaction: discord.Interaction, limit: int) -> None:
         if not interaction.guild:
             return
-        await interaction.response.defer(ephemeral=hide)
+        await interaction.response.defer(ephemeral=True)
         from sqlalchemy import desc, select
 
         from database.engine import session_scope
@@ -1895,12 +1889,12 @@ class ModerationModule(BarkModule):
                     value=f"**Target:** {c.target_tag}\n**Mod:** {c.moderator_tag}\n**Reason:** {c.reason or 'No reason'}\n<t:{int(c.created_at.timestamp())}:R>",
                     inline=False,
                 )
-            await interaction.followup.send(embed=embed, ephemeral=hide)
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
-    async def _cmd_warnings(self, interaction: discord.Interaction, member: discord.Member, hide: bool = True) -> None:
+    async def _cmd_warnings(self, interaction: discord.Interaction, member: discord.Member) -> None:
         if not interaction.guild:
             return
-        await interaction.response.defer(ephemeral=hide)
+        await interaction.response.defer(ephemeral=True)
         from sqlalchemy import desc, select
 
         from database.engine import session_scope
@@ -1931,7 +1925,7 @@ class ModerationModule(BarkModule):
                     value=f"**Reason:** {w.reason}\n**By:** <@{w.moderator_id}>\n<t:{int(w.created_at.timestamp())}:R>",
                     inline=False,
                 )
-            await interaction.followup.send(embed=embed, ephemeral=hide)
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def _cmd_clearwarn(self, interaction: discord.Interaction, warning_id: int) -> None:
         if not interaction.guild:

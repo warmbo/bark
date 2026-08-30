@@ -190,6 +190,18 @@ async def test_docs_command_info_command_advertises_public_visibility(client):
 
 
 @pytest.mark.asyncio
+async def test_docs_command_moderation_records_are_always_private(client):
+    """Cases/warnings expose other members' records and must be documented as
+    always-private (never advertise a public-broadcast toggle)."""
+    resp = await client.get("/docs/commands/cases")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "always private" in body
+    # Must not advertise the public-toggle syntax.
+    assert "post it in the channel for everyone" not in body
+
+
+@pytest.mark.asyncio
 async def test_docs_settings_page_lists_settings_by_module(client):
     resp = await client.get("/docs/settings")
     assert resp.status_code == 200

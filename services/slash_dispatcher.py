@@ -405,7 +405,7 @@ class SlashDispatcher:
             f"`/{self._group_name()} <command> [args...]`, or type a module name "
             f"(e.g. `{self._group_name()} moderation`) for its menu. For details "
             f"on any command, use `/{self._group_name()} help <command>`.\n\n"
-            "Info commands (help, info, leaderboard, reputation, cases…) are private "
+            "Info commands (help, info, leaderboard, reputation…) are private "
             "by default — post them for everyone by adding `false` as the last "
             f"argument, e.g. `/{self._group_name()} leaderboard false`."
         )

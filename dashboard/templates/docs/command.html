@@ -12,7 +12,9 @@
 
 <h2>Usage</h2>
 <p><code style="font-size:14px">/{{ group }} {{ command.path }}{% for p in command.parameters %} {% if p.required %}&lt;{{ p.name }}&gt;{% else %}[{{ p.name }}]{% endif %}{% endfor %}</code></p>
-{% if command.required_role == 'Anyone' %}
+{% if command.always_private %}
+<p style="margin-top:10px">This command shows <strong>other members' moderation records</strong> (warning reasons, moderator IDs, case targets). It is available to members but is <strong>always private</strong> — the response is never posted to the channel for everyone.</p>
+{% elif command.required_role == 'Anyone' %}
 <p style="margin-top:10px">This is an <strong>info command</strong> — it only shows information. It's private by default; add <code>false</code> as the last argument to post it in the channel for everyone, e.g. <code>/{{ group }} {{ command.path }} false</code>.</p>
 {% else %}
 <p style="margin-top:10px">This command changes server state and is restricted to the role shown above.</p>
