@@ -1,4 +1,4 @@
-{% extends "docs/base.html" %}
+{% extends docs_base %}
 {% block title %}{{ module.name | replace('_', ' ') | title }} — Bark Docs{% endblock %}
 {% block crumb %}<a href="/docs">Docs</a><span>/</span><a href="/docs/modules">Modules</a><span>/</span>{{ module.name | title }}{% endblock %}
 {% block content %}

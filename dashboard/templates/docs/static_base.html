@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Bark Docs{% endblock %}</title>
+<meta name="description" content="{% block description %}Bark documentation — every command, setting, and module.{% endblock %}">
+<meta name="robots" content="index, follow">
+<meta property="og:site_name" content="Bark">
+<meta property="og:title" content="{% block og_title %}Bark Docs{% endblock %}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://bark.warx.org/docs/">
+<meta property="og:image" content="https://bark.warx.org/assets/bark-og.png">
+<meta name="theme-color" content="#3b82f6">
+<link rel="icon" type="image/png" href="{{ base }}bark-avatar.png">
+<link rel="stylesheet" href="{{ base }}docs.css?v=1">
+</head>
+<body>
+<header class="docs-header">
+  <div class="docs-header-inner">
+    <a class="docs-brand" href="https://bark.warx.org/"><img src="{{ base }}bark-avatar.png" alt="" width="30" height="30"><span>Bark <small>Docs</small></span></a>
+    <nav class="docs-nav" aria-label="Documentation sections">
+      <a href="{{ base }}index.html" class="{{ 'active' if active == 'home' else '' }}">Overview</a>
+      <a href="{{ base }}modules.html" class="{{ 'active' if active == 'modules' else '' }}">Modules</a>
+      <a href="{{ base }}commands.html" class="{{ 'active' if active == 'commands' else '' }}">Commands</a>
+      <a href="{{ base }}settings.html" class="{{ 'active' if active == 'settings' else '' }}">Settings</a>
+      <a href="{{ base }}permissions.html" class="{{ 'active' if active == 'permissions' else '' }}">Permissions</a>
+    </nav>
+    <a class="docs-home" href="https://bark.warx.org/">← Back to bark.warx.org</a>
+  </div>
+</header>
+<main class="docs-layout">
+  <div class="docs-crumb">{% block crumb %}Docs{% endblock %}</div>
+  {% block content %}{% endblock %}
+</main>
+<footer class="docs-footer">
+  <p>Bark — self-hosted Discord server management · <a href="https://bark.warx.org/">bark.warx.org</a> · <a href="https://github.com/warmbo/bark">GitHub</a></p>
+</footer>
+</body>
+</html>

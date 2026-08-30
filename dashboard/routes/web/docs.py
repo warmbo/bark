@@ -25,6 +25,7 @@ def _ctx(request: Request) -> dict:
         "config": config,
         "public_url": docs_registry.public_url(config),
         "group": docs_registry.command_group_name(manager),
+        "docs_base": "docs/base.html",
         "modules": docs_registry.collect_modules(manager),
         "commands": docs_registry.collect_commands(manager),
         "settings": docs_registry.collect_settings(manager),
