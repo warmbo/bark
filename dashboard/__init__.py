@@ -265,6 +265,22 @@ def create_app(bot: BarkBot) -> DashboardApp:
             },
         )
 
+    @app.get("/privacy", response_class=HTMLResponse)
+    async def privacy(request: Request):
+        """Public Privacy Policy — required for Discord app verification."""
+        tmpl = request.app.state.templates
+        return tmpl.TemplateResponse(
+            request, "pages/privacy.html", {"config": config}
+        )
+
+    @app.get("/terms", response_class=HTMLResponse)
+    async def terms(request: Request):
+        """Public Terms of Service — required for Discord app verification."""
+        tmpl = request.app.state.templates
+        return tmpl.TemplateResponse(
+            request, "pages/terms.html", {"config": config}
+        )
+
     @app.get("/")
     async def root(request: Request):
         """Serve the Bark landing/welcome page with OG tags."""

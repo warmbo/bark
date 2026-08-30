@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service — Bark</title>
+    <meta name="description" content="Bark Terms of Service.">
+    <meta name="robots" content="index, follow">
+    <meta property="og:site_name" content="Bark">
+    <meta property="og:title" content="Terms of Service — Bark">
+    <meta property="og:description" content="The terms governing use of the Bark Discord bot and dashboard.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ config.dashboard.public_url }}/terms">
+    <meta property="og:image" content="{{ config.dashboard.public_url }}/static/img/bark-og.png">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="icon" type="image/png" href="/static/img/bark-avatar.png">
+    <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <style>
+        @font-face { font-family:'Inter'; src:url('/static/fonts/inter-latin.woff2') format('woff2'); font-style:normal; font-weight:100 900; font-display:swap; }
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        :root {
+            --bg:#080b12; --primary:oklch(60% .07 250); --primary-foreground:oklch(98% .01 82);
+            --text-primary:#ffffff; --text-secondary:#d6d6dd; --border:rgba(96,165,250,.28);
+            --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        }
+        body { font-family:var(--font-sans); background:var(--bg); color:var(--text-primary); min-height:100vh; padding:48px 24px; }
+        .wrap { max-width:760px; margin:0 auto; }
+        a { color:var(--primary-foreground); }
+        h1 { font-size:30px; font-weight:700; margin-bottom:6px; }
+        .updated { color:var(--text-secondary); font-size:14px; margin-bottom:28px; }
+        h2 { font-size:20px; font-weight:650; margin:28px 0 10px; }
+        p, li { color:var(--text-secondary); font-size:15px; line-height:1.6; margin-bottom:10px; }
+        ul { padding-left:22px; margin-bottom:14px; }
+        strong { color:var(--text-primary); }
+        .back { display:inline-block; margin-top:28px; color:var(--text-secondary); text-decoration:underline; }
+    </style>
+</head>
+<body>
+    <main class="wrap">
+        <h1>Bark Terms of Service</h1>
+        <p class="updated">Last updated: 2026-08-29</p>
+
+        <p>These Terms of Service ("Terms") govern your use of the Bark Discord bot and its dashboard ("Bark"). By adding Bark to a server or using its dashboard, you agree to these Terms. The person or organization running a Bark instance ("instance operator") may provide additional or differing terms for that instance.</p>
+
+        <h2>1. Acceptance</h2>
+        <p>By using Bark, you confirm that you are at least 13 years old and that you agree to these Terms and to Discord's Terms of Service.</p>
+
+        <h2>2. License to use</h2>
+        <p>Bark is provided free of charge for your own lawful use, subject to these Terms. You may not resell, sublicense, or misuse Bark or its underlying software. Bark is open source under the MIT License; you may self-host it in accordance with that license.</p>
+
+        <h2>3. Acceptable use</h2>
+        <p>You agree not to use Bark to:</p>
+        <ul>
+            <li>Violate Discord's Terms of Service or Community Guidelines.</li>
+            <li>Harass, abuse, or harm other individuals.</li>
+            <li>Engage in or facilitate illegal activity.</li>
+            <li>Attempt to disrupt, overload, or gain unauthorized access to any system.</li>
+        </ul>
+
+        <h2>4. Availability</h2>
+        <p>Bark is provided on an "as is" and "as available" basis. We do not guarantee uninterrupted or error-free operation. Downtime may occur for maintenance, updates, or failures. You acknowledge that the instance operator is responsible for the continued operation of any particular instance.</p>
+
+        <h2>5. Disclaimer of warranties</h2>
+        <p>To the maximum extent permitted by law, Bark is provided without warranties of any kind, express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
+
+        <h2>6. Limitation of liability</h2>
+        <p>To the maximum extent permitted by law, neither the Bark maintainers nor any instance operator shall be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or data, arising out of or in connection with your use of Bark, even if advised of the possibility of such damages.</p>
+
+        <h2>7. Changes to these terms</h2>
+        <p>We may update these Terms from time to time. Continued use of Bark after changes take effect constitutes acceptance of the revised Terms.</p>
+
+        <h2>8. Governing law</h2>
+        <p>These Terms are governed by the laws of the jurisdiction in which the instance operator is located, without regard to conflict-of-law principles.</p>
+
+        <h2>9. Contact</h2>
+        <p>For questions about these Terms, contact the instance operator running the Bark instance you use.</p>
+
+        <a class="back" href="/">← Back to Bark</a>
+    </main>
+</body>
+</html>

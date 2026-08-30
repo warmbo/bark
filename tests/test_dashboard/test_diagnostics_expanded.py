@@ -400,3 +400,34 @@ def test_runtime_diagnostics_reports_bot_connection_status():
     assert rt["is_connected"] is False
     assert rt["latency_ms"] == 12.3
     assert rt["bot_id"] == "111"
+
+
+@pytest.mark.asyncio
+async def test_privacy_and_terms_pages_are_public(db):
+    """Privacy/Terms pages (needed for Discord verification) are reachable
+    without authentication."""
+    from dashboard import create_app
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from httpx import ASGITransport, AsyncClient
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+        await session.commit()
+
+    bot = SimpleNamespace(
+        user=SimpleNamespace(id=111, name="Bark", bot=True),
+        guilds=[],
+        modules=SimpleNamespace(event_bus=SimpleNamespace(), get_all_modules=lambda: {}),
+        is_ready=lambda: True,
+        is_connected=lambda: True,
+    )
+    app = create_app(bot)
+    transport = ASGITransport(app=app.app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        privacy = await client.get("/privacy")
+        terms = await client.get("/terms")
+    assert privacy.status_code == 200
+    assert "Bark Privacy Policy" in privacy.text
+    assert terms.status_code == 200
+    assert "Bark Terms of Service" in terms.text

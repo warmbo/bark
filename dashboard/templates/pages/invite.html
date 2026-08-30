@@ -112,6 +112,21 @@
         }
         .btn-secondary:hover { border-color: var(--border-hover); color: var(--text-primary); background: transparent; }
         .hint { margin-top: 18px; font-size: 15px; color: #8a8a96; }
+        .verify-note {
+            margin-top: 20px;
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            background: rgba(37, 99, 235, 0.08);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--primary);
+        }
+        .verify-note strong { color: var(--text-primary); }
+        .legal-links { margin-top: 18px; font-size: 13px; color: #8a8a96; }
+        .legal-links a { color: var(--text-secondary); text-decoration: underline; }
+        .legal-links a:hover { color: var(--text-primary); }
     </style>
 </head>
 <body>
@@ -122,10 +137,21 @@
         {% if invite_url %}
         <a class="btn" href="{{ invite_url }}">Continue to Discord</a>
         <p class="hint">You should be redirected automatically.</p>
+        <div class="verify-note">
+            <strong>Can't add Bark?</strong> Bark uses Discord's privileged intents and is
+            not yet a Discord-verified app, so Discord may require a
+            <strong>phone-verified account</strong> to install it — even for a server
+            owner. If you see "You need to verify your account," verify your phone in
+            Discord Settings → My Account, or have a verified manager add the bot once
+            and you can still configure everything here afterwards.
+        </div>
         {% else %}
         <p>No invite link is configured on this instance yet. Ask the instance owner to set one up in Settings → Instance Access.</p>
         <a class="btn btn-secondary" href="/">Back to Bark</a>
         {% endif %}
+        <p class="legal-links">
+            <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a>
+        </p>
     </main>
 </body>
 </html>

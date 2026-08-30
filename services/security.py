@@ -15,6 +15,8 @@ from starlette.responses import RedirectResponse
 PUBLIC_PATHS = {
     "/",
     "/invite",
+    "/privacy",
+    "/terms",
     "/auth/login",
     "/auth/callback",
     "/auth/logout",
