@@ -26,7 +26,7 @@ from services.dashboard_access import (
     replace_user_guild_access,
     resolve_dashboard_role,
 )
-from services.instance_invites import authorize_instance_user
+from services.instance_invites import authorize_instance_user, redeem_instance_invite
 
 logger = logging.getLogger("bark.dashboard.auth")
 
@@ -58,6 +58,7 @@ AUTH_ERROR_MESSAGES = {
     "user_fetch_failed": "Couldn't load your Discord profile — please try again.",
     "guild_fetch_failed": "Couldn't load your servers — please try again.",
     "invite_required": "This Bark instance is invite-only. Ask the owner for an invite link.",
+    "invite_invalid": "This invite link is invalid, expired, revoked, or has already been used.",
     "no_shared_guild": "You need to be a member of a server where Bark is installed to use the dashboard.",
     "oauth_required": "Sign-in isn't set up on this instance yet.",
 }
@@ -218,11 +219,32 @@ async def callback(
         is_owner = str(user["id"]) in {str(oid) for oid in config.oauth2.owner_discord_ids}
         invite_token = request.session.pop("instance_invite_token", None)
         shared_guild_ids = {str(g.get("id")) for g in guilds} & bot_guild_ids
-        if not is_owner and not shared_guild_ids and not await authorize_instance_user(
-            session,
-            discord_user_id=user["id"],
-            invite_token=invite_token,
-        ):
+
+        # A staged named invite must be consumed whenever this OAuth callback
+        # succeeds. Previously it was evaluated only as the final branch of the
+        # admission condition below. Python short-circuiting therefore skipped
+        # redemption for anyone who was already an instance owner or shared a
+        # guild with Bark: login worked, but the invite stayed "Pending" and no
+        # durable InstanceAccess grant was created (observed with Virulan).
+        invite_authorized = False
+        if invite_token:
+            invite_authorized = (
+                await redeem_instance_invite(
+                    session,
+                    token=invite_token,
+                    discord_user_id=user["id"],
+                )
+                is not None
+            )
+        if not invite_authorized:
+            # Existing durable grants remain a valid admission path, but must
+            # not short-circuit consumption of a newly presented one-time link.
+            invite_authorized = await authorize_instance_user(
+                session,
+                discord_user_id=user["id"],
+            )
+
+        if not is_owner and not shared_guild_ids and not invite_authorized:
             request.session.clear()
             logger.warning(
                 "Rejected dashboard login for Discord user %s: not a member of any Bark server",
@@ -302,11 +324,26 @@ async def callback(
 
 @router.get("/share/{token}")
 async def accept_share_link(request: Request, token: str):
-    """Stage a one-time invite token until the recipient completes Discord OAuth."""
+    """Redeem now for a signed-in recipient, otherwise stage through OAuth."""
     if not _oauth_enabled():
         return _auth_error_redirect("oauth_required")
+
+    user = request.session.get("user")
+    if user:
+        # /auth/login intentionally short-circuits an authenticated session, so
+        # staging the token would strand it forever. Consume it here instead.
+        async with session_scope() as session:
+            access = await redeem_instance_invite(
+                session,
+                token=token,
+                discord_user_id=user["id"],
+            )
+        if access is None:
+            return _auth_error_redirect("invite_invalid")
+        return RedirectResponse(url="/dashboard", status_code=302)
+
     request.session["instance_invite_token"] = token
-    return RedirectResponse(url="/auth/login")
+    return RedirectResponse(url="/auth/login", status_code=302)
 
 
 @router.post("/logout")
