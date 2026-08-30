@@ -174,3 +174,80 @@ async def test_member_and_voice_events_persist_to_shared_audit_store():
     # Voice join carries the channel name in details for the log view.
     voice_call = next(c for c in calls if c.args[1] == "voice_join")
     assert voice_call.kwargs.get("details") == {"channel": "#hangout"}
+
+
+@pytest.mark.asyncio
+async def test_noop_same_channel_move_is_suppressed():
+    """A voice-state event with from == to channel (a no-op move) must not be
+    logged — it is not a real transition and only contributes to spam."""
+    guild_id = 221627370375872512
+    channel = SimpleNamespace(id=200, name="hangout", mention="<#200>")
+    guild = SimpleNamespace(id=guild_id)
+    member = SimpleNamespace(
+        id=42,
+        guild=guild,
+        mention="<@42>",
+        __str__=lambda self: "cody",
+    )
+    bot = MagicMock()
+    bot.get_guild.return_value = guild
+    ctx = BarkContext(bot, EventBus())
+    ctx.get_module_config = AsyncMock(return_value={})
+    module = LoggingModule(ctx)
+    module._get_channel = AsyncMock(return_value=SimpleNamespace())
+    module._send = AsyncMock()
+
+    await module._on_voice_state(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=channel),
+        after=SimpleNamespace(channel=channel),
+    )
+
+    module._send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_rapid_duplicate_voice_events_are_debounced():
+    """Auto Voice's join->move->cleanup cycle can fire several on_voice_state
+    events for the same member within a second. Rapid duplicate transitions for
+    one member must be collapsed so a single move does not flood the log."""
+    import services.logging_voice_debounce as debounce
+
+    debounce.reset()
+    guild_id = 221627370375872512
+    guild = SimpleNamespace(id=guild_id)
+    member = SimpleNamespace(
+        id=42,
+        guild=guild,
+        mention="<@42>",
+        __str__=lambda self: "cody",
+    )
+    a = SimpleNamespace(id=100, name="hangout", mention="<#100>")
+    b = SimpleNamespace(id=200, name="afk channel", mention="<#200>")
+
+    bot = MagicMock()
+    bot.get_guild.return_value = guild
+    ctx = BarkContext(bot, EventBus())
+    ctx.get_module_config = AsyncMock(return_value={})
+    module = LoggingModule(ctx)
+    module._get_channel = AsyncMock(return_value=SimpleNamespace())
+    module._send = AsyncMock()
+
+    # A real move a -> b, followed by a rapid duplicate (same member, same
+    # transition) within the debounce window. Only the first should be logged.
+    await module._on_voice_state(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=a),
+        after=SimpleNamespace(channel=b),
+    )
+    await module._on_voice_state(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=a),
+        after=SimpleNamespace(channel=b),
+    )
+
+    module._send.assert_awaited_once()
+    debounce.reset()

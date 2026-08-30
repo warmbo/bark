@@ -590,6 +590,15 @@ class LoggingModule(BarkModule):
         )
         if before_channel is None and after_channel is None:
             return
+        # A "move" with from == to is a no-op Discord re-emit (not a real
+        # transition) — suppress it entirely so it neither clogs the audit
+        # store nor posts a pointless "Move X → X" embed.
+        if (
+            before_channel is not None
+            and after_channel is not None
+            and before_channel.id == after_channel.id
+        ):
+            return
         # Persist voice transitions to the shared audit-log store (item 7).
         if before_channel is None and after_channel is not None:
             action = "voice_join"
@@ -614,6 +623,19 @@ class LoggingModule(BarkModule):
             self._logger.exception("Error logging voice transition to audit store")
         ch = await self._get_channel(member.guild.id, "voice_state")
         if not ch:
+            return
+        # Debounce the EMBED: Auto Voice's join-to-create + move + cleanup can
+        # fire several gateway events for one real action. The audit store above
+        # still records every distinct transition, but we post only the first
+        # duplicate embed so the channel is not spammed.
+        from services.logging_voice_debounce import should_log
+
+        if not should_log(
+            guild_id=int(member.guild.id),
+            member_id=int(member.id),
+            before_channel_id=int(before_channel.id) if before_channel is not None else None,
+            after_channel_id=int(after_channel.id) if after_channel is not None else None,
+        ):
             return
         if before_channel is None and after_channel is not None:
             await self._send(
