@@ -161,7 +161,12 @@ class HelpModule(BarkModule):
                 )
             reference.add_field(
                 name="Tip",
-                value=f"Run `{prefix}help` anytime — the bot DMs you this list.",
+                value=(
+                    f"Run `{prefix}help` anytime — the bot DMs you this list. "
+                    "Text commands (`bark!…`) reply in the channel; only `help` "
+                    "uses DMs. Slash info commands stay private unless you add "
+                    "`false` as the last argument."
+                ),
                 inline=False,
             )
             reference.set_footer(text=f"Bark {self.name} v{self.version}")
@@ -213,14 +218,17 @@ class HelpModule(BarkModule):
             name="info",
             description="Show server stats: members, channels, roles, boosts, age",
         )
-        async def info_cmd(interaction: discord.Interaction):
+        @discord.app_commands.describe(
+            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+        )
+        async def info_cmd(interaction: discord.Interaction, hide: bool = True):
             guild = interaction.guild
             if guild is None:
                 await interaction.response.send_message(
                     "This command only works inside a server.", ephemeral=True
                 )
                 return
-            await interaction.response.defer(ephemeral=True)
+            await interaction.response.defer(ephemeral=hide)
             bot = self.ctx.bot
             online = sum(
                 1 for m in guild.members if getattr(m, "status", None) is not None and m.status != discord.Status.offline
@@ -268,7 +276,7 @@ class HelpModule(BarkModule):
                 inline=True,
             )
             embed.set_footer(text=f"Server ID {guild.id}")
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=hide)
 
         return info_cmd
 

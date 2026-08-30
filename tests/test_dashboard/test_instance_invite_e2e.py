@@ -195,3 +195,69 @@ async def test_named_invite_is_consumed_for_already_authenticated_recipient(db, 
         assert row is not None
         assert row.redeemed_at is not None
         assert row.redeemed_by_discord_id == "7007"
+
+
+@pytest.mark.asyncio
+async def test_revoked_access_grant_can_be_removed_by_owner(db, monkeypatch):
+    """The owner must be able to hard-remove a revoked access grant from the
+    list (there was no way to delete one before)."""
+    import config
+
+    app = _app(monkeypatch)
+    async with session_scope() as session:
+        session.add(InstanceAccess(discord_user_id="210812020075790337", role="admin"))
+        await session.flush()
+
+    owner_session = {"user": {"id": "42", "username": "Owner"}, "role": "admin"}
+    payload = base64.b64encode(json.dumps(owner_session).encode())
+    cookie = TimestampSigner(config.config.dashboard.secret_key).sign(payload).decode()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        resp = await client.delete("/api/v1/instance/access/210812020075790337/remove")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["removed"] is True
+
+    async with session_scope() as session:
+        from sqlalchemy import select
+
+        row = (
+            await session.execute(
+                select(InstanceAccess).where(
+                    InstanceAccess.discord_user_id == "210812020075790337"
+                )
+            )
+        ).scalar_one_or_none()
+    assert row is None, "revoked access grant was hard-deleted"
+
+
+@pytest.mark.asyncio
+async def test_remove_access_requires_owner_and_missing_grant_404s(db, monkeypatch):
+    import config
+
+    app = _app(monkeypatch)
+    non_owner = {"user": {"id": "999", "username": "Member"}, "role": "viewer"}
+    payload = base64.b64encode(json.dumps(non_owner).encode())
+    cookie = TimestampSigner(config.config.dashboard.secret_key).sign(payload).decode()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        denied = await client.delete("/api/v1/instance/access/210812020075790337/remove")
+        assert denied.status_code == 403
+
+    owner_session = {"user": {"id": "42", "username": "Owner"}, "role": "admin"}
+    payload = base64.b64encode(json.dumps(owner_session).encode())
+    cookie = TimestampSigner(config.config.dashboard.secret_key).sign(payload).decode()
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        missing = await client.delete("/api/v1/instance/access/nobody/remove")
+        assert missing.status_code == 404

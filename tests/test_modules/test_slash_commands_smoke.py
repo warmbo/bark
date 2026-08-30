@@ -422,3 +422,60 @@ async def test_every_bark_slash_command_responds(tree):
             assert any(command in tested for command in plugin_commands), (
                 f"missing plugin command from table: one of {plugin_commands} in {tested}"
             )
+
+
+@pytest.mark.asyncio
+async def test_authorization_policy_mutators_gated_informational_open(tree):
+    """Locks in the command authorization policy: every state-changing command
+    carries a ``default_permissions`` gate (mod/admin), while informational and
+    deliberately member-facing commands are open. Guards against a future change
+    silently opening a mutator or over-restricting an info command."""
+    bot, manager = tree
+    dispatcher = manager._dispatcher
+    perms_by_path: dict[str, object] = {
+        path: getattr(leaf.command, "default_permissions", None)
+        for path, leaf in dispatcher._registry.items()
+    }
+
+    # Mutating commands MUST be gated (any member must be denied).
+    gated = {
+        "announce",
+        "logsetup",
+        "logfiles",
+        "warn",
+        "timeout",
+        "kick",
+        "ban",
+        "unban",
+        "clearwarn",
+        "vc_kick",
+        "vc_move",
+        "vc_mute",
+        "vc_unmute",
+        "vc_deafen",
+        "vc_undeafen",
+        "voice_sessions",
+        "automod",
+    }
+    missing = [p for p in gated if perms_by_path.get(p) is None]
+    assert not missing, f"mutating commands left ungated: {missing}"
+
+    # Informational / deliberately member-facing commands MUST be open.
+    open_cmds = {
+        "help",
+        "info",
+        "roles",
+        "logstatus",
+        "reputation",
+        "leaderboard",
+        "cases",
+        "warnings",
+        "welcome",
+        "speak",
+        "thanks",
+        "voice_name",
+        "voice_limit",
+        "voice_access",
+    }
+    overgated = [p for p in open_cmds if perms_by_path.get(p) is not None]
+    assert not overgated, f"informational commands wrongly gated: {overgated}"

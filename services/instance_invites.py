@@ -164,3 +164,17 @@ async def revoke_instance_access(session: AsyncSession, discord_user_id: str) ->
     access.revoked_at = _utc_now()
     await session.flush()
     return True
+
+
+async def delete_instance_access(session: AsyncSession, discord_user_id: str) -> bool:
+    """Permanently remove an access-grant row so it stops cluttering the list.
+
+    Unlike ``revoke_instance_access`` (which deactivates an active grant and
+    leaves a "Revoked" record), this hard-deletes the row entirely — the
+    "remove from list" action for a grant that is already revoked.
+    """
+    result = await session.execute(
+        delete(InstanceAccess).where(InstanceAccess.discord_user_id == str(discord_user_id))
+    )
+    await session.flush()
+    return _affected_rows(result) == 1

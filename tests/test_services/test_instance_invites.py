@@ -7,9 +7,10 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from database.engine import session_scope
-from database.models.permissions import DashboardUser, InstanceInvite
+from database.models.permissions import DashboardUser, InstanceAccess, InstanceInvite
 from services.instance_invites import (
     create_instance_invite,
+    delete_instance_access,
     delete_instance_invite,
     is_instance_user_authorized,
     redeem_instance_invite,
@@ -165,3 +166,37 @@ async def test_delete_invite_removes_redeemed_row(db):
 async def test_delete_invite_missing_id_returns_false(db):
     async with session_scope() as session:
         assert await delete_instance_invite(session, 999999) is False
+
+
+@pytest.mark.asyncio
+async def test_delete_access_removes_revoked_grant_but_revoke_refuses(db):
+    """A revoked access grant must be removable from the list (hard delete),
+    while the soft Revoke action still refuses an already-revoked grant."""
+    async with session_scope() as session:
+        session.add(DashboardUser(discord_id="u1", username="User", role="viewer"))
+        grant = InstanceAccess(discord_user_id="u1", role="admin")
+        session.add(grant)
+        await session.flush()
+        assert await revoke_instance_access(session, "u1")
+
+    async with session_scope() as session:
+        # Revoke (soft) refuses an already-revoked grant...
+        assert not await revoke_instance_access(session, "u1")
+        # ...but remove (hard) succeeds and drops the row.
+        assert await delete_instance_access(session, "u1")
+
+    async with session_scope() as session:
+        from sqlalchemy import select
+
+        row = (
+            await session.execute(
+                select(InstanceAccess).where(InstanceAccess.discord_user_id == "u1")
+            )
+        ).scalar_one_or_none()
+    assert row is None, "hard delete removed the access grant row"
+
+
+@pytest.mark.asyncio
+async def test_delete_access_missing_user_returns_false(db):
+    async with session_scope() as session:
+        assert await delete_instance_access(session, "nobody") is False

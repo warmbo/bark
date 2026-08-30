@@ -39,7 +39,7 @@
     </script>
     {% endif %}
     <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/css/main.css?v=368">
+    <link rel="stylesheet" href="/static/css/main.css?v=369">
     {% block head %}{% endblock %}
     {% if request and request.app and request.app.state.bot is defined %}
     {% set _bot = request.app.state.bot %}
@@ -160,6 +160,9 @@
                 <div class="sidebar-footer-top">
                     <a href="https://github.com/warmbo/bark" target="_blank" rel="noopener" class="sidebar-github">
                         {{ icon("code-2", 14) }} GitHub
+                    </a>
+                    <a href="/docs" class="sidebar-github" title="Documentation">
+                        {{ icon("book-open", 14) }} Docs
                     </a>
                     <span class="sidebar-status">
                         <span class="status-dot online"></span>

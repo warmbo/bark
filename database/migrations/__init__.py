@@ -801,6 +801,39 @@ MIGRATIONS: tuple[Migration, ...] = (
         "0017_reputation_tier_purpose",
         _add_reputation_tier_purpose,
     ),
+    (
+        "0018_announcement_schedules",
+        (
+            """
+            CREATE TABLE IF NOT EXISTS announcement_schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id VARCHAR(32) NOT NULL,
+                channel_id VARCHAR(32) NOT NULL,
+                title VARCHAR(256) NOT NULL DEFAULT '',
+                message TEXT NOT NULL,
+                as_embed BOOLEAN NOT NULL DEFAULT 1,
+                embed_color VARCHAR(16) NOT NULL DEFAULT '#5865F2',
+                image_url TEXT NOT NULL DEFAULT '',
+                video_url TEXT NOT NULL DEFAULT '',
+                next_run_at DATETIME NOT NULL,
+                timezone_name VARCHAR(64) NOT NULL DEFAULT 'UTC',
+                recurrence_unit VARCHAR(16),
+                recurrence_interval INTEGER NOT NULL DEFAULT 1,
+                recurrence_anchor_day INTEGER NOT NULL DEFAULT 1,
+                status VARCHAR(16) NOT NULL DEFAULT 'queued',
+                last_run_at DATETIME,
+                last_error TEXT NOT NULL DEFAULT '',
+                created_by VARCHAR(32) NOT NULL DEFAULT '',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(guild_id) REFERENCES guilds (discord_id)
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_announcement_schedules_guild_id ON announcement_schedules (guild_id)",
+            "CREATE INDEX IF NOT EXISTS ix_announcement_schedules_next_run_at ON announcement_schedules (next_run_at)",
+            "CREATE INDEX IF NOT EXISTS ix_announcement_schedules_status ON announcement_schedules (status)",
+        ),
+    ),
 )
 
 

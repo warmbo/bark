@@ -150,6 +150,22 @@ def test_mutation_capabilities_cover_every_route_family_and_gets_remain_readable
         == "roles.manage"
     )
     assert mutation_capability("POST", "/api/v1/guilds/1/modules/post/compose") == "post.manage"
+    assert (
+        mutation_capability("POST", "/api/v1/guilds/1/modules/announcements/post")
+        == "announcements.post"
+    )
+    assert (
+        mutation_capability(
+            "PATCH", "/api/v1/guilds/1/modules/announcements/schedules/42"
+        )
+        == "announcements.post"
+    )
+    assert (
+        mutation_capability(
+            "DELETE", "/api/v1/guilds/1/modules/announcements/schedules/42"
+        )
+        == "announcements.post"
+    )
     assert mutation_capability("POST", "/api/v1/guilds/1/notes") == "moderation.notes.create"
     assert mutation_capability("PATCH", "/api/v1/guilds/1/notes/42") == "moderation.notes.create"
     assert mutation_capability("DELETE", "/api/v1/guilds/1/notes/42") == "moderation.notes.create"

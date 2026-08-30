@@ -1,0 +1,8 @@
+{% extends "docs/base.html" %}
+{% block title %}Not found — Bark Docs{% endblock %}
+{% block crumb %}<a href="/docs">Docs</a><span>/</span>Not found{% endblock %}
+{% block content %}
+<h1>Not found</h1>
+<p class="notfound">{{ not_found or 'That page' }} doesn't exist in this instance's documentation.</p>
+<p style="margin-top:14px"><a href="/docs">← Back to the docs home</a></p>
+{% endblock %}

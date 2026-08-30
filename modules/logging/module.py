@@ -235,14 +235,17 @@ class LoggingModule(BarkModule):
 
     def _make_logstatus_command(self):
         @discord.app_commands.command(name="logstatus", description="View logging configuration")
-        async def logstatus(interaction: discord.Interaction):
-            await self._cmd_logstatus(interaction)
+        @discord.app_commands.describe(
+            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+        )
+        async def logstatus(interaction: discord.Interaction, hide: bool = True):
+            await self._cmd_logstatus(interaction, hide)
 
         return logstatus
 
     def _make_logfiles_command(self):
         @discord.app_commands.command(name="logfiles", description="Search recent file uploads")
-        @discord.app_commands.default_permissions(manage_guild=True)
+        @discord.app_commands.default_permissions(moderate_members=True)
         async def logfiles(
             interaction: discord.Interaction,
             member: discord.Member | None = None,
@@ -268,10 +271,10 @@ class LoggingModule(BarkModule):
             f"✅ {EVENT_TYPES[event_type]} → #{channel.name}", ephemeral=True
         )
 
-    async def _cmd_logstatus(self, interaction):
+    async def _cmd_logstatus(self, interaction, hide: bool = True):
         if not interaction.guild:
             return
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=hide)
         from sqlalchemy import func, select
 
         async with session_scope() as session:
@@ -300,7 +303,7 @@ class LoggingModule(BarkModule):
             )
         if total_files:
             embed.set_footer(text=f"{total_files} files logged")
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=hide)
 
     async def _cmd_logfiles(self, interaction, member, file_type, limit):
         if not interaction.guild:

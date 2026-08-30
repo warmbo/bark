@@ -308,3 +308,44 @@ async def test_dispatch_allows_invoker_with_required_permission():
 
     await d.dispatch(interaction, "ban", "@someone")
     assert callback.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_dispatch_hide_boolean_is_passed_to_informational_leaf():
+    """`/bark leaderboard false` must reach the handler with hide=False (public),
+    while a bare `/bark leaderboard` leaves hide unset so the default applies."""
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    captured = {}
+
+    async def callback(interaction, **kwargs):
+        captured.update(kwargs)
+
+    leaf = MagicMock()
+    leaf.name = "leaderboard"
+    leaf.callback = callback
+    leaf.parameters = [
+        SimpleNamespace(
+            name="hide",
+            type=discord.AppCommandOptionType.boolean,
+            required=False,
+            description="Only show this to you (default true)",
+        )
+    ]
+    leaf.commands = None
+    leaf.default_permissions = None
+    _register_fake_module(d, "reputation", "leaderboard", leaf)
+
+    interaction = MagicMock()
+    interaction.guild_id = 1
+    interaction.user = SimpleNamespace(guild_permissions=discord.Permissions.none())
+    interaction.guild = MagicMock()
+    interaction.response = MagicMock()
+
+    # Bare invocation -> hide omitted -> default (True) applies in the handler.
+    await d.dispatch(interaction, "leaderboard", "")
+    assert "hide" not in captured
+
+    # Explicit false -> public.
+    captured.clear()
+    await d.dispatch(interaction, "leaderboard", "false")
+    assert captured.get("hide") is False

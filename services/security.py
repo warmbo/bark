@@ -85,6 +85,9 @@ def _is_public(path: str) -> bool:
     """Check if a path is always accessible without auth."""
     if path in PUBLIC_PATHS:
         return True
+    # The public documentation wiki (all nested pages are linkable and open).
+    if path == "/docs" or path.startswith("/docs/"):
+        return True
     if path.startswith("/static/"):
         return True
     if path.startswith("/media/"):
@@ -167,6 +170,12 @@ def mutation_capability(method: str, path: str) -> str | None:
         return "logging.configure"
     if tail == "settings/automod":
         return "settings.automod"
+    # Announcements has one declared mutation capability for immediate posts
+    # and durable queue management. Map the whole nested resource family to it
+    # before the generic module fallback would invent announcements.manage
+    # (an undeclared action that fails closed to admin).
+    if re.fullmatch(r"modules/announcements/(?:post|schedules(?:/\d+)?)", tail):
+        return "announcements.post"
     module_match = re.fullmatch(r"modules/([a-z0-9_-]+)(?:/(toggle|reload))?", tail)
     if module_match:
         # Module lifecycle routes must resolve to the MODULE's own capability

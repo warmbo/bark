@@ -956,7 +956,13 @@
                 const when = invite.expires_at ? ` · expires ${new Date(invite.expires_at).toLocaleDateString()}` : '';
                 return `<div class="info-row"><span class="info-label">${escHtml(invite.note || 'Invite #' + invite.id)}</span><span class="info-value">${state}${when} ${action}</span></div>`;
             }).join('');
-            const accessRows = grants.map((grant) => `<div class="info-row"><span class="info-label">Discord user ${escHtml(grant.discord_user_id)}</span><span class="info-value">${grant.revoked_at ? 'Revoked' : 'Active'}${!grant.revoked_at ? ` <button type="button" class="btn btn-xs" data-revoke-access="${escHtml(grant.discord_user_id)}">Revoke access</button>` : ''}</span></div>`).join('');
+            const accessRows = grants.map((grant) => {
+                const live = !grant.revoked_at;
+                const action = live
+                    ? `<button type="button" class="btn btn-xs" data-revoke-access="${escHtml(grant.discord_user_id)}">Revoke access</button>`
+                    : `<button type="button" class="btn btn-xs" data-remove-access="${escHtml(grant.discord_user_id)}" aria-label="Remove access" title="Remove from list">✕</button>`;
+                return `<div class="info-row"><span class="info-label">Discord user ${escHtml(grant.discord_user_id)}</span><span class="info-value">${grant.revoked_at ? 'Revoked' : 'Active'} ${action}</span></div>`;
+            }).join('');
             inviteList.innerHTML = inviteRows || accessRows ? `${inviteRows}${accessRows}` : '<p class="text-tertiary">No access links created yet.</p>';
         } catch (error) {
             inviteList.innerHTML = `<p class="text-tertiary">Access list unavailable — ${escHtml(error.message || 'request failed')}</p>`;
@@ -989,7 +995,7 @@
         } catch { showToast('Could not copy invite link', 'error'); }
     });
     inviteList?.addEventListener('click', async (event) => {
-        const button = event.target.closest('[data-revoke-invite], [data-revoke-access], [data-remove-invite]');
+        const button = event.target.closest('[data-revoke-invite], [data-revoke-access], [data-remove-invite], [data-remove-access]');
         if (!button) return;
         if (button.dataset.removeInvite) {
             const ok = await BarkDialog.confirm({ title: 'Remove invite?', message: 'This removes the invite row from the list permanently. It is already revoked, expired, or redeemed, so it can no longer grant access.', confirmLabel: 'Remove', danger: true });
@@ -999,6 +1005,16 @@
                 await loadInstanceInvites();
                 showToast('Invite removed from list', 'success');
             } catch (error) { showToast(error.message || 'Could not remove invite', 'error'); }
+            return;
+        }
+        if (button.dataset.removeAccess) {
+            const ok = await BarkDialog.confirm({ title: 'Remove access grant?', message: 'This removes this revoked access grant from the list permanently. It can no longer grant access to the instance.', confirmLabel: 'Remove', danger: true });
+            if (!ok) return;
+            try {
+                await safeFetch(`/api/v1/instance/access/${encodeURIComponent(button.dataset.removeAccess)}/remove`, {method: 'DELETE'});
+                await loadInstanceInvites();
+                showToast('Access grant removed from list', 'success');
+            } catch (error) { showToast(error.message || 'Could not remove access grant', 'error'); }
             return;
         }
         const kind = button.dataset.revokeInvite ? 'invite' : 'access grant';

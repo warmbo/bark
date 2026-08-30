@@ -1,0 +1,26 @@
+{% extends "docs/base.html" %}
+{% block title %}Commands — Bark Docs{% endblock %}
+{% block crumb %}<a href="/docs">Docs</a><span>/</span>Commands{% endblock %}
+{% block content %}
+<h1>Commands</h1>
+<p class="lead">{{ commands | length }} commands across the running modules. Click any command for its arguments and required role. Info commands are private by default — add <code>false</code> as the last argument to post them for everyone.</p>
+<div class="role-key">
+  <span class="badge anyone">Anyone</span> members can run it
+  <span class="badge moderator">Moderator</span> mods &amp; admins only
+  <span class="badge admin">Admin</span> server admins / owner only
+</div>
+{% if not commands %}<p class="notfound">No commands are registered right now.</p>{% endif %}
+
+{% set ns = namespace(current=None) %}
+{% for c in commands %}
+  {% if c.module != ns.current %}
+    {% set ns.current = c.module %}
+    <h2>{{ c.module | replace('_', ' ') | title }}</h2>
+  {% endif %}
+  <div class="cmd">
+    <a class="path" href="/docs/commands/{{ c.path }}">/{{ group }} {{ c.path }}</a>
+    <span class="desc">{{ c.description or '' }}</span>
+    <span class="badge {{ 'anyone' if c.required_role == 'Anyone' else c.required_role | lower }}">{{ c.required_role }}</span>
+  </div>
+{% endfor %}
+{% endblock %}

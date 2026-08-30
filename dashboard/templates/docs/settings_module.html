@@ -1,0 +1,20 @@
+{% extends "docs/base.html" %}
+{% block title %}{{ setting_group.module | title }} settings — Bark Docs{% endblock %}
+{% block crumb %}<a href="/docs">Docs</a><span>/</span><a href="/docs/settings">Settings</a><span>/</span>{{ setting_group.module | title }}{% endblock %}
+{% block content %}
+<h1>{{ setting_group.module | replace('_', ' ') | title }} — Settings</h1>
+<p class="lead">{{ setting_group.module_description or '' }}</p>
+<table>
+  <thead><tr><th>Setting</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+  {% for s in setting_group.settings %}
+    <tr>
+      <td><code>{{ s.key }}</code></td>
+      <td>{{ s.type }}</td>
+      <td>{% if s.default is not none %}<code>{{ s.default }}</code>{% else %}—{% endif %}</td>
+      <td>{{ s.description or s.title }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "docs/base.html" %}
+{% block title %}Settings — Bark Docs{% endblock %}
+{% block crumb %}<a href="/docs">Docs</a><span>/</span>Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<p class="lead">Every configurable setting across all modules, with its type, default, and what it controls. Open a module to see its full settings.</p>
+{% if not settings %}<p class="notfound">No configurable settings are registered right now.</p>{% endif %}
+<div class="grid" style="margin-top:8px">
+  {% for s in settings %}
+  <a class="card" href="/docs/settings/{{ s.module }}">
+    <h3>{{ s.module | replace('_', ' ') | title }} <span class="ver">{{ s.settings | length }}</span></h3>
+    <p>{{ s.module_description or '' }}</p>
+    <div class="meta">{{ s.settings | length }} settings</div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

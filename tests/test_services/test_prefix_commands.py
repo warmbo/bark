@@ -79,6 +79,48 @@ def test_prefix_command_dispatches_handler_with_converted_args():
     assert _captured["times"] == 3  # int converted
 
 
+def _make_hidable_command():
+    """An informational command with a trailing `hide: bool = True` (private default)."""
+    @discord.app_commands.command(name="leaderboard", description="Show the top ranked members")
+    @discord.app_commands.describe(hide="Only show this to you (default true)")
+    async def lb_cmd(interaction: discord.Interaction, hide: bool = True) -> None:
+        _captured["hide"] = hide
+        await interaction.response.send_message(f"ephemeral={hide}")
+    return lb_cmd
+
+
+def test_prefix_command_omitted_boolean_keeps_handler_default():
+    """Bare `bark!reputation leaderboard` must honour the handler's `hide=True`
+    default (private), not be forced public by the adapter."""
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "leaderboard", _make_hidable_command())
+    ctx = _make_ctx()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx))
+    assert _captured.get("hide") is True
+
+
+def test_prefix_command_explicit_false_makes_response_public():
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "leaderboard", _make_hidable_command())
+    ctx = _make_ctx()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "false"))
+    assert _captured.get("hide") is False
+
+
+def test_prefix_command_explicit_true_keeps_response_private():
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "leaderboard", _make_hidable_command())
+    ctx = _make_ctx()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "true"))
+    assert _captured.get("hide") is True
+
+
 def _make_restricted_command():
     """A real app_commands Command with a ban_members default_permissions."""
     @discord.app_commands.command(name="ban", description="Ban a member")

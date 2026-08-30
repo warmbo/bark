@@ -1327,6 +1327,14 @@ textarea:focus-visible,
 }.discord-toolbar { display: flex; gap: 2px; padding: 5px 6px; background: var(--bg-elevated); border: 1px solid var(--border-input); border-bottom: 0; flex-wrap: wrap; }.discord-toolbar button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 7px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 15px; font-weight: 600; white-space: nowrap; transition: background var(--transition-fast), color var(--transition-fast); }.discord-toolbar button:hover { background: var(--bg-card); color: var(--text-primary); }.discord-toolbar .sep { width: 1px; background: var(--border-subtle); margin: 2px 4px; }.discord-toolbar + textarea.form-input { border-top: 0; }/* ── Announcements live Discord preview (canonical data-card, remake 2026-08-19) ── */
 
 .announcement-preview-card .announcement-preview-body { max-width: none; }
+.announcement-queue-list { display: grid; gap: var(--space-sm); }
+.announcement-queue-item { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--glass-tint); }
+.announcement-queue-main { min-width: 0; flex: 1; }
+.announcement-queue-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.announcement-queue-main p { margin: var(--space-xs) 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.announcement-queue-main small { color: var(--text-tertiary); }
+@media (max-width: 560px) { .announcement-queue-item { flex-direction: column; } .announcement-queue-item .table-actions { width: 100%; justify-content: flex-start; } }
+.discord-emoji { width: 1.25em; height: 1.25em; vertical-align: -0.25em; object-fit: contain; margin: 0 1px; }
 .announcement-preview { min-width: 0; }.discord-preview {
     background: var(--discord-chat-bg); border: 1px solid var(--discord-code-border); border-radius: var(--radius);
     padding: 14px 16px; max-width: 640px;

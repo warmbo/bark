@@ -10,6 +10,7 @@ from config import config
 from database.engine import session_scope
 from services.instance_invites import (
     create_instance_invite,
+    delete_instance_access,
     delete_instance_invite,
     list_instance_access,
     list_instance_invites,
@@ -138,3 +139,18 @@ async def revoke_access(request: Request, discord_user_id: str):
     if not revoked:
         return api_error("Active access grant not found", status_code=404)
     return api_success({"revoked": True})
+
+
+@router.delete("/instance/access/{discord_user_id}/remove")
+async def remove_access(request: Request, discord_user_id: str):
+    """Permanently remove an already-revoked access-grant row from the list.
+    ``revoke_access`` above deactivates a still-active grant; this is the
+    cleanup action that drops the row entirely so revoked users stop cluttering
+    the access list."""
+    if not _is_owner(request):
+        return api_error("Owner access required", status_code=403)
+    async with session_scope() as session:
+        removed = await delete_instance_access(session, discord_user_id)
+    if not removed:
+        return api_error("Access grant not found", status_code=404)
+    return api_success({"removed": True})

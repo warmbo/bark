@@ -236,6 +236,57 @@ def test_full_width_spacer_has_large_intrinsic_width():
 
 
 @pytest.mark.asyncio
+async def test_schedule_worker_sends_due_job_and_completes_it(db):
+    from datetime import datetime, timedelta, timezone
+
+    from database.engine import session_scope
+    from database.models.guild import Guild
+    from services.announcement_schedules import create_schedule, list_schedules
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id="1", name="Test Guild"))
+
+    await create_schedule(
+        guild_id="1",
+        channel_id="55",
+        title="Scheduled",
+        message="It is time",
+        as_embed=True,
+        embed_color="#22C55E",
+        image_url="",
+        video_url="",
+        scheduled_for=datetime.now(timezone.utc) - timedelta(seconds=1),
+        timezone_name="UTC",
+        recurrence_unit=None,
+        recurrence_interval=1,
+        created_by="42",
+    )
+
+    channel = MagicMock()
+    channel.send = AsyncMock()
+    guild = MagicMock(id=1)
+    guild.get_channel.return_value = channel
+    manager = MagicMock()
+    manager.is_enabled_for_guild.return_value = True
+    bot = MagicMock()
+    bot.guilds = [guild]
+    bot.get_guild.return_value = guild
+    bot.modules = manager
+    ctx = SimpleNamespace(bot=bot, guilds=[guild], public_url="https://bark.test")
+    module = AnnouncementsModule(ctx)
+
+    processed = await module._process_due_once()
+
+    assert processed is True
+    channel.send.assert_awaited_once()
+    sent_embed = channel.send.await_args.kwargs["embed"]
+    assert sent_embed.title == "Scheduled"
+    assert sent_embed.description == "It is time"
+    schedule = (await list_schedules("1"))[0]
+    assert schedule.status == "completed"
+
+
+@pytest.mark.asyncio
 async def test_announce_slash_command_uses_custom_embed_color():
     module = AnnouncementsModule(MagicMock())
     command = module._make_announce_command()

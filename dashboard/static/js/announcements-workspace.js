@@ -42,9 +42,19 @@
   function renderMarkdown(source, embedMode) {
     const text = esc(source);
 
+    // Discord custom emoji: <:name:id> (static) and <a:name:id> (animated) →
+    // CDN <img>. The source is escaped first, so these tokens appear as
+    // &lt;…&gt; and can never inject HTML; we emit only an id-derived CDN img
+    // with the emoji name as alt/title.
+    let out = text.replace(
+      /&lt;(a?):([A-Za-z0-9_]+):(\d+)&gt;/g,
+      (_, animated, name, id) =>
+        `<img class="discord-emoji" src="https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'png'}?size=48&amp;quality=lossless" alt=":${name}:" title="${name}" loading="lazy">`
+    );
+
     // Protect code blocks from inline token processing.
     const blocks = [];
-    let out = text.replace(/```([\s\S]*?)```/g, (_, code) => {
+    out = out.replace(/```([\s\S]*?)```/g, (_, code) => {
       blocks.push(`<pre class="discord-codeblock">${code}</pre>`);
       return `\u0000CB${blocks.length - 1}\u0000`;
     });
@@ -393,6 +403,96 @@
     // Keep the picker above the preview toggle button if one exists.
     updatePreview();
   }
+
+  // ── Scheduled announcement queue ──────────────────────────────────────
+
+  const form = card.querySelector('.module-action-form');
+  const timezoneInput = document.createElement('input');
+  timezoneInput.type = 'hidden';
+  timezoneInput.name = 'timezone_name';
+  timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  form?.appendChild(timezoneInput);
+  const intervalInput = document.getElementById('action-post_announcement-recurrence_interval');
+  if (intervalInput && !intervalInput.value) intervalInput.value = '1';
+
+  const queueCard = document.createElement('article');
+  queueCard.className = 'content-card workspace-data-card announcement-queue-card';
+  queueCard.innerHTML =
+    '<div class="card-header"><div><h2 class="card-title">' + (typeof getIconSvg === 'function' ? getIconSvg('clock', 16) : '') + ' Scheduled Queue</h2>' +
+    '<p class="card-description">One-time and recurring announcements for this server.</p></div>' +
+    '<button type="button" class="btn btn-xs" data-schedule-refresh>Refresh</button></div>' +
+    '<div class="config-body announcement-queue-body" aria-live="polite"><div class="state-panel">Loading schedules…</div></div>';
+  if (sideCol) sideCol.appendChild(queueCard);
+  else previewCard.after(queueCard);
+  if (typeof refreshIcons === 'function') refreshIcons();
+
+  const queueBody = queueCard.querySelector('.announcement-queue-body');
+  const guildId = window.currentGuildId ? window.currentGuildId() : null;
+  const schedulesUrl = () => `/api/v1/guilds/${guildId}/modules/announcements/schedules`;
+
+  function recurrenceText(job) {
+    if (!job.recurrence_unit) return 'One time';
+    const count = Number(job.recurrence_interval) || 1;
+    return `Every ${count} ${job.recurrence_unit}${count === 1 ? '' : 's'}`;
+  }
+
+  function renderQueue(jobs) {
+    if (!jobs.length) {
+      queueBody.innerHTML = '<div class="state-panel"><strong>No scheduled announcements</strong><span>Choose “Schedule for later” in the composer to add one.</span></div>';
+      return;
+    }
+    queueBody.innerHTML = `<div class="announcement-queue-list">${jobs.map((job) => {
+      const when = new Date(job.next_run_at).toLocaleString();
+      const paused = job.status === 'paused' || job.status === 'failed';
+      const action = paused ? 'resume' : 'pause';
+      const actionLabel = job.status === 'failed' ? 'Retry' : (paused ? 'Resume' : 'Pause');
+      return `<article class="announcement-queue-item" data-schedule-id="${Number(job.id)}">` +
+        `<div class="announcement-queue-main"><div class="announcement-queue-head"><strong>${esc(job.title || job.message.slice(0, 80))}</strong><span class="status-badge">${esc(job.status)}</span></div>` +
+        `<p>${esc(job.message.slice(0, 180))}</p><small>${esc(when)} · ${esc(recurrenceText(job))} · ${esc(job.timezone_name)}</small>` +
+        (job.last_error ? `<div class="action-result error">${esc(job.last_error)}</div>` : '') +
+        `</div><div class="table-actions"><button type="button" class="btn btn-xs" data-schedule-action="${action}">${actionLabel}</button>` +
+        '<button type="button" class="btn btn-xs btn-danger" data-schedule-action="delete">Delete</button></div></article>';
+    }).join('')}</div>`;
+  }
+
+  async function loadQueue() {
+    if (!guildId) return;
+    try {
+      const response = await safeFetch(schedulesUrl(), {cache: 'no-cache'});
+      renderQueue(response?.data?.schedules || []);
+    } catch (error) {
+      queueBody.innerHTML = `<div class="action-result error">${esc(error.message || 'Could not load schedules')}</div>`;
+    }
+  }
+
+  queueCard.querySelector('[data-schedule-refresh]')?.addEventListener('click', loadQueue);
+  queueBody.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-schedule-action]');
+    const item = button?.closest('[data-schedule-id]');
+    if (!button || !item) return;
+    const action = button.dataset.scheduleAction;
+    if (action === 'delete' && typeof BarkDialog?.confirm === 'function') {
+      const confirmed = await BarkDialog.confirm({title: 'Delete scheduled announcement?', message: 'This removes it from the queue permanently.', confirmLabel: 'Delete', danger: true});
+      if (!confirmed) return;
+    }
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    try {
+      const url = `${schedulesUrl()}/${item.dataset.scheduleId}`;
+      if (action === 'delete') await safeFetch(url, {method: 'DELETE'});
+      else await safeFetch(url, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({paused: action === 'pause'})});
+      await loadQueue();
+      showToast(action === 'delete' ? 'Schedule deleted' : `Schedule ${action}d`, 'success');
+    } catch (error) {
+      showToast(error.message || 'Schedule update failed', 'error');
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
+  });
+  window.addEventListener('bark:module-action-complete', (event) => {
+    if (event.detail?.moduleName === 'announcements' && event.detail?.endpoint === 'post') loadQueue();
+  });
+  loadQueue();
 
   updatePreview();
 })();

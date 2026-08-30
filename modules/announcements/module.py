@@ -1,11 +1,12 @@
 """
-Announcements module v1.0.0 — post text or embeds to a chosen channel.
+Announcements module v1.1.0 — post or schedule text/embeds to a chosen channel.
 
 Provides:
 - Dashboard action to send announcements from the Operate tab
 - Configurable default announcement channel
 - Optional embed mode for richer formatting
 - /announce slash command for quick posting from Discord
+- Durable one-time and recurring dashboard schedules with queue controls
 
 Placeholders are not required here; announcement text is freeform.
 """
@@ -16,6 +17,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import discord
 from fastapi import Request
@@ -103,13 +105,17 @@ class AnnouncementsModule(BarkModule):
     """Post announcements to a selected channel as text or embeds."""
 
     name = "announcements"
-    version = "1.0.0"
-    description = "Send text or embed announcements to a configurable channel"
+    version = "1.1.0"
+    description = "Send now or queue recurring text/embed announcements"
     author = "ZENHAWX"
 
     # Announcement defaults are optional conveniences; the module is fully
     # usable from the Operate tab and /announce without a Configure screen.
     show_configure_tab = False
+
+    def __init__(self, ctx) -> None:
+        super().__init__(ctx)
+        self._schedule_task: asyncio.Task | None = None
 
     def get_events(self) -> list[EventRegistration]:
         return []
@@ -136,9 +142,92 @@ class AnnouncementsModule(BarkModule):
 
     async def enable(self) -> None:
         self._logger.info("Enabling announcements module v%s", self.version)
+        from services.announcement_schedules import recover_interrupted_deliveries
+
+        recovered = await recover_interrupted_deliveries()
+        if recovered:
+            self._logger.warning("Marked %s interrupted announcement sends as failed", recovered)
+        if self._schedule_task is None or self._schedule_task.done():
+            self._schedule_task = asyncio.create_task(self._schedule_loop())
 
     async def disable(self) -> None:
         self._logger.info("Disabling announcements module")
+        task = self._schedule_task
+        self._schedule_task = None
+        if task is not None:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def _schedule_loop(self) -> None:
+        """Continuously drain due schedules without dying on transient errors."""
+        while True:
+            try:
+                processed = await self._process_due_once()
+                await asyncio.sleep(0 if processed else 15)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._logger.exception("Scheduled announcement worker failed; continuing")
+                await asyncio.sleep(15)
+
+    async def _process_due_once(self) -> bool:
+        from services.announcement_schedules import (
+            claim_next_due,
+            complete_delivery,
+            fail_delivery,
+        )
+
+        manager = getattr(self.ctx.bot, "modules", None)
+        eligible = {
+            str(guild.id)
+            for guild in getattr(self.ctx, "guilds", ())
+            if manager is None
+            or not hasattr(manager, "is_enabled_for_guild")
+            or manager.is_enabled_for_guild(int(guild.id), self.name)
+        }
+        schedule = await claim_next_due(datetime.now(timezone.utc), eligible)
+        if schedule is None:
+            return False
+        now = datetime.now(timezone.utc)
+        try:
+            guild = self.ctx.bot.get_guild(int(schedule.guild_id))
+            if guild is None:
+                raise RuntimeError("Guild is unavailable")
+            channel = guild.get_channel(int(schedule.channel_id))
+            if channel is None:
+                raise RuntimeError("Channel is unavailable")
+            await self._send_scheduled(channel, schedule)
+        except Exception as exc:
+            await fail_delivery(schedule.id, failed_at=now, error=str(exc) or type(exc).__name__)
+            self._logger.exception("Scheduled announcement %s failed", schedule.id)
+        else:
+            await complete_delivery(schedule.id, sent_at=now)
+        return True
+
+    async def _send_scheduled(self, channel, schedule) -> None:
+        description = schedule.message[:4096]
+        if schedule.video_url and schedule.as_embed:
+            link = f"[Watch Video]({schedule.video_url.strip().rstrip('/')})"
+            description = f"{description}\n\n{link}" if description else link
+        if schedule.as_embed:
+            embed = discord.Embed(
+                title=schedule.title or None,
+                description=description or None,
+                color=_parse_embed_color(schedule.embed_color),
+                timestamp=datetime.now(timezone.utc),
+            )
+            _force_full_width(embed)
+            _pad_footer_full_width(embed)
+            embed.set_image(url=schedule.image_url or _full_width_spacer_url(self.ctx))
+            await _send_with_timeout(channel, embed=embed)
+        elif schedule.image_url:
+            embed = discord.Embed(color=discord.Color.blurple())
+            embed.set_image(url=schedule.image_url)
+            _force_full_width(embed)
+            _pad_footer_full_width(embed)
+            await _send_with_timeout(channel, content=schedule.message[:2000], embed=embed)
+        else:
+            await _send_with_timeout(channel, content=schedule.message[:2000])
 
     def get_about(self) -> list[dict]:
         return [
@@ -149,6 +238,10 @@ class AnnouncementsModule(BarkModule):
             {
                 "title": "Defaults",
                 "description": "You can save a default announcement channel for convenience. You can still override the channel per announcement.",
+            },
+            {
+                "title": "Scheduling",
+                "description": "Queue multiple one-time announcements or repeat them every N hours, days, weeks, or months. Pause, retry, resume, or delete each job from the dashboard.",
             },
             {
                 "title": "How to Set Up",
@@ -238,6 +331,45 @@ class AnnouncementsModule(BarkModule):
                         "required": False,
                         "placeholder": "Add images or video URLs — images embed inline, videos show a Watch Video link",
                     },
+                    {
+                        "key": "delivery_mode",
+                        "label": "Delivery",
+                        "type": "select",
+                        "required": False,
+                        "placeholder": "Send now",
+                        "options": [
+                            {"value": "schedule", "label": "Schedule for later"},
+                        ],
+                    },
+                    {
+                        "key": "scheduled_for",
+                        "label": "First send",
+                        "type": "datetime-local",
+                        "required": True,
+                        "depends_on": {"field": "delivery_mode", "value": "schedule"},
+                    },
+                    {
+                        "key": "recurrence_unit",
+                        "label": "Repeat",
+                        "type": "select",
+                        "required": False,
+                        "placeholder": "Do not repeat",
+                        "depends_on": {"field": "delivery_mode", "value": "schedule"},
+                        "options": [
+                            {"value": "hour", "label": "Every N hours"},
+                            {"value": "day", "label": "Every N days"},
+                            {"value": "week", "label": "Every N weeks"},
+                            {"value": "month", "label": "Every N months"},
+                        ],
+                    },
+                    {
+                        "key": "recurrence_interval",
+                        "label": "Repeat every",
+                        "type": "integer",
+                        "required": False,
+                        "placeholder": "1",
+                        "depends_on": {"field": "delivery_mode", "value": "schedule"},
+                    },
                 ],
             }
         ]
@@ -277,21 +409,6 @@ class AnnouncementsModule(BarkModule):
             image_url = str(data.get("image_url", "") or "").strip()
             video_url = str(data.get("video_url", "") or "").strip()
 
-            if not channel_id or not message.strip():
-                return api_error("channel_id and message are required")
-
-            bot = request.state.bot
-            try:
-                guild = bot.get_guild(int(guild_id))
-            except Exception:
-                guild = None
-            if guild is None:
-                return api_not_found("Guild")
-
-            channel = guild.get_channel(int(channel_id))
-            if channel is None:
-                return api_error("Channel not found in this guild")
-
             # Media picker payload: [{"type": "image"|"video", "url": "..."}]
             media_raw = data.get("media")
             if isinstance(media_raw, list):
@@ -312,6 +429,62 @@ class AnnouncementsModule(BarkModule):
                 m = re.search(r"!\[.*?\]\((https?://\S+)\)", message)
                 if m:
                     image_url = m.group(1)
+
+            if not channel_id or not message.strip():
+                return api_error("channel_id and message are required")
+
+            bot = request.state.bot
+            try:
+                guild = bot.get_guild(int(guild_id))
+            except Exception:
+                guild = None
+            if guild is None:
+                return api_not_found("Guild")
+
+            channel = guild.get_channel(int(channel_id))
+            if channel is None:
+                return api_error("Channel not found in this guild")
+
+            if str(data.get("delivery_mode", "immediate")) == "schedule":
+                from services.announcement_schedules import create_schedule
+
+                raw_scheduled_for = str(data.get("scheduled_for", "") or "").strip()
+                timezone_name = str(data.get("timezone_name", "UTC") or "UTC").strip()
+                recurrence_unit = str(data.get("recurrence_unit", "") or "").strip() or None
+                try:
+                    scheduled_for = datetime.fromisoformat(
+                        raw_scheduled_for.replace("Z", "+00:00")
+                    )
+                    if scheduled_for.tzinfo is None:
+                        scheduled_for = scheduled_for.replace(tzinfo=ZoneInfo(timezone_name))
+                    scheduled_for = scheduled_for.astimezone(timezone.utc)
+                    ZoneInfo(timezone_name)
+                    recurrence_interval = int(data.get("recurrence_interval", 1) or 1)
+                except (ValueError, TypeError, ZoneInfoNotFoundError):
+                    return api_error("Invalid schedule time, timezone, or recurrence")
+                if scheduled_for <= datetime.now(timezone.utc):
+                    return api_error("Scheduled time must be in the future")
+                if recurrence_unit not in {None, "hour", "day", "week", "month"}:
+                    return api_error("Invalid recurrence unit")
+                if not 1 <= recurrence_interval <= 999:
+                    return api_error("Recurrence interval must be between 1 and 999")
+                user = request.session.get("user") or {}
+                schedule = await create_schedule(
+                    guild_id=guild_id,
+                    channel_id=channel_id,
+                    title=title[:256],
+                    message=message,
+                    as_embed=as_embed,
+                    embed_color=embed_color,
+                    image_url=image_url or "",
+                    video_url=video_url,
+                    scheduled_for=scheduled_for,
+                    timezone_name=timezone_name,
+                    recurrence_unit=recurrence_unit,
+                    recurrence_interval=recurrence_interval,
+                    created_by=str(user.get("id", "")),
+                )
+                return api_success({"scheduled": True, "id": schedule.id})
 
             description = message[:4096]
             if video_url and as_embed:
@@ -358,6 +531,84 @@ class AnnouncementsModule(BarkModule):
                 return api_error(f"Discord send failed: {exc.status}")
 
             return api_success({"sent": True})
+
+        @router.get("/guilds/{guild_id}/modules/announcements/schedules")
+        async def list_announcement_schedules(request: Request, guild_id: str):
+            from services.announcement_schedules import list_schedules
+            from services.response import api_forbidden, api_success, check_api_permission
+
+            if not check_api_permission(request, "announcements.post", guild_id):
+                return api_forbidden()
+            schedules = await list_schedules(guild_id)
+            return api_success(
+                {
+                    "schedules": [
+                        {
+                            "id": item.id,
+                            "channel_id": item.channel_id,
+                            "title": item.title,
+                            "message": item.message,
+                            "as_embed": item.as_embed,
+                            "embed_color": item.embed_color,
+                            "image_url": item.image_url,
+                            "video_url": item.video_url,
+                            "next_run_at": item.next_run_at.isoformat(),
+                            "timezone_name": item.timezone_name,
+                            "recurrence_unit": item.recurrence_unit,
+                            "recurrence_interval": item.recurrence_interval,
+                            "status": item.status,
+                            "last_run_at": (
+                                item.last_run_at.isoformat() if item.last_run_at else None
+                            ),
+                            "last_error": item.last_error,
+                        }
+                        for item in schedules
+                    ]
+                }
+            )
+
+        @router.patch("/guilds/{guild_id}/modules/announcements/schedules/{schedule_id}")
+        async def pause_announcement_schedule(
+            request: Request, guild_id: str, schedule_id: int
+        ):
+            from services.announcement_schedules import set_schedule_paused
+            from services.response import (
+                api_forbidden,
+                api_not_found,
+                api_success,
+                check_api_permission,
+            )
+
+            if not check_api_permission(request, "announcements.post", guild_id):
+                return api_forbidden()
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            changed = await set_schedule_paused(
+                guild_id, schedule_id, paused=bool(body.get("paused", True))
+            )
+            if not changed:
+                return api_not_found("Editable announcement schedule")
+            return api_success({"updated": True})
+
+        @router.delete("/guilds/{guild_id}/modules/announcements/schedules/{schedule_id}")
+        async def delete_announcement_schedule(
+            request: Request, guild_id: str, schedule_id: int
+        ):
+            from services.announcement_schedules import delete_schedule
+            from services.response import (
+                api_forbidden,
+                api_not_found,
+                api_success,
+                check_api_permission,
+            )
+
+            if not check_api_permission(request, "announcements.post", guild_id):
+                return api_forbidden()
+            if not await delete_schedule(guild_id, schedule_id):
+                return api_not_found("Deletable announcement schedule")
+            return api_success({"deleted": True})
 
         return router
 

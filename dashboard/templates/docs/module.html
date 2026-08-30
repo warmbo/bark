@@ -1,0 +1,59 @@
+{% extends "docs/base.html" %}
+{% block title %}{{ module.name | replace('_', ' ') | title }} — Bark Docs{% endblock %}
+{% block crumb %}<a href="/docs">Docs</a><span>/</span><a href="/docs/modules">Modules</a><span>/</span>{{ module.name | title }}{% endblock %}
+{% block content %}
+<h1>{{ module.name | replace('_', ' ') | title }}</h1>
+<p class="lead">{{ module.description or 'No description.' }}{% if module.version %} <span class="ver" style="color:var(--dim);font-size:12px">v{{ module.version }}</span>{% endif %}{% if module.author %} · {{ module.author }}{% endif %}</p>
+
+{% if module.commands %}
+<h2>Commands</h2>
+<div class="role-key">Info commands are private by default — add <code>false</code> as the last argument to post them for everyone.</div>
+{% for c in module.commands %}
+<div class="cmd">
+  <a class="path" href="/docs/commands/{{ c.path }}">/{{ group }} {{ c.path }}</a>
+  <span class="desc">{{ c.description or '' }}</span>
+  <span class="badge {{ 'anyone' if c.required_role == 'Anyone' else c.required_role | lower }}">{{ c.required_role }}</span>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if module.settings %}
+<h2>Settings</h2>
+<table>
+  <thead><tr><th>Setting</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+  {% for s in module.settings %}
+    <tr>
+      <td><code>{{ s.key }}</code></td>
+      <td>{{ s.type }}</td>
+      <td>{% if s.default is not none %}<code>{{ s.default }}</code>{% else %}—{% endif %}</td>
+      <td>{{ s.description or s.title }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<h2>Settings</h2>
+<p>This module has no configurable settings — it works out of the box.</p>
+{% endif %}
+
+{% if module.permissions %}
+<h2>Dashboard permissions</h2>
+<table>
+  <thead><tr><th>Permission</th><th>Label</th><th>Description</th></tr></thead>
+  <tbody>
+  {% for p in module.permissions %}
+    <tr><td><code>{{ p.name }}</code></td><td>{{ p.label }}</td><td>{{ p.description or '—' }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if module.about %}
+<h2>About</h2>
+{% for story in module.about %}
+  {% if story.title %}<h3>{{ story.title }}</h3>{% endif %}
+  {% for s in story.stories %}<p>{{ s.text }}</p>{% endfor %}
+{% endfor %}
+{% endif %}
+{% endblock %}

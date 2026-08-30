@@ -1,0 +1,43 @@
+{% extends "docs/base.html" %}
+{% block title %}Permissions — Bark Docs{% endblock %}
+{% block crumb %}<a href="/docs">Docs</a><span>/</span>Permissions{% endblock %}
+{% block content %}
+<h1>Permissions</h1>
+<p class="lead">Bark grants access in three tiers. A user's effective role is the most permissive they hold (server owner, Discord admin, configured staff role, or per-module override).</p>
+
+<div class="grid" style="margin-top:8px">
+  <div class="card">
+    <h3><span class="badge anyone">Anyone</span></h3>
+    <p>Every member of a server where Bark is installed. Info commands (help, info, leaderboard, reputation, roles…) and self-service commands (voice, thanks) are available here.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge moderator">Moderator</span></h3>
+    <p>Members holding a moderation permission (kick, ban, timeout, moderate members…) or a configured staff role. Can warn/kick/ban/timeout, manage moderation, and post announcements where the module allows.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge admin">Admin</span></h3>
+    <p>Server owner, Discord ADMIN/MANAGE permissions, or the instance owner. Can change server state and configuration, manage modules, and access instance settings.</p>
+  </div>
+</div>
+
+<h2 style="margin-top:34px">Rules of thumb</h2>
+<ul style="margin:0 0 20px 22px;color:var(--muted)">
+  <li>Commands that only <strong>show information</strong> are available to all members.</li>
+  <li>Commands that <strong>change anything</strong> (moderation actions, config, announcements, role management) require Moderator or Admin.</li>
+  <li>Every action has a documented role — see the table below.</li>
+</ul>
+
+<h2>All actions &amp; required role</h2>
+<p style="margin-bottom:10px">{{ permissions | length }} actions are defined across core and modules.</p>
+<table>
+  <thead><tr><th>Action</th><th>Required role</th></tr></thead>
+  <tbody>
+  {% for p in permissions %}
+    <tr>
+      <td><code>{{ p.action }}</code></td>
+      <td><span class="badge {{ 'anyone' if p.role in ('viewer', 'member') else p.role }}">{{ p.role }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

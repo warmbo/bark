@@ -184,6 +184,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     # ── Web Routes ────────────────────────────────────
 
     from dashboard.routes.web.home import router as home_router
+    from dashboard.routes.web.docs import router as docs_router
     from dashboard.routes.web.members import router as members_router
     from dashboard.routes.web.moderation import router as moderation_router
     from dashboard.routes.web.modules import router as modules_router
@@ -191,6 +192,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
     from dashboard.routes.web.stats import router as stats_router
 
     app.include_router(home_router, prefix="")
+    app.include_router(docs_router, prefix="")
     app.include_router(modules_router, prefix="/guild/{guild_id}")
     app.include_router(moderation_router, prefix="/guild/{guild_id}")
     app.include_router(settings_router, prefix="/guild/{guild_id}")

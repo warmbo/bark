@@ -146,6 +146,12 @@ def _make_dispatch(slash_leaf, check=None):
         kwargs: dict[str, Any] = {}
         tokens = list(raw_args)
         for param in params:
+            # Mirror the slash dispatcher: when the user omits a trailing
+            # argument (e.g. a boolean visibility flag), leave it unset so the
+            # handler's default applies, instead of coercing it to False and
+            # overriding a `hide=True` private-by-default command.
+            if not tokens:
+                break
             t = param.type
             if t in (AppCommandOptionType.string, AppCommandOptionType.number):
                 kwargs[param.name] = tokens.pop(0) if tokens else (None if not param.required else "")

@@ -6,6 +6,7 @@ from database.models.analytics import (
     DailyEmojiStat,
     VoiceGameStat,
 )
+from database.models.announcements import AnnouncementSchedule
 from database.models.attachments import FileAttachment
 from database.models.auto_voice import AutoVoiceChannel
 from database.models.automod import AutoModConfig
@@ -33,6 +34,7 @@ from database.models.voice import VoiceSession
 
 __all__ = [
     "ActivitySnapshot",
+    "AnnouncementSchedule",
     "AuditLog",
     "AutoModConfig",
     "AutoVoiceChannel",

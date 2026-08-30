@@ -2356,13 +2356,16 @@ class ReputationModule(BarkModule):
         @discord.app_commands.command(
             name="reputation", description="View your rank or another member's rank"
         )
-        @discord.app_commands.describe(member="Member to look up (leave empty for yourself)")
+        @discord.app_commands.describe(
+            member="Member to look up (leave empty for yourself)",
+            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone.",
+        )
         async def reputation_cmd(
-            interaction: discord.Interaction, member: discord.Member | None = None
+            interaction: discord.Interaction, member: discord.Member | None = None, hide: bool = True
         ):
             if not interaction.guild:
                 return
-            await interaction.response.defer(ephemeral=True)
+            await interaction.response.defer(ephemeral=hide)
             target = member or interaction.user
             guild_id = int(interaction.guild.id)
 
@@ -2457,7 +2460,7 @@ class ReputationModule(BarkModule):
             embed.add_field(name="Weekly Score", value=f"{profile.weekly_score:.0f}", inline=True)
             embed.add_field(name="Showoff Channel", value=showoff_mention, inline=True)
 
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=hide)
 
         return reputation_cmd
 
@@ -2465,7 +2468,9 @@ class ReputationModule(BarkModule):
         @discord.app_commands.command(
             name="leaderboard", description="Show the top ranked members in this server"
         )
-        @discord.app_commands.describe(hide="Hide the response from others (default: false)")
+        @discord.app_commands.describe(
+            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+        )
         async def leaderboard_cmd(interaction: discord.Interaction, hide: bool = True):
             if not interaction.guild:
                 return

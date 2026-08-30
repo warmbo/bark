@@ -1,0 +1,40 @@
+{% extends "docs/base.html" %}
+{% block title %}/{{ group }} {{ command.path }} — Bark Docs{% endblock %}
+{% block crumb %}<a href="/docs">Docs</a><span>/</span><a href="/docs/commands">Commands</a><span>/</span>{{ command.path }}{% endblock %}
+{% block content %}
+<h1><code style="font-size:22px">/{{ group }} {{ command.path }}</code></h1>
+<p class="lead">{{ command.description or 'No description.' }}</p>
+
+<div class="role-key">
+  <span>Requires:</span>
+  <span class="badge {{ 'anyone' if command.required_role == 'Anyone' else command.required_role | lower }}">{{ command.required_role }}</span>
+</div>
+
+<h2>Usage</h2>
+<p><code style="font-size:14px">/{{ group }} {{ command.path }}{% for p in command.parameters %} {% if p.required %}&lt;{{ p.name }}&gt;{% else %}[{{ p.name }}]{% endif %}{% endfor %}</code></p>
+{% if command.required_role == 'Anyone' %}
+<p style="margin-top:10px">This is an <strong>info command</strong> — it only shows information. It's private by default; add <code>false</code> as the last argument to post it in the channel for everyone, e.g. <code>/{{ group }} {{ command.path }} false</code>.</p>
+{% else %}
+<p style="margin-top:10px">This command changes server state and is restricted to the role shown above.</p>
+{% endif %}
+
+{% if command.parameters %}
+<h2>Arguments</h2>
+<table>
+  <thead><tr><th>Argument</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+  <tbody>
+  {% for p in command.parameters %}
+    <tr>
+      <td><code>{{ p.name }}</code></td>
+      <td>{{ p.type }}</td>
+      <td class="{{ 'req' if p.required else 'opt' }}">{{ 'Required' if p.required else 'Optional' }}</td>
+      <td>{{ p.description or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<h2>Arguments</h2>
+<p>This command takes no arguments.</p>
+{% endif %}
+{% endblock %}

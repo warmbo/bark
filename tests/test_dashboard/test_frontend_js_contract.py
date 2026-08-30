@@ -22,6 +22,19 @@ def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def test_announcements_preview_renders_custom_discord_emojis_as_cdn_images():
+    """The live announcements preview must convert Discord custom emoji tokens
+    (<:name:id> static, <a:name:id> animated) into CDN <img> elements, driven
+    from the escaped source so the token match can never inject HTML."""
+    js = source(JS / "announcements-workspace.js")
+    # The token is matched after escaping (the source is escaped first), so the
+    # regex operates on the &lt;…&gt; form — asserting the two anchor fragments
+    # keeps this robust against cosmetic formatting of the regex body.
+    assert "&lt;(a?):" in js, "custom emoji static/animated anchor missing"
+    assert "cdn.discordapp.com/emojis/" in js
+    assert "discord-emoji" in js
+
+
 def test_settings_script_invocations_follow_declarations():
     """Inline settings script must not call functions before their consts are
     declared — the temporal dead zone throws ReferenceError and aborts the
@@ -497,6 +510,19 @@ def test_avatar_upload_targets_visible_label_and_has_one_persistent_error_listen
     banner_handler = html[banner_start:banner_end]
     assert "bannerUpload.disabled = true" in banner_handler
     assert "bannerUpload.disabled = false" in banner_handler
+
+
+def test_revoked_access_grant_is_removable_from_list():
+    """A revoked instance-access grant must expose a remove (✕) action and the
+    click handler must route it to the hard-delete /remove endpoint."""
+    html = source(TEMPLATES / "components" / "settings_scripts.html")
+    # Revoked grants render a data-remove-access ✕ button.
+    assert "data-remove-access=\"${escHtml(grant.discord_user_id)}\"" in html
+    # The click handler listens for it.
+    assert "data-remove-access" in html
+    assert "button.dataset.removeAccess" in html
+    # It routes to the /remove endpoint (mirroring the invite flow).
+    assert "/instance/access/${encodeURIComponent(button.dataset.removeAccess)}/remove" in html
 
 
 def test_public_and_invite_url_rows_have_copy_buttons():
