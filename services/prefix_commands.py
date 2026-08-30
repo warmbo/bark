@@ -243,7 +243,7 @@ def _to_int(raw: str) -> int:
 
 
 def _to_bool(raw: str) -> bool:
-    return raw.strip().lower() in ("true", "1", "yes", "on", "y", "enabled")
+    return raw.strip().lower() in ("true", "1", "yes", "on", "y", "enabled", "public")
 
 
 async def _to_member_or_user(ctx: commands.Context, raw: str):

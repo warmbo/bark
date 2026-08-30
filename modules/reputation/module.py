@@ -2358,14 +2358,14 @@ class ReputationModule(BarkModule):
         )
         @discord.app_commands.describe(
             member="Member to look up (leave empty for yourself)",
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone.",
+            public="Post in the channel for everyone (default private). Add `public` as the last argument.",
         )
         async def reputation_cmd(
-            interaction: discord.Interaction, member: discord.Member | None = None, hide: bool = True
+            interaction: discord.Interaction, member: discord.Member | None = None, public: bool = False
         ):
             if not interaction.guild:
                 return
-            await interaction.response.defer(ephemeral=hide)
+            await interaction.response.defer(ephemeral=not public)
             target = member or interaction.user
             guild_id = int(interaction.guild.id)
 
@@ -2460,7 +2460,7 @@ class ReputationModule(BarkModule):
             embed.add_field(name="Weekly Score", value=f"{profile.weekly_score:.0f}", inline=True)
             embed.add_field(name="Showoff Channel", value=showoff_mention, inline=True)
 
-            await interaction.followup.send(embed=embed, ephemeral=hide)
+            await interaction.followup.send(embed=embed, ephemeral=not public)
 
         return reputation_cmd
 
@@ -2469,12 +2469,12 @@ class ReputationModule(BarkModule):
             name="leaderboard", description="Show the top ranked members in this server"
         )
         @discord.app_commands.describe(
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+            public="Post in the channel for everyone (default private). Add `public` as the last argument."
         )
-        async def leaderboard_cmd(interaction: discord.Interaction, hide: bool = True):
+        async def leaderboard_cmd(interaction: discord.Interaction, public: bool = False):
             if not interaction.guild:
                 return
-            await interaction.response.defer(ephemeral=hide)
+            await interaction.response.defer(ephemeral=not public)
             guild_id = int(interaction.guild.id)
 
             async with session_scope() as session:
@@ -2520,7 +2520,7 @@ class ReputationModule(BarkModule):
             )
             embed.set_footer(text="Use /reputation to see your detailed stats")
 
-            await interaction.followup.send(embed=embed, ephemeral=hide)
+            await interaction.followup.send(embed=embed, ephemeral=not public)
 
         return leaderboard_cmd
 

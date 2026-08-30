@@ -406,8 +406,8 @@ class SlashDispatcher:
             f"(e.g. `{self._group_name()} moderation`) for its menu. For details "
             f"on any command, use `/{self._group_name()} help <command>`.\n\n"
             "Info commands (help, info, leaderboard, reputation…) are private "
-            "by default — post them for everyone by adding `false` as the last "
-            f"argument, e.g. `/{self._group_name()} leaderboard false`."
+            "by default — post them for everyone by adding `public` as the last "
+            f"argument, e.g. `/{self._group_name()} leaderboard public`."
         )
         pages: list[discord.Embed] = []
         core_chunks = self._chunk_by_module(core)
@@ -581,7 +581,9 @@ async def parse_args_to_kwargs(
                 kwargs[param.name] = 0
         elif t is discord.AppCommandOptionType.boolean:
             raw = tokens.pop(0)
-            kwargs[param.name] = raw.strip().lower() in ("true", "1", "yes", "on", "y", "enabled")
+            kwargs[param.name] = raw.strip().lower() in (
+                "true", "1", "yes", "on", "y", "enabled", "public",
+            )
         elif t in (discord.AppCommandOptionType.user, discord.AppCommandOptionType.mentionable):
             kwargs[param.name] = await _resolve_member(interaction, tokens.pop(0))
         elif t is discord.AppCommandOptionType.role:

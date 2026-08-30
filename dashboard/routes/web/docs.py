@@ -26,6 +26,8 @@ def _ctx(request: Request) -> dict:
         "public_url": docs_registry.public_url(config),
         "group": docs_registry.command_group_name(manager),
         "docs_base": "docs/base.html",
+        "base": "/docs/",
+        "suffix": "",
         "modules": docs_registry.collect_modules(manager),
         "commands": docs_registry.collect_commands(manager),
         "settings": docs_registry.collect_settings(manager),
@@ -41,6 +43,11 @@ async def docs_index(request: Request):
     ctx = _ctx(request)
     ctx["active"] = "home"
     return request.app.state.templates.TemplateResponse(request, "docs/index.html", ctx)
+
+
+@router.get("/index", response_class=HTMLResponse)
+async def docs_index_alias(request: Request):
+    return await docs_index(request)
 
 
 @router.get("/modules", response_class=HTMLResponse)

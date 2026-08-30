@@ -303,12 +303,12 @@ class WelcomeModule(BarkModule):
     def _make_welcome_command(self):
         @discord.app_commands.command(name="welcome", description="Preview or test welcome message")
         @discord.app_commands.describe(
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+            public="Post in the channel for everyone (default private). Add `public` as the last argument."
         )
-        async def welcome_cmd(interaction: discord.Interaction, hide: bool = True):
+        async def welcome_cmd(interaction: discord.Interaction, public: bool = False):
             if not interaction.guild:
                 return
-            await interaction.response.defer(ephemeral=hide)
+            await interaction.response.defer(ephemeral=not public)
             config = await self.load_dashboard_config(interaction.guild.id)
 
             embed = discord.Embed(
@@ -342,6 +342,6 @@ class WelcomeModule(BarkModule):
                 name="Welcome DM", value="✅ Enabled" if dm_enabled else "❌ Disabled", inline=True
             )
 
-            await interaction.followup.send(embed=embed, ephemeral=hide)
+            await interaction.followup.send(embed=embed, ephemeral=not public)
 
         return welcome_cmd

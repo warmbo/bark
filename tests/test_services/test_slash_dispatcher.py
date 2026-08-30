@@ -311,9 +311,10 @@ async def test_dispatch_allows_invoker_with_required_permission():
 
 
 @pytest.mark.asyncio
-async def test_dispatch_hide_boolean_is_passed_to_informational_leaf():
-    """`/bark leaderboard false` must reach the handler with hide=False (public),
-    while a bare `/bark leaderboard` leaves hide unset so the default applies."""
+async def test_dispatch_public_flag_is_passed_to_informational_leaf():
+    """`/bark leaderboard public` must reach the handler with public=True,
+    `/bark leaderboard private` with public=False, and a bare invocation leaves
+    public unset so the private-by-default applies."""
     d = SlashDispatcher(_make_bot(), _make_manager())
     captured = {}
 
@@ -325,10 +326,10 @@ async def test_dispatch_hide_boolean_is_passed_to_informational_leaf():
     leaf.callback = callback
     leaf.parameters = [
         SimpleNamespace(
-            name="hide",
+            name="public",
             type=discord.AppCommandOptionType.boolean,
             required=False,
-            description="Only show this to you (default true)",
+            description="Post in the channel for everyone (default private)",
         )
     ]
     leaf.commands = None
@@ -341,11 +342,16 @@ async def test_dispatch_hide_boolean_is_passed_to_informational_leaf():
     interaction.guild = MagicMock()
     interaction.response = MagicMock()
 
-    # Bare invocation -> hide omitted -> default (True) applies in the handler.
+    # Bare invocation -> public omitted -> default (private) applies.
     await d.dispatch(interaction, "leaderboard", "")
-    assert "hide" not in captured
+    assert "public" not in captured
 
-    # Explicit false -> public.
+    # Explicit "public" -> public.
     captured.clear()
-    await d.dispatch(interaction, "leaderboard", "false")
-    assert captured.get("hide") is False
+    await d.dispatch(interaction, "leaderboard", "public")
+    assert captured.get("public") is True
+
+    # Explicit "private" -> private.
+    captured.clear()
+    await d.dispatch(interaction, "leaderboard", "private")
+    assert captured.get("public") is False

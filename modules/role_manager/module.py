@@ -557,12 +557,12 @@ class RoleManagerModule(BarkModule):
             name="roles", description="List roles you can claim in this server"
         )
         @discord.app_commands.describe(
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+            public="Post in the channel for everyone (default private). Add `public` as the last argument."
         )
-        async def roles_cmd(interaction: discord.Interaction, hide: bool = True):
+        async def roles_cmd(interaction: discord.Interaction, public: bool = False):
             if not interaction.guild:
                 return
-            await interaction.response.defer(ephemeral=hide)
+            await interaction.response.defer(ephemeral=not public)
             guild_id = int(interaction.guild.id)
             rules = await self._get_rules(guild_id)
             reaction_rules = [r for r in rules if r.rule_type == "reaction"]
@@ -589,7 +589,7 @@ class RoleManagerModule(BarkModule):
                 embed.description = "\n".join(lines)
                 embed.set_footer(text="React to the configured message to claim these roles.")
 
-            await interaction.followup.send(embed=embed, ephemeral=hide)
+            await interaction.followup.send(embed=embed, ephemeral=not public)
 
         return roles_cmd
 

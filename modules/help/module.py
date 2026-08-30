@@ -165,7 +165,7 @@ class HelpModule(BarkModule):
                     f"Run `{prefix}help` anytime — the bot DMs you this list. "
                     "Text commands (`bark!…`) reply in the channel; only `help` "
                     "uses DMs. Slash info commands stay private unless you add "
-                    "`false` as the last argument."
+                    "`public` as the last argument."
                 ),
                 inline=False,
             )
@@ -219,16 +219,16 @@ class HelpModule(BarkModule):
             description="Show server stats: members, channels, roles, boosts, age",
         )
         @discord.app_commands.describe(
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+            public="Post in the channel for everyone (default private). Add `public` as the last argument."
         )
-        async def info_cmd(interaction: discord.Interaction, hide: bool = True):
+        async def info_cmd(interaction: discord.Interaction, public: bool = False):
             guild = interaction.guild
             if guild is None:
                 await interaction.response.send_message(
                     "This command only works inside a server.", ephemeral=True
                 )
                 return
-            await interaction.response.defer(ephemeral=hide)
+            await interaction.response.defer(ephemeral=not public)
             bot = self.ctx.bot
             online = sum(
                 1 for m in guild.members if getattr(m, "status", None) is not None and m.status != discord.Status.offline
@@ -276,7 +276,7 @@ class HelpModule(BarkModule):
                 inline=True,
             )
             embed.set_footer(text=f"Server ID {guild.id}")
-            await interaction.followup.send(embed=embed, ephemeral=hide)
+            await interaction.followup.send(embed=embed, ephemeral=not public)
 
         return info_cmd
 

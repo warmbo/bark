@@ -1,13 +1,14 @@
 {% extends docs_base %}
 {% block title %}Modules — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span>Modules{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span>Modules{% endblock %}
 {% block content %}
+<p class="eyebrow">Built-in Modules</p>
 <h1>Modules</h1>
 <p class="lead">{{ modules | length }} modules ship with this Bark instance. Each page lists its commands, settings, and permissions.</p>
 {% if not modules %}<p class="notfound">No modules are registered right now.</p>{% endif %}
-<div class="grid" style="margin-top:8px">
+<div class="grid">
   {% for m in modules %}
-  <a class="card" href="/docs/modules/{{ m.name }}">
+  <a class="card" href="{{ base }}module/{{ m.name }}{{ suffix }}">
     <h3>{{ m.name | replace('_', ' ') | title }} <span class="ver">v{{ m.version }}</span></h3>
     <p>{{ m.description or 'No description.' }}</p>
     <div class="meta">

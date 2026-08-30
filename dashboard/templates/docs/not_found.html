@@ -1,8 +1,11 @@
 {% extends docs_base %}
 {% block title %}Not found — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span>Not found{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span>Not found{% endblock %}
 {% block content %}
+<p class="eyebrow">Oops</p>
 <h1>Not found</h1>
 <p class="notfound">{{ not_found or 'That page' }} doesn't exist in this instance's documentation.</p>
-<p style="margin-top:14px"><a href="/docs">← Back to the docs home</a></p>
+<div class="docs-actions">
+  <a href="{{ base }}index{{ suffix }}" class="button button-primary">Docs home</a>
+</div>
 {% endblock %}

@@ -236,10 +236,10 @@ class LoggingModule(BarkModule):
     def _make_logstatus_command(self):
         @discord.app_commands.command(name="logstatus", description="View logging configuration")
         @discord.app_commands.describe(
-            hide="Only show this to you (default true). Add `false` as the last argument to post it in the channel for everyone."
+            public="Post in the channel for everyone (default private). Add `public` as the last argument."
         )
-        async def logstatus(interaction: discord.Interaction, hide: bool = True):
-            await self._cmd_logstatus(interaction, hide)
+        async def logstatus(interaction: discord.Interaction, public: bool = False):
+            await self._cmd_logstatus(interaction, public)
 
         return logstatus
 
@@ -271,10 +271,10 @@ class LoggingModule(BarkModule):
             f"✅ {EVENT_TYPES[event_type]} → #{channel.name}", ephemeral=True
         )
 
-    async def _cmd_logstatus(self, interaction, hide: bool = True):
+    async def _cmd_logstatus(self, interaction, public: bool = False):
         if not interaction.guild:
             return
-        await interaction.response.defer(ephemeral=hide)
+        await interaction.response.defer(ephemeral=not public)
         from sqlalchemy import func, select
 
         async with session_scope() as session:
@@ -303,7 +303,7 @@ class LoggingModule(BarkModule):
             )
         if total_files:
             embed.set_footer(text=f"{total_files} files logged")
-        await interaction.followup.send(embed=embed, ephemeral=hide)
+        await interaction.followup.send(embed=embed, ephemeral=not public)
 
     async def _cmd_logfiles(self, interaction, member, file_type, limit):
         if not interaction.guild:

@@ -1,7 +1,8 @@
 {% extends docs_base %}
 {% block title %}{{ setting_group.module | title }} settings — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span><a href="/docs/settings">Settings</a><span>/</span>{{ setting_group.module | title }}{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span><a href="{{ base }}settings{{ suffix }}">Settings</a><span>/</span>{{ setting_group.module | title }}{% endblock %}
 {% block content %}
+<p class="eyebrow">Configuration</p>
 <h1>{{ setting_group.module | replace('_', ' ') | title }} — Settings</h1>
 <p class="lead">{{ setting_group.module_description or '' }}</p>
 <table>

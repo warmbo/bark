@@ -1,13 +1,14 @@
 {% extends docs_base %}
 {% block title %}Settings — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span>Settings{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span>Settings{% endblock %}
 {% block content %}
+<p class="eyebrow">Configuration</p>
 <h1>Settings</h1>
 <p class="lead">Every configurable setting across all modules, with its type, default, and what it controls. Open a module to see its full settings.</p>
 {% if not settings %}<p class="notfound">No configurable settings are registered right now.</p>{% endif %}
-<div class="grid" style="margin-top:8px">
+<div class="grid">
   {% for s in settings %}
-  <a class="card" href="/docs/settings/{{ s.module }}">
+  <a class="card" href="{{ base }}settings/{{ s.module }}{{ suffix }}">
     <h3>{{ s.module | replace('_', ' ') | title }} <span class="ver">{{ s.settings | length }}</span></h3>
     <p>{{ s.module_description or '' }}</p>
     <div class="meta">{{ s.settings | length }} settings</div>

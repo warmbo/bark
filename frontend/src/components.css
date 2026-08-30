@@ -431,6 +431,9 @@ textarea:focus-visible,
     justify-content: center;
     flex-shrink: 0;
     color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    border-radius: var(--radius-sm);
 }.dashboard-stat-body {
     min-width: 0;
     flex: 1;
@@ -491,7 +494,20 @@ textarea:focus-visible,
     border-color: var(--border-hover);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
-}.guild-card-uninstalled { border-style: dashed; }.guild-card-readonly { cursor: default; opacity: 0.55; }.guild-card-readonly:hover {
+}.guild-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    background: transparent;
+    transition: background var(--transition-fast);
+}
+.guild-card-connected::before { background: var(--accent); }
+.guild-card-connected.guild-card-ready::before { background: var(--green); }
+.guild-card-uninstalled { border-style: dashed; }.guild-card-readonly { cursor: default; opacity: 0.55; }.guild-card-readonly:hover {
     background: var(--bg-card);
     border-color: var(--glass-border);
     transform: none;

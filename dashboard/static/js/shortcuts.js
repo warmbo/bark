@@ -4,6 +4,16 @@ document.addEventListener('keydown', (event) => {
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target.isContentEditable;
     if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
+        // On the server dashboard, Ctrl/Cmd+K focuses the server search — the
+        // search bar advertises `Ctrl K` and that's the page's primary action.
+        // On any other page (or when the search input is absent) it opens the
+        // global command palette.
+        const serverSearch = document.getElementById('server-search');
+        if (serverSearch) {
+            serverSearch.focus();
+            serverSearch.select();
+            return;
+        }
         const overlay = document.getElementById('palette-overlay');
         if (overlay?.classList.contains('visible')) closePalette(); else openPalette();
         return;

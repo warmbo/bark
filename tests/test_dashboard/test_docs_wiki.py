@@ -186,7 +186,7 @@ async def test_docs_command_info_command_advertises_public_visibility(client):
     assert resp.status_code == 200
     body = resp.text
     assert "info command" in body
-    assert "false" in body  # the "post for everyone" hint
+    assert "public" in body  # the "post for everyone" hint
 
 
 @pytest.mark.asyncio

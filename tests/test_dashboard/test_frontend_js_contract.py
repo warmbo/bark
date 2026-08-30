@@ -574,3 +574,17 @@ def test_frontend_api_paths_have_matching_backend_routes():
     assert "moderation/cases?" in moderation_js
     assert "api('rulesets')" in moderation_js
     assert "api('wordlists')" in moderation_js
+
+
+def test_dashboard_server_search_ctrl_k_focus():
+    """On the dashboard, Ctrl/Cmd+K must focus the server search input (not
+    only open the command palette), matching the search bar's `Ctrl K` hint."""
+    shortcuts_js = source(JS / "shortcuts.js")
+    dashboard_html = source(TEMPLATES / "pages" / "dashboard.html")
+    # The dashboard search input must be targetable by the shortcut.
+    assert "server-search" in dashboard_html
+    # shortcuts.js must route Ctrl+K to the server search when it exists.
+    assert "server-search" in shortcuts_js, (
+        "Ctrl+K should focus #server-search on the dashboard"
+    )
+    assert "focus" in shortcuts_js

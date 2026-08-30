@@ -2,30 +2,36 @@
 {% block title %}Bark — Documentation & Help{% endblock %}
 {% block crumb %}Home{% endblock %}
 {% block content %}
-<h1>Bark Documentation &amp; Help</h1>
-<p class="lead">Welcome to the Bark knowledge base. Everything is generated live from the running instance, so it always matches the bot you're using.</p>
+<p class="eyebrow">Bark Documentation</p>
+<h1>Everything you need to run Bark.</h1>
+<p class="lead">Every command, setting, module, and permission — generated live from the running instance so it always matches the bot you're using.</p>
 
-<div class="grid" style="margin-top:8px">
-  <a class="card" href="/docs/modules">
+<div class="grid">
+  <a class="card" href="{{ base }}modules{{ suffix }}">
     <h3>Modules <span class="ver">{{ modules | length }}</span></h3>
     <p>Every module — moderation, reputation, announcements, roles, and more — with its commands, settings, and permissions.</p>
     <div class="meta">Start with the module you want to set up</div>
   </a>
-  <a class="card" href="/docs/commands">
+  <a class="card" href="{{ base }}commands{{ suffix }}">
     <h3>Commands <span class="ver">{{ commands | length }}</span></h3>
     <p>Every <code>/{{ group }}</code> command and its arguments, with the role required to run it.</p>
     <div class="meta">Look up any command by name</div>
   </a>
-  <a class="card" href="/docs/settings">
+  <a class="card" href="{{ base }}settings{{ suffix }}">
     <h3>Settings <span class="ver">{{ settings | length }} modules</span></h3>
     <p>Every configurable setting, its type, default value, and what it controls.</p>
     <div class="meta">Understand what each option does</div>
   </a>
-  <a class="card" href="/docs/permissions">
+  <a class="card" href="{{ base }}permissions{{ suffix }}">
     <h3>Permissions</h3>
     <p>How Bark decides who can run commands and change server state — member, moderator, and admin tiers.</p>
     <div class="meta">Who can do what</div>
   </a>
+</div>
+
+<div class="docs-actions">
+  <a href="{{ base }}commands{{ suffix }}" class="button button-primary">Browse commands</a>
+  <a href="{{ base }}modules{{ suffix }}" class="button button-secondary">Explore modules</a>
 </div>
 
 <h2>Quick start</h2>
@@ -33,6 +39,6 @@
 <ul style="margin:12px 0 0 22px;color:var(--muted)">
   <li><code>/{{ group }} help</code> — a DM with the full guide.</li>
   <li><code>/{{ group }} help &lt;command&gt;</code> — detailed help for one command.</li>
-  <li>Info commands are private by default; add <code>false</code> as the last argument to post them for everyone, e.g. <code>/{{ group }} leaderboard false</code>.</li>
+  <li>Info commands are private by default; add <code>public</code> as the last argument to post them for everyone, e.g. <code>/{{ group }} leaderboard public</code>.</li>
 </ul>
 {% endblock %}

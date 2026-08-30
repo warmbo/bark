@@ -4,7 +4,7 @@
 
 {% macro server_card(guild) %}
 {% if guild.access_tier == 'connected' %}
-<a href="/guild/{{ guild.id }}" class="guild-card guild-card-connected" data-server-name="{{ guild.name | lower }}">
+<a href="/guild/{{ guild.id }}" class="guild-card guild-card-connected{% if guild.ready_to_manage %} guild-card-ready{% endif %}" data-server-name="{{ guild.name | lower }}">
 {% elif guild.access_tier == 'manageable' and guild.invite_url %}
 <a href="{{ guild.invite_url }}" target="_blank" rel="noopener" class="guild-card guild-card-uninstalled" data-server-name="{{ guild.name | lower }}">
 {% else %}

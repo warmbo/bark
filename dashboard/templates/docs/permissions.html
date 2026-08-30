@@ -1,11 +1,12 @@
 {% extends docs_base %}
 {% block title %}Permissions — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span>Permissions{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span>Permissions{% endblock %}
 {% block content %}
+<p class="eyebrow">Authorization Model</p>
 <h1>Permissions</h1>
 <p class="lead">Bark grants access in three tiers. A user's effective role is the most permissive they hold (server owner, Discord admin, configured staff role, or per-module override).</p>
 
-<div class="grid" style="margin-top:8px">
+<div class="grid">
   <div class="card">
     <h3><span class="badge anyone">Anyone</span></h3>
     <p>Every member of a server where Bark is installed. Info commands (help, info, leaderboard, reputation, roles…) and self-service commands (voice, thanks) are available here.</p>
@@ -20,7 +21,7 @@
   </div>
 </div>
 
-<h2 style="margin-top:34px">Rules of thumb</h2>
+<h2>Rules of thumb</h2>
 <ul style="margin:0 0 20px 22px;color:var(--muted)">
   <li>Commands that only <strong>show information</strong> are available to all members.</li>
   <li>Commands that <strong>change anything</strong> (moderation actions, config, announcements, role management) require Moderator or Admin.</li>

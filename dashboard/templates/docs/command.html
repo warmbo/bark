@@ -1,8 +1,9 @@
 {% extends docs_base %}
 {% block title %}/{{ group }} {{ command.path }} — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span><a href="/docs/commands">Commands</a><span>/</span>{{ command.path }}{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span><a href="{{ base }}commands{{ suffix }}">Commands</a><span>/</span>{{ command.path }}{% endblock %}
 {% block content %}
-<h1><code style="font-size:22px">/{{ group }} {{ command.path }}</code></h1>
+<p class="eyebrow">Command Reference</p>
+<h1><code style="font-size:24px">/{{ group }} {{ command.path }}</code></h1>
 <p class="lead">{{ command.description or 'No description.' }}</p>
 
 <div class="role-key">
@@ -15,7 +16,7 @@
 {% if command.always_private %}
 <p style="margin-top:10px">This command shows <strong>other members' moderation records</strong> (warning reasons, moderator IDs, case targets). It is available to members but is <strong>always private</strong> — the response is never posted to the channel for everyone.</p>
 {% elif command.required_role == 'Anyone' %}
-<p style="margin-top:10px">This is an <strong>info command</strong> — it only shows information. It's private by default; add <code>false</code> as the last argument to post it in the channel for everyone, e.g. <code>/{{ group }} {{ command.path }} false</code>.</p>
+<p style="margin-top:10px">This is an <strong>info command</strong> — it only shows information. It's private by default; add <code>public</code> as the last argument to post it in the channel for everyone, e.g. <code>/{{ group }} {{ command.path }} public</code>.</p>
 {% else %}
 <p style="margin-top:10px">This command changes server state and is restricted to the role shown above.</p>
 {% endif %}

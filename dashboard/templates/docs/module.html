@@ -1,16 +1,17 @@
 {% extends docs_base %}
 {% block title %}{{ module.name | replace('_', ' ') | title }} — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span><a href="/docs/modules">Modules</a><span>/</span>{{ module.name | title }}{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span><a href="{{ base }}modules{{ suffix }}">Modules</a><span>/</span>{{ module.name | title }}{% endblock %}
 {% block content %}
+<p class="eyebrow">Module</p>
 <h1>{{ module.name | replace('_', ' ') | title }}</h1>
-<p class="lead">{{ module.description or 'No description.' }}{% if module.version %} <span class="ver" style="color:var(--dim);font-size:12px">v{{ module.version }}</span>{% endif %}{% if module.author %} · {{ module.author }}{% endif %}</p>
+<p class="lead">{{ module.description or 'No description.' }}{% if module.version %} <span class="ver" style="color:var(--muted-dim);font-size:13px;font-family:var(--font-mono)">v{{ module.version }}</span>{% endif %}{% if module.author %} · {{ module.author }}{% endif %}</p>
 
 {% if module.commands %}
 <h2>Commands</h2>
-<div class="role-key">Info commands are private by default — add <code>false</code> as the last argument to post them for everyone.</div>
+<div class="role-key">Info commands are private by default — add <code>public</code> as the last argument to post them for everyone.</div>
 {% for c in module.commands %}
 <div class="cmd">
-  <a class="path" href="/docs/commands/{{ c.path }}">/{{ group }} {{ c.path }}</a>
+  <a class="path" href="{{ base }}command/{{ c.path.replace(' ', '_') }}{{ suffix }}">/{{ group }} {{ c.path }}</a>
   <span class="desc">{{ c.description or '' }}</span>
   <span class="badge {{ 'anyone' if c.required_role == 'Anyone' else c.required_role | lower }}">{{ c.required_role }}</span>
 </div>

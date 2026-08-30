@@ -1,9 +1,10 @@
 {% extends docs_base %}
 {% block title %}Commands — Bark Docs{% endblock %}
-{% block crumb %}<a href="/docs">Docs</a><span>/</span>Commands{% endblock %}
+{% block crumb %}<a href="{{ base }}index{{ suffix }}">Docs</a><span>/</span>Commands{% endblock %}
 {% block content %}
+<p class="eyebrow">Slash Commands</p>
 <h1>Commands</h1>
-<p class="lead">{{ commands | length }} commands across the running modules. Click any command for its arguments and required role. Info commands are private by default — add <code>false</code> as the last argument to post them for everyone.</p>
+<p class="lead">{{ commands | length }} commands across the running modules. Click any command for its arguments and required role. Info commands are private by default — add <code>public</code> as the last argument to post them for everyone.</p>
 <div class="role-key">
   <span class="badge anyone">Anyone</span> members can run it
   <span class="badge moderator">Moderator</span> mods &amp; admins only
@@ -18,7 +19,7 @@
     <h2>{{ c.module | replace('_', ' ') | title }}</h2>
   {% endif %}
   <div class="cmd">
-    <a class="path" href="/docs/commands/{{ c.path }}">/{{ group }} {{ c.path }}</a>
+    <a class="path" href="{{ base }}command/{{ c.path.replace(' ', '_') }}{{ suffix }}">/{{ group }} {{ c.path }}</a>
     <span class="desc">{{ c.description or '' }}</span>
     <span class="badge {{ 'anyone' if c.required_role == 'Anyone' else c.required_role | lower }}">{{ c.required_role }}</span>
   </div>
