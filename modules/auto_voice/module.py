@@ -629,6 +629,18 @@ class AutoVoiceModule(BarkModule):
             return
         if not self._has_required_role(member, self._cfg(config, "required_role_id")):
             return
+        # A member should only ever have one live temporary channel per guild.
+        # discord.py's cached-VoiceState mutation can re-fire a "joined primary"
+        # event right after we move the member into their temp channel; without
+        # this guard Auto Voice would create a second channel and bounce the
+        # member between them, flooding the voice log with joins/moves/leaves
+        # and hitting Discord's rate limit.
+        already_owned = any(
+            ch.owner_id == member_id and ch.guild_id == int(member.guild.id)
+            for ch in self._managed_channels.values()
+        )
+        if already_owned:
+            return
         max_channels = self._config_int(
             config, "max_channels_per_user", default=0, minimum=0, maximum=50
         )

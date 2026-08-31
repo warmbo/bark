@@ -195,6 +195,40 @@ async def test_joining_primary_creates_configured_channel_and_moves_member():
 
 
 @pytest.mark.asyncio
+async def test_re_fired_join_does_not_create_second_channel_for_same_member():
+    """A member who already owns a temporary channel must not get a second one.
+
+    discord.py's cached-VoiceState mutation can re-fire a 'joined primary' event
+    right after Auto Voice moves the member into their temp channel. Without a
+    per-member guard, Auto Voice would create a second channel and bounce the
+    member between them — flooding the voice log and hitting Discord's rate
+    limit. Re-running _on_voice_state_update for the primary join must be a
+    no-op once the member already has a managed channel.
+    """
+    ctx, guild, member, primary, temporary, disconnected, joined_primary = _voice_fixture()
+    module = AutoVoiceModule(ctx)
+
+    # First join: creates a temp channel and moves the member.
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=disconnected, after=joined_primary
+    )
+    guild.create_voice_channel.assert_awaited_once()
+    member.move_to.assert_awaited_once()
+    assert temporary.id in module.managed_channel_ids
+
+    # A re-fired 'joined primary' event (from the VoiceState mutation) arrives.
+    guild.create_voice_channel.reset_mock()
+    member.move_to.reset_mock()
+    await module._on_voice_state_update(
+        "discord_voice_state", member=member, before=disconnected, after=joined_primary
+    )
+
+    guild.create_voice_channel.assert_not_awaited()
+    member.move_to.assert_not_awaited()
+    assert len(module.managed_channel_ids) == 1
+
+
+@pytest.mark.asyncio
 async def test_created_channel_is_persisted_for_restart_recovery(db):
     from sqlalchemy import select
 
