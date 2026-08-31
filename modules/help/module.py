@@ -287,6 +287,14 @@ class HelpModule(BarkModule):
     def _make_stats_command(self):
         from services import server_stats
 
+        def _ranked(items, fmt):
+            """Render a ranked list with medal markers for the top 3."""
+            medals = ("🥇", "🥈", "🥉")
+            lines = []
+            for i, item in enumerate(items[:3]):
+                lines.append(f"{medals[i]} {fmt(item)}")
+            return "\n".join(lines)
+
         @discord.app_commands.command(
             name="stats",
             description="Show server activity stats: top channels, games, rep, voice, and more",
@@ -317,46 +325,53 @@ class HelpModule(BarkModule):
                 timestamp=datetime.now(timezone.utc),
             )
 
-            if channels:
-                value = "\n".join(
-                    f"**#{c['name']}** — {c['count']:,} messages" for c in channels
-                )
-                embed.add_field(name="Top Channels (30d)", value=value, inline=False)
-            else:
-                embed.add_field(name="Top Channels (30d)", value="No message data yet.", inline=False)
-
-            if games:
-                value = "\n".join(f"**{g['name']}** — {g['count']} sessions" for g in games)
-                embed.add_field(name="🎮 Top Games (this month)", value=value, inline=False)
-            else:
-                embed.add_field(name="🎮 Top Games (this month)", value="No game data yet.", inline=False)
-
-            if rep:
-                value = "\n".join(
-                    f"<@{r['user_id']}> — **{r['score']:,.1f} pts** (Lv {r['level']})" for r in rep
-                )
-                embed.add_field(name="🏆 Highest Reputation", value=value, inline=False)
-            else:
-                embed.add_field(name="🏆 Highest Reputation", value="No reputation data yet.", inline=False)
-
-            if voice:
-                value = "\n".join(
-                    f"<@{v['user_id']}> — **{v['minutes']:,.0f} min**" for v in voice
-                )
-                embed.add_field(name="🎧 Top Voice (30d)", value=value, inline=False)
-            else:
-                embed.add_field(name="🎧 Top Voice (30d)", value="No voice data yet.", inline=False)
-
-            sessions_value = (
-                f"**Avg {sessions['avg_per_day']}** sessions/day\n"
-                f"**Max {sessions['max_per_day']}** in a day\n"
-                f"({sessions['days']} active days)"
-            )
-            embed.add_field(name="💬 Voice Sessions (30d)", value=sessions_value, inline=True)
-
+            # Row 1 — the three "activity" leaders.
             embed.add_field(
-                name="⭐ Top Rep Source",
-                value=f"**{rep_source['source'].title()}** — {rep_source['points']:,.1f} pts",
+                name="Top Channels · 30d",
+                value=_ranked(channels, lambda c: f"#{c['name']} — {c['count']:,}") if channels
+                else "No message data yet.",
+                inline=True,
+            )
+            embed.add_field(
+                name="Top Games · month",
+                value=_ranked(games, lambda g: f"**{g['name']}** ×{g['count']}") if games
+                else "No game data yet.",
+                inline=True,
+            )
+            embed.add_field(
+                name="Highest Rep",
+                value=_ranked(
+                    rep,
+                    lambda r: f"<@{r['user_id']}> — {r['score']:,.1f} pts",
+                ) if rep else "No reputation data yet.",
+                inline=True,
+            )
+
+            # Row 2 — voice + summary stats.
+            embed.add_field(
+                name="Top Voice · 30d",
+                value=_ranked(
+                    voice,
+                    lambda v: f"<@{v['user_id']}> — {v['minutes']:,.0f} min",
+                ) if voice else "No voice data yet.",
+                inline=True,
+            )
+            embed.add_field(
+                name="Voice Sessions · day",
+                value=(
+                    f"**Avg {sessions['avg_per_day']}**\n"
+                    f"**Max {sessions['max_per_day']}**\n"
+                    f"{sessions['days']} active days"
+                ),
+                inline=True,
+            )
+            embed.add_field(
+                name="Top Rep Source",
+                value=(
+                    f"**{rep_source['source'].title()}**\n"
+                    f"{rep_source['points']:,.1f} pts"
+                    if rep_source["source"] != "none" else "No rep data yet."
+                ),
                 inline=True,
             )
 

@@ -93,14 +93,19 @@ async def test_stats_command_builds_embed_with_all_fields(db, interaction):
     send = interaction.followup.send
     send.assert_awaited_once()
     embed = send.await_args.kwargs["embed"]
-    assert embed.title == "📊 War Lab — Activity Stats"
-    field_names = {f.name for f in embed.fields}
-    assert "Top Channels (30d)" in field_names
-    assert "🎮 Top Games (this month)" in field_names
-    assert "🏆 Highest Reputation" in field_names
-    assert "🎧 Top Voice (30d)" in field_names
-    assert "💬 Voice Sessions (30d)" in field_names
-    assert "⭐ Top Rep Source" in field_names
+    assert "Activity Stats" in embed.title
+    # Layout is a balanced grid: 6 inline fields in two rows of 3, not a tall
+    # column of full-width fields.
+    fields = embed.fields
+    assert len(fields) == 6
+    assert all(f.inline for f in fields), "stats fields should be inline (side-by-side)"
+    field_names = [f.name for f in fields]
+    joined = " ".join(field_names)
+    for name in ("Top Channels", "Top Games", "Highest Rep", "Top Voice", "Voice Sessions", "Rep Source"):
+        assert name in joined
+    # Ranked entries use medal markers so the leader is scannable.
+    values = " ".join(f.value for f in fields)
+    assert "🥇" in values
     # Private by default -> ephemeral.
     assert send.await_args.kwargs["ephemeral"] is True
 
