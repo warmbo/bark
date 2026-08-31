@@ -36,6 +36,50 @@ logger = logging.getLogger("bark.slash_dispatcher")
 
 AUTOCOMPLETE_LIMIT = 25
 
+# Alias names for modules and commands so users can type short forms, e.g.
+# `/bark rep lb` instead of `/bark reputation leaderboard`. Keys are canonical
+# names; values are alternate names registered alongside (sharing the same
+# callback). Module aliases create an extra subgroup; command aliases create
+# extra subcommands within that module's subgroup (or directly off /bark for
+# single-command modules). Discord has no native alias concept, so we register
+# duplicate entries pointing at the same underlying command.
+MODULE_ALIASES: dict[str, tuple[str, ...]] = {
+    "reputation": ("rep",),
+    "moderation": ("mod",),
+    "role_manager": ("role",),
+    "logging": ("log",),
+    "auto_voice": ("voice", "av"),
+    "announcements": ("announce",),
+    "birthdays": ("bday", "birthday"),
+}
+
+COMMAND_ALIASES: dict[str, tuple[str, ...]] = {
+    "leaderboard": ("lb", "top"),
+    "reputation": ("rep", "score"),
+    "thanks": ("thx", "ty"),
+    "warn": ("w",),
+    "warnings": ("warns", "warnlist"),
+    "cases": ("c",),
+    "clearwarn": ("cw",),
+    "voice_sessions": ("vs", "sessions"),
+    "vc_kick": ("vk",),
+    "vc_move": ("vm",),
+    "vc_mute": ("vmu",),
+    "vc_unmute": ("vum",),
+    "vc_deafen": ("vdef",),
+    "vc_undeafen": ("vundef",),
+    "automod": ("am",),
+    "logsetup": ("logs", "setup"),
+    "logstatus": ("status",),
+    "logfiles": ("lf",),
+    "voice_name": ("vn",),
+    "voice_limit": ("vl",),
+    "voice_lock": ("vlock",),
+    "voice_unlock": ("vunlock",),
+    "welcome": ("hello",),
+    "speak": ("say",),
+}
+
 
 @dataclass
 class Leaf:
@@ -158,6 +202,13 @@ class SlashDispatcher:
             for leaf in leaves:
                 try:
                     root.add_command(self._native_leaf(leaf))
+                    for alias in self._command_aliases(leaf):
+                        try:
+                            root.add_command(self._alias_leaf(leaf, alias))
+                        except Exception:
+                            logger.exception(
+                                "Failed to add alias %s for %s to group", alias, leaf.path
+                            )
                 except Exception:
                     logger.exception("Failed to add %s to group", leaf.path)
         else:
@@ -166,11 +217,70 @@ class SlashDispatcher:
                 description=(module_name.title() + " commands")[:100],
             )
             for leaf in leaves:
-                sub.add_command(self._native_leaf(leaf))
+                try:
+                    sub.add_command(self._native_leaf(leaf))
+                    for alias in self._command_aliases(leaf):
+                        try:
+                            sub.add_command(self._alias_leaf(leaf, alias))
+                        except Exception:
+                            logger.exception(
+                                "Failed to add alias %s for %s", alias, leaf.path
+                            )
+                except Exception:
+                    logger.exception("Failed to add %s to group %s", leaf.path, module_name)
             try:
                 root.add_command(sub)
+                for mod_alias in MODULE_ALIASES.get(module_name, ()):
+                    if mod_alias == module_name:
+                        continue
+                    alias_sub = app_commands.Group(
+                        name=mod_alias,
+                        description=(module_name.title() + " commands")[:100],
+                    )
+                    for leaf in leaves:
+                        try:
+                            alias_sub.add_command(self._native_leaf(leaf))
+                            for alias in self._command_aliases(leaf):
+                                try:
+                                    alias_sub.add_command(self._alias_leaf(leaf, alias))
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                    try:
+                        root.add_command(alias_sub)
+                    except Exception:
+                        logger.exception("Failed to add module alias group %s", mod_alias)
             except Exception:
                 logger.exception("Failed to add module group %s", module_name)
+
+    def _command_aliases(self, leaf: Leaf) -> tuple[str, ...]:
+        """Return the command aliases for a leaf (canonical name only, no collision)."""
+        name = getattr(leaf.command, "name", "")
+        aliases = COMMAND_ALIASES.get(name, ())
+        # Skip aliases that would collide with an existing canonical path.
+        return tuple(a for a in aliases if a != name and a not in self._registry)
+
+    def _alias_leaf(self, leaf: Leaf, alias: str) -> Any:
+        """Return an alias Command sharing the leaf's callback + check.
+
+        discord.py requires a distinct Command object per name, but a shared
+        callback means invoking the alias runs exactly the same handler with the
+        same parameters and the same module enablement check.
+        """
+        orig = leaf.command
+        alias_cmd = app_commands.Command(
+            name=alias,
+            description=getattr(orig, "description", "") or "",
+            callback=orig.callback,
+        )
+        # Mirror the module enablement check added by _native_leaf.
+        try:
+            for check in getattr(orig, "checks", []):
+                alias_cmd.add_check(check)
+        except Exception:
+            logger.exception("Failed to copy checks to alias %s", alias)
+        return alias_cmd
 
     def _sync_module_to_group(self, module_name: str) -> None:
         """Add (or refresh) a module's commands in the live group tree."""

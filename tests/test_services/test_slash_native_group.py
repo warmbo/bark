@@ -114,3 +114,43 @@ def test_subcommand_has_module_enablement_check():
     interaction.guild_id = 1
     with pytest.raises(discord.app_commands.CheckFailure):
         asyncio.run(lb.checks[0](interaction))
+
+
+def test_module_and_command_aliases_are_registered_in_group():
+    """`/bark rep lb` must work like `/bark reputation leaderboard`: a `rep`
+    subgroup containing an `lb` subcommand that shares the leaderboard callback."""
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    lb_leaf, _ = _make_leaf("leaderboard")
+    rep_leaf, _ = _make_leaf("reputation")
+    _register(d, "reputation", [(lb_leaf, _), (rep_leaf, _)])
+
+    group = d.build_group("bark")
+
+    # Canonical subgroup `reputation` exists.
+    rep_group = next(c for c in group.commands if c.name == "reputation")
+    assert {c.name for c in rep_group.commands} >= {"leaderboard", "reputation"}
+
+    # Alias subgroup `rep` exists and carries an `lb` alias of leaderboard.
+    alias_group = next((c for c in group.commands if c.name == "rep"), None)
+    assert alias_group is not None, "module alias 'rep' should be registered"
+    alias_names = {c.name for c in alias_group.commands}
+    assert "lb" in alias_names, "command alias 'lb' should be registered"
+
+    # The alias subcommand shares the canonical leaf's callback.
+    lb_alias = next(c for c in alias_group.commands if c.name == "lb")
+    lb_canonical = next(c for c in rep_group.commands if c.name == "leaderboard")
+    assert lb_alias.callback is lb_canonical.callback
+
+
+def test_single_command_module_aliases_are_direct_children():
+    """A single-command module's alias hangs directly off /bark."""
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    _register(d, "welcome", [_make_leaf("welcome")])
+
+    group = d.build_group("bark")
+    direct_names = {c.name for c in group.commands if not getattr(c, "commands", None)}
+    # welcome command alias "hello" -> direct child sharing the welcome callback.
+    assert "hello" in direct_names
+    w_cmd = next(c for c in group.commands if c.name == "hello")
+    welcome_cmd = next(c for c in group.commands if c.name == "welcome")
+    assert w_cmd.callback is welcome_cmd.callback
