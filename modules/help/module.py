@@ -9,7 +9,7 @@ in-channel copy when the user has DMs disabled.
 from __future__ import annotations
 
 import logging
-from datetime import timezone
+from datetime import datetime, timezone
 
 import discord
 
@@ -57,6 +57,10 @@ class HelpModule(BarkModule):
             CommandRegistration(
                 name="info",
                 description="Show server stats: members, channels, roles, boosts, age",
+            ),
+            CommandRegistration(
+                name="stats",
+                description="Show server activity stats: top channels, games, rep, voice, and more",
             ),
         ]
 
@@ -279,6 +283,87 @@ class HelpModule(BarkModule):
             await interaction.followup.send(embed=embed, ephemeral=not public)
 
         return info_cmd
+
+    def _make_stats_command(self):
+        from services import server_stats
+
+        @discord.app_commands.command(
+            name="stats",
+            description="Show server activity stats: top channels, games, rep, voice, and more",
+        )
+        @discord.app_commands.describe(
+            public="Post in the channel for everyone (default private). Add `public` as the last argument."
+        )
+        async def stats_cmd(interaction: discord.Interaction, public: bool = False):
+            guild = interaction.guild
+            if guild is None:
+                await interaction.response.send_message(
+                    "This command only works inside a server.", ephemeral=True
+                )
+                return
+            await interaction.response.defer(ephemeral=not public)
+            guild_id = int(guild.id)
+
+            channels = await server_stats.top_channel_30d(guild_id)
+            games = await server_stats.top_game_month(guild_id)
+            rep = await server_stats.top_reputation(guild_id)
+            voice = await server_stats.top_voice_30d(guild_id)
+            sessions = await server_stats.voice_session_summary(guild_id)
+            rep_source = await server_stats.top_rep_source(guild_id)
+
+            embed = discord.Embed(
+                title=f"📊 {guild.name} — Activity Stats",
+                color=discord.Color.blurple(),
+                timestamp=datetime.now(timezone.utc),
+            )
+
+            if channels:
+                value = "\n".join(
+                    f"**#{c['name']}** — {c['count']:,} messages" for c in channels
+                )
+                embed.add_field(name="Top Channels (30d)", value=value, inline=False)
+            else:
+                embed.add_field(name="Top Channels (30d)", value="No message data yet.", inline=False)
+
+            if games:
+                value = "\n".join(f"**{g['name']}** — {g['count']} sessions" for g in games)
+                embed.add_field(name="🎮 Top Games (this month)", value=value, inline=False)
+            else:
+                embed.add_field(name="🎮 Top Games (this month)", value="No game data yet.", inline=False)
+
+            if rep:
+                value = "\n".join(
+                    f"<@{r['user_id']}> — **{r['score']:,.1f} pts** (Lv {r['level']})" for r in rep
+                )
+                embed.add_field(name="🏆 Highest Reputation", value=value, inline=False)
+            else:
+                embed.add_field(name="🏆 Highest Reputation", value="No reputation data yet.", inline=False)
+
+            if voice:
+                value = "\n".join(
+                    f"<@{v['user_id']}> — **{v['minutes']:,.0f} min**" for v in voice
+                )
+                embed.add_field(name="🎧 Top Voice (30d)", value=value, inline=False)
+            else:
+                embed.add_field(name="🎧 Top Voice (30d)", value="No voice data yet.", inline=False)
+
+            sessions_value = (
+                f"**Avg {sessions['avg_per_day']}** sessions/day\n"
+                f"**Max {sessions['max_per_day']}** in a day\n"
+                f"({sessions['days']} active days)"
+            )
+            embed.add_field(name="💬 Voice Sessions (30d)", value=sessions_value, inline=True)
+
+            embed.add_field(
+                name="⭐ Top Rep Source",
+                value=f"**{rep_source['source'].title()}** — {rep_source['points']:,.1f} pts",
+                inline=True,
+            )
+
+            embed.set_footer(text=f"Server ID {guild.id}")
+            await interaction.followup.send(embed=embed, ephemeral=not public)
+
+        return stats_cmd
 
     async def enable(self) -> None:
         pass
