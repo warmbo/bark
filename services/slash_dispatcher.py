@@ -56,12 +56,14 @@ class SlashDispatcher:
         self._registry: dict[str, Leaf] = {}
         self._module_paths: dict[str, list[str]] = {}  # module name -> command paths
         self._cmd: app_commands.Command | None = None
+        self._group: app_commands.Group | None = None
 
     # ── Registration ──────────────────────────────────
 
     def register_module(self, module_name: str, module: BarkModule) -> None:
         """Index every slash-capable command a module exposes."""
         check = self.manager._command_enabled_check(module_name)  # noqa: SLF001
+        registered_any = False
         for cmd in module.get_commands():
             if not cmd.slash:
                 continue
@@ -76,6 +78,9 @@ class SlashDispatcher:
                 )
                 continue
             self._add_leaf(module_name, root, check)
+            registered_any = True
+        if self._group is not None and registered_any:
+            self._sync_module_to_group(module_name)
 
     def _add_leaf(self, module_name: str, cmd, check, prefix: str = "") -> None:
         children = getattr(cmd, "commands", None)
@@ -120,6 +125,98 @@ class SlashDispatcher:
         )
         cmd.autocomplete("command")(self._autocomplete)
         self._cmd = cmd
+        return cmd
+
+    # ── Native subcommand-group build ─────────────────
+
+    def build_group(self, group_name: str) -> app_commands.Group:
+        """Construct ``/<group_name>`` as a native command Group.
+
+        Multi-command modules become subcommand-groups (``/bark moderation
+        warn``); single-command modules and the general help commands hang
+        directly off the root (``/bark welcome``, ``/bark stats``). Every leaf
+        carries a check that gates on its module being enabled for the guild.
+        Native subcommands give Discord typed-argument autocomplete, so users
+        type ``/bark reputation leaderboard`` instead of selecting the old
+        ``command``/``args`` string fields.
+        """
+        root = app_commands.Group(
+            name=group_name,
+            description="Bark commands — pick a module or command.",
+        )
+        for module_name in sorted(self._module_paths):
+            self._add_module_to_group(root, module_name)
+        self._group = root
+        return root
+
+    def _add_module_to_group(self, root: app_commands.Group, module_name: str) -> None:
+        """Add one module's leaves to a group (idempotent per module)."""
+        leaves = [self._registry[p] for p in self._module_paths[module_name]]
+        if not leaves:
+            return
+        if len(leaves) == 1 or module_name == "help":
+            for leaf in leaves:
+                try:
+                    root.add_command(self._native_leaf(leaf))
+                except Exception:
+                    logger.exception("Failed to add %s to group", leaf.path)
+        else:
+            sub = app_commands.Group(
+                name=module_name,
+                description=(module_name.title() + " commands")[:100],
+            )
+            for leaf in leaves:
+                sub.add_command(self._native_leaf(leaf))
+            try:
+                root.add_command(sub)
+            except Exception:
+                logger.exception("Failed to add module group %s", module_name)
+
+    def _sync_module_to_group(self, module_name: str) -> None:
+        """Add (or refresh) a module's commands in the live group tree."""
+        if self._group is None:
+            return
+        # Remove any existing child for this module (by subgroup name or by the
+        # direct leaf names) so re-registration is idempotent.
+        for child in list(self._group.commands):
+            child_name = getattr(child, "name", "")
+            if child_name == module_name:
+                try:
+                    self._group.remove_command(module_name)
+                except Exception:
+                    pass
+        self._add_module_to_group(self._group, module_name)
+
+    def _native_leaf(self, leaf: Leaf) -> Any:
+        """Return a leaf command wired for native subcommand invocation.
+
+        The leaf is a real ``app_commands.Command`` (or Group). We add a check
+        that raises ``CheckFailure`` when its module is disabled for the guild,
+        so Discord's native UI enforces the module gate. ``default_permissions``
+        on the leaf are enforced natively by Discord.
+        """
+        cmd = leaf.command
+        module_name = leaf.module_name
+
+        async def _module_gate(interaction: discord.Interaction) -> bool:
+            guild_id = getattr(interaction, "guild_id", None)
+            if guild_id is None:
+                return True  # DM / no-guild context — never gate here
+            try:
+                enabled = self.manager.is_enabled_for_guild(guild_id, module_name)
+            except Exception:
+                logger.exception("Enablement check failed for module %s", module_name)
+                enabled = False  # fail closed
+            if not enabled:
+                raise discord.app_commands.CheckFailure(
+                    f"module '{module_name}' is not enabled here"
+                )
+            return True
+
+        try:
+            cmd.add_check(_module_gate)
+        except Exception:
+            logger.exception("Failed to add enablement check to %s", leaf.path)
         return cmd
 
     # ── Dispatch ──────────────────────────────────────

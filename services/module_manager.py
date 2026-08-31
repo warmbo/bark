@@ -86,17 +86,22 @@ class ModuleManager:
         # Single /bark dispatcher: one slash command hosting every module command.
         self._dispatcher = SlashDispatcher(self.bot, self)
 
-    # ── Single /bark dispatcher ───────────────────────
+    # ── Native /bark subcommand group ─────────────────
 
     def _ensure_dispatcher_command(self):
-        """Register the single ``/bark`` dispatcher command on the tree once."""
-        if self._dispatcher._cmd is not None:  # noqa: SLF001
-            return self._dispatcher._cmd
-        cmd = self._dispatcher.build_command(self.command_group_name())
+        """Register the native ``/bark`` subcommand group on the tree once.
+
+        Builds the group from the live registry (multi-command modules become
+        subcommand-groups; single-command modules and general help commands hang
+        directly off the root). Commands sync to Discord on ready.
+        """
+        if self._dispatcher._group is not None:  # noqa: SLF001
+            return self._dispatcher._group
+        group = self._dispatcher.build_group(self.command_group_name())
         if getattr(self.bot, "tree", None) is not None:
-            self.bot.tree.add_command(cmd, guild=self._command_guild())
-            logger.info("Registered slash dispatcher command '/%s'", cmd.name)
-        return cmd
+            self.bot.tree.add_command(group, guild=self._command_guild())
+            logger.info("Registered native slash command group '/%s'", group.name)
+        return group
 
     # ── Command namespace ─────────────────────────────
 

@@ -288,11 +288,10 @@ class HelpModule(BarkModule):
         from services import server_stats
 
         def _ranked(items, fmt):
-            """Render a ranked list with medal markers for the top 3."""
-            medals = ("🥇", "🥈", "🥉")
+            """Render a ranked list (top 3) with clean 1./2./3. numbering."""
             lines = []
             for i, item in enumerate(items[:3]):
-                lines.append(f"{medals[i]} {fmt(item)}")
+                lines.append(f"`{i + 1}.` {fmt(item)}")
             return "\n".join(lines)
 
         @discord.app_commands.command(
@@ -321,61 +320,63 @@ class HelpModule(BarkModule):
 
             embed = discord.Embed(
                 title=f"📊 {guild.name} — Activity Stats",
+                description="Last 30 days of activity across the server.",
                 color=discord.Color.blurple(),
                 timestamp=datetime.now(timezone.utc),
             )
 
-            # Row 1 — the three "activity" leaders.
+            # Channel + game leaders sit side-by-side as a compact 2-up.
             embed.add_field(
-                name="Top Channels · 30d",
-                value=_ranked(channels, lambda c: f"#{c['name']} — {c['count']:,}") if channels
-                else "No message data yet.",
+                name="🗨️ Top Channels",
+                value=_ranked(channels, lambda c: f"**#{c['name']}** · {c['count']:,} msgs")
+                if channels else "No message data yet.",
                 inline=True,
             )
             embed.add_field(
-                name="Top Games · month",
-                value=_ranked(games, lambda g: f"**{g['name']}** ×{g['count']}") if games
+                name="🎮 Top Games",
+                value=_ranked(games, lambda g: f"**{g['name']}** · {g['count']}×") if games
                 else "No game data yet.",
                 inline=True,
             )
+
+            # Rep + voice leaders as a second 2-up.
             embed.add_field(
-                name="Highest Rep",
+                name="🏆 Highest Rep",
                 value=_ranked(
                     rep,
-                    lambda r: f"<@{r['user_id']}> — {r['score']:,.1f} pts",
+                    lambda r: f"<@{r['user_id']}> · {r['score']:,.0f} pts",
                 ) if rep else "No reputation data yet.",
                 inline=True,
             )
-
-            # Row 2 — voice + summary stats.
             embed.add_field(
-                name="Top Voice · 30d",
+                name="🎧 Top Voice",
                 value=_ranked(
                     voice,
-                    lambda v: f"<@{v['user_id']}> — {v['minutes']:,.0f} min",
+                    lambda v: f"<@{v['user_id']}> · {v['minutes']:,.0f} min",
                 ) if voice else "No voice data yet.",
                 inline=True,
             )
+
+            # Two summary lines — voice sessions and the top rep source.
             embed.add_field(
-                name="Voice Sessions · day",
+                name="💬 Voice Sessions",
                 value=(
-                    f"**Avg {sessions['avg_per_day']}**\n"
-                    f"**Max {sessions['max_per_day']}**\n"
+                    f"**{sessions['avg_per_day']}** sessions/day on average\n"
+                    f"**{sessions['max_per_day']}** in a single day\n"
                     f"{sessions['days']} active days"
                 ),
                 inline=True,
             )
             embed.add_field(
-                name="Top Rep Source",
+                name="⭐ Top Rep Source",
                 value=(
-                    f"**{rep_source['source'].title()}**\n"
-                    f"{rep_source['points']:,.1f} pts"
+                    f"**{rep_source['source'].title()}** · {rep_source['points']:,.0f} pts"
                     if rep_source["source"] != "none" else "No rep data yet."
                 ),
                 inline=True,
             )
 
-            embed.set_footer(text=f"Server ID {guild.id}")
+            embed.set_footer(text=f"Server ID {guild.id} · /{self.ctx.command_group}")
             await interaction.followup.send(embed=embed, ephemeral=not public)
 
         return stats_cmd

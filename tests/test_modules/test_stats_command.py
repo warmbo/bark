@@ -103,9 +103,9 @@ async def test_stats_command_builds_embed_with_all_fields(db, interaction):
     joined = " ".join(field_names)
     for name in ("Top Channels", "Top Games", "Highest Rep", "Top Voice", "Voice Sessions", "Rep Source"):
         assert name in joined
-    # Ranked entries use medal markers so the leader is scannable.
+    # Ranked entries use clean 1./2./3. numbering.
     values = " ".join(f.value for f in fields)
-    assert "🥇" in values
+    assert "`1.`" in values
     # Private by default -> ephemeral.
     assert send.await_args.kwargs["ephemeral"] is True
 
