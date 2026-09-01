@@ -42,7 +42,6 @@ def should_log(
         _LAST_LOGGED[key] = now
         # Bound the cache so a long-running process doesn't grow unboundedly.
         if len(_LAST_LOGGED) > 2000:
-            cutoff = now - (WINDOW_SECONDS * 4)
             _LAST_LOGGED.clear()
             _LAST_LOGGED[key] = now
         return True

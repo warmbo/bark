@@ -37,8 +37,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("bark.slash_dispatcher")
 
-AUTOCOMPLETE_LIMIT = 25
-
 # Alias names for modules and commands so users can type short forms, e.g.
 # `/bark rep lb` instead of `/bark reputation leaderboard`. Keys are canonical
 # names; values are alternate names registered alongside (sharing the same
@@ -162,8 +160,16 @@ class SlashDispatcher:
         """Construct the single top-level ``/<group_name>`` app command.
 
         Options are auto-derived from the callback signature: ``command``
-        (optional string, autocompleted) and ``args`` (optional string). Making
-        ``command`` optional lets a bare ``/bark`` show guidance.
+        (optional string) and ``args`` (optional string). Making ``command``
+        optional lets a bare ``/bark`` show guidance.
+
+        ``command`` is intentionally a PLAIN string option, NOT autocompleted:
+        Discord only commits free-typed text into non-autocomplete options, so
+        ``/bark help`` typed by hand must bind to ``command`` and run help —
+        the same behavior as other bots' ``/help``-style commands (2026-09-01
+        report: "/bark-dev help" returned the generic overview because the
+        autocomplete option kept the typed text pending). Discovery is served
+        by the interactive module/command menus instead.
         """
         async def _callback(
             interaction: discord.Interaction, command: str = "", args: str = ""
@@ -172,10 +178,9 @@ class SlashDispatcher:
 
         cmd = app_commands.Command(
             name=group_name,
-            description="Bark commands — pick a command (tab to autocomplete) and add optional args.",
+            description="Bark commands — type a command (e.g. help, warn @user) or leave blank for the menu.",
             callback=_callback,
         )
-        cmd.autocomplete("command")(self._autocomplete)
         self._cmd = cmd
         return cmd
 
@@ -740,22 +745,6 @@ class SlashDispatcher:
         pages = self._build_overview_pages(guild_id)
         view = module_menu_view(self, guild_id)
         await self._send_paginated(interaction, pages, view=view)
-
-    # ── Autocomplete ──────────────────────────────────
-
-    async def _autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        current = (current or "").lower()
-        guild_id = getattr(interaction, "guild_id", None)
-        paths = [
-            path
-            for path, leaf in self._registry.items()
-            if (not current or current in path.lower())
-            and self._path_enabled(guild_id, leaf)
-        ]
-        paths.sort()
-        return [app_commands.Choice(name=path, value=path) for path in paths[:AUTOCOMPLETE_LIMIT]]
 
     def _path_enabled(self, guild_id, leaf: Leaf) -> bool:
         if guild_id is None:

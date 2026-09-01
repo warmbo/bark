@@ -14,6 +14,8 @@ still exposes every module command including `/bark birthday set`.
 import importlib
 import json
 
+import discord
+
 from modules.base import BarkModule
 from services.slash_dispatcher import SlashDispatcher
 
@@ -85,11 +87,15 @@ def test_flat_bark_payload_fits_discord_cap():
 
 
 def test_flat_bark_resolves_birthday_set_path():
-    """`/bark birthday set` must resolve through the flat dispatcher's command
-    autocomplete — the exact syntax that failed for users on 2026-09-01."""
+    """`/bark birthday set` must resolve through the flat dispatcher — the
+    exact syntax that failed for users on 2026-09-01."""
     d = _dispatcher()
     assert "birthday set" in d._registry
-    # The flat command's 'command' option carries the autocomplete handler.
+    # The flat command's 'command' option is a PLAIN string so Discord binds
+    # free-typed text (e.g. `/bark help`) without requiring a click. An
+    # autocomplete option would leave typed text pending (2026-09-01 report).
     cmd = d.build_command("bark")
     param = next(p for p in cmd.parameters if p.name == "command")
-    assert param.autocomplete is not None
+    assert param.type is discord.AppCommandOptionType.string
+    assert not param.autocomplete  # False = no autocomplete handler attached
+    assert param.required is False

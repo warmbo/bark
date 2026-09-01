@@ -262,17 +262,31 @@ async def test_dispatch_help_with_unknown_shows_guidance():
 
 
 @pytest.mark.asyncio
-async def test_autocomplete_filters_by_current():
+async def test_typed_command_binds_to_plain_option():
+    """`/bark help` typed by hand must bind 'help' to the command option and
+    run help — NOT fall through to the generic overview. Discord only commits
+    free-typed text into a plain (non-autocomplete) string option; the flat
+    command must therefore NOT autocomplete its 'command' parameter
+    (2026-09-01 report: "/bark help" showed '+2 options' and gave the
+    generic response because autocomplete kept the typed text pending)."""
     d = SlashDispatcher(_make_bot(), _make_manager())
-    _register_fake_module(d, "moderation", "warn", _make_leaf("warn")[0])
-    _register_fake_module(d, "moderation", "warnings", _make_leaf("warnings")[0])
-    _register_fake_module(d, "moderation", "ban", _make_leaf("ban")[0])
+    cmd = d.build_command("bark")
+    param = next(p for p in cmd.parameters if p.name == "command")
+    assert not param.autocomplete  # plain string (no autocomplete) -> typed text binds
+
+    # 'help' is a registered leaf -> dispatch runs it, not the overview.
+    leaf, callback = _make_leaf("help")
+    leaf.default_permissions = None
+    _register_fake_module(d, "help", "help", leaf)
 
     interaction = MagicMock()
     interaction.guild_id = 1
-    choices = await d._autocomplete(interaction, "wa")
-    values = [c.value for c in choices]
-    assert values == ["warn", "warnings"]
+    interaction.user = SimpleNamespace(guild_permissions=discord.Permissions.all())
+    interaction.guild = MagicMock()
+    interaction.response = MagicMock()
+
+    await d.dispatch(interaction, "help", "")
+    assert callback.await_count == 1
 
 
 @pytest.mark.asyncio
