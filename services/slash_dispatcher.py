@@ -477,11 +477,6 @@ class SlashDispatcher:
             description=self._usage_desc(leaf),
             color=discord.Color.blurple(),
         )
-        embed.add_field(
-            name="How to use",
-            value=f"Type `{self._usage_line(leaf)}`.",
-            inline=False,
-        )
         if leaf.command.parameters:
             embed.add_field(
                 name="Arguments",
@@ -489,8 +484,8 @@ class SlashDispatcher:
                 inline=False,
             )
         embed.add_field(
-            name="Need more?",
-            value=f"Run `/{self._group_name()} help {leaf.path}` for the full breakdown.",
+            name="Tip",
+            value=f"Use `/{self._group_name()} help {leaf.path}` for the full breakdown.",
             inline=False,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -629,60 +624,73 @@ class SlashDispatcher:
         core = [leaf for leaf in enabled if not self.manager.is_plugin(leaf.module_name)]
         plugins = [leaf for leaf in enabled if self.manager.is_plugin(leaf.module_name)]
 
-        how_to = (
-            "Bark commands run through a single slash command. Type "
-            f"`/{self._group_name()} <command> [args...]`, or type a module name "
-            f"(e.g. `{self._group_name()} moderation`) for its menu. For details "
-            f"on any command, use `/{self._group_name()} help <command>`.\n\n"
-            "Info commands (help, info, leaderboard, reputation…) are private "
-            "by default — post them for everyone by adding `public` as the last "
-            f"argument, e.g. `/{self._group_name()} leaderboard public`."
+        desc = (
+            f"Bark's commands live under one slash command. **Pick a module below** "
+            f"to browse its commands, or type one directly — e.g. "
+            f"`/{self._group_name()} warn @user`.\n\n"
+            f"Need the full list? `/{self._group_name()} help` DM's you the reference."
         )
         pages: list[discord.Embed] = []
-        core_chunks = self._chunk_by_module(core)
-        for i, chunk in enumerate(core_chunks):
+        for i, chunk in enumerate(self._chunk_by_module(core)):
             embed = discord.Embed(
-                title="🐺 Bark — how to use" if i == 0 else "🐺 Bark commands",
+                title="🐺 Bark",
+                description=desc,
                 color=discord.Color.blurple(),
             )
-            if i == 0:
-                embed.description = how_to
             for module_name, ls in chunk:
+                label = module_name.replace("_", " ").title()
                 embed.add_field(
-                    name=module_name.title(),
-                    value="\n".join(self._command_line(leaf) for leaf in ls),
-                    inline=False,
+                    name=label,
+                    value=f"{len(ls)} command{'s' if len(ls) != 1 else ''} — "
+                          f"`/{self._group_name()} {module_name}`",
+                    inline=True,
                 )
             pages.append(embed)
         if plugins:
             for chunk in self._chunk_by_module(plugins):
-                embed = discord.Embed(
+                p = discord.Embed(
                     title="🧩 Add-on Modules",
                     description="Commands from installed add-on plugins.",
                     color=discord.Color.blurple(),
                 )
                 for module_name, ls in chunk:
-                    embed.add_field(
-                        name=module_name.title(),
-                        value="\n".join(self._command_line(leaf) for leaf in ls),
-                        inline=False,
+                    p.add_field(
+                        name=module_name.replace("_", " ").title(),
+                        value=f"{len(ls)} command{'s' if len(ls) != 1 else ''} — "
+                              f"`/{self._group_name()} {module_name}`",
+                        inline=True,
                     )
-                pages.append(embed)
+                pages.append(p)
         if not pages:
             pages = [discord.Embed(title="🐺 Bark", description="No commands available yet.")]
         self._set_footers(pages)
         return pages
 
+    def _menu_line(self, leaf: Leaf) -> str:
+        """A compact menu item: ``/bark warn`` — description (no params; the
+        command-select and modal collect them)."""
+        usage = f"/{self._group_name()} {leaf.path}"
+        desc = getattr(leaf.command, "description", "") or ""
+        return f"`{usage}` — {desc}" if desc else f"`{usage}`"
+
     def _build_menu_pages(self, leaves: list[Leaf], title: str, detail: str) -> list[discord.Embed]:
+        """Build the menu embed for a module/group.
+
+        One concise embed (pagination only if a single module truly needs it):
+        the title, a short instruction line, and a compact list of the module's
+        commands. The interactive command-select below does the work; this just
+        orients the user.
+        """
         pages: list[discord.Embed] = []
         for chunk in self._chunk_by_module(leaves, max_fields=8):
             embed = discord.Embed(title=title, color=discord.Color.blurple())
             if detail and pages == []:
                 embed.description = detail
             for module_name, ls in chunk:
+                value = "\n".join(self._menu_line(leaf) for leaf in ls)
                 embed.add_field(
                     name=module_name.title(),
-                    value="\n".join(self._command_line(leaf) for leaf in ls),
+                    value=value,
                     inline=False,
                 )
             pages.append(embed)
@@ -716,10 +724,7 @@ class SlashDispatcher:
             self._registry[p] for p in self._module_paths.get(module_name, [])
             if self._path_enabled(guild_id, self._registry[p])
         ]
-        detail = (
-            f"`/{self._group_name()} <command> [args...]` — pick a command below or "
-            "type it after the slash command."
-        )
+        detail = f"Pick a command below, or type `/{self._group_name()} {module_name} <command>`."
         pages = self._build_menu_pages(leaves, title=f"🐺 {module_name.title()} commands", detail=detail)
         view = command_menu_view(self, leaves, guild_id)
         await self._send_paginated(interaction, pages, view=view)

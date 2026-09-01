@@ -194,7 +194,10 @@ async def test_dispatch_bare_shows_overview():
     await d.dispatch(interaction, "", "")
     interaction.response.send_message.assert_awaited_once()
     _, kwargs = interaction.response.send_message.await_args
-    assert "how to use" in kwargs["embed"].title.lower()
+    embed = kwargs["embed"]
+    assert embed.title == "🐺 Bark"
+    assert "Pick a module below" in embed.description
+    assert kwargs.get("view") is not None  # interactive module picker attached
 
 
 @pytest.mark.asyncio
@@ -211,7 +214,7 @@ async def test_overview_has_separate_addon_modules_page_for_plugins():
 
     pages = d._build_overview_pages(1)
     titles = [(e.title or "") for e in pages]
-    assert any("how to use" in t.lower() for t in titles)  # core page
+    assert any(t == "🐺 Bark" for t in titles)  # core page
     assert any("Add-on Modules" in t for t in titles)  # plugin section
 
 
