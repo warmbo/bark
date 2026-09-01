@@ -94,6 +94,11 @@ class Leaf:
 class SlashDispatcher:
     """Builds and dispatches the single ``/bark`` command from module commands."""
 
+    # Discord hard cap: a subcommand group may hold at most 25 children. A
+    # command-heavy module (moderation) with aliases would exceed it and fail
+    # the entire tree sync with 50035 — alias leaves are dropped past this.
+    MAX_GROUP_CHILDREN = 25
+
     def __init__(self, bot, module_manager) -> None:
         self.bot = bot
         self.manager = module_manager
@@ -217,9 +222,19 @@ class SlashDispatcher:
                 description=(module_name.title() + " commands")[:100],
             )
             for leaf in leaves:
+                if len(sub.commands) >= self.MAX_GROUP_CHILDREN:
+                    break
                 try:
                     sub.add_command(self._native_leaf(leaf))
                     for alias in self._command_aliases(leaf):
+                        # Discord caps a subcommand group at 25 children; a
+                        # command-heavy module (e.g. moderation) can exceed it
+                        # once aliases are included, which fails the whole tree
+                        # sync with 50035. Aliases are convenience — drop the
+                        # ones that would overflow instead of losing the
+                        # canonical command (2026-09-01 tree-sync incident).
+                        if len(sub.commands) >= self.MAX_GROUP_CHILDREN:
+                            break
                         try:
                             sub.add_command(self._alias_leaf(leaf, alias))
                         except Exception:
@@ -238,9 +253,13 @@ class SlashDispatcher:
                         description=(module_name.title() + " commands")[:100],
                     )
                     for leaf in leaves:
+                        if len(alias_sub.commands) >= self.MAX_GROUP_CHILDREN:
+                            break
                         try:
                             alias_sub.add_command(self._native_leaf(leaf))
                             for alias in self._command_aliases(leaf):
+                                if len(alias_sub.commands) >= self.MAX_GROUP_CHILDREN:
+                                    break
                                 try:
                                     alias_sub.add_command(self._alias_leaf(leaf, alias))
                                 except Exception:
