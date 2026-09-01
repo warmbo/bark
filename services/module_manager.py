@@ -60,8 +60,6 @@ class ModuleManager:
         # Runtime-installed single-file plugins: module name -> file path.
         self._plugin_files: dict[str, Path] = {}
         self._discovery = ModuleDiscovery(self._context, self._registry, self._plugin_files)
-        # Modules whose native top-level command is already on the tree.
-        self._native_registered_modules: set[str] = set()
         # Plugin-file lifecycle (install/uninstall/reload) is delegated to a
         # dedicated collaborator so this manager stays focused on module
         # discovery + registration (T4 of the clean-architecture refactor).
@@ -91,41 +89,23 @@ class ModuleManager:
     # ── Native /bark subcommand group ─────────────────
 
     def _ensure_dispatcher_command(self):
-        """Register the flat ``/bark`` fallback AND native per-module commands.
+        """Register the single flat ``/bark`` dispatcher command on the tree.
 
-        The flat command hosts every module command through the string
-        ``command``/``args`` options (autocompleted) so nothing is ever lost.
-        Alongside it, one native slash command per module (``/birthday set``,
-        ``/moderation warn``) gives the "other bots" UX: real typed fields, no
-        string options to fill in.
-
-        Splitting the surface across ~12 small top-level commands (rather than
-        one monolithic ``/bark`` group) keeps every command under Discord's
-        8000-byte payload cap — the 2026-09-01 incident where one giant group
-        failed sync with 50035 and left a stale signature.
+        One command hosts every module/plugin command through the string
+        ``command``/``args`` options (autocompleted), which is Bark's intended
+        design: a native subcommand-group tree would need every module's leaves
+        under one global command, whose serialized payload far exceeds
+        Discord's 8000-byte global-command cap (2026-09-01 incident: sync
+        failed with 50035 "Command exceeds maximum size (8000)", leaving a
+        stale signature and every /bark rejected with CommandSignatureMismatch).
         """
-        # Flat fallback (idempotent via _cmd).
-        if self._dispatcher._cmd is None:  # noqa: SLF001
-            flat = self._dispatcher.build_command(self.command_group_name())
-            if getattr(self.bot, "tree", None) is not None:
-                self.bot.tree.add_command(flat, guild=self._command_guild())
-                logger.info("Registered flat slash command '/%s'", flat.name)
-
-        # Native per-module commands, registered once per module as they are
-        # enabled (modules load incrementally, so we can't build the whole
-        # surface on the first enable).
-        for module_name in sorted(self._dispatcher._module_paths):  # noqa: SLF001
-            if module_name in self._native_registered_modules:
-                continue
-            for cmd in self._dispatcher.build_module_commands([module_name]):
-                try:
-                    if getattr(self.bot, "tree", None) is not None:
-                        self.bot.tree.add_command(cmd, guild=self._command_guild())
-                except Exception:
-                    logger.exception("Failed to register native command '%s'", getattr(cmd, "name", "?"))
-            self._native_registered_modules.add(module_name)
-
-        return self._dispatcher._cmd
+        if self._dispatcher._cmd is not None:  # noqa: SLF001
+            return self._dispatcher._cmd
+        cmd = self._dispatcher.build_command(self.command_group_name())
+        if getattr(self.bot, "tree", None) is not None:
+            self.bot.tree.add_command(cmd, guild=self._command_guild())
+            logger.info("Registered flat slash command '/%s'", cmd.name)
+        return cmd
 
     # ── Command namespace ─────────────────────────────
 
