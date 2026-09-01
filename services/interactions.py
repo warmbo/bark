@@ -7,7 +7,16 @@ the user type ``command``/``args``:
     /bark                     -> overview embed + a MODULE select menu
     pick a module             -> that module's commands as a COMMAND select
     pick a command w/o args   -> runs immediately
-    pick a command w/ args    -> a form MODAL collects the arguments
+    pick a command w/ args    -> collects the arguments privately
+
+Arguments are collected one of two ways, chosen by the command:
+
+* **reply capture** (default) — Bark posts an ephemeral prompt, you reply to
+  it as a normal message, and Bark deletes your reply once the command runs.
+  Keeps bot↔user interaction private and auto-cleaning, and feels natural on
+  mobile. Used for sensitive (moderation, voice) and simple one-arg commands.
+* **form modal** — only for multi-field config commands (``announce``,
+  ``automod``, ``logsetup``) where labelled fields genuinely help.
 
 Everything routes back through the dispatcher's ``dispatch()``, so the typed
 path (``/bark warn @bob spamming``) and the enabled/permission gates all
@@ -16,12 +25,181 @@ still apply — the menu is just a friendlier front door.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Callable
 
 import discord
 
 logger = logging.getLogger("bark.interactions")
+
+#: Multi-field config commands keep the form modal — they have 3+ structured
+#: params (channel + title + message + color + image…) where labelled fields
+#: genuinely beat a single packed reply. Everything else with params uses the
+#: privacy-preserving reply-capture flow.
+MODAL_ARG_COMMANDS: frozenset[str] = frozenset({"announce", "automod", "logsetup"})
+
+#: How long to wait for the user's reply before giving up (seconds).
+REPLY_CAPTURE_TIMEOUT = 90
+
+
+def command_uses_modal(leaf) -> bool:
+    """Whether ``leaf`` should collect args through a form modal.
+
+    Only commands in :data:`MODAL_ARG_COMMANDS` (and only when they actually
+    have parameters) get the modal; everything else with args is reply-capture.
+    """
+    if not getattr(leaf.command, "parameters", []):
+        return False
+    return leaf.path.split()[0] in MODAL_ARG_COMMANDS
+
+
+def _param_summary(leaf) -> str:
+    """Human "name (description)" summary of a command's parameters."""
+    lines = []
+    for p in leaf.command.parameters:
+        name = (p.name or "value").replace("_", " ")
+        desc = (getattr(p, "description", None) or "").strip()
+        lines.append(f"• ``{name}`` — {desc}".rstrip())
+    return "\n".join(lines) or "• no arguments"
+
+
+# ── Reply capture (privacy-preserving arg collection) ──
+
+
+class _FollowupResponseAdapter:
+    """Mimic ``Interaction.response`` but route through ``followup``.
+
+    The select interaction already responded (the ephemeral prompt), so the
+    command callback can't call ``interaction.response.send_message`` again —
+    discord.py raises ``InteractionResponded``. This adapter keeps command
+    callbacks unchanged by forwarding ``send_message`` to ``followup.send``
+    (ephemeral by default) and making ``defer`` a no-op, so the common
+    ``defer``/``send``/``followup`` patterns all keep working.
+    """
+
+    def __init__(self, interaction, ephemeral: bool = True) -> None:
+        self._interaction = interaction
+        self._ephemeral = ephemeral
+
+    async def send_message(self, content=None, **kwargs):
+        kwargs.setdefault("ephemeral", self._ephemeral)
+        return await self._interaction.followup.send(content=content, **kwargs)
+
+    async def defer(self, *, ephemeral: bool = True) -> None:
+        # Already responded (the prompt); nothing to defer.
+        return None
+
+    async def edit_message(self, **kwargs):
+        return await self._interaction.edit_original_response(**kwargs)
+
+    def is_done(self) -> bool:
+        return True
+
+
+class _ReplyArgsInteraction:
+    """A proxy around the already-consumed select interaction.
+
+    Lets the dispatcher and command callbacks respond after the ephemeral
+    prompt was sent. ``response`` is swapped for :class:`_FollowupResponseAdapter`
+    (so sends go through ``followup``); every other attribute/method delegates
+    to the real interaction.
+    """
+
+    def __init__(self, real, ephemeral: bool = True) -> None:
+        object.__setattr__(self, "_real", real)
+        object.__setattr__(self, "_ephemeral", ephemeral)
+
+    @property
+    def response(self):
+        return _FollowupResponseAdapter(self._real, self._ephemeral)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+async def _collect_args_by_reply(dispatcher, interaction, leaf) -> None:
+    """Collect a command's args via an ephemeral prompt + captured reply.
+
+    Privacy model: Bark posts an ephemeral prompt (only the invoker sees it),
+    the user replies as a normal message, Bark reads the reply and **deletes
+    it**, then dispatches the command. The sensitive reply never lingers, so
+    the bot↔user exchange stays private and self-cleaning.
+    """
+    prompt = discord.Embed(
+        title=f"Run {leaf.path}",
+        description=(
+            f"Reply with the value{'s' if len(list(leaf.command.parameters)) != 1 else ''} "
+            f"for ``{leaf.path}`` below. Your reply is deleted after it's read."
+        ),
+        color=discord.Color.brand_green(),
+    )
+    prompt.add_field(name="Arguments", value=_param_summary(leaf), inline=False)
+    prompt.set_footer(text="Type 'cancel' to abort. Times out after a while.")
+
+    try:
+        await interaction.response.send_message(embed=prompt, ephemeral=True)
+    except discord.HTTPException:
+        await interaction.followup.send(embed=prompt, ephemeral=True)
+
+    client = getattr(interaction, "client", None) or getattr(dispatcher, "bot", None)
+    if client is None or not hasattr(client, "wait_for"):
+        try:
+            await interaction.followup.send(
+                "Couldn't start a reply listener — try the typed form instead.",
+                ephemeral=True,
+            )
+        except discord.HTTPException:
+            pass
+        return
+    channel_id = getattr(interaction, "channel_id", None) or getattr(
+        getattr(interaction, "channel", None), "id", None
+    )
+
+    def check(m):
+        return (
+            m.author is not None
+            and m.author.id == interaction.user.id
+            and m.channel.id == channel_id
+            and not m.author.bot
+            and (m.content or "").strip() != ""
+        )
+
+    try:
+        reply = await client.wait_for("message", check=check, timeout=REPLY_CAPTURE_TIMEOUT)
+    except (asyncio.TimeoutError, AttributeError):
+        try:
+            await interaction.followup.send(
+                "⏰ Timed out — run the command again if you still need it.",
+                ephemeral=True,
+            )
+        except discord.HTTPException:
+            pass
+        return
+
+    content = (reply.content or "").strip()
+    # Privacy: delete the user's reply before acting on it.
+    try:
+        await reply.delete()
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
+    if content.lower() in {"cancel", "cancel.", "abort"}:
+        try:
+            await interaction.followup.send("Cancelled.", ephemeral=True)
+        except discord.HTTPException:
+            pass
+        return
+
+    proxy = _ReplyArgsInteraction(interaction, ephemeral=True)
+    try:
+        await dispatcher.dispatch(proxy, leaf.path, content)
+    except Exception:
+        logger.exception("Reply-capture dispatch failed for %r", leaf.path)
+        try:
+            await interaction.followup.send("That command failed to run.", ephemeral=True)
+        except Exception:
+            pass
 
 
 # ── Argument form modal ─────────────────────────────
@@ -81,8 +259,10 @@ class BarkCommandSelect(discord.ui.Select):
     """A select of a module's commands.
 
     Picking a command with required parameters opens a form modal (so the user
-    fills labelled fields instead of typing slash args); a command without
-    required params runs immediately through the dispatcher.
+    fills labelled fields instead of typing slash args) for the multi-field
+    config commands, or starts a privacy-preserving reply-capture prompt for
+    everything else; a command without required params runs immediately
+    through the dispatcher.
     """
 
     def __init__(
@@ -124,7 +304,10 @@ class BarkCommandSelect(discord.ui.Select):
         if leaf is None:
             return
         if getattr(leaf.command, "parameters", []):
-            await interaction.response.send_modal(BarkArgsModal(self._dispatcher, leaf))
+            if command_uses_modal(leaf):
+                await interaction.response.send_modal(BarkArgsModal(self._dispatcher, leaf))
+            else:
+                await _collect_args_by_reply(self._dispatcher, interaction, leaf)
             return
         try:
             await self._dispatcher.dispatch(interaction, path, "")
@@ -197,7 +380,7 @@ class BarkModuleSelect(discord.ui.Select):
         pages = self._dispatcher._build_menu_pages(  # noqa: SLF001
             leaves,
             title=f"🐺 {module_name.replace('_', ' ').title()}",
-            detail="Choose a command below. If it needs details, Bark opens a short form.",
+            detail="Choose a command below. If it needs details, Bark asks you in a private message.",
         )
         view = command_menu_view(self._dispatcher, leaves, self._guild_id)
         await interaction.response.edit_message(embed=pages[0], view=view)
