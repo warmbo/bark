@@ -621,55 +621,22 @@ class SlashDispatcher:
         for i, embed in enumerate(pages):
             if total > 1:
                 embed.set_footer(text=f"Page {i + 1}/{total} — react ◀ ▶ to navigate")
-            else:
-                embed.set_footer(text="React ◀ ▶ to page through the rest")
 
     def _build_overview_pages(self, guild_id) -> list[discord.Embed]:
         enabled = self._enabled_leaves(guild_id)
-        core = [leaf for leaf in enabled if not self.manager.is_plugin(leaf.module_name)]
-        plugins = [leaf for leaf in enabled if self.manager.is_plugin(leaf.module_name)]
-
-        desc = (
-            f"Bark's commands live under one slash command. **Pick a module below** "
-            f"to browse its commands, or type one directly — e.g. "
-            f"`/{self._group_name()} warn @user`.\n\n"
-            f"Need the full list? `/{self._group_name()} help` DM's you the reference."
-        )
-        pages: list[discord.Embed] = []
-        for i, chunk in enumerate(self._chunk_by_module(core)):
-            embed = discord.Embed(
-                title="🐺 Bark",
-                description=desc,
+        if not enabled:
+            return [discord.Embed(title="🐺 Bark", description="No commands are available here yet.")]
+        return [
+            discord.Embed(
+                title="🐺 Bark Commands",
+                description=(
+                    "**Choose a module below**, then choose what you want Bark to do. "
+                    "Commands that need details open a short form.\n\n"
+                    f"Prefer typing? Use `/{self._group_name()} help` or another command name."
+                ),
                 color=discord.Color.blurple(),
             )
-            for module_name, ls in chunk:
-                label = module_name.replace("_", " ").title()
-                embed.add_field(
-                    name=label,
-                    value=f"{len(ls)} command{'s' if len(ls) != 1 else ''} — "
-                          f"`/{self._group_name()} {module_name}`",
-                    inline=True,
-                )
-            pages.append(embed)
-        if plugins:
-            for chunk in self._chunk_by_module(plugins):
-                p = discord.Embed(
-                    title="🧩 Add-on Modules",
-                    description="Commands from installed add-on plugins.",
-                    color=discord.Color.blurple(),
-                )
-                for module_name, ls in chunk:
-                    p.add_field(
-                        name=module_name.replace("_", " ").title(),
-                        value=f"{len(ls)} command{'s' if len(ls) != 1 else ''} — "
-                              f"`/{self._group_name()} {module_name}`",
-                        inline=True,
-                    )
-                pages.append(p)
-        if not pages:
-            pages = [discord.Embed(title="🐺 Bark", description="No commands available yet.")]
-        self._set_footers(pages)
-        return pages
+        ]
 
     def _menu_line(self, leaf: Leaf) -> str:
         """A compact menu item: ``/bark warn`` — description (no params; the
@@ -686,28 +653,16 @@ class SlashDispatcher:
         commands. The interactive command-select below does the work; this just
         orients the user.
         """
-        pages: list[discord.Embed] = []
-        for chunk in self._chunk_by_module(leaves, max_fields=8):
-            embed = discord.Embed(title=title, color=discord.Color.blurple())
-            if detail and pages == []:
-                embed.description = detail
-            for module_name, ls in chunk:
-                value = "\n".join(self._menu_line(leaf) for leaf in ls)
-                embed.add_field(
-                    name=module_name.title(),
-                    value=value,
-                    inline=False,
-                )
-            pages.append(embed)
-        if not pages:
-            pages = [
-                discord.Embed(
-                    title=title,
-                    description="No commands in this section are enabled for this server.",
-                )
-            ]
-        self._set_footers(pages)
-        return pages
+        description = detail or "Choose a command below."
+        if not leaves:
+            description = "No commands in this section are enabled for this server."
+        return [
+            discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.blurple(),
+            )
+        ]
 
     async def _send_paginated(
         self,
@@ -729,8 +684,9 @@ class SlashDispatcher:
             self._registry[p] for p in self._module_paths.get(module_name, [])
             if self._path_enabled(guild_id, self._registry[p])
         ]
-        detail = f"Pick a command below, or type `/{self._group_name()} {module_name} <command>`."
-        pages = self._build_menu_pages(leaves, title=f"🐺 {module_name.title()} commands", detail=detail)
+        detail = "Choose a command below. If it needs details, Bark opens a short form."
+        label = module_name.replace("_", " ").title()
+        pages = self._build_menu_pages(leaves, title=f"🐺 {label}", detail=detail)
         view = command_menu_view(self, leaves, guild_id)
         await self._send_paginated(interaction, pages, view=view)
 

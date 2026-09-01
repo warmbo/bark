@@ -122,6 +122,27 @@ def test_command_menu_view_has_select_and_back_button():
     assert interactions.BackToModulesButton in kinds
 
 
+def test_command_select_uses_short_action_labels():
+    d = _dispatcher()
+    leaves = [d._registry[p] for p in d._module_paths["birthdays"]]
+    select = interactions.BarkCommandSelect(d, leaves)
+    labels = {option.value: option.label for option in select.options}
+
+    assert labels["birthday channel"] == "Channel"
+    assert labels["birthday set"] == "Set"
+    assert all(not label.lower().startswith("birthday ") for label in labels.values())
+
+
+def test_module_select_formats_names_for_people():
+    d = _dispatcher()
+    view = interactions.module_menu_view(d, guild_id=123)
+    select = next(c for c in view.children if isinstance(c, interactions.BarkModuleSelect))
+    labels = {option.value: option.label for option in select.options}
+
+    assert labels["auto_voice"] == "Auto Voice"
+    assert labels["role_manager"] == "Role Manager"
+
+
 def test_command_select_opens_modal_for_required_args():
     d = _dispatcher()
     leaf = d._registry["birthday set"]  # required day+month
@@ -136,6 +157,26 @@ def test_command_select_opens_modal_for_required_args():
     modal = asyncio.run(run())
     assert isinstance(modal, interactions.BarkArgsModal)
     assert set(modal._inputs) == {"day", "month"}
+
+
+def test_command_select_opens_modal_for_optional_args_instead_of_running_default():
+    """Picking `birthday channel` must not immediately disable announcements."""
+    d = _dispatcher()
+    leaf = d._registry["birthday channel"]
+
+    async def run():
+        captured = _stub_dispatch(d)
+        select = interactions.BarkCommandSelect(d, [leaf])
+        select._values = ["birthday channel"]  # noqa: SLF001
+        inter = FakeInteraction()
+        await select.callback(inter)
+        return inter.response.modal, captured
+
+    modal, captured = asyncio.run(run())
+    assert isinstance(modal, interactions.BarkArgsModal)
+    assert "channel" in modal._inputs
+    assert modal._inputs["channel"].required is False
+    assert captured == {}
 
 
 def test_command_select_runs_directly_when_no_required_args():

@@ -178,7 +178,9 @@ async def test_dispatch_module_name_shows_menu():
     interaction.response.send_message.assert_awaited_once()
     _, kwargs = interaction.response.send_message.await_args
     embed = kwargs["embed"]
-    assert "Moderation commands" in embed.title
+    assert embed.title == "🐺 Moderation"
+    assert embed.fields == []
+    assert "Choose a command below" in embed.description
     assert kwargs.get("view") is not None  # interactive command picker attached
 
 
@@ -195,13 +197,30 @@ async def test_dispatch_bare_shows_overview():
     interaction.response.send_message.assert_awaited_once()
     _, kwargs = interaction.response.send_message.await_args
     embed = kwargs["embed"]
-    assert embed.title == "🐺 Bark"
-    assert "Pick a module below" in embed.description
+    assert embed.title == "🐺 Bark Commands"
+    assert "Choose a module below" in embed.description
     assert kwargs.get("view") is not None  # interactive module picker attached
 
 
+def test_single_page_menu_is_guidance_only_without_fake_pagination():
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    _register_fake_module(d, "birthdays", "birthday set", _make_leaf("set")[0])
+
+    leaf = next(iter(d._registry.values()))
+    pages = d._build_menu_pages(
+        [leaf],
+        title="🎂 Birthdays",
+        detail="Choose a command below.",
+    )
+
+    assert len(pages) == 1
+    assert pages[0].footer.text in (None, "")
+    assert pages[0].fields == []
+    assert pages[0].description == "Choose a command below."
+
+
 @pytest.mark.asyncio
-async def test_overview_has_separate_addon_modules_page_for_plugins():
+async def test_overview_keeps_addons_in_the_single_module_picker_page():
     d = SlashDispatcher(_make_bot(), _make_manager())
     d.build_command("bark")
     _register_fake_module(d, "moderation", "warn", _make_leaf("warn")[0])
@@ -213,9 +232,9 @@ async def test_overview_has_separate_addon_modules_page_for_plugins():
     _register_fake_module(d, "birthday", "birthday", _make_leaf("birthday")[0])
 
     pages = d._build_overview_pages(1)
-    titles = [(e.title or "") for e in pages]
-    assert any(t == "🐺 Bark" for t in titles)  # core page
-    assert any("Add-on Modules" in t for t in titles)  # plugin section
+    assert len(pages) == 1
+    assert pages[0].title == "🐺 Bark Commands"
+    assert pages[0].fields == []
 
 
 @pytest.mark.asyncio

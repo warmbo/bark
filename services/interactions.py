@@ -43,15 +43,13 @@ class BarkArgsModal(discord.ui.Modal):
         super().__init__(title=title, timeout=300)
         self._inputs: dict[str, discord.ui.TextInput] = {}
         for p in leaf.command.parameters:
-            if not getattr(p, "required", False):
-                continue  # optional params keep their defaults
             label = (p.name or "value")[:45]
             placeholder = ((p.description or "") or p.name or "")[:100]
             field = discord.ui.TextInput(
                 label=label,
                 placeholder=placeholder,
-                required=True,
-                min_length=1,
+                required=bool(getattr(p, "required", False)),
+                min_length=1 if getattr(p, "required", False) else None,
                 max_length=1024,
             )
             self._inputs[p.name] = field
@@ -93,9 +91,22 @@ class BarkCommandSelect(discord.ui.Select):
         leaves,
         placeholder: str = "Pick a command…",
     ) -> None:
+        paths = [leaf.path.split() for leaf in leaves]
+        shared_prefix = (
+            paths[0][0]
+            if paths and all(parts and parts[0] == paths[0][0] for parts in paths)
+            else None
+        )
+
+        def action_label(leaf) -> str:
+            parts = leaf.path.split()
+            if shared_prefix and len(parts) > 1:
+                parts = parts[1:]
+            return " ".join(parts).replace("_", " ").title()[:100] or "Command"
+
         options = [
             discord.SelectOption(
-                label=(leaf.path[:100] if leaf.path else "?"),
+                label=action_label(leaf),
                 value=leaf.path,
                 description=((getattr(leaf.command, "description", "") or "")[:100] or None),
             )
@@ -112,11 +123,7 @@ class BarkCommandSelect(discord.ui.Select):
         leaf = self._leaves.get(path)
         if leaf is None:
             return
-        required = [
-            p for p in getattr(leaf.command, "parameters", [])
-            if getattr(p, "required", False)
-        ]
-        if required:
+        if getattr(leaf.command, "parameters", []):
             await interaction.response.send_modal(BarkArgsModal(self._dispatcher, leaf))
             return
         try:
@@ -167,7 +174,7 @@ class BarkModuleSelect(discord.ui.Select):
     def __init__(self, dispatcher, modules: list[tuple[str, list]], guild_id) -> None:
         options = [
             discord.SelectOption(
-                label=module_name.title()[:100],
+                label=module_name.replace("_", " ").title()[:100],
                 value=module_name,
                 description=f"{len(paths)} command{'s' if len(paths) != 1 else ''}",
             )
@@ -189,8 +196,8 @@ class BarkModuleSelect(discord.ui.Select):
         ]
         pages = self._dispatcher._build_menu_pages(  # noqa: SLF001
             leaves,
-            title=f"🐺 {module_name.title()} commands",
-            detail=f"`/{self._dispatcher._group_name()} <command> [args...]` — pick a command below or type it.",
+            title=f"🐺 {module_name.replace('_', ' ').title()}",
+            detail="Choose a command below. If it needs details, Bark opens a short form.",
         )
         view = command_menu_view(self._dispatcher, leaves, self._guild_id)
         await interaction.response.edit_message(embed=pages[0], view=view)
