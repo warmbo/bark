@@ -27,7 +27,10 @@ from typing import TYPE_CHECKING, Any, Callable
 import discord
 from discord import app_commands
 
-from services.interactions import command_picker_view
+from services.interactions import (
+    command_menu_view,
+    module_menu_view,
+)
 
 if TYPE_CHECKING:
     from modules.base import BarkModule
@@ -693,9 +696,12 @@ class SlashDispatcher:
         self._set_footers(pages)
         return pages
 
-    async def _send_paginated(self, interaction: discord.Interaction, pages: list[discord.Embed],
-                              picker_paths: list[str]) -> None:
-        view = command_picker_view(dispatcher=self, paths=picker_paths) if picker_paths else None
+    async def _send_paginated(
+        self,
+        interaction: discord.Interaction,
+        pages: list[discord.Embed],
+        view: discord.ui.View | None = None,
+    ) -> None:
         paginator = getattr(self.bot, "paginator", None)
         if paginator is None:
             if view is not None:
@@ -715,20 +721,20 @@ class SlashDispatcher:
             "type it after the slash command."
         )
         pages = self._build_menu_pages(leaves, title=f"🐺 {module_name.title()} commands", detail=detail)
-        picker = [leaf.path for leaf in leaves]
-        await self._send_paginated(interaction, pages, picker)
+        view = command_menu_view(self, leaves, guild_id)
+        await self._send_paginated(interaction, pages, view=view)
 
     async def _show_menu(self, interaction: discord.Interaction, title: str, paths: list[str],
                          guild_id, detail: str = "") -> None:
         leaves = [self._registry[p] for p in paths if self._path_enabled(guild_id, self._registry[p])]
         pages = self._build_menu_pages(leaves, title=title, detail=detail)
-        picker = [leaf.path for leaf in leaves]
-        await self._send_paginated(interaction, pages, picker)
+        view = command_menu_view(self, leaves, guild_id)
+        await self._send_paginated(interaction, pages, view=view)
 
     async def _show_overview(self, interaction: discord.Interaction, guild_id) -> None:
         pages = self._build_overview_pages(guild_id)
-        enabled = [leaf.path for leaf in self._enabled_leaves(guild_id)]
-        await self._send_paginated(interaction, pages, enabled)
+        view = module_menu_view(self, guild_id)
+        await self._send_paginated(interaction, pages, view=view)
 
     # ── Autocomplete ──────────────────────────────────
 
