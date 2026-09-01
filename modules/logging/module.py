@@ -647,6 +647,7 @@ class LoggingModule(BarkModule):
                     ("User", f"{member} ({member.id})", True),
                     ("Channel", self._voice_channel_label(after_channel), True),
                 ],
+                thumbnail=member.display_avatar.url,
             )
         elif before_channel is not None and after_channel is None:
             await self._send(
@@ -658,6 +659,7 @@ class LoggingModule(BarkModule):
                     ("User", f"{member} ({member.id})", True),
                     ("Channel", self._voice_channel_label(before_channel), True),
                 ],
+                thumbnail=member.display_avatar.url,
             )
         elif before_channel != after_channel:
             await self._send(
@@ -670,6 +672,7 @@ class LoggingModule(BarkModule):
                     ("From", self._voice_channel_label(before_channel), True),
                     ("To", self._voice_channel_label(after_channel), True),
                 ],
+                thumbnail=member.display_avatar.url,
             )
 
     @staticmethod

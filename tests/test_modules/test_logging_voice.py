@@ -18,6 +18,7 @@ async def test_join_to_create_transition_logs_only_the_final_voice_channel():
         id=42,
         guild=guild,
         mention="@cody",
+        display_avatar=SimpleNamespace(url="https://cdn/a.png"),
         __str__=lambda self: "cody",
     )
     bot = MagicMock()
@@ -46,12 +47,14 @@ async def test_join_to_create_transition_logs_only_the_final_voice_channel():
     )
 
     module._send.assert_awaited_once()
-    args = module._send.await_args.args
-    assert args[1] == "🔊 Voice Join"
-    assert module._send.await_args.kwargs["fields"] == [
+    sent = module._send.await_args
+    assert sent is not None
+    assert sent.args[1] == "🔊 Voice Join"
+    assert sent.kwargs["fields"] == [
         ("User", f"{member} ({member.id})", True),
         ("Channel", f"#{managed.name}", True),
     ]
+    assert sent.kwargs["thumbnail"] == "https://cdn/a.png"
 
 
 @pytest.mark.asyncio
@@ -65,6 +68,7 @@ async def test_voice_leave_log_records_channel_name_not_mention():
         id=42,
         guild=guild,
         mention="@cody",
+        display_avatar=SimpleNamespace(url="https://cdn/a.png"),
         __str__=lambda self: "cody",
     )
     bot = MagicMock()
@@ -83,12 +87,14 @@ async def test_voice_leave_log_records_channel_name_not_mention():
     )
 
     module._send.assert_awaited_once()
-    args = module._send.await_args.args
-    assert args[1] == "🔇 Voice Leave"
-    assert module._send.await_args.kwargs["fields"] == [
+    sent = module._send.await_args
+    assert sent is not None
+    assert sent.args[1] == "🔇 Voice Leave"
+    assert sent.kwargs["fields"] == [
         ("User", f"{member} ({member.id})", True),
         ("Channel", "#hangout", True),
     ]
+    assert sent.kwargs["thumbnail"] == "https://cdn/a.png"
 
 
 @pytest.mark.asyncio
@@ -221,6 +227,7 @@ async def test_rapid_duplicate_voice_events_are_debounced():
         id=42,
         guild=guild,
         mention="<@42>",
+        display_avatar=SimpleNamespace(url="https://cdn/a.png"),
         __str__=lambda self: "cody",
     )
     a = SimpleNamespace(id=100, name="hangout", mention="<#100>")
