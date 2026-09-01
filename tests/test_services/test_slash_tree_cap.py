@@ -1,13 +1,18 @@
-"""Regression: the /bark native subcommand tree must stay under Discord's
-25-child cap so the tree sync succeeds.
+"""Regression: the /bark command tree must fit Discord's limits so sync works.
 
-Live incident (2026-09-01): the moderation subcommand-group held 30 children
-(16 canonical + 14 aliases). `tree.sync()` failed with 50035
-"In ...options: Must be 25 or fewer in length", the new /bark signature never
-reached Discord, and every /bark interaction was rejected with
-CommandSignatureMismatch ("Couldn't run that command — check the arguments").
+Live incident (2026-09-01): a native subcommand-group tree for /bark exceeded
+Discord's 8000-byte global-command payload cap (moderation alone was 3.8KB,
+the whole tree 9KB+ canonical-only). `tree.sync()` failed with 50035
+"Command exceeds maximum size (8000)", so the new signature never reached
+Discord and every /bark interaction was rejected with CommandSignatureMismatch
+("Couldn't run that command — check the arguments and try again").
+
+The fix: register the flat single-command dispatcher (string command/args
+options) — Bark's intended design — which fits trivially and whose autocomplete
+still exposes every module command including `/bark birthday set`.
 """
 import importlib
+import json
 
 from modules.base import BarkModule
 from services.slash_dispatcher import SlashDispatcher
@@ -53,28 +58,38 @@ def _module_class(module_name):
     )
 
 
-def _build_tree():
+def _dispatcher():
     d = SlashDispatcher(FakeBot(), FakeManager())
     for name in CORE + PLUGINS:
         d.register_module(name, _module_class(name).__new__(_module_class(name)))
-    return d.build_group("bark")
+    return d
 
 
-def test_every_subcommand_group_respects_discord_cap():
-    """No subgroup may exceed 25 children (canonical + aliases)."""
-    group = _build_tree()
-    bad = []
-    for child in group.commands:
-        if getattr(child, "commands", None) and len(child.commands) > 25:
-            bad.append((child.name, len(child.commands)))
-    assert not bad, f"subgroups over Discord's 25-child cap: {bad}"
+def _flat_payload_bytes(cmd) -> int:
+    """Serialize the flat command the way discord.py's tree sync does:
+    {name, description, type, options}. The flat command has two string
+    options (command + args)."""
+    opts = []
+    for o in getattr(cmd, "options", []):
+        opts.append({"name": o.name, "description": o.description or "", "type": 3, "required": o.required})
+    payload = {"name": cmd.name, "description": cmd.description or "", "type": 1, "options": opts}
+    return len(json.dumps(payload, separators=(",", ":")).encode())
 
 
-def test_canonical_commands_present_before_cap():
-    """Capping aliases must not silently drop canonical commands — every
-    module's primary commands stay in the tree."""
-    group = _build_tree()
-    names = {c.name: getattr(c, "commands", None) for c in group.commands}
-    # The birthday group (module plugin) keeps all 4 subcommands.
-    bday = names.get("birthdays")
-    assert bday is not None and {c.name for c in bday} >= {"set", "remove", "list", "channel"}
+def test_flat_bark_payload_fits_discord_cap():
+    """The registered /bark command must serialize under Discord's 8000-byte
+    global-command limit (this was the 2026-09-01 sync failure)."""
+    cmd = _dispatcher().build_command("bark")
+    size = _flat_payload_bytes(cmd)
+    assert size <= 8000, f"/bark payload is {size} bytes (> 8000)"
+
+
+def test_flat_bark_resolves_birthday_set_path():
+    """`/bark birthday set` must resolve through the flat dispatcher's command
+    autocomplete — the exact syntax that failed for users on 2026-09-01."""
+    d = _dispatcher()
+    assert "birthday set" in d._registry
+    # The flat command's 'command' option carries the autocomplete handler.
+    cmd = d.build_command("bark")
+    param = next(p for p in cmd.parameters if p.name == "command")
+    assert param.autocomplete is not None

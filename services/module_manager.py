@@ -89,19 +89,23 @@ class ModuleManager:
     # ── Native /bark subcommand group ─────────────────
 
     def _ensure_dispatcher_command(self):
-        """Register the native ``/bark`` subcommand group on the tree once.
+        """Register the single flat ``/bark`` dispatcher command on the tree.
 
-        Builds the group from the live registry (multi-command modules become
-        subcommand-groups; single-command modules and general help commands hang
-        directly off the root). Commands sync to Discord on ready.
+        One command hosts every module/plugin command through the string
+        ``command``/``args`` options (autocompleted), which is Bark's intended
+        design: a native subcommand-group tree would need every module's leaves
+        under one global command, whose serialized payload far exceeds
+        Discord's 8000-byte global-command cap (2026-09-01 incident: sync
+        failed with 50035 "Command exceeds maximum size (8000)", leaving a
+        stale signature and every /bark rejected with CommandSignatureMismatch).
         """
-        if self._dispatcher._group is not None:  # noqa: SLF001
-            return self._dispatcher._group
-        group = self._dispatcher.build_group(self.command_group_name())
+        if self._dispatcher._cmd is not None:  # noqa: SLF001
+            return self._dispatcher._cmd
+        cmd = self._dispatcher.build_command(self.command_group_name())
         if getattr(self.bot, "tree", None) is not None:
-            self.bot.tree.add_command(group, guild=self._command_guild())
-            logger.info("Registered native slash command group '/%s'", group.name)
-        return group
+            self.bot.tree.add_command(cmd, guild=self._command_guild())
+            logger.info("Registered flat slash command '/%s'", cmd.name)
+        return cmd
 
     # ── Command namespace ─────────────────────────────
 
