@@ -66,6 +66,50 @@ def test_format_empty_template_returns_empty():
 # ── _build_message text vs embed ────────────────────────
 
 
+class _Invite:
+    def __init__(self, code: str, uses: int) -> None:
+        self.code = code
+        self.uses = uses
+
+
+def test_format_renders_invite_code_or_unknown():
+    module = _module()
+    member = _member(_guild(1), 5)
+    assert module._format("via {invite}", member, "KT8zF6x2ju") == "via KT8zF6x2ju"
+    assert module._format("via {invite}", member) == "via unknown"
+
+
+@pytest.mark.asyncio
+async def test_invite_attribution_primes_cache_then_reports_used_code():
+    """Discord exposes no per-join invite event, so the code is found by diffing
+    use counts. The first call can only prime the cache."""
+    guild = _guild(7)
+    state = {"uses": {"KT8zF6x2ju": 10, "OTHER": 3}}
+
+    async def invites():
+        return [_Invite(code, uses) for code, uses in state["uses"].items()]
+
+    guild.invites = invites
+    module = _module()
+
+    assert await module._attribute_invite(guild) is None  # priming
+
+    state["uses"]["KT8zF6x2ju"] = 11
+    assert await module._attribute_invite(guild) == "KT8zF6x2ju"
+
+    assert await module._attribute_invite(guild) is None  # nothing moved
+
+    # An invite consumed between snapshots is not in the previous map at all.
+    state["uses"]["FRESH"] = 1
+    assert await module._attribute_invite(guild) == "FRESH"
+
+
+@pytest.mark.asyncio
+async def test_invite_attribution_gives_up_quietly_without_endpoint():
+    module = _module()
+    assert await module._attribute_invite(_guild(7)) is None
+
+
 def test_build_message_plain_text():
     module = WelcomeModule(MagicMock())
     member = _member(_guild(1), 5)

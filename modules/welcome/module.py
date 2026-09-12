@@ -33,7 +33,7 @@ class WelcomeModule(BarkModule):
     """Customizable welcome and goodbye messages with optional embed formatting."""
 
     name = "welcome"
-    version = "2.0.0"
+    version = "2.1.0"
     description = "Welcome messages, goodbye messages, and optional embeds for new members"
     author = "ZENHAWX"
 
@@ -101,7 +101,7 @@ class WelcomeModule(BarkModule):
                     "format": "textarea",
                     "format_toolbar": True,
                     "title": "Welcome Message",
-                    "description": "Message or embed description posted when someone joins. Supports {user}, {user.mention}, {server}, and {member_count}. `**bold**`, *italic*, `code`, ||spoiler||, ---",
+                    "description": "Message or embed description posted when someone joins. Supports {user}, {user.mention}, {server}, {member_count}, and {invite} (the invite code they joined through, or \"unknown\"). `**bold**`, *italic*, `code`, ||spoiler||, ---",
                     "placeholder": "Welcome {user.mention} to {server}! We now have {member_count} members.",
                     "default": "Welcome {user.mention} to {server}!",
                     "rows": 10,
@@ -174,6 +174,45 @@ class WelcomeModule(BarkModule):
             },
         }
 
+    def __init__(self, ctx) -> None:
+        super().__init__(ctx)
+        # Per-guild snapshot of invite code -> use count. Discord has no "which
+        # invite did this member use" event, so attribution is a diff around the
+        # join. The first join after startup only primes this cache.
+        self._invite_uses: dict[int, dict[str, int]] = {}
+
+    async def _attribute_invite(self, guild) -> str | None:
+        """Return the invite code whose use count rose, if we can tell.
+
+        Requires Manage Server (or Manage Channels) on the invite endpoint; on
+        refusal this quietly returns None rather than breaking the welcome
+        message.
+        """
+        # AttributeError covers guild objects without the endpoint at all (and
+        # lightweight test doubles); attribution is best-effort either way.
+        try:
+            invites = await guild.invites()
+        except AttributeError:
+            return None
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+
+        current = {invite.code: invite.uses or 0 for invite in invites}
+        previous = self._invite_uses.get(guild.id)
+        self._invite_uses[guild.id] = current
+        if previous is None:
+            return None
+
+        for code, uses in current.items():
+            if uses > previous.get(code, 0):
+                return code
+        # An invite created and consumed between snapshots starts above zero
+        # without appearing in `previous` at all.
+        for code, uses in current.items():
+            if code not in previous and uses > 0:
+                return code
+        return None
+
     async def enable(self) -> None:
         self._logger.info("Enabling welcome module v%s", self.version)
 
@@ -187,7 +226,7 @@ class WelcomeModule(BarkModule):
 
     # ── Message helpers ──────────────────────────────────
 
-    def _format(self, template: str, member: discord.Member) -> str:
+    def _format(self, template: str, member: discord.Member, invite: str | None = None) -> str:
         """Replace placeholders in a message template."""
         if not template:
             return ""
@@ -197,11 +236,21 @@ class WelcomeModule(BarkModule):
             .replace("{user.id}", str(member.id))
             .replace("{server}", member.guild.name)
             .replace("{member_count}", str(member.guild.member_count))
+            # "unknown" rather than a dangling fragment so an unattributable
+            # join still reads as a sentence.
+            .replace("{invite}", invite or "unknown")
         )
 
-    def _build_message(self, template: str, member: discord.Member, as_embed: bool, title: str):
+    def _build_message(
+        self,
+        template: str,
+        member: discord.Member,
+        as_embed: bool,
+        title: str,
+        invite: str | None = None,
+    ):
         """Return either a formatted string or a Discord embed from a template."""
-        text = self._format(template, member)
+        text = self._format(template, member, invite)
         if not as_embed:
             return text
         embed = discord.Embed(
@@ -239,6 +288,10 @@ class WelcomeModule(BarkModule):
         if member.guild.get_member(member.id) is None:
             return
 
+        # Attribute the join to an invite before rendering, so the message can
+        # name the code they arrived through.
+        invite_code = await self._attribute_invite(member.guild)
+
         # Welcome channel message
         ch_id = config.get("welcome_channel", "")
         if ch_id:
@@ -249,6 +302,7 @@ class WelcomeModule(BarkModule):
                     member,
                     bool(config.get("welcome_embed")),
                     "Welcome!",
+                    invite_code,
                 )
                 await self._send(channel, message)
 
