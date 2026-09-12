@@ -64,6 +64,23 @@ def _param_summary(leaf) -> str:
     return "\n".join(lines) or "• no arguments"
 
 
+#: Parameters that only choose where a reply lands, not what the command does.
+_VISIBILITY_PARAMS = frozenset({"public", "private"})
+
+
+def needs_user_args(leaf) -> bool:
+    """Whether the picker should ask for arguments before running.
+
+    A command whose only parameter is the visibility flag has nothing to
+    collect — prompting for it added a step and made people type ``public`` to
+    get the behaviour they already wanted.
+    """
+    return any(
+        (p.name or "").lower() not in _VISIBILITY_PARAMS
+        for p in getattr(leaf.command, "parameters", [])
+    )
+
+
 # ── Reply capture (privacy-preserving arg collection) ──
 
 
@@ -191,6 +208,10 @@ async def _collect_args_by_reply(dispatcher, interaction, leaf) -> None:
             pass
         return
 
+    # ponytail: responses that reach the proxy without an explicit
+    # `ephemeral` kwarg stay private. The visibility-flag commands all use
+    # defer(...) + followup.send(...), so the public default lands correctly;
+    # revisit if a public command starts replying via response.send_message.
     proxy = _ReplyArgsInteraction(interaction, ephemeral=True)
     try:
         await dispatcher.dispatch(proxy, leaf.path, content)
@@ -303,7 +324,7 @@ class BarkCommandSelect(discord.ui.Select):
         leaf = self._leaves.get(path)
         if leaf is None:
             return
-        if getattr(leaf.command, "parameters", []):
+        if needs_user_args(leaf):
             if command_uses_modal(leaf):
                 await interaction.response.send_modal(BarkArgsModal(self._dispatcher, leaf))
             else:

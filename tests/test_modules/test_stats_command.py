@@ -87,7 +87,7 @@ async def test_stats_command_builds_embed_with_all_fields(db, interaction):
 
     await _seed()
     cmd = _make_stats_cmd()
-    await _invoke(cmd, interaction, public=False)
+    await _invoke(cmd, interaction)
 
     interaction.response.defer.assert_awaited_once()
     send = interaction.followup.send
@@ -106,8 +106,8 @@ async def test_stats_command_builds_embed_with_all_fields(db, interaction):
     # Ranked entries use clean 1./2./3. numbering.
     values = " ".join(f.value for f in fields)
     assert "`1.`" in values
-    # Private by default -> ephemeral.
-    assert send.await_args.kwargs["ephemeral"] is True
+    # Public by default — no flag needed.
+    assert send.await_args.kwargs["ephemeral"] is False
 
 
 @pytest.mark.asyncio

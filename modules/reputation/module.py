@@ -2358,10 +2358,10 @@ class ReputationModule(BarkModule):
         )
         @discord.app_commands.describe(
             member="Member to look up (leave empty for yourself)",
-            public="Post in the channel for everyone (default private). Add `public` as the last argument.",
+            public="Post in the channel for everyone. Add `private` to keep it to yourself.",
         )
         async def reputation_cmd(
-            interaction: discord.Interaction, member: discord.Member | None = None, public: bool = False
+            interaction: discord.Interaction, member: discord.Member | None = None, public: bool = True
         ):
             if not interaction.guild:
                 return
@@ -2469,9 +2469,9 @@ class ReputationModule(BarkModule):
             name="leaderboard", description="Show the top ranked members in this server"
         )
         @discord.app_commands.describe(
-            public="Post in the channel for everyone (default private). Add `public` as the last argument."
+            public="Post in the channel for everyone. Add `private` to keep it to yourself."
         )
-        async def leaderboard_cmd(interaction: discord.Interaction, public: bool = False):
+        async def leaderboard_cmd(interaction: discord.Interaction, public: bool = True):
             if not interaction.guild:
                 return
             await interaction.response.defer(ephemeral=not public)

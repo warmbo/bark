@@ -232,6 +232,30 @@ def test_command_select_starts_reply_capture_for_optional_args_instead_of_runnin
     assert captured == {}
 
 
+def test_command_select_runs_a_visibility_only_command_without_prompting():
+    """`leaderboard`'s only parameter is the `public` flag, so picking it must
+    just run it (publicly by default) instead of asking for an argument."""
+    d = _dispatcher()
+    leaf = d._registry.get("leaderboard")
+    assert leaf is not None, f"leaderboard not registered; have {sorted(d._registry)}"
+    assert [p.name for p in leaf.command.parameters] == ["public"]
+    assert interactions.needs_user_args(leaf) is False
+
+    async def run():
+        captured = _stub_dispatch(d)
+        select = interactions.BarkCommandSelect(d, [leaf])
+        select._values = ["leaderboard"]  # noqa: SLF001
+        inter = FakeInteraction()
+        await select.callback(inter)
+        return inter.response, captured
+
+    response, captured = asyncio.run(run())
+    assert response.sent is None  # no ephemeral prompt
+    assert response.modal is None
+    assert captured["command"] == "leaderboard"
+    assert captured["args"] == ""
+
+
 def test_command_select_runs_directly_when_no_required_args():
     d = _dispatcher()
     leaf = d._registry.get("help")

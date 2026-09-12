@@ -168,8 +168,8 @@ class HelpModule(BarkModule):
                 value=(
                     f"Run `{prefix}help` anytime — the bot DMs you this list. "
                     "Text commands (`bark!…`) reply in the channel; only `help` "
-                    "uses DMs. Slash info commands stay private unless you add "
-                    "`public` as the last argument."
+                    "uses DMs. Info commands post in the channel — add "
+                    "`private` as the last argument to keep one to yourself."
                 ),
                 inline=False,
             )
@@ -223,9 +223,9 @@ class HelpModule(BarkModule):
             description="Show server stats: members, channels, roles, boosts, age",
         )
         @discord.app_commands.describe(
-            public="Post in the channel for everyone (default private). Add `public` as the last argument."
+            public="Post in the channel for everyone. Add `private` to keep it to yourself."
         )
-        async def info_cmd(interaction: discord.Interaction, public: bool = False):
+        async def info_cmd(interaction: discord.Interaction, public: bool = True):
             guild = interaction.guild
             if guild is None:
                 await interaction.response.send_message(
@@ -299,9 +299,9 @@ class HelpModule(BarkModule):
             description="Show server activity stats: top channels, games, rep, voice, and more",
         )
         @discord.app_commands.describe(
-            public="Post in the channel for everyone (default private). Add `public` as the last argument."
+            public="Post in the channel for everyone. Add `private` to keep it to yourself."
         )
-        async def stats_cmd(interaction: discord.Interaction, public: bool = False):
+        async def stats_cmd(interaction: discord.Interaction, public: bool = True):
             guild = interaction.guild
             if guild is None:
                 await interaction.response.send_message(

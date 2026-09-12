@@ -557,9 +557,9 @@ class RoleManagerModule(BarkModule):
             name="roles", description="List roles you can claim in this server"
         )
         @discord.app_commands.describe(
-            public="Post in the channel for everyone (default private). Add `public` as the last argument."
+            public="Post in the channel for everyone. Add `private` to keep it to yourself."
         )
-        async def roles_cmd(interaction: discord.Interaction, public: bool = False):
+        async def roles_cmd(interaction: discord.Interaction, public: bool = True):
             if not interaction.guild:
                 return
             await interaction.response.defer(ephemeral=not public)
