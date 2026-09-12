@@ -2,7 +2,13 @@ from types import SimpleNamespace
 
 import pytest
 
+import bark_version
 from bot.client import BarkBot
+
+
+def test_bot_exposes_its_version_for_user_facing_output():
+    """`/bark info` renders bot.version — nothing set it, so it showed "v?"."""
+    assert BarkBot().version == bark_version.__version__
 
 
 @pytest.mark.asyncio

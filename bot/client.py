@@ -16,6 +16,7 @@ import discord
 from discord import Intents
 from discord.ext import commands
 
+from bark_version import __version__
 from config import config
 from database.engine import session_scope
 from database.models.guild import Guild
@@ -59,6 +60,8 @@ class BarkBot(commands.Bot):
         self._app = None  # FastAPI app, set by dashboard at creation
         self._data_collector: GuildDataCollector | None = None
         self._initialized_once = False
+        # Shown by /bark info; nothing set this before, so it displayed "v?".
+        self.version = __version__
         from services.paginator import ReactionPaginator
 
         self.paginator = ReactionPaginator()
