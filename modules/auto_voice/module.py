@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any
@@ -114,11 +115,19 @@ class AutoVoiceModule(BarkModule):
     # single tall stack of fieldsets.
     config_layout = "columns"
 
+    # Discord rate-limits channel edits aggressively — a burst comes back as a
+    # 429 with a multi-minute retry (observed: ~549s on a single PATCH). Presence
+    # churn can flip a channel's majority game back and forth, so cap how often
+    # one channel may be renamed automatically. Owner `/voice_name` renames are
+    # deliberate user actions and bypass this on purpose.
+    _RENAME_COOLDOWN_SECONDS = 600.0
+
     def __init__(self, ctx) -> None:
         super().__init__(ctx)
         self._managed_channels: dict[int, ManagedChannel] = {}
         self._delete_tasks: dict[int, asyncio.Task] = {}
         self._rename_locks: dict[int, asyncio.Lock] = {}
+        self._last_rename_at: dict[int, float] = {}
         self._joins_in_progress: set[int] = set()
         self._channel_sequence: dict[int, int] = {}
 
@@ -440,6 +449,7 @@ class AutoVoiceModule(BarkModule):
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._rename_locks.clear()
+        self._last_rename_at.clear()
         self._joins_in_progress.clear()
         self._logger.info("Disabled auto voice module")
 
@@ -591,10 +601,15 @@ class AutoVoiceModule(BarkModule):
         if after_channel is not None and primary_id == int(after_channel.id):
             await self._create_for_member(member, after_channel, config)
 
+        # Schedule the emptiness check even if the cached member list still
+        # shows someone here: discord.py's cache lags the gateway by a tick, so
+        # the departing last member can still appear present. Gating on that
+        # stale cache left empty temp channels alive forever (and their DB rows
+        # behind). _delete_if_empty re-verifies after the delay and refuses to
+        # touch a channel that genuinely still has members.
         if (
             before_channel is not None
             and int(before_channel.id) in self._managed_channels
-            and not getattr(before_channel, "members", [])
         ):
             await self._schedule_deletion(before_channel, config)
 
@@ -759,10 +774,25 @@ class AutoVoiceModule(BarkModule):
             return
         self._managed_channels.pop(channel_id, None)
         self._rename_locks.pop(channel_id, None)
+        self._last_rename_at.pop(channel_id, None)
         await self._forget_persisted_channel(channel_id)
 
     async def _forget_persisted_channel(self, channel_id: int) -> None:
-        await self.ctx.delete_auto_voice_channel(channel_id)
+        """Best-effort cleanup of the persisted row after the channel is gone.
+
+        The Discord channel has already been deleted by the time this runs, so a
+        transient DB failure (SQLite write lock) must not be reported as "failed
+        to delete the channel" — and must not skip the rest of the cleanup path.
+        A leftover row is reconciled on the next startup, which forgets rows
+        whose channel no longer exists.
+        """
+        try:
+            await self.ctx.delete_auto_voice_channel(channel_id)
+        except Exception:
+            self._logger.warning(
+                "Could not clear persisted state for temp channel %s", channel_id,
+                exc_info=True,
+            )
 
     def _cancel_deletion(self, channel_id: int) -> None:
         task = self._delete_tasks.pop(channel_id, None)
@@ -836,6 +866,10 @@ class AutoVoiceModule(BarkModule):
 
     async def _refresh_channel_name(self, channel, config: dict[str, Any]) -> None:
         channel_id = int(channel.id)
+        # Rate-limit-aware guard: never hammer Discord's channel-edit endpoint.
+        # See _RENAME_COOLDOWN_SECONDS for why.
+        if time.monotonic() - self._last_rename_at.get(channel_id, 0.0) < self._RENAME_COOLDOWN_SECONDS:
+            return
         lock = self._rename_locks.setdefault(channel_id, asyncio.Lock())
         async with lock:
             await self._refresh_channel_name_locked(channel, config)
@@ -878,6 +912,7 @@ class AutoVoiceModule(BarkModule):
                 reason="Bark Auto Voice: majority game changed",
             )
             channel.name = desired_name
+            self._last_rename_at[int(channel.id)] = time.monotonic()
         except (discord.Forbidden, discord.HTTPException):
             self._logger.exception("Failed to update temporary voice channel %s name", channel.id)
 

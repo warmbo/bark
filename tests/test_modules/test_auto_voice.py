@@ -363,6 +363,64 @@ async def test_empty_managed_channel_is_deleted_when_last_member_leaves():
 
 
 @pytest.mark.asyncio
+async def test_deletion_is_scheduled_even_when_cached_members_look_stale():
+    """discord.py's cached member list lags the gateway. If the departing last
+    member is still listed, cleanup must still be scheduled — otherwise an empty
+    temp channel lives forever (and its DB row with it)."""
+    ctx, guild, member, primary, temporary, disconnected, _joined_primary = _voice_fixture()
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
+    temporary.members = [member]  # stale: the leaver is still listed
+
+    await module._on_voice_state_update(
+        "discord_voice_state",
+        member=member,
+        before=SimpleNamespace(channel=temporary),
+        after=disconnected,
+    )
+
+    assert temporary.id in module._delete_tasks  # the regression
+    temporary.members = []  # cache settles
+    await module._delete_tasks[temporary.id]
+    temporary.delete.assert_awaited_once_with(reason="Bark Auto Voice: channel empty")
+
+
+@pytest.mark.asyncio
+async def test_forget_persisted_channel_tolerates_db_failure():
+    """The channel is already gone from Discord by the time the row is cleared,
+    so a transient DB error must not raise (which the caller would report as a
+    failed channel deletion). A leftover row is reconciled on next startup."""
+    ctx, _guild, _member, _primary, _temporary, _disconnected, _joined_primary = _voice_fixture()
+    ctx.delete_auto_voice_channel = AsyncMock(side_effect=RuntimeError("database is locked"))
+    module = AutoVoiceModule(ctx)
+
+    await module._forget_persisted_channel(200)  # must not raise
+
+    ctx.delete_auto_voice_channel.assert_awaited_once_with(200)
+
+
+@pytest.mark.asyncio
+async def test_auto_rename_is_rate_limited_per_channel():
+    """Discord 429s channel edits with multi-minute retries, so automatic
+    renames must be capped per channel. Owner /voice_name is unaffected."""
+    ctx, guild, member, primary, temporary, _disconnected, _joined_primary = _voice_fixture()
+    config = {"channel_name_template": "{game}", "fallback_name": "hangout"}
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(guild_id=guild.id, owner_id=member.id)
+    temporary.members = [member]
+    member.activities = [SimpleNamespace(name="Game A", type=None)]
+
+    await module._refresh_channel_name(temporary, config)
+    assert temporary.edit.await_count == 1
+
+    # A genuinely different game would be renamed, but the cooldown suppresses it.
+    member.activities = [SimpleNamespace(name="Game B", type=None)]
+    assert module._render_name(member, config) != temporary.name
+    await module._refresh_channel_name(temporary, config)
+    assert temporary.edit.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_deleted_channel_is_removed_from_restart_recovery_state(db):
     from sqlalchemy import select
 
