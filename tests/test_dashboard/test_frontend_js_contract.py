@@ -304,10 +304,12 @@ def test_announcements_mention_token_and_queue_summary_rules():
     ann = source(JS / "announcements-workspace.js")
     token = ann[ann.index("function tokenAtCaret(") : ann.index("function mentionToken(")]
     summary = ann[ann.index("function summarise(") : ann.index("function renderQueue(")]
+    recurrence = ann[ann.index("function recurrenceText(") : ann.index("function summarise(")]
 
     script = f"""
 {token}
 {summary}
+{recurrence}
 const eq = (got, want, what) => {{
   if (JSON.stringify(got) !== JSON.stringify(want)) {{
     throw new Error(`${{what}}: got ${{JSON.stringify(got)}}, want ${{JSON.stringify(want)}}`);
@@ -323,6 +325,10 @@ eq(summarise('**bold**  text\\n\\nmore', 100), 'bold text more', 'markdown + whi
 eq(summarise('<@123> joined', 100), 'joined', 'mention token dropped');
 eq(summarise('one two three four', 12), 'one two…', 'breaks on a word boundary');
 eq(summarise('a'.repeat(200), 20).length, 21, 'hard cut when there is no space');
+eq(recurrenceText({{recurrence_unit: 'days', recurrence_interval: 3}}), 'Every 3 days', 'plural unit, count > 1');
+eq(recurrenceText({{recurrence_unit: 'weeks', recurrence_interval: 1}}), 'Every 1 week', 'plural unit, count == 1');
+eq(recurrenceText({{recurrence_unit: 'hours', recurrence_interval: 6}}), 'Every 6 hours', 'hours stays plural');
+eq(recurrenceText({{recurrence_unit: null, recurrence_interval: 1}}), 'One time', 'no recurrence');
 console.log('OK');
 """
     subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)

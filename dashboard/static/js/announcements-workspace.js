@@ -622,7 +622,10 @@
   function recurrenceText(job) {
     if (!job.recurrence_unit) return 'One time';
     const count = Number(job.recurrence_interval) || 1;
-    return `Every ${count} ${job.recurrence_unit}${count === 1 ? '' : 's'}`;
+    // The API stores a plural unit ("days"); singularise before re-pluralising
+    // so it can't render "Every 3 dayss" / "Every 1 weeks".
+    const unit = String(job.recurrence_unit).replace(/s$/, '');
+    return `Every ${count} ${unit}${count === 1 ? '' : 's'}`;
   }
 
   /** Flatten Discord markdown to one readable line so a sidebar slice can't
