@@ -38,8 +38,9 @@
 
   /** Render Discord message markdown (full client support) or embed-description
    * markdown (embeds drop block-level formatting). Source is escaped first, so
-   * token matches cannot inject HTML. */
-  function renderMarkdown(source, embedMode) {
+   * token matches cannot inject HTML. `mentionNames` (id → display name) is
+   * optional and passed in so the renderer stays pure and testable. */
+  function renderMarkdown(source, embedMode, mentionNames) {
     const text = esc(source);
 
     // Discord custom emoji: <:name:id> (static) and <a:name:id> (animated) →
@@ -51,6 +52,17 @@
       (_, animated, name, id) =>
         `<img class="discord-emoji" src="https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'png'}?size=48&amp;quality=lossless" alt=":${name}:" title="${name}" loading="lazy">`
     );
+
+    // Discord mentions (<@id>, <@!id>, <#id>) → the name recorded when the
+    // composer offered it; unknown ids keep the raw (already escaped) token.
+    // Same placement as the emoji pass, before code blocks are protected.
+    if (mentionNames) {
+      out = out.replace(/&lt;(@!?|#)(\d+)&gt;/g, (match, sigil, id) => {
+        const name = mentionNames[id];
+        if (!name) return match;
+        return `<span class="discord-mention">${sigil === '#' ? '#' : '@'}${esc(name)}</span>`;
+      });
+    }
 
     // Protect code blocks from inline token processing.
     const blocks = [];
@@ -182,6 +194,9 @@
     return `<img class="${cls}" src="${esc(src)}" alt="">`;
   }
 
+  // id → display name, filled in as the composer suggests/inserts mentions.
+  const mentionNames = {};
+
   function updatePreview() {
     timestampEl.textContent = nowTimestamp();
 
@@ -219,13 +234,13 @@
         `<div class="discord-embed-bar" style="background:${readColor()}"></div>` +
         '<div class="discord-embed-body">' +
           (title ? `<div class="discord-embed-title">${esc(title)}</div>` : '') +
-          (description ? `<div class="discord-embed-desc">${renderMarkdown(description, true)}</div>` : '') +
+          (description ? `<div class="discord-embed-desc">${renderMarkdown(description, true, mentionNames)}</div>` : '') +
           (imageUrl ? mediaImg(imageUrl, 'discord-embed-image') : '') +
           `<div class="discord-embed-footer"><span>Bark</span><span>${nowTimestamp()}</span></div>` +
         '</div>';
     } else {
       // Backend: content = message[:2000]; an image is a separate embed below.
-      contentEl.innerHTML = renderMarkdown(message.slice(0, 2000), false);
+      contentEl.innerHTML = renderMarkdown(message.slice(0, 2000), false, mentionNames);
       if (image) {
         embedEl.hidden = false;
         embedEl.innerHTML =
@@ -358,6 +373,8 @@
     }
 
     async function openPicker() {
+      // The mention list and the emoji grid share the same anchor.
+      closeMentions();
       const grid = pickerWrap.querySelector('.announce-emoji-picker-grid');
       const emojis = await loadEmojis();
       if (!emojis.length) {
@@ -400,6 +417,178 @@
       if (e.key === 'Escape' && !pickerWrap.hidden) closePicker();
     });
 
+    // ── @ / # mention autocomplete ────────────────────────────────────────
+    // Typing @ or # lists members or channels for the token being typed and
+    // inserts the Discord token (<@id> / <#id>). Names are recorded so the live
+    // preview can render the mention instead of a raw token.
+    const mentionList = document.createElement('div');
+    mentionList.className = 'announce-mention-list';
+    mentionList.hidden = true;
+    mentionList.setAttribute('role', 'listbox');
+    mentionList.setAttribute('aria-label', 'Mention suggestions');
+    fieldWrap.appendChild(mentionList);
+
+    const membersByQuery = new Map();
+    let channelItems = null;
+    let mentionItems = [];
+    let activeIndex = -1;
+    let mentionTimer = null;
+
+    async function fetchJson(path) {
+      const res = await (window.safeFetch || fetch)(path);
+      // safeFetch returns the parsed body; a bare fetch returns a Response.
+      return res && typeof res.json === 'function' ? await res.json() : res;
+    }
+
+    /** The @/# token immediately before `caret` in `value`, if any.
+     * Pure (takes the text + caret) so the token rules are testable. */
+    function tokenAtCaret(value, caret) {
+      const before = String(value ?? '').slice(0, caret);
+      const match = before.match(/(?:^|\s)([@#])([\w.\-]*)$/);
+      if (!match) return null;
+      return {sigil: match[1], query: match[2], start: caret - match[2].length - 1};
+    }
+
+    function mentionToken() {
+      return tokenAtCaret(messageInput.value, messageInput.selectionStart ?? messageInput.value.length);
+    }
+
+    function closeMentions() {
+      mentionList.hidden = true;
+      mentionList.innerHTML = '';
+      mentionItems = [];
+      activeIndex = -1;
+    }
+
+    function renderMentions() {
+      if (!mentionItems.length) {
+        mentionList.innerHTML = '<div class="announce-mention-empty">No matches.</div>';
+        mentionList.hidden = false;
+        closePicker();
+        return;
+      }
+      mentionList.innerHTML = mentionItems.map((item, index) => {
+        const face = item.avatar
+          ? `<img class="announce-mention-avatar" src="${esc(item.avatar)}" alt="" loading="lazy">`
+          : `<span class="announce-mention-sigil">${esc(item.sigil)}</span>`;
+        return `<button type="button" class="announce-mention-item${index === activeIndex ? ' active' : ''}"` +
+          ` role="option" aria-selected="${index === activeIndex}" data-mention-index="${index}">` +
+          `${face}<span class="announce-mention-name">${esc(item.label)}</span>` +
+          (item.meta ? `<span class="announce-mention-meta">${esc(item.meta)}</span>` : '') +
+          '</button>';
+      }).join('');
+      mentionList.hidden = false;
+      closePicker();
+    }
+
+    async function loadChannelItems() {
+      if (channelItems) return channelItems;
+      const gid = window.currentGuildId ? window.currentGuildId() : null;
+      if (!gid) return [];
+      try {
+        const data = await fetchJson(`/api/v1/guilds/${gid}/channels?type=text`);
+        channelItems = ((data && data.data && data.data.channels) || []).map((c) => {
+          mentionNames[c.id] = c.name;
+          return {id: c.id, label: `#${c.name}`, sigil: '#', meta: c.parent_name || ''};
+        });
+      } catch {
+        channelItems = [];
+      }
+      return channelItems;
+    }
+
+    // Members are looked up server-side (a guild can have thousands); results
+    // are cached per query so backspacing doesn't re-request.
+    async function loadMemberItems(query) {
+      const key = query.toLowerCase();
+      if (membersByQuery.has(key)) return membersByQuery.get(key);
+      const gid = window.currentGuildId ? window.currentGuildId() : null;
+      if (!gid) return [];
+      let items = [];
+      try {
+        const data = await fetchJson(
+          `/api/v1/guilds/${gid}/members?limit=8&search=${encodeURIComponent(query)}`
+        );
+        items = ((data && data.data && data.data.members) || []).map((m) => {
+          mentionNames[m.id] = m.name;
+          return {id: m.id, label: m.name, sigil: '@', avatar: m.avatar_url, meta: m.tag || ''};
+        });
+      } catch {
+        items = [];
+      }
+      membersByQuery.set(key, items);
+      return items;
+    }
+
+    async function updateMentions() {
+      const token = mentionToken();
+      if (!token) {
+        closeMentions();
+        return;
+      }
+      if (token.sigil === '#') {
+        const needle = token.query.toLowerCase();
+        mentionItems = (await loadChannelItems())
+          .filter((c) => c.label.toLowerCase().includes(needle))
+          .slice(0, 8);
+      } else {
+        mentionItems = await loadMemberItems(token.query);
+      }
+      activeIndex = mentionItems.length ? 0 : -1;
+      renderMentions();
+    }
+
+    function acceptMention(item) {
+      const caret = messageInput.selectionStart ?? messageInput.value.length;
+      const token = mentionToken();
+      const start = token ? token.start : caret;
+      const inserted = item.sigil === '#' ? `<#${item.id}>` : `<@${item.id}>`;
+      mentionNames[item.id] = String(item.label).replace(/^#/, '');
+      messageInput.value =
+        messageInput.value.slice(0, start) + inserted + messageInput.value.slice(caret);
+      const next = start + inserted.length;
+      messageInput.setSelectionRange(next, next);
+      closeMentions();
+      messageInput.focus();
+      messageInput.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+
+    messageInput.addEventListener('input', () => {
+      clearTimeout(mentionTimer);
+      if (!mentionToken()) {
+        closeMentions();
+        return;
+      }
+      mentionTimer = setTimeout(updateMentions, 140);
+    });
+
+    messageInput.addEventListener('keydown', (event) => {
+      if (mentionList.hidden || !mentionItems.length) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        activeIndex = (activeIndex + step + mentionItems.length) % mentionItems.length;
+        renderMentions();
+      } else if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        acceptMention(mentionItems[activeIndex] || mentionItems[0]);
+      } else if (event.key === 'Escape') {
+        closeMentions();
+      }
+    });
+
+    // mousedown, not click: the textarea would blur (and the row unmount) first.
+    mentionList.addEventListener('mousedown', (event) => {
+      const button = event.target.closest('[data-mention-index]');
+      if (!button) return;
+      event.preventDefault();
+      acceptMention(mentionItems[Number(button.dataset.mentionIndex)]);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!mentionList.hidden && !fieldWrap.contains(event.target)) closeMentions();
+    });
+
     // Keep the picker above the preview toggle button if one exists.
     updatePreview();
   }
@@ -436,6 +625,23 @@
     return `Every ${count} ${job.recurrence_unit}${count === 1 ? '' : 's'}`;
   }
 
+  /** Flatten Discord markdown to one readable line so a sidebar slice can't
+   * leave a half-word, a stray `**`, or a wall of newlines. */
+  function summarise(text, limit) {
+    const flat = String(text ?? '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/<[@#][!&]?\d+>/g, ' ')
+      .replace(/[*_~`>#|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (flat.length <= limit) return flat;
+    const cut = flat.slice(0, limit);
+    // Break on the last word boundary rather than mid-word; a long unbroken
+    // string (a URL) has no space to find, so it hard-cuts.
+    const space = cut.lastIndexOf(' ');
+    return `${(space > 0 ? cut.slice(0, space) : cut).trim()}…`;
+  }
+
   function renderQueue(jobs) {
     if (!jobs.length) {
       queueBody.innerHTML = '<div class="state-panel"><strong>No scheduled announcements</strong><span>Choose “Schedule for later” in the composer to add one.</span></div>';
@@ -446,10 +652,15 @@
       const paused = job.status === 'paused' || job.status === 'failed';
       const action = paused ? 'resume' : 'pause';
       const actionLabel = job.status === 'failed' ? 'Retry' : (paused ? 'Resume' : 'Pause');
+      // Full text lives in the title attribute; the visible lines are clamped
+      // by CSS so the narrow sidebar column stays readable.
+      const title = job.title ? summarise(job.title, 60) : 'Untitled announcement';
+      const titleFull = summarise(job.title || job.message, 200);
+      const message = summarise(job.message, 140);
       return `<article class="announcement-queue-item" data-schedule-id="${Number(job.id)}">` +
-        `<div class="announcement-queue-main"><div class="announcement-queue-head"><strong>${esc(job.title || job.message.slice(0, 80))}</strong><span class="status-badge">${esc(job.status)}</span></div>` +
-        `<p>${esc(job.message.slice(0, 180))}</p><small>${esc(when)} · ${esc(recurrenceText(job))} · ${esc(job.timezone_name)}</small>` +
-        (job.last_error ? `<div class="action-result error">${esc(job.last_error)}</div>` : '') +
+        `<div class="announcement-queue-main"><div class="announcement-queue-head"><strong class="announcement-queue-title" title="${esc(titleFull)}">${esc(title)}</strong><span class="status-badge">${esc(job.status)}</span></div>` +
+        `<p title="${esc(summarise(job.message, 300))}">${esc(message)}</p><small>${esc(when)} · ${esc(recurrenceText(job))} · ${esc(job.timezone_name)}</small>` +
+        (job.last_error ? `<div class="action-result error" title="${esc(job.last_error)}">${esc(summarise(job.last_error, 200))}</div>` : '') +
         `</div><div class="table-actions"><button type="button" class="btn btn-xs" data-schedule-action="${action}">${actionLabel}</button>` +
         '<button type="button" class="btn btn-xs btn-danger" data-schedule-action="delete">Delete</button></div></article>';
     }).join('')}</div>`;

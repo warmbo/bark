@@ -278,6 +278,56 @@ def test_announcements_preview_uses_canonical_preview_card_and_color_picker():
     assert "embed_color" in module
 
 
+def test_announcements_composer_offers_mention_autocomplete_and_clamps_queue():
+    """Typing @ or # in the composer lists members/channels and inserts the
+    Discord token; the scheduled queue clamps text instead of slicing it."""
+    ann = source(JS / "announcements-workspace.js")
+
+    # @ / # autocomplete in the message field.
+    assert "announce-mention-list" in ann
+    assert "tokenAtCaret" in ann
+    assert "acceptMention" in ann
+    assert "/channels?type=text" in ann  # channel list from the guild API
+    assert "/members?limit=8&search=" in ann  # members searched server-side
+    assert "discord-mention" in ann  # preview renders the recorded name
+
+    # Sidebar queue: summarised + clamped, never a raw mid-word slice.
+    assert "announcement-queue-title" in ann
+    assert "summarise(job.message, 140)" in ann
+    assert "job.message.slice(0, 180)" not in ann
+    assert "job.message.slice(0, 80)" not in ann
+
+
+def test_announcements_mention_token_and_queue_summary_rules():
+    """The @/# token parser and the sidebar text summary are pure helpers with
+    real edge cases (mid-word @, bare sigil, word-boundary truncation)."""
+    ann = source(JS / "announcements-workspace.js")
+    token = ann[ann.index("function tokenAtCaret(") : ann.index("function mentionToken(")]
+    summary = ann[ann.index("function summarise(") : ann.index("function renderQueue(")]
+
+    script = f"""
+{token}
+{summary}
+const eq = (got, want, what) => {{
+  if (JSON.stringify(got) !== JSON.stringify(want)) {{
+    throw new Error(`${{what}}: got ${{JSON.stringify(got)}}, want ${{JSON.stringify(want)}}`);
+  }}
+}};
+eq(tokenAtCaret('@co', 3), {{sigil: '@', query: 'co', start: 0}}, 'bare sigil at start');
+eq(tokenAtCaret('hi @co', 6), {{sigil: '@', query: 'co', start: 3}}, 'after a space');
+eq(tokenAtCaret('hi #gen', 7), {{sigil: '#', query: 'gen', start: 3}}, 'channel token');
+eq(tokenAtCaret('hi @', 4), {{sigil: '@', query: '', start: 3}}, 'sigil with no query');
+eq(tokenAtCaret('mail a@b', 8), null, 'mid-word @ is not a mention');
+eq(tokenAtCaret('@co you', 3), {{sigil: '@', query: 'co', start: 0}}, 'caret before the space');
+eq(summarise('**bold**  text\\n\\nmore', 100), 'bold text more', 'markdown + whitespace flattened');
+eq(summarise('<@123> joined', 100), 'joined', 'mention token dropped');
+eq(summarise('one two three four', 12), 'one two…', 'breaks on a word boundary');
+eq(summarise('a'.repeat(200), 20).length, 21, 'hard cut when there is no space');
+console.log('OK');
+"""
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+
+
 def test_discord_markdown_renderer_covers_discord_tokens():
     """The announcements preview's markdown renderer must escape HTML before
     formatting and cover Discord's core inline/block tokens."""
@@ -314,6 +364,13 @@ const embedOut = renderMarkdown('# Head\\n## Sub\\n-# muted\\n- item\\n> quote',
 for (const cls of ['discord-h2', 'discord-h3', 'discord-subtext', 'discord-li', 'discord-quote']) {{
   if (!embedOut.includes(cls)) throw new Error(`embed mode must render ${{cls}}`);
 }}
+// Mentions render as a tinted pill when the composer recorded the name.
+const mentionOut = renderMarkdown('hi <@123> and <#456>', false, {{'123': 'Cody', '456': 'general'}});
+if (!mentionOut.includes('<span class="discord-mention">@Cody</span>')) throw new Error(`user mention not rendered: ${{mentionOut}}`);
+if (!mentionOut.includes('<span class="discord-mention">#general</span>')) throw new Error(`channel mention not rendered: ${{mentionOut}}`);
+// An unknown id keeps the escaped token instead of inventing a name.
+const unknownOut = renderMarkdown('<@999>', false, {{}});
+if (!unknownOut.includes('&lt;@999&gt;')) throw new Error(`unknown mention must stay raw: ${{unknownOut}}`);
 console.log('OK');
 """
     subprocess.run(
