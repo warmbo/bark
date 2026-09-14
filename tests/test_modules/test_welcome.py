@@ -105,6 +105,53 @@ async def test_invite_attribution_primes_cache_then_reports_used_code():
 
 
 @pytest.mark.asyncio
+async def test_enable_primes_invites_so_the_first_join_is_attributed():
+    """The first join after a restart used to render "unknown" because the cache
+    only primed on that very join."""
+    guild = _guild(7)
+    state = {"uses": {"KT8zF6x2ju": 10}}
+
+    async def invites():
+        return [_Invite(code, uses) for code, uses in state["uses"].items()]
+
+    guild.invites = invites
+    module = _module()
+    module.ctx.bot.guilds = [guild]
+
+    await module.enable()
+    assert module._invite_uses[7] == {"KT8zF6x2ju": 10}  # primed at startup
+
+    state["uses"]["KT8zF6x2ju"] = 11
+    assert await module._attribute_invite(guild) == "KT8zF6x2ju"
+
+
+@pytest.mark.asyncio
+async def test_enable_survives_a_guild_that_refuses_invites():
+    """A guild the bot can't read invites for must not break startup."""
+    ok = _guild(7)
+    state = {"uses": {"ABC": 5}}
+
+    async def ok_invites():
+        return [_Invite(code, uses) for code, uses in state["uses"].items()]
+
+    ok.invites = ok_invites
+
+    refused = _guild(8)
+
+    async def refused_invites():
+        raise discord.Forbidden(MagicMock(status=403), "Missing Permissions")
+
+    refused.invites = refused_invites
+
+    module = _module()
+    module.ctx.bot.guilds = [ok, refused]
+    await module.enable()
+
+    assert module._invite_uses[7] == {"ABC": 5}
+    assert 8 not in module._invite_uses
+
+
+@pytest.mark.asyncio
 async def test_invite_attribution_gives_up_quietly_without_endpoint():
     module = _module()
     assert await module._attribute_invite(_guild(7)) is None

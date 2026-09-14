@@ -213,8 +213,30 @@ class WelcomeModule(BarkModule):
                 return code
         return None
 
+    async def _prime_invite_cache(self) -> None:
+        """Snapshot invite use counts at startup.
+
+        Attribution is a diff, so a cache primed only on the first join makes
+        that first join render "unknown" — and on a quiet server the first join
+        after a restart is most joins. Priming on enable (which also runs after
+        a dashboard module reload) fixes it.
+        """
+        primed = 0
+        for guild in getattr(getattr(self.ctx, "bot", None), "guilds", None) or []:
+            try:
+                invites = await guild.invites()
+            except AttributeError:
+                continue
+            except (discord.Forbidden, discord.HTTPException):
+                continue
+            self._invite_uses[guild.id] = {invite.code: invite.uses or 0 for invite in invites}
+            primed += 1
+        if primed:
+            self._logger.info("Primed invite cache for %d guild(s)", primed)
+
     async def enable(self) -> None:
         self._logger.info("Enabling welcome module v%s", self.version)
+        await self._prime_invite_cache()
 
     async def disable(self) -> None:
         self._logger.info("Disabling welcome module")
