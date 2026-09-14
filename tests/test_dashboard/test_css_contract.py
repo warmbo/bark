@@ -95,12 +95,6 @@ def test_desktop_operation_grid_keeps_odd_card_counts_uniform():
     )
 
 
-def test_mobile_health_strip_stacks_labels_and_values():
-    css = css_source()
-    assert "@media (max-width: 480px)" in css
-    assert ".module-health-strip > div { grid-template-columns: 1fr; row-gap: 2px; }" in css
-
-
 def test_activity_feed_fade_mask_contract():
     css = css_source()
     assert ".activity-feed.is-masked" in css

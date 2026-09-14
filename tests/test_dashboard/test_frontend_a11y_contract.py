@@ -216,7 +216,12 @@ def test_workspace_omits_empty_operate_tab_and_updates_toggle_in_place():
     assert "has_operations" in html
     assert "No operations available" not in html
     assert 'id="module-status-badge"' in html
-    assert 'id="module-runtime-status"' in html
+    # The Runtime/Configuration/Version/Commands health strip and the module
+    # role-access shield menu were removed as noise (2026-09-14).
+    assert "module-health-strip" not in html
+    assert 'id="module-runtime-status"' not in html
+    assert "role-access-menu" not in html
+    assert "module-min-role" not in html
     assert "window.location.reload" not in js
     assert "module-status-badge" in js
 

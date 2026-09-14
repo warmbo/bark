@@ -22,12 +22,6 @@
   const configForm = root.querySelector('.module-config-form');
   const saveButton = document.getElementById('save-config-btn');
   const discardButton = document.getElementById('discard-config-btn');
-  const roleAccessForm = document.getElementById('module-role-access-form');
-  const roleSelect = document.getElementById('module-min-role');
-  const roleSaveButton = document.getElementById('save-role-access-btn');
-  const roleResetButton = document.getElementById('reset-role-access-btn');
-  const roleSummary = document.getElementById('role-access-summary-text');
-  const roleMenu = root.querySelector('.role-access-menu');
   const snapshotForm = () => configForm ? [...configForm.elements]
     .filter(field => field.name)
     .map(field => ({field, value: field.value, checked: field.checked})) : [];
@@ -74,50 +68,6 @@
     } finally { saveButton.removeAttribute('aria-busy'); saveButton.innerHTML = idleHtml; }
   });
 
-  const saveRoleAccess = async (minRole) => {
-    const reset = !minRole;
-    roleSaveButton.disabled = true;
-    roleResetButton.disabled = true;
-    roleSaveButton.setAttribute('aria-busy', 'true');
-    try {
-      await safeFetch(`/api/v1/guilds/${guildId}/modules/${moduleName}/role-access`, reset ? {
-        method: 'DELETE'
-      } : {
-        method: 'PATCH',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({min_role: minRole})
-      });
-      roleAccessForm.dataset.currentRole = minRole;
-      roleSelect.value = minRole;
-      roleResetButton.disabled = reset;
-      roleSaveButton.disabled = true;
-      if (roleSummary) {
-        const effectiveRole = minRole || 'admin';
-        roleSummary.textContent = `${effectiveRole[0].toUpperCase()}${effectiveRole.slice(1)}+`;
-      }
-      if (roleMenu) roleMenu.open = false;
-      showToast(reset ? 'Role access reset to admin default' : 'Role access saved', 'success');
-    } catch (error) {
-      roleSelect.value = roleAccessForm.dataset.currentRole;
-      roleResetButton.disabled = !roleAccessForm.dataset.currentRole;
-      showToast(error.message || 'Unable to save role access', 'error');
-    } finally {
-      roleSaveButton.disabled = roleSelect.value === roleAccessForm.dataset.currentRole;
-      roleSaveButton.removeAttribute('aria-busy');
-    }
-  };
-
-  roleAccessForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    await saveRoleAccess(roleSelect.value);
-  });
-  roleSelect?.addEventListener('change', () => {
-    roleSaveButton.disabled = roleSelect.value === roleAccessForm.dataset.currentRole;
-  });
-  roleResetButton?.addEventListener('click', async () => {
-    await saveRoleAccess('');
-  });
-
   root.querySelector('.module-toggle')?.addEventListener('change', async (event) => {
     const enabled = event.target.checked;
     event.target.disabled = true;
@@ -126,9 +76,7 @@
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled})
       });
       const badge = document.getElementById('module-status-badge');
-      const runtime = document.getElementById('module-runtime-status');
       if (badge) badge.innerHTML = `<span class="status-badge status-${enabled ? 'success' : 'neutral'}"><span class="status-indicator" aria-hidden="true"></span>${enabled ? 'Enabled' : 'Disabled'}</span>`;
-      if (runtime) runtime.textContent = enabled ? 'Active' : 'Paused';
       const sidebarNav = document.getElementById('sidebar-nav-items');
       if (sidebarNav && typeof loadSidebarManifest === 'function') {
         try { sessionStorage.removeItem(`bark_manifest_cache_${guildId}`); } catch {}

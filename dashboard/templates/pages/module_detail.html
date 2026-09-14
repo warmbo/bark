@@ -24,36 +24,8 @@
         <span class="toggle-switch"><input id="module-enabled" name="module_enabled" type="checkbox" class="module-toggle" {{ 'checked' if module_data.enabled else '' }}><span class="toggle-slider"></span></span>
       </label>
       <button type="button" class="btn btn-sm module-reload" data-module="{{ module_name }}">{{ icon('refresh-cw', 14) }} Reload</button>
-      {% if request.session.get('role', 'admin') in ['admin', 'owner'] %}
-      <details class="role-access-menu">
-        <summary class="btn btn-sm role-access-summary">{{ icon('shield', 14) }} <span id="role-access-summary-text">{{ (module_data.role_access_override or 'admin') | capitalize }}+</span> {{ icon('edit-3', 12) }}</summary>
-        <div class="role-access-popover">
-          <form id="module-role-access-form" data-current-role="{{ module_data.role_access_override or '' }}">
-            <div class="form-group">
-              <label class="form-label" for="module-min-role">Minimum dashboard role</label>
-              <select id="module-min-role" name="min_role" class="form-select">
-                <option value="" {{ 'selected' if not module_data.role_access_override else '' }}>Default (Admin+)</option>
-                {% for role in ['viewer', 'moderator', 'admin', 'owner'] %}<option value="{{ role }}" {{ 'selected' if module_data.role_access_override == role else '' }}>{{ role | capitalize }}+</option>{% endfor %}
-              </select>
-              <p class="form-hint">Higher roles inherit access.</p>
-            </div>
-            <div class="form-actions form-actions-static">
-              <button type="button" class="btn btn-sm" id="reset-role-access-btn" {{ 'disabled' if not module_data.role_access_override else '' }}>Use default</button>
-              <button type="submit" class="btn btn-primary btn-sm" id="save-role-access-btn">Save</button>
-            </div>
-          </form>
-        </div>
-      </details>
-      {% endif %}
     </div>
   </header>
-
-  <section class="module-health-strip" aria-label="Module health">
-    <div><span class="health-label">Runtime</span><strong id="module-runtime-status">{{ 'Active' if module_data.enabled else 'Paused' }}</strong></div>
-    <div><span class="health-label">Configuration</span><strong>{{ 'Configured' if module_data.config else 'Defaults' }}</strong></div>
-    <div><span class="health-label">Version</span><strong>v{{ module_data.version }}</strong></div>
-    <div><span class="health-label">Commands</span><strong>{{ module_data.commands | length }}</strong></div>
-  </section>
 
   <div class="tabs workspace-tabs" role="tablist" aria-label="{{ module_name | replace('_', ' ') | title }} workspace">
     {% if has_operations %}<button id="workspace-tab-operate" class="tab active" type="button" role="tab" aria-controls="tab-operate" aria-selected="true">Operate</button>{% endif %}
@@ -190,7 +162,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/module-workspace.js?v=17"></script>
+<script src="/static/js/module-workspace.js?v=18"></script>
 {% if module_name == 'auto_voice' %}<script src="/static/js/auto-voice-workspace.js?v=6"></script>{% endif %}
 {% if module_name == 'announcements' %}<script src="/static/js/announcements-workspace.js?v=10"></script>{% endif %}
 {% if module_name == 'logging' %}<script src="/static/js/logging-workspace.js?v=2"></script>{% endif %}
