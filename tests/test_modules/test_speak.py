@@ -79,6 +79,44 @@ async def test_speak_sends_phrase_publicly():
 
 
 @pytest.mark.asyncio
+async def test_speak_schedules_auto_delete_from_module_config():
+    """``delete_delay_seconds`` is a top-level module setting, not a key inside
+    the phrases dict. The command used to read it from ``_load_phrases()``,
+    which returns only the phrases — so the configured delay never applied."""
+    module = _make_module({"word1": "hello there"})
+    module.ctx.get_module_config = AsyncMock(
+        return_value={"phrases": {"word1": "hello there"}, "delete_delay_seconds": 5}
+    )
+    interaction = _Interaction(guild_id=100)
+    interaction.response.is_done = lambda: True
+    sent = MagicMock()
+    sent.delete = AsyncMock()
+    interaction.original_response = AsyncMock(return_value=sent)
+
+    cmd = module._make_speak_command()
+    await cmd.callback(interaction, key="word1")
+
+    call_later = module.ctx.bot.loop.call_later
+    assert call_later.call_count == 1
+    assert call_later.call_args.args[0] == 5
+
+
+@pytest.mark.asyncio
+async def test_speak_posts_phrase_when_delete_delay_is_malformed():
+    """A non-numeric stored delay must not raise after the phrase was posted."""
+    module = _make_module({"word1": "hello there"})
+    module.ctx.get_module_config = AsyncMock(
+        return_value={"phrases": {"word1": "hello there"}, "delete_delay_seconds": "soon"}
+    )
+    interaction = _Interaction(guild_id=100)
+
+    cmd = module._make_speak_command()
+    await cmd.callback(interaction, key="word1")
+
+    assert interaction.response.messages == [{"content": "hello there", "ephemeral": None}]
+
+
+@pytest.mark.asyncio
 async def test_speak_unknown_key_lists_available():
     module = _make_module({"word1": "hello", "phrase2": "world"})
     interaction = _Interaction(guild_id=100)

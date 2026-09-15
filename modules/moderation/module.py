@@ -452,8 +452,11 @@ class ModerationModule(BarkModule):
             },
             {
                 "id": "test_rule",
-                "label": "Test Rule",
-                "description": "Simulate a rule trigger to test your AutoMod configuration.",
+                "label": "Validate Rule Configuration",
+                "description": (
+                    "Check a rule's saved settings and see what it would do. "
+                    "This validates configuration — it does not simulate a message."
+                ),
                 "endpoint": "test-rule",
                 "fields": [
                     {
@@ -2402,9 +2405,14 @@ class ModerationModule(BarkModule):
                 )
             return api_success(
                 {
-                    "message": f"Rule '{rule_type}' is active. Threshold={cfg.get('threshold')}, "
-                    f"Action={cfg.get('action')}, Window={cfg.get('window_seconds')}s. "
-                    f"No simulated violations detected.",
+                    # Truthful output: this endpoint reads configuration. It must
+                    # not claim a simulation ran — earlier copy said "No
+                    # simulated violations detected", which implied a real
+                    # evaluation of sample content that never happened.
+                    "message": f"Rule '{rule_type}' configuration is valid. "
+                    f"Threshold={cfg.get('threshold')}, Action={cfg.get('action')}, "
+                    f"Window={cfg.get('window_seconds')}s. "
+                    f"No message was simulated — this is a configuration check.",
                 }
             )
 

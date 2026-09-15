@@ -193,12 +193,26 @@ class SpeakModule(BarkModule):
                 )
                 return
 
-            await interaction.response.send_message(str(text))
+            # Resolve the auto-delete delay BEFORE posting (validate -> act), and
+            # from the MODULE config: delete_delay_seconds is a top-level
+            # setting, while _load_phrases() returns only the "phrases" dict —
+            # reading it from there meant the delay never applied. A malformed
+            # stored value must not fail the command after the phrase is already
+            # in the channel.
+            delay = 0
             try:
-                cfg = await self._load_phrases(guild_id)  # guild_id narrowed non-None above
+                config = await self.load_dashboard_config(guild_id)
+                delay = int((config or {}).get("delete_delay_seconds") or 0)
+            except (TypeError, ValueError):
+                self._logger.warning(
+                    "Ignoring non-numeric delete_delay_seconds for guild %s", guild_id
+                )
             except Exception:
-                cfg = {}
-            delay = int((cfg or {}).get("delete_delay_seconds") or 0)
+                self._logger.exception(
+                    "speak: could not load config for guild %s; not auto-deleting", guild_id
+                )
+
+            await interaction.response.send_message(str(text))
             if delay > 0 and interaction.response.is_done():
                 sent = await interaction.original_response()
                 if sent:
