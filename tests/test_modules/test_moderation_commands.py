@@ -307,10 +307,10 @@ async def test_test_rule_endpoint_simulates_the_posted_sample(db, monkeypatch):
     import base64
     import json
 
-    import config as config_module
     from httpx import ASGITransport, AsyncClient
     from itsdangerous import TimestampSigner
 
+    import config as config_module
     from dashboard import create_app
     from database.models.module import ModuleConfig
     from database.models.permissions import DashboardUser
