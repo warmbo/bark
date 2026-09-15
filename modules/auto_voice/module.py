@@ -128,6 +128,7 @@ class AutoVoiceModule(BarkModule):
         self._delete_tasks: dict[int, asyncio.Task] = {}
         self._rename_locks: dict[int, asyncio.Lock] = {}
         self._last_rename_at: dict[int, float] = {}
+        self._retry_tasks: dict[int, asyncio.Task] = {}
         self._joins_in_progress: set[int] = set()
         self._channel_sequence: dict[int, int] = {}
 
@@ -448,6 +449,12 @@ class AutoVoiceModule(BarkModule):
             await asyncio.gather(*tasks, return_exceptions=True)
         self._rename_locks.clear()
         self._last_rename_at.clear()
+        retries = list(self._retry_tasks.values())
+        self._retry_tasks.clear()
+        for task in retries:
+            task.cancel()
+        if retries:
+            await asyncio.gather(*retries, return_exceptions=True)
         self._joins_in_progress.clear()
         self._logger.info("Disabled auto voice module")
 
@@ -770,6 +777,9 @@ class AutoVoiceModule(BarkModule):
         self._managed_channels.pop(channel_id, None)
         self._rename_locks.pop(channel_id, None)
         self._last_rename_at.pop(channel_id, None)
+        retry = self._retry_tasks.pop(channel_id, None)
+        if retry is not None:
+            retry.cancel()
         await self._forget_persisted_channel(channel_id)
 
     async def _forget_persisted_channel(self, channel_id: int) -> None:
@@ -863,15 +873,45 @@ class AutoVoiceModule(BarkModule):
     async def _refresh_channel_name(self, channel, config: dict[str, Any]) -> None:
         channel_id = int(channel.id)
         # Rate-limit-aware guard: never hammer Discord's channel-edit endpoint.
-        # See _RENAME_COOLDOWN_SECONDS for why.
+        # See _RENAME_COOLDOWN_SECONDS for why. A rename blocked by the cooldown
+        # is DEFERRED, not dropped: dropping left the channel showing a stale
+        # game for the whole window with nothing left to re-trigger it (live:
+        # exact 600s gaps between a correct rename and its follow-up).
         if (
             time.monotonic() - self._last_rename_at.get(channel_id, 0.0)
             < self._RENAME_COOLDOWN_SECONDS
         ):
+            self._schedule_rename_retry(channel, config)
             return
         lock = self._rename_locks.setdefault(channel_id, asyncio.Lock())
         async with lock:
             await self._refresh_channel_name_locked(channel, config)
+
+    def _schedule_rename_retry(self, channel, config: dict[str, Any]) -> None:
+        """Re-check once the cooldown expires — one pending retry per channel."""
+        channel_id = int(channel.id)
+        pending = self._retry_tasks.get(channel_id)
+        if pending is not None and not pending.done():
+            return
+        remaining = self._RENAME_COOLDOWN_SECONDS - (
+            time.monotonic() - self._last_rename_at.get(channel_id, 0.0)
+        )
+        self._retry_tasks[channel_id] = asyncio.create_task(
+            self._retry_rename_later(channel, config, max(remaining, 1.0))
+        )
+
+    async def _retry_rename_later(self, channel, config: dict[str, Any], delay: float) -> None:
+        try:
+            await asyncio.sleep(delay)
+            # Straight to the worker: the cooldown has been waited out, and the
+            # worker no-ops when the name already matches, so this can't oscillate.
+            lock = self._rename_locks.setdefault(int(channel.id), asyncio.Lock())
+            async with lock:
+                await self._refresh_channel_name_locked(channel, config)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._logger.debug("Deferred temp channel rename failed", exc_info=True)
 
     async def _refresh_channel_name_locked(self, channel, config: dict[str, Any]) -> None:
         state = self._managed_channels.get(int(channel.id))
@@ -887,7 +927,22 @@ class AutoVoiceModule(BarkModule):
         if callable(get_member):
             owner = get_member(int(state.owner_id))
         owner = owner or members[0]
-        game = self._majority_game(members) or str(self._cfg(config, "fallback_name") or "General")
+        sequence = int(getattr(state, "sequence", 1))
+        game = self._majority_game(members)
+        if game is None:
+            detected = {g for member in members if (g := self._member_game(member))}
+            current = str(channel.name)
+            # A majority that merely LAPSED must not rename the channel: live in
+            # ZENHAWX a second, non-playing member joining flipped a correct
+            # '〢wardogs' back to '〢hangout' 20-40 seconds after it was earned.
+            # The name is kept while anyone still plays it; a channel that never
+            # earned a game name is unaffected (the 3-member rule above).
+            if detected and any(
+                self._render_name(owner, config, game=g, index=sequence) == current
+                for g in detected
+            ):
+                return
+            game = str(self._cfg(config, "fallback_name") or "General")
         # Record the detected game so Statistics can surface popular games.
         try:
             from services.stats_recorder import record_game
@@ -917,6 +972,13 @@ class AutoVoiceModule(BarkModule):
 
     @classmethod
     def _majority_game(cls, members) -> str | None:
+        """The game a majority of the channel plays, else None.
+
+        Deliberate: one player must not name a channel the group shares (see
+        test_one_player_does_not_define_game_for_three_member_channel). A
+        *lapsed* majority must not rename one either — that is handled by the
+        caller, which keeps an earned game name instead of falling back.
+        """
         games = [game for member in members if (game := cls._member_game(member))]
         if not games:
             return None

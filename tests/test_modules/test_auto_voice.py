@@ -431,6 +431,70 @@ async def test_auto_rename_is_rate_limited_per_channel():
 
 
 @pytest.mark.asyncio
+async def test_lapsed_majority_keeps_the_earned_game_name():
+    """Live regression: a channel correctly named '〢wardogs' was renamed back to
+    '〢hangout' 20-40 seconds later, when a second, non-playing member joined and
+    the majority lapsed. A lapse is not a rename."""
+    ctx, guild, owner, _primary, temporary, _d, _j = _voice_fixture()
+    config = {
+        "channel_name_template": "〢{game}",
+        "name_lowercase": True,
+        "fallback_name": "hangout",
+    }
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=owner.id, sequence=1
+    )
+    idle = _HashableNamespace(id=43, bot=False, guild=guild, activities=[])
+    owner.activities = [SimpleNamespace(name="WARDOGS", type=None)]
+    temporary.members = [owner, idle]
+    temporary.name = "〢wardogs"  # earned earlier, while two members played it
+
+    await module._refresh_channel_name(temporary, config)
+
+    temporary.edit.assert_not_awaited()
+
+    # Nobody playing anything at all still falls back, so the name can't stick forever.
+    owner.activities = []
+    await module._refresh_channel_name(temporary, config)
+
+    assert temporary.edit.await_args.kwargs["name"] == "〢hangout"
+
+
+@pytest.mark.asyncio
+async def test_cooldown_blocked_rename_is_deferred_not_dropped():
+    """A rename blocked by the rate-limit cooldown used to be dropped, leaving
+    the wrong game on screen for the whole window (live: exact 600s gaps)."""
+    ctx, guild, member, _p, temporary, _d, _j = _voice_fixture()
+    config = {
+        "channel_name_template": "{game}",
+        "name_lowercase": True,
+        "fallback_name": "hangout",
+    }
+    module = AutoVoiceModule(ctx)
+    module._RENAME_COOLDOWN_SECONDS = 0.05
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=member.id, sequence=1
+    )
+    member.activities = [SimpleNamespace(name="WARDOGS", type=None)]
+    temporary.members = [member]
+
+    await module._refresh_channel_name(temporary, config)
+    assert temporary.edit.await_count == 1
+
+    member.activities = [SimpleNamespace(name="PUBG", type=None)]
+    await module._refresh_channel_name(temporary, config)
+    assert temporary.edit.await_count == 1, "the rate-limit guard still applies"
+
+    retry = module._retry_tasks[temporary.id]
+    await asyncio.sleep(0.12)
+    await retry
+
+    assert temporary.edit.await_count == 2
+    assert temporary.edit.await_args.kwargs["name"] == "pubg"
+
+
+@pytest.mark.asyncio
 async def test_deleted_channel_is_removed_from_restart_recovery_state(db):
     from sqlalchemy import select
 
