@@ -50,6 +50,13 @@ INVITE_REGEX = re.compile(
 )
 RULE_TYPES: list[str] = ["spam", "invite", "mention", "content_spam"]
 
+# Discord's own limits for moderation actions. Validating against these before
+# calling the API turns an unhandled 400 into a sentence the moderator can act
+# on ("Discord limits timeouts to 28 days"). MAX_BAN_DELETE_DAYS is the
+# delete_message_days window for a single ban.
+MAX_TIMEOUT_SECONDS = 28 * 24 * 60 * 60
+MAX_BAN_DELETE_DAYS = 7
+
 # How long between raid alerts for the same guild (prevents DM floods during
 # a join raid — a 100-user raid previously produced 100 owner DMs).
 RAID_ALERT_COOLDOWN_SECONDS = 60
@@ -452,10 +459,11 @@ class ModerationModule(BarkModule):
             },
             {
                 "id": "test_rule",
-                "label": "Validate Rule Configuration",
+                "label": "Test Rule",
                 "description": (
-                    "Check a rule's saved settings and see what it would do. "
-                    "This validates configuration — it does not simulate a message."
+                    "Validate a rule's settings, and optionally paste sample text to "
+                    "see whether the real matcher would fire on it. The rule's action "
+                    "is never executed."
                 ),
                 "endpoint": "test-rule",
                 "fields": [
@@ -472,6 +480,14 @@ class ModerationModule(BarkModule):
                             {"value": "mention_rate", "label": "Mention rate per window"},
                         ],
                         "placeholder": "Select a rule type to test...",
+                    },
+                    {
+                        "key": "sample_message",
+                        "label": "Sample message (optional)",
+                        "type": "textarea",
+                        "rows": 3,
+                        "required": False,
+                        "placeholder": "Paste the text a member might send, to see if this rule fires",
                     },
                 ],
             },
@@ -598,6 +614,7 @@ class ModerationModule(BarkModule):
                 discord.app_commands.Choice(name="minutes", value="minutes"),
                 discord.app_commands.Choice(name="seconds", value="seconds"),
                 discord.app_commands.Choice(name="hours", value="hours"),
+                discord.app_commands.Choice(name="days", value="days"),
             ]
         )
         async def timeout(
@@ -1217,16 +1234,11 @@ class ModerationModule(BarkModule):
             # Read existing flat config
             existing = await self._get_configs_for_seed(guild_id)
             if not existing:
-                # Create a minimal default
-                rs = RuleSet(
-                    guild_id=str(guild_id),
-                    name="Default",
-                    enabled=True,
-                    priority=100,
-                )
-                session.add(rs)
-                await session.commit()
-                return True
+                # Nothing to migrate: do NOT seed an empty ruleset. An empty
+                # "Default" row used to make /automod refuse with "this server is
+                # using the new Ruleset system" for guilds that had never
+                # configured anything — a dead end pointing at an empty tab.
+                return False
 
             # Convert flat rules to a ruleset
             rs = RuleSet(
@@ -1777,7 +1789,83 @@ class ModerationModule(BarkModule):
         )
         return case_number
 
+    async def simulate_rule(self, guild, rule_type: str, cfg: dict, sample: str) -> str:
+        """Evaluate sample text against the REAL matcher for a single-message rule.
+
+        Simulation must never have a side effect: only the trigger check runs,
+        never ``execute_effect`` — nothing is deleted, warned or timed out. Rule
+        types the matcher cannot evaluate (stateful, cross-message rules such as
+        ``mention_rate``) are reported as unsimulatable rather than as "would not
+        trigger", which would be a lie about a rule that never ran.
+        """
+        from types import SimpleNamespace
+
+        from modules.moderation.ruleset_engine import TRIGGER_CHECKS, check_trigger
+
+        if rule_type not in TRIGGER_CHECKS:
+            return (
+                f"Rule '{rule_type}' is a stateful, cross-message rule — the simulator "
+                "only evaluates single-message rules, so nothing was simulated."
+            )
+
+        probe = SimpleNamespace(
+            id=0,
+            content=sample,
+            guild=guild,
+            channel=None,
+            author=SimpleNamespace(id=0, bot=False, roles=[]),
+            webhook_id=None,
+            attachments=[],
+            mentions=[],
+            role_mentions=[],
+            mention_everyone=False,
+            created_at=None,
+        )
+        triggered, reason = await check_trigger(probe, rule_type, cfg, 0, self)
+        verdict = f"WOULD TRIGGER — {reason}" if triggered else "would NOT trigger"
+        return (
+            f"Simulated rule '{rule_type}' against the sample text: {verdict}. "
+            f"Action that would run: {cfg.get('action') or 'default'}. "
+            "Nothing was executed — no message was deleted, warned or timed out."
+        )
+
     # ── Command handlers ──────────────────────────────
+
+    # ── Punishment notifications ─────────────────────
+    _ACTION_VERB = {"warn": "warned", "timeout": "timed out", "kick": "kicked", "ban": "banned"}
+
+    async def _dm_target(
+        self,
+        member,
+        guild,
+        action: str,
+        reason: str,
+        *,
+        until=None,
+        case: int | None = None,
+    ) -> bool:
+        """Best-effort DM telling the member what happened and why.
+
+        Discord refuses DMs from most members (closed DMs), which is normal and
+        must never change the outcome of the action or surface as an error.
+        ``until``/``case`` are only known after the action (or not at all, for
+        kick/ban, which can no longer DM the target afterwards) — callers pass
+        what they have.
+        """
+        if not isinstance(member, discord.Member) and not hasattr(member, "send"):
+            return False
+        lines = [f"You were {self._ACTION_VERB.get(action, action)} in {guild.name}."]
+        if reason:
+            lines.append(f"Reason: {reason}")
+        if until is not None:
+            lines.append(f"Expires: {discord.utils.format_dt(until, 'R')}")
+        if case is not None:
+            lines.append(f"Case #{case}")
+        try:
+            await member.send("\n".join(lines))
+            return True
+        except (discord.Forbidden, discord.HTTPException):
+            return False
 
     async def _cmd_warn(
         self, interaction: discord.Interaction, member: discord.Member, reason: str
@@ -1792,12 +1880,7 @@ class ModerationModule(BarkModule):
             interaction.guild.id, str(member.id), str(interaction.user.id), reason
         )
         await interaction.followup.send(f"⚠️ Warned {member.mention} | Case #{case}")
-        try:
-            await member.send(
-                f"You were warned in {interaction.guild.name}.\nReason: {reason}\nCase #{case}"
-            )
-        except discord.Forbidden:
-            pass
+        await self._dm_target(member, interaction.guild, "warn", reason, case=case)
 
     async def _cmd_timeout(
         self,
@@ -1816,18 +1899,43 @@ class ModerationModule(BarkModule):
         await interaction.response.defer(ephemeral=True)
         if not interaction.guild.me.guild_permissions.moderate_members:
             return await interaction.followup.send("❌ Cannot timeout members.", ephemeral=True)
-        unit_map = {"seconds": 1, "minutes": 60, "hours": 3600}
-        seconds = duration * unit_map.get(unit, 60)
+        unit_map = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
+        # An unrecognised unit used to fall back to minutes silently, so a typo
+        # became a duration nobody asked for.
+        factor = unit_map.get(unit.lower()) if isinstance(unit, str) else None
+        if factor is None:
+            return await interaction.followup.send(
+                f"❌ Unknown unit '{unit}' — use seconds, minutes, hours or days.",
+                ephemeral=True,
+            )
+        seconds = duration * factor
+        # Validate before acting: Discord rejects an out-of-range timeout with a
+        # 400, which used to escape as an unhandled interaction.
+        if seconds <= 0:
+            return await interaction.followup.send(
+                "❌ Duration must be greater than zero.", ephemeral=True
+            )
+        if seconds > MAX_TIMEOUT_SECONDS:
+            return await interaction.followup.send(
+                f"❌ Discord limits timeouts to 28 days — {duration} {unit} is longer.",
+                ephemeral=True,
+            )
         minutes = seconds // 60
         until = discord.utils.utcnow() + timedelta(seconds=seconds)
         try:
             await member.timeout(until, reason=f"{reason}")
         except discord.Forbidden:
             return await interaction.followup.send("❌ Cannot timeout that member.", ephemeral=True)
+        except discord.HTTPException as exc:
+            return await interaction.followup.send(
+                f"❌ Discord rejected the timeout: {exc}", ephemeral=True
+            )
         case = await self._act(interaction, "timeout", member, reason, duration=minutes)
         await interaction.followup.send(
-            f"⏱ {member.mention} timed out {duration}{unit} | Case #{case}"
+            f"⏱ {member.mention} timed out {duration}{unit} "
+            f"(until {discord.utils.format_dt(until, 'f')}) | Case #{case}"
         )
+        await self._dm_target(member, interaction.guild, "timeout", reason, until=until, case=case)
 
     async def _cmd_kick(
         self, interaction: discord.Interaction, member: discord.Member, reason: str
@@ -1839,10 +1947,17 @@ class ModerationModule(BarkModule):
         await interaction.response.defer(ephemeral=True)
         if not interaction.guild.me.guild_permissions.kick_members:
             return await interaction.followup.send("❌ Cannot kick members.", ephemeral=True)
+        # DM before the kick: once kicked, the member shares no guild with the
+        # bot and can no longer be messaged (best-effort either way).
+        await self._dm_target(member, interaction.guild, "kick", reason)
         try:
             await member.kick(reason=reason)
         except discord.Forbidden:
             return await interaction.followup.send("❌ Cannot kick that member.", ephemeral=True)
+        except discord.HTTPException as exc:
+            return await interaction.followup.send(
+                f"❌ Discord rejected the kick: {exc}", ephemeral=True
+            )
         case = await self._act(interaction, "kick", member, reason)
         await interaction.followup.send(f"👢 Kicked {member.mention} | Case #{case}")
 
@@ -1860,12 +1975,27 @@ class ModerationModule(BarkModule):
         await interaction.response.defer(ephemeral=True)
         if not interaction.guild.me.guild_permissions.ban_members:
             return await interaction.followup.send("❌ Cannot ban members.", ephemeral=True)
+        # Validate before acting: Discord accepts 0–7 days of pruning and
+        # answers anything else with a 400 that used to escape unhandled.
+        if not 0 <= delete_days <= MAX_BAN_DELETE_DAYS:
+            return await interaction.followup.send(
+                f"❌ Message pruning must be 0–{MAX_BAN_DELETE_DAYS} days "
+                f"(Discord's limit) — got {delete_days}.",
+                ephemeral=True,
+            )
+        # DM before the ban: afterwards the member shares no guild with the bot.
+        await self._dm_target(member, interaction.guild, "ban", reason)
         try:
             await member.ban(reason=reason, delete_message_days=delete_days)
         except discord.Forbidden:
             return await interaction.followup.send("❌ Cannot ban that member.", ephemeral=True)
+        except discord.HTTPException as exc:
+            return await interaction.followup.send(
+                f"❌ Discord rejected the ban: {exc}", ephemeral=True
+            )
         case = await self._act(interaction, "ban", member, reason)
-        await interaction.followup.send(f"🔨 Banned {member.mention} | Case #{case}")
+        pruned = f" | pruned {delete_days}d of messages" if delete_days else ""
+        await interaction.followup.send(f"🔨 Banned {member.mention} | Case #{case}{pruned}")
 
     async def _cmd_unban(self, interaction: discord.Interaction, user_id: str, reason: str) -> None:
         if not interaction.guild:
@@ -2096,21 +2226,25 @@ class ModerationModule(BarkModule):
                 f"Invalid. Valid: {', '.join(RULE_TYPES)}", ephemeral=True
             )
 
-        # Check if rulesets exist — if so, this command is deprecated
+        # Check whether AutoMod actually runs from rulesets here. Count RULES,
+        # not rulesets: an empty ruleset (auto-seeded by an older build) means
+        # nothing is configured, and refusing then sent moderators to an empty
+        # Rulesets tab with no explanation.
         from sqlalchemy import func, select
 
-        from database.models.ruleset import RuleSet
+        from database.models.ruleset import Rule, RuleSet
 
         async with session_scope() as session:
-            rs_count = (
+            rule_count = (
                 await session.execute(
-                    select(func.count(RuleSet.id)).where(
-                        RuleSet.guild_id == str(interaction.guild.id)
-                    )
+                    select(func.count(Rule.id))
+                    .select_from(Rule)
+                    .join(RuleSet, Rule.ruleset_id == RuleSet.id)
+                    .where(RuleSet.guild_id == str(interaction.guild.id))
                 )
             ).scalar() or 0
 
-        if rs_count > 0:
+        if rule_count > 0:
             # Migrated to rulesets — show deprecation message
             await interaction.followup.send(
                 "⚠️ This server is using the new Ruleset system. "
@@ -2403,16 +2537,19 @@ class ModerationModule(BarkModule):
                     f"Rule '{rule_type}' is not enabled. Enable it in the Configuration section first.",
                     status_code=400,
                 )
+            sample = str(data.get("sample_message") or "").strip()
+            summary = (
+                f"Rule '{rule_type}' configuration is valid. "
+                f"Threshold={cfg.get('threshold')}, Action={cfg.get('action')}, "
+                f"Window={cfg.get('window_seconds')}s."
+            )
+            if sample:
+                verdict = await self.simulate_rule(guild, rule_type, cfg, sample)
+                return api_success({"message": f"{summary} {verdict}"})
             return api_success(
                 {
-                    # Truthful output: this endpoint reads configuration. It must
-                    # not claim a simulation ran — earlier copy said "No
-                    # simulated violations detected", which implied a real
-                    # evaluation of sample content that never happened.
-                    "message": f"Rule '{rule_type}' configuration is valid. "
-                    f"Threshold={cfg.get('threshold')}, Action={cfg.get('action')}, "
-                    f"Window={cfg.get('window_seconds')}s. "
-                    f"No message was simulated — this is a configuration check.",
+                    "message": f"{summary} No sample text given — configuration checked "
+                    "only, no message was evaluated.",
                 }
             )
 

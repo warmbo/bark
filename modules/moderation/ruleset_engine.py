@@ -217,33 +217,7 @@ async def check_trigger(
     module_instance,
 ) -> tuple[bool, str]:
     """Check if a message matches the given trigger. Returns (triggered, reason)."""
-    checks = {
-        # Core triggers (keepers)
-        "message_spam": _check_spam,
-        "mass_mention": _check_mention,
-        "invite_link": _check_invite,
-        "banned_words": _check_word_denylist,
-        "banned_domains": _check_link_denylist,
-        "scam_link": _check_scam_link,
-        "regex_match": _check_regex_match,
-        "duplicate_message": _check_duplicate_message,
-        "all_caps": _check_all_caps,
-        "attachment_spam": _check_attachment_rate,
-        "any_link": _check_any_link,
-        # Aliases (backward compat with old names)
-        "spam": _check_spam,
-        "user_message_rate": _check_spam,
-        "mention": _check_mention,
-        "user_mention_rate": _check_mention,
-        "invite": _check_invite,
-        "word_denylist": _check_word_denylist,
-        "link_denylist": _check_link_denylist,
-        "content_spam": _check_duplicate_message,
-        "attachment_rate": _check_attachment_rate,
-        "regex": _check_regex_match,
-    }
-
-    checker = checks.get(trigger_type)
+    checker = TRIGGER_CHECKS.get(trigger_type)
     if checker is None:
         logger.warning("Unknown trigger type: %s (rule %d)", trigger_type, rule_id)
         return False, ""
@@ -450,6 +424,37 @@ async def _check_any_link(message, cfg, rule_id, module):
     if urls:
         return True, f"Link detected: {urls[0]}"
     return False, ""
+
+
+# Dispatch table for check_trigger, module-level and AFTER the checkers so it
+# can reference them. Hoisted out of the function so callers (the dashboard rule
+# simulator) can ask whether a trigger type is evaluable at all, instead of
+# inferring it from a (False, "") return that also means "no match".
+TRIGGER_CHECKS: dict[str, Any] = {
+    # Core triggers (keepers)
+    "message_spam": _check_spam,
+    "mass_mention": _check_mention,
+    "invite_link": _check_invite,
+    "banned_words": _check_word_denylist,
+    "banned_domains": _check_link_denylist,
+    "scam_link": _check_scam_link,
+    "regex_match": _check_regex_match,
+    "duplicate_message": _check_duplicate_message,
+    "all_caps": _check_all_caps,
+    "attachment_spam": _check_attachment_rate,
+    "any_link": _check_any_link,
+    # Aliases (backward compat with old names)
+    "spam": _check_spam,
+    "user_message_rate": _check_spam,
+    "mention": _check_mention,
+    "user_mention_rate": _check_mention,
+    "invite": _check_invite,
+    "word_denylist": _check_word_denylist,
+    "link_denylist": _check_link_denylist,
+    "content_spam": _check_duplicate_message,
+    "attachment_rate": _check_attachment_rate,
+    "regex": _check_regex_match,
+}
 
 
 async def execute_effect(
