@@ -11,7 +11,7 @@ auto-seeded ruleset made /automod refuse for guilds that never configured it.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
 import pytest
@@ -298,6 +298,88 @@ async def test_rule_simulator_never_executes_the_effect(db):
             )
         ).scalar()
     assert cases == 0, "simulation must not open a case"
+
+
+@pytest.mark.asyncio
+async def test_test_rule_endpoint_simulates_the_posted_sample(db, monkeypatch):
+    """End-to-end through the real route: the posted sample_message reaches the
+    simulator and the verdict comes back in the API envelope."""
+    import base64
+    import json
+
+    import config as config_module
+    from httpx import ASGITransport, AsyncClient
+    from itsdangerous import TimestampSigner
+
+    from dashboard import create_app
+    from database.models.module import ModuleConfig
+    from database.models.permissions import DashboardUser
+    from services.bark_context import BarkContext
+    from services.dashboard_access import replace_user_guild_access
+
+    monkeypatch.setattr(config_module.config.oauth2, "client_id", "123")
+    monkeypatch.setattr(config_module.config.oauth2, "client_secret", "secret")
+    monkeypatch.setattr(config_module.config.oauth2, "redirect_uri", "http://test/auth/callback")
+
+    async with session_scope() as session:
+        session.add(Guild(discord_id=str(GUILD_ID), name="[ ZENHAWX ]"))
+        session.add(DashboardUser(discord_id="42", username="Moderator", role="admin"))
+        await session.flush()
+        await replace_user_guild_access(
+            session,
+            "42",
+            [{"id": str(GUILD_ID), "name": "[ ZENHAWX ]", "permissions": "0", "owner": True}],
+        )
+        session.add(
+            ModuleConfig(
+                guild_id=str(GUILD_ID),
+                module_name="moderation",
+                enabled=True,
+                config=json.dumps(
+                    {"invite": {"enabled": True, "threshold": 1, "action": "delete"}}
+                ),
+            )
+        )
+        await session.commit()
+
+    bot = MagicMock()
+    bot.guilds = []
+    bot.user = None
+    bot.get_guild.return_value = _Guild()
+    bot.modules = MagicMock()
+    bot.modules.event_bus.get_subscribers.return_value = {}
+    bot.modules.event_bus.event_types = []
+    bot.modules.get_all_modules.return_value = {"moderation": MagicMock()}
+    bot.modules.is_enabled_for_guild.return_value = True
+
+    app = create_app(bot)
+    from modules.moderation.module import ModerationModule
+
+    module = ModerationModule(BarkContext(bot, bot.modules.event_bus))
+    app.app.include_router(module.get_api_routes(), prefix="/api/v1")
+
+    session_data = {"user": {"id": "42", "username": "Moderator"}, "role": "admin"}
+    payload = base64.b64encode(json.dumps(session_data).encode("utf-8"))
+    cookie = TimestampSigner("test_secret_key").sign(payload).decode("utf-8")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app),
+        base_url="http://test",
+        cookies={"session": cookie},
+    ) as client:
+        matched = await client.post(
+            f"/api/v1/guilds/{GUILD_ID}/modules/moderation/test-rule",
+            json={"rule_type": "invite", "sample_message": "join discord.gg/abc123"},
+        )
+        unmatched = await client.post(
+            f"/api/v1/guilds/{GUILD_ID}/modules/moderation/test-rule",
+            json={"rule_type": "invite", "sample_message": "nothing to see here"},
+        )
+
+    assert matched.status_code == 200, matched.text
+    assert "WOULD TRIGGER" in matched.json()["data"]["message"]
+    assert unmatched.status_code == 200, unmatched.text
+    assert "would NOT trigger" in unmatched.json()["data"]["message"]
 
 
 @pytest.mark.asyncio
