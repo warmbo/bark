@@ -285,6 +285,53 @@ def test_apply_update_streams_terminal_log(repo):
     assert update_service.get_update_log(0)["entries"] == []
 
 
+def test_apply_update_reports_fetch_failure_without_touching_checkout(repo, monkeypatch):
+    """A failed fetch aborts before the backup/reset phases and leaves the
+    checkout exactly where it was (nothing half-applied)."""
+    work, _ = repo
+
+    def _boom(branch):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(update_service, "_resolve_remote", _boom)
+    before = _git(work, "rev-parse", "HEAD").stdout.strip()
+    update_service.clear_update_log()
+
+    result = update_service.apply_update("main")
+
+    assert result["ok"] is False
+    assert "fetch failed" in result["error"]
+    assert _git(work, "rev-parse", "HEAD").stdout.strip() == before
+    lines = [e["line"] for e in update_service.get_update_log(0)["entries"]]
+    assert any(line.startswith("fetch failed") for line in lines)
+    update_service.clear_update_log()
+
+
+def test_apply_update_continues_when_dependency_install_fails(repo):
+    """A failed dependency install is reported and the update continues: the
+    pre-update backup is the rollback path, and the operator must see the
+    warning in the update log rather than a silently-stale environment."""
+    work, _ = repo
+    (work / "requirements.txt").write_text("discord.py\n")
+    _git(work, "add", ".")
+    _git(work, "commit", "-m", "add dependency")
+    _git(work, "push", "origin", "main")
+    _git(work, "reset", "--hard", "HEAD~1")  # checkout falls behind again
+
+    fake_pip = work / ".venv" / "bin" / "pip"
+    fake_pip.parent.mkdir(parents=True)
+    fake_pip.write_text("#!/bin/sh\necho 'boom' >&2\nexit 1\n")
+    fake_pip.chmod(0o755)
+    update_service.clear_update_log()
+
+    result = update_service.apply_update("main")
+
+    assert result["ok"] is True
+    lines = [e["line"] for e in update_service.get_update_log(0)["entries"]]
+    assert any(line.startswith("pip install failed (continuing)") for line in lines)
+    update_service.clear_update_log()
+
+
 def test_check_update_reports_error_when_branch_on_no_remote(repo, monkeypatch):
     work, _ = repo
     monkeypatch.setattr(update_service.config.instance, "repo_dir", str(work))
