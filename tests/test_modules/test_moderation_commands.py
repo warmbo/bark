@@ -235,6 +235,76 @@ async def test_timeout_notifies_target_with_expiry(db):
     assert "until" in interaction.followup.last
 
 
+async def _seed_moderation_config(db, config: dict):
+    """Create the module (which creates the guild row) then write the
+    ModuleConfig the dashboard would write, dropping the cached empty read."""
+    import json
+
+    from database.models.module import ModuleConfig
+
+    module = await _module(db)
+    async with session_scope() as session:
+        session.add(
+            ModuleConfig(
+                guild_id=str(GUILD_ID),
+                module_name="moderation",
+                enabled=True,
+                config=json.dumps(config),
+            )
+        )
+        await session.commit()
+    module.ctx._module_config_cache.clear()
+    return module
+
+
+def test_setting_reads_both_config_shapes():
+    """The dashboard writes settings under ``general``; old configs are flat.
+    Reading only one shape made dm_on_action/default_timeout_minutes dead."""
+    from modules.moderation.module import ModerationModule as M
+
+    grouped = {"general": {"dm_on_action": False, "default_timeout_minutes": 25}}
+    flat = {"dm_on_action": False, "default_timeout_minutes": 25}
+    assert M._setting(grouped, "dm_on_action", True) is False
+    assert M._setting(flat, "dm_on_action", True) is False
+    assert M._setting(grouped, "default_timeout_minutes", 10) == 25
+    assert M._setting(flat, "default_timeout_minutes", 10) == 25
+    assert M._setting({}, "dm_on_action", True) is True
+    assert M._setting(None, "dm_on_action", True) is True
+
+
+@pytest.mark.asyncio
+async def test_dm_on_action_false_suppresses_the_notification(db):
+    """A server that turns DMs off must not receive them — the setting exists."""
+    module = await _seed_moderation_config(db, {"general": {"dm_on_action": False}})
+    calls: list[str] = []
+    interaction = _Interaction(_Guild())
+
+    await module._cmd_warn(interaction, _Member(calls), "spamming")
+
+    assert "dm" not in calls, "dm_on_action=false must suppress the DM"
+    assert "Warned" in interaction.followup.last, "the action itself still happens"
+
+
+@pytest.mark.asyncio
+async def test_dm_warn_template_is_rendered(db):
+    module = await _seed_moderation_config(
+        db, {"general": {"dm_warn_template": "Bark: {reason} (case {case} in {server})"}}
+    )
+
+    sent: list[str] = []
+
+    class _M(_Member):
+        async def send(self, content=None, **kwargs):
+            sent.append(content or "")
+            return None
+
+    interaction = _Interaction(_Guild())
+    await module._cmd_warn(interaction, _M([]), "posting scam links")
+
+    assert sent, "the template should produce a DM"
+    assert sent[0].startswith("Bark: posting scam links (case ")
+
+
 @pytest.mark.asyncio
 async def test_rule_simulator_reports_a_real_match(db):
     """The simulator runs the production matcher, not a decorative message."""

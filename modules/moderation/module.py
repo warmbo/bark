@@ -629,7 +629,7 @@ class ModerationModule(BarkModule):
             guild_id = int(interaction.guild.id)
             cfg = await self.load_dashboard_config(guild_id)
             if duration is None or duration <= 0:
-                duration = int((cfg or {}).get("default_timeout_minutes") or 10)
+                duration = int(self._setting(cfg, "default_timeout_minutes", 10) or 10)
             await self._cmd_timeout(interaction, member, duration, unit, reason)
 
         return timeout
@@ -1834,6 +1834,21 @@ class ModerationModule(BarkModule):
     # ── Punishment notifications ─────────────────────
     _ACTION_VERB = {"warn": "warned", "timeout": "timed out", "kick": "kicked", "ban": "banned"}
 
+    @staticmethod
+    def _setting(cfg: dict, key: str, default=None):
+        """Read a moderation setting from either config shape.
+
+        The dashboard stores these under the ``general`` group; older configs
+        keep them flat. Only one shape used to be read, so `dm_on_action`,
+        `dm_warn_template` and `default_timeout_minutes` were schema-only.
+        """
+        if not isinstance(cfg, dict):
+            return default
+        general = cfg.get("general")
+        if isinstance(general, dict) and key in general:
+            return general.get(key)
+        return cfg.get(key, default)
+
     async def _dm_target(
         self,
         member,
@@ -1848,21 +1863,36 @@ class ModerationModule(BarkModule):
 
         Discord refuses DMs from most members (closed DMs), which is normal and
         must never change the outcome of the action or surface as an error.
-        ``until``/``case`` are only known after the action (or not at all, for
-        kick/ban, which can no longer DM the target afterwards) — callers pass
-        what they have.
+        Honours the module's ``dm_on_action`` / ``dm_warn_template`` settings.
         """
         if not isinstance(member, discord.Member) and not hasattr(member, "send"):
             return False
-        lines = [f"You were {self._ACTION_VERB.get(action, action)} in {guild.name}."]
-        if reason:
-            lines.append(f"Reason: {reason}")
-        if until is not None:
-            lines.append(f"Expires: {discord.utils.format_dt(until, 'R')}")
-        if case is not None:
-            lines.append(f"Case #{case}")
         try:
-            await member.send("\n".join(lines))
+            cfg = await self.load_dashboard_config(int(guild.id)) or {}
+        except Exception:  # a config read must not block the punishment itself
+            cfg = {}
+        if not self._setting(cfg, "dm_on_action", True):
+            return False
+
+        template = self._setting(cfg, "dm_warn_template", None)
+        if action == "warn" and template:
+            body = (
+                str(template)
+                .replace("{server}", guild.name)
+                .replace("{reason}", reason or "")
+                .replace("{case}", str(case) if case is not None else "")
+            )
+        else:
+            lines = [f"You were {self._ACTION_VERB.get(action, action)} in {guild.name}."]
+            if reason:
+                lines.append(f"Reason: {reason}")
+            if until is not None:
+                lines.append(f"Expires: {discord.utils.format_dt(until, 'R')}")
+            if case is not None:
+                lines.append(f"Case #{case}")
+            body = "\n".join(lines)
+        try:
+            await member.send(body)
             return True
         except (discord.Forbidden, discord.HTTPException):
             return False
