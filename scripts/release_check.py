@@ -33,21 +33,29 @@ TYPED_TARGETS = [
 ]
 
 
+def _tool(name: str) -> list[str]:
+    """Prefer the venv console script, else fall back to ``python -m <name>``.
+
+    Some tools ship only a console script (pip-audit is not importable as a
+    module in this venv), so ``-m`` alone reports a false failure.
+    """
+    exe = ROOT / ".venv" / "bin" / name
+    return [str(exe)] if exe.exists() else [PY, "-m", name]
+
+
 def _checks(quick: bool) -> list[tuple[str, list[str], Path]]:
     checks: list[tuple[str, list[str], Path]] = [
-        ("pytest", [PY, "-m", "pytest", "-q"], ROOT),
-        ("ruff lint", [PY, "-m", "ruff", "check", "."], ROOT),
-        ("ruff format", [PY, "-m", "ruff", "format", "--check", "."], ROOT),
-        ("mypy", [PY, "-m", "mypy", *TYPED_TARGETS], ROOT),
+        ("pytest", [*_tool("pytest"), "-q"], ROOT),
+        ("ruff lint", [*_tool("ruff"), "check", "."], ROOT),
+        ("ruff format", [*_tool("ruff"), "format", "--check", "."], ROOT),
+        ("mypy", [*_tool("mypy"), *TYPED_TARGETS], ROOT),
     ]
     if not quick:
         checks += [
             (
                 "bandit",
                 [
-                    PY,
-                    "-m",
-                    "bandit",
+                    *_tool("bandit"),
                     "-q",
                     "-r",
                     "-ll",
@@ -61,7 +69,7 @@ def _checks(quick: bool) -> list[tuple[str, list[str], Path]]:
                 ],
                 ROOT,
             ),
-            ("pip-audit", [PY, "-m", "pip-audit"], ROOT),
+            ("pip-audit", _tool("pip-audit"), ROOT),
         ]
     # Generated frontend assets must reproduce from source (npm run check
     # rebuilds and diffs the committed CSS/fonts/vendor).
