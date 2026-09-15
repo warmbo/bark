@@ -376,6 +376,93 @@ class AnnouncementsModule(BarkModule):
             }
         ]
 
+    async def _parse_announcement(
+        self, guild_id: str, data: dict
+    ) -> tuple[dict | None, str | None]:
+        """Normalise a composer payload into send/schedule keyword arguments.
+
+        Shared by "post now", "schedule for later" and "edit schedule" so the
+        three can never disagree about media, colour, timezone or recurrence
+        validation. Returns ``(kwargs, error)``; ``kwargs["is_schedule"]`` says
+        whether the time fields were parsed.
+        """
+        channel_id = str(data.get("channel_id", "") or "").strip()
+        title = str(data.get("title", "") or "")
+        message = str(data.get("message", "") or "")
+        as_embed = bool(data.get("as_embed", False))
+        embed_color = str(data.get("embed_color", "") or "").strip()
+        if not embed_color:
+            cfg = await self.load_dashboard_config(int(guild_id))
+            embed_color = str((cfg or {}).get("default_embed_color", "") or "").strip()
+        image_url: str | None = str(data.get("image_url", "") or "").strip()
+        video_url = str(data.get("video_url", "") or "").strip()
+
+        # Media picker payload: [{"type": "image"|"video", "url": "..."}]
+        media_raw = data.get("media")
+        if isinstance(media_raw, list):
+            for item in media_raw:
+                if not isinstance(item, dict):
+                    continue
+                url = str(item.get("url", "") or "").strip()
+                mtype = str(item.get("type", "image")).lower()
+                if not url:
+                    continue
+                if mtype == "video":
+                    video_url = video_url or url
+                else:
+                    image_url = image_url or url
+
+        image_url = image_url or None
+        if not image_url and as_embed and message:
+            m = re.search(r"!\[.*?\]\((https?://\S+)\)", message)
+            if m:
+                image_url = m.group(1)
+
+        if not channel_id or not message.strip():
+            return None, "channel_id and message are required"
+
+        kwargs: dict = {
+            "channel_id": channel_id,
+            "title": title[:256],
+            "message": message,
+            "as_embed": as_embed,
+            "embed_color": embed_color,
+            "image_url": image_url or "",
+            "video_url": video_url,
+            "is_schedule": False,
+        }
+
+        if str(data.get("delivery_mode", "immediate")) != "schedule":
+            return kwargs, None
+
+        raw_scheduled_for = str(data.get("scheduled_for", "") or "").strip()
+        timezone_name = str(data.get("timezone_name", "UTC") or "UTC").strip()
+        recurrence_unit = str(data.get("recurrence_unit", "") or "").strip() or None
+        try:
+            scheduled_for = datetime.fromisoformat(raw_scheduled_for.replace("Z", "+00:00"))
+            if scheduled_for.tzinfo is None:
+                scheduled_for = scheduled_for.replace(tzinfo=ZoneInfo(timezone_name))
+            scheduled_for = scheduled_for.astimezone(timezone.utc)
+            ZoneInfo(timezone_name)
+            recurrence_interval = int(data.get("recurrence_interval", 1) or 1)
+        except (ValueError, TypeError, ZoneInfoNotFoundError):
+            return None, "Invalid schedule time, timezone, or recurrence"
+        if scheduled_for <= datetime.now(timezone.utc):
+            return None, "Scheduled time must be in the future"
+        if recurrence_unit not in {None, "hour", "day", "week", "month"}:
+            return None, "Invalid recurrence unit"
+        if not 1 <= recurrence_interval <= 999:
+            return None, "Recurrence interval must be between 1 and 999"
+
+        kwargs.update(
+            scheduled_for=scheduled_for,
+            timezone_name=timezone_name,
+            recurrence_unit=recurrence_unit,
+            recurrence_interval=recurrence_interval,
+            is_schedule=True,
+        )
+        return kwargs, None
+
     def get_api_routes(self):
         from fastapi import APIRouter  # local import to avoid module-level cost
 
@@ -400,40 +487,16 @@ class AnnouncementsModule(BarkModule):
             except Exception:
                 return api_error("Invalid JSON body", status_code=400)
 
-            channel_id = str(data.get("channel_id", "") or "").strip()
-            title = str(data.get("title", "") or "")
-            message = str(data.get("message", "") or "")
-            as_embed = bool(data.get("as_embed", False))
-            embed_color = str(data.get("embed_color", "") or "").strip()
-            if not embed_color:
-                cfg = await self.load_dashboard_config(int(guild_id))
-                embed_color = str((cfg or {}).get("default_embed_color", "") or "").strip()
-            image_url: str | None = str(data.get("image_url", "") or "").strip()
-            video_url = str(data.get("video_url", "") or "").strip()
-
-            # Media picker payload: [{"type": "image"|"video", "url": "..."}]
-            media_raw = data.get("media")
-            if isinstance(media_raw, list):
-                for item in media_raw:
-                    if not isinstance(item, dict):
-                        continue
-                    url = str(item.get("url", "") or "").strip()
-                    mtype = str(item.get("type", "image")).lower()
-                    if not url:
-                        continue
-                    if mtype == "video":
-                        video_url = video_url or url
-                    else:
-                        image_url = image_url or url
-
-            image_url = image_url or None
-            if not image_url and as_embed and message:
-                m = re.search(r"!\[.*?\]\((https?://\S+)\)", message)
-                if m:
-                    image_url = m.group(1)
-
-            if not channel_id or not message.strip():
-                return api_error("channel_id and message are required")
+            payload, parse_error = await self._parse_announcement(guild_id, data)
+            if parse_error or payload is None:
+                return api_error(parse_error or "Invalid announcement payload")
+            channel_id = payload["channel_id"]
+            title = payload["title"]
+            message = payload["message"]
+            as_embed = payload["as_embed"]
+            embed_color = payload["embed_color"]
+            image_url = payload["image_url"]
+            video_url = payload["video_url"]
 
             bot = request.state.bot
             try:
@@ -447,41 +510,23 @@ class AnnouncementsModule(BarkModule):
             if channel is None:
                 return api_error("Channel not found in this guild")
 
-            if str(data.get("delivery_mode", "immediate")) == "schedule":
+            if payload["is_schedule"]:
                 from services.announcement_schedules import create_schedule
 
-                raw_scheduled_for = str(data.get("scheduled_for", "") or "").strip()
-                timezone_name = str(data.get("timezone_name", "UTC") or "UTC").strip()
-                recurrence_unit = str(data.get("recurrence_unit", "") or "").strip() or None
-                try:
-                    scheduled_for = datetime.fromisoformat(raw_scheduled_for.replace("Z", "+00:00"))
-                    if scheduled_for.tzinfo is None:
-                        scheduled_for = scheduled_for.replace(tzinfo=ZoneInfo(timezone_name))
-                    scheduled_for = scheduled_for.astimezone(timezone.utc)
-                    ZoneInfo(timezone_name)
-                    recurrence_interval = int(data.get("recurrence_interval", 1) or 1)
-                except (ValueError, TypeError, ZoneInfoNotFoundError):
-                    return api_error("Invalid schedule time, timezone, or recurrence")
-                if scheduled_for <= datetime.now(timezone.utc):
-                    return api_error("Scheduled time must be in the future")
-                if recurrence_unit not in {None, "hour", "day", "week", "month"}:
-                    return api_error("Invalid recurrence unit")
-                if not 1 <= recurrence_interval <= 999:
-                    return api_error("Recurrence interval must be between 1 and 999")
                 user = request.session.get("user") or {}
                 schedule = await create_schedule(
                     guild_id=guild_id,
                     channel_id=channel_id,
-                    title=title[:256],
+                    title=title,
                     message=message,
                     as_embed=as_embed,
                     embed_color=embed_color,
                     image_url=image_url or "",
                     video_url=video_url,
-                    scheduled_for=scheduled_for,
-                    timezone_name=timezone_name,
-                    recurrence_unit=recurrence_unit,
-                    recurrence_interval=recurrence_interval,
+                    scheduled_for=payload["scheduled_for"],
+                    timezone_name=payload["timezone_name"],
+                    recurrence_unit=payload["recurrence_unit"],
+                    recurrence_interval=payload["recurrence_interval"],
                     created_by=str(user.get("id", "")),
                 )
                 return api_success({"scheduled": True, "id": schedule.id})
@@ -531,6 +576,63 @@ class AnnouncementsModule(BarkModule):
                 return api_error(f"Discord send failed: {exc.status}")
 
             return api_success({"sent": True})
+
+        @router.post("/guilds/{guild_id}/modules/announcements/schedules/{schedule_id}")
+        async def edit_announcement_schedule(request: Request, guild_id: str, schedule_id: int):
+            """Edit a scheduled announcement's content, timing or recurrence.
+
+            POST (not PUT) because the dashboard's action runner always posts —
+            while editing, the existing composer form is pointed at this path.
+            """
+            from services.announcement_schedules import update_schedule
+            from services.response import (
+                api_error,
+                api_forbidden,
+                api_not_found,
+                api_success,
+                check_api_permission,
+            )
+
+            if not check_api_permission(request, "announcements.post", guild_id):
+                return api_forbidden()
+            guild_id = str(guild_id)
+            try:
+                data = await request.json()
+            except Exception:
+                return api_error("Invalid JSON body", status_code=400)
+
+            payload, parse_error = await self._parse_announcement(guild_id, data)
+            if parse_error or payload is None:
+                return api_error(parse_error or "Invalid announcement payload")
+            if not payload["is_schedule"]:
+                return api_error("Editing a schedule needs a delivery time")
+
+            bot = request.state.bot
+            try:
+                guild = bot.get_guild(int(guild_id))
+            except Exception:
+                guild = None
+            if guild is None or guild.get_channel(int(payload["channel_id"])) is None:
+                return api_error("Channel not found in this guild")
+
+            updated = await update_schedule(
+                guild_id=guild_id,
+                schedule_id=schedule_id,
+                channel_id=payload["channel_id"],
+                title=payload["title"],
+                message=payload["message"],
+                as_embed=payload["as_embed"],
+                embed_color=payload["embed_color"],
+                image_url=payload["image_url"] or "",
+                video_url=payload["video_url"],
+                scheduled_for=payload["scheduled_for"],
+                timezone_name=payload["timezone_name"],
+                recurrence_unit=payload["recurrence_unit"],
+                recurrence_interval=payload["recurrence_interval"],
+            )
+            if not updated:
+                return api_not_found("Editable announcement schedule")
+            return api_success({"updated": True, "id": schedule_id})
 
         @router.get("/guilds/{guild_id}/modules/announcements/schedules")
         async def list_announcement_schedules(request: Request, guild_id: str):

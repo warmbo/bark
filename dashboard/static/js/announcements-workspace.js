@@ -645,6 +645,8 @@
     return `${(space > 0 ? cut.slice(0, space) : cut).trim()}…`;
   }
 
+  let lastJobs = [];
+
   function renderQueue(jobs) {
     if (!jobs.length) {
       queueBody.innerHTML = '<div class="state-panel"><strong>No scheduled announcements</strong><span>Choose “Schedule for later” in the composer to add one.</span></div>';
@@ -655,6 +657,8 @@
       const paused = job.status === 'paused' || job.status === 'failed';
       const action = paused ? 'resume' : 'pause';
       const actionLabel = job.status === 'failed' ? 'Retry' : (paused ? 'Resume' : 'Pause');
+      // A job a worker already claimed ("sending") must not be rewritten mid-flight.
+      const editable = ['queued', 'paused', 'failed'].includes(job.status);
       // Full text lives in the title attribute; the visible lines are clamped
       // by CSS so the narrow sidebar column stays readable.
       const title = job.title ? summarise(job.title, 60) : 'Untitled announcement';
@@ -664,7 +668,9 @@
         `<div class="announcement-queue-main"><div class="announcement-queue-head"><strong class="announcement-queue-title" title="${esc(titleFull)}">${esc(title)}</strong><span class="status-badge">${esc(job.status)}</span></div>` +
         `<p title="${esc(summarise(job.message, 300))}">${esc(message)}</p><small>${esc(when)} · ${esc(recurrenceText(job))} · ${esc(job.timezone_name)}</small>` +
         (job.last_error ? `<div class="action-result error" title="${esc(job.last_error)}">${esc(summarise(job.last_error, 200))}</div>` : '') +
-        `</div><div class="table-actions"><button type="button" class="btn btn-xs" data-schedule-action="${action}">${actionLabel}</button>` +
+        `</div><div class="table-actions">` +
+        (editable ? '<button type="button" class="btn btn-xs" data-schedule-action="edit">Edit</button>' : '') +
+        `<button type="button" class="btn btn-xs" data-schedule-action="${action}">${actionLabel}</button>` +
         '<button type="button" class="btn btn-xs btn-danger" data-schedule-action="delete">Delete</button></div></article>';
     }).join('')}</div>`;
   }
@@ -673,10 +679,109 @@
     if (!guildId) return;
     try {
       const response = await safeFetch(schedulesUrl(), {cache: 'no-cache'});
-      renderQueue(response?.data?.schedules || []);
+      lastJobs = response?.data?.schedules || [];
+      renderQueue(lastJobs);
     } catch (error) {
       queueBody.innerHTML = `<div class="action-result error">${esc(error.message || 'Could not load schedules')}</div>`;
     }
+  }
+
+  // ── Editing a queued schedule ─────────────────────────────────────────
+  // An edit reuses the composer rather than a second form: same validation,
+  // same live preview, same emoji/mention tooling, and the action runner
+  // already posts whatever the form serialises. Editing only repoints
+  // `data-endpoint` at the schedule's own path, so one code path serves both
+  // "schedule for later" and "save changes".
+  const deliverySelect = document.getElementById('action-post_announcement-delivery_mode');
+  const scheduledForInput = document.getElementById('action-post_announcement-scheduled_for');
+  const recurrenceUnitInput = document.getElementById('action-post_announcement-recurrence_unit');
+  const recurrenceIntervalInput = document.getElementById('action-post_announcement-recurrence_interval');
+  const channelSelect = document.getElementById('action-post_announcement-channel_id');
+
+  // Appended AFTER the card's own result node so the runner's
+  // querySelector('.action-result') keeps finding its own element.
+  const editBanner = document.createElement('div');
+  editBanner.className = 'action-result success';
+  editBanner.hidden = true;
+  card.append(editBanner);
+  const cancelEdit = document.createElement('button');
+  cancelEdit.type = 'button';
+  cancelEdit.className = 'btn btn-xs';
+  cancelEdit.textContent = 'Cancel edit';
+  cancelEdit.addEventListener('click', () => {
+    stopEdit();
+    showToast('Edit cancelled', 'success');
+  });
+
+  let editingId = null;
+
+  function setField(input, value) {
+    if (!input) return;
+    input.value = value ?? '';
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    input.dispatchEvent(new Event('change', {bubbles: true}));
+  }
+
+  /** The composer has no timezone field; stores are UTC by default. Carrying
+   * the job's own zone keeps a re-save from silently shifting its wall clock. */
+  function timezoneField() {
+    let input = form.querySelector('input[name="timezone_name"]');
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'timezone_name';
+      form.append(input);
+    }
+    return input;
+  }
+
+  function localDatetime(iso) {
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function startEdit(job) {
+    editingId = Number(job.id);
+    if (job.channel_id && channelSelect && !Array.from(channelSelect.options).some((o) => o.value === String(job.channel_id))) {
+      channelSelect.add(new Option(`#${job.channel_id}`, String(job.channel_id)));
+    }
+    setField(channelSelect, job.channel_id);
+    setField(titleInput, job.title || '');
+    setField(messageInput, job.message || '');
+    if (embedCheck) {
+      embedCheck.checked = !!job.as_embed;
+      embedCheck.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    setField(colorHex, (job.embed_color || '#5865F2').toUpperCase());
+    if (mediaHidden) {
+      const media = [];
+      if (job.image_url) media.push({type: 'image', url: job.image_url});
+      if (job.video_url) media.push({type: 'video', url: job.video_url});
+      mediaHidden.value = JSON.stringify(media);
+      picker?.dispatchEvent(new CustomEvent('bark:media-changed', {bubbles: true, detail: {items: media}}));
+    }
+    setField(deliverySelect, 'schedule');
+    setField(scheduledForInput, localDatetime(job.next_run_at));
+    setField(recurrenceUnitInput, job.recurrence_unit || '');
+    setField(recurrenceIntervalInput, String(job.recurrence_interval || 1));
+    timezoneField().value = job.timezone_name || '';
+    form.dataset.endpoint = `schedules/${editingId}`;
+    editBanner.hidden = false;
+    editBanner.textContent = `Editing schedule #${editingId} — saving replaces it and requeues it. `;
+    editBanner.append(cancelEdit);
+    updatePreview();
+    card.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+
+  function stopEdit() {
+    editingId = null;
+    form.dataset.endpoint = 'post';
+    timezoneField().value = '';
+    editBanner.hidden = true;
+    editBanner.textContent = '';
+    setField(deliverySelect, '');
+    if (scheduledForInput) scheduledForInput.value = '';
   }
 
   queueCard.querySelector('[data-schedule-refresh]')?.addEventListener('click', loadQueue);
@@ -685,6 +790,11 @@
     const item = button?.closest('[data-schedule-id]');
     if (!button || !item) return;
     const action = button.dataset.scheduleAction;
+    if (action === 'edit') {
+      const job = lastJobs.find((j) => Number(j.id) === Number(item.dataset.scheduleId));
+      if (job) startEdit(job);
+      return;
+    }
     if (action === 'delete' && typeof BarkDialog?.confirm === 'function') {
       const confirmed = await BarkDialog.confirm({title: 'Delete scheduled announcement?', message: 'This removes it from the queue permanently.', confirmLabel: 'Delete', danger: true});
       if (!confirmed) return;
@@ -704,7 +814,10 @@
     }
   });
   window.addEventListener('bark:module-action-complete', (event) => {
-    if (event.detail?.moduleName === 'announcements' && event.detail?.endpoint === 'post') loadQueue();
+    if (event.detail?.moduleName !== 'announcements') return;
+    const endpoint = event.detail?.endpoint || '';
+    if (endpoint.startsWith('schedules/')) stopEdit();
+    if (endpoint === 'post' || endpoint.startsWith('schedules/')) loadQueue();
   });
   loadQueue();
 

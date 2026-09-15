@@ -225,6 +225,58 @@ async def set_schedule_paused(guild_id: str, schedule_id: int, *, paused: bool) 
         return getattr(result, "rowcount", 0) == 1
 
 
+async def update_schedule(
+    *,
+    guild_id: str,
+    schedule_id: int,
+    channel_id: str,
+    title: str,
+    message: str,
+    as_embed: bool,
+    embed_color: str,
+    image_url: str,
+    video_url: str,
+    scheduled_for: datetime,
+    timezone_name: str,
+    recurrence_unit: str | None,
+    recurrence_interval: int,
+) -> bool:
+    """Replace a queued/paused job's content and timing.
+
+    ``status != 'sending'`` is the same ownership boundary as delete: a job a
+    worker already claimed must not be rewritten mid-delivery. An edited job is
+    requeued with ``last_error`` cleared, so editing a failed job retries it.
+    """
+    when = _as_utc(scheduled_for)
+    async with session_scope() as session:
+        result = await session.execute(
+            update(AnnouncementSchedule)
+            .where(
+                AnnouncementSchedule.id == schedule_id,
+                AnnouncementSchedule.guild_id == str(guild_id),
+                AnnouncementSchedule.status != "sending",
+            )
+            .values(
+                channel_id=str(channel_id),
+                title=title,
+                message=message,
+                as_embed=as_embed,
+                embed_color=embed_color,
+                image_url=image_url,
+                video_url=video_url,
+                next_run_at=when,
+                timezone_name=timezone_name,
+                recurrence_unit=recurrence_unit,
+                recurrence_interval=recurrence_interval,
+                recurrence_anchor_day=when.astimezone(ZoneInfo(timezone_name)).day,
+                status="queued",
+                last_error="",
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        return getattr(result, "rowcount", 0) == 1
+
+
 async def delete_schedule(guild_id: str, schedule_id: int) -> bool:
     """Delete a guild-owned job unless a worker currently owns it."""
     async with session_scope() as session:
