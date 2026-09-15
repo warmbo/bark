@@ -67,7 +67,9 @@ def _sqlite_checks(path: Path) -> tuple[bool, list[str]]:
         notes.append(f"integrity_check: {integrity}")
         fk = con.execute("PRAGMA foreign_key_check").fetchall()
         notes.append(f"foreign_key_check: {len(fk)} violation(s)")
-        tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {
+            row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
         missing = sorted(REQUIRED_TABLES - tables)
         notes.append(f"tables: {len(tables)} present, missing required: {missing or 'none'}")
         migrations = []

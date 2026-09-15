@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -109,7 +108,11 @@ def main() -> int:
     for name, ok, detail in results:
         print(f"  {'PASS' if ok else 'FAIL'}  {name:18} {detail[:70]}")
     print(f"  {'PASS' if tree_ok else 'FAIL'}  {'working tree':18} ", end="")
-    print("clean" if tree_ok else f"{len(dirty)} uncommitted file(s): {', '.join(d[:40] for d in dirty[:3])}")
+    print(
+        "clean"
+        if tree_ok
+        else f"{len(dirty)} uncommitted file(s): {', '.join(d[:40] for d in dirty[:3])}"
+    )
 
     failed = [name for name, ok, _ in results if not ok] + ([] if tree_ok else ["working tree"])
     if failed:

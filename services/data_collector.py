@@ -332,6 +332,8 @@ class GuildDataCollector:
         self.interval = interval_minutes
         self._task: asyncio.Task | None = None
         self._last_snapshots: dict[int, dict] = {}
+        # Set after each completed pass — diagnostics reads it for freshness.
+        self.last_run_at: datetime | None = None
 
     async def start(self):
         if self._task is not None and not self._task.done():
@@ -404,6 +406,8 @@ class GuildDataCollector:
                     except Exception:
                         logger.exception("Error collecting data for guild %s", guild.name)
 
+                # Recorded after a full pass so diagnostics can judge freshness.
+                self.last_run_at = datetime.now(timezone.utc)
                 await asyncio.sleep(self.interval * 60)
         except asyncio.CancelledError:
             pass

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Request, Response
 from config import config
 from services.diagnostics import (
     build_diagnostics_report,
-    build_runtime_diagnostics,
+    build_runtime_diagnostics_async,
     render_report,
 )
 from services.instance_auth import can_manage_instance
@@ -111,7 +111,7 @@ async def instance_diagnostics(request: Request):
     # bot connection status / "runtime unavailable" rather than silently
     # omitting the module+guild diagnostics.
     try:
-        runtime = build_runtime_diagnostics(bot)
+        runtime = await build_runtime_diagnostics_async(bot)
         report.update(runtime)
     except Exception as exc:  # runtime is best-effort; never break the report
         logger.warning("build_runtime_diagnostics failed: %s", exc)

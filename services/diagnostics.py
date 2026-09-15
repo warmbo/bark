@@ -12,9 +12,11 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import pkgutil
 import platform
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -403,6 +405,7 @@ def build_runtime_diagnostics(bot) -> dict:
                 "modules": {"count": 0, "items": [], "errors": []},
                 "guilds": {"count": 0, "items": [], "errors": []},
                 "multi_instance_conflicts": [],
+                "checks": _none_bot_checks(),
             }
         }
     # Imported lazily so this module stays importable in stripped-down test/dev
@@ -528,8 +531,367 @@ def build_runtime_diagnostics(bot) -> dict:
             "modules": modules_section,
             "guilds": guilds_section,
             "multi_instance_conflicts": multi_instance,
+            "checks": _sync_checks(bot, modules_mgr, modules_section, guilds),
         }
     }
+
+
+def _none_bot_checks() -> list[dict[str, str]]:
+    """Capability checks for a dashboard process with no bot wired."""
+    return [
+        {"name": "process", "status": "ok", "detail": f"PID {os.getpid()} running"},
+        {"name": "discord", "status": "unavailable", "detail": "no bot wired to this dashboard"},
+        {
+            "name": "collectors",
+            "status": "unavailable",
+            "detail": "no bot runtime — data collector / stats flush not running",
+        },
+        {
+            "name": "modules",
+            "status": "unavailable",
+            "detail": "no bot runtime — modules not enumerated",
+        },
+        {
+            "name": "permissions",
+            "status": "unavailable",
+            "detail": "no bot runtime — guild permissions not checked",
+        },
+        {
+            "name": "database",
+            "status": "unavailable",
+            "detail": "bot runtime unavailable — not checked",
+        },
+        {
+            "name": "scheduler",
+            "status": "unavailable",
+            "detail": "bot runtime unavailable — not checked",
+        },
+        {
+            "name": "media_engine",
+            "status": "unavailable",
+            "detail": "bot runtime unavailable — not checked",
+        },
+    ]
+
+
+def _sync_checks(bot, modules_mgr, modules_section, guilds) -> list[dict[str, str]]:
+    """Checks computable without I/O: process, gateway, workers, modules, perms.
+
+    The async checks (database, scheduler, media engine) are appended by
+    ``build_runtime_diagnostics_async`` so the sync builder stays testable.
+    """
+    checks: list[dict[str, str]] = []
+    checks.append({"name": "process", "status": "ok", "detail": f"PID {os.getpid()} running"})
+
+    ready = _safe_bool(getattr(bot, "is_ready", None))
+    connected = _safe_bool(getattr(bot, "is_connected", None))
+    latency = _safe_number(getattr(bot, "latency", None))
+    if ready is True:
+        detail = (
+            f"connected to gateway ({latency} ms)"
+            if latency is not None
+            else "connected to gateway"
+        )
+        checks.append({"name": "discord", "status": "ok", "detail": detail})
+    elif connected is False:
+        checks.append(
+            {
+                "name": "discord",
+                "status": "unavailable",
+                "detail": "DISCONNECTED — no events are being processed; check token/intents",
+            }
+        )
+    else:
+        checks.append(
+            {
+                "name": "discord",
+                "status": "degraded",
+                "detail": "connecting — gateway up but not ready (no on_ready yet)",
+            }
+        )
+
+    checks.append(_collectors_check(bot))
+    checks.append(_modules_check(modules_mgr, modules_section))
+    checks.append(_permissions_check(bot, guilds))
+    return checks
+
+
+# Two collector intervals (15 min) without a run means the background loop stalled.
+_COLLECTOR_STALE_SECONDS = 2 * 15 * 60
+
+
+def _collectors_check(bot) -> dict[str, str]:
+    """Background worker freshness: guild data collector + stats flush task."""
+    from services import stats_recorder
+
+    collector = getattr(bot, "_data_collector", None)
+    collector_task = getattr(collector, "_task", None) if collector is not None else None
+    collector_alive = collector_task is not None and not collector_task.done()
+    last_run = getattr(collector, "last_run_at", None)
+    age_min: int | None = None
+    if last_run is not None:
+        try:
+            age_min = max(0, int((datetime.now(timezone.utc) - last_run).total_seconds() // 60))
+        except TypeError:
+            age_min = None
+    stale = age_min is not None and age_min * 60 > _COLLECTOR_STALE_SECONDS
+
+    flush_task = getattr(stats_recorder, "_flush_task", None)
+    flush_alive = flush_task is not None and not flush_task.done()
+    last_flush = getattr(stats_recorder, "last_flush_at", None)
+
+    parts = []
+    if last_run is not None:
+        parts.append(f"collector last run {age_min} min ago" + (" (STALE)" if stale else ""))
+    else:
+        parts.append("collector has not run yet")
+    parts.append("stats flush task " + ("running" if flush_alive else "NOT running"))
+    if last_flush is not None:
+        try:
+            flush_age_min = max(
+                0, int((datetime.now(timezone.utc) - last_flush).total_seconds() // 60)
+            )
+            parts.append(f"last flush {flush_age_min} min ago")
+        except TypeError:
+            pass
+    ok = collector_alive and flush_alive and not stale
+    return {"name": "collectors", "status": "ok" if ok else "degraded", "detail": "; ".join(parts)}
+
+
+def _modules_check(modules_mgr, modules_section) -> dict[str, str]:
+    """Per-module health: enumeration errors and packages that failed to load."""
+    errors = list(modules_section.get("errors") or [])
+    failed = _failed_to_load(modules_mgr)
+    if errors or failed:
+        detail = "; ".join(errors[:2])
+        if failed:
+            detail = (detail + "; " if detail else "") + f"failed to load: {', '.join(failed)}"
+        return {"name": "modules", "status": "degraded", "detail": detail}
+    enabled = 0
+    if modules_mgr is not None and hasattr(modules_mgr, "should_run_globally"):
+        try:
+            for name in modules_mgr.get_all_modules() or {}:
+                if modules_mgr.should_run_globally(name):
+                    enabled += 1
+        except Exception:
+            enabled = 0
+    return {
+        "name": "modules",
+        "status": "ok",
+        "detail": f"{modules_section.get('count', 0)} modules discovered, {enabled} enabled globally",
+    }
+
+
+def _failed_to_load(modules_mgr) -> list[str]:
+    """Built-in module packages that did not register (import/instantiate error).
+
+    Module discovery logs load failures but does not record them anywhere;
+    diffing the modules package tree against the registry is the cheapest
+    honest signal. Plugins live outside the ``modules`` package and are
+    covered by their own load logging.
+    """
+    try:
+        import modules as modules_pkg
+
+        expected = {
+            name
+            for _, name, is_pkg in pkgutil.iter_modules(modules_pkg.__path__)
+            if is_pkg and name != "base"
+        }
+        if modules_mgr is None:
+            return sorted(expected)
+        loaded = set((modules_mgr.get_all_modules() or {}).keys())
+        return sorted(expected - loaded)
+    except Exception:
+        return []
+
+
+def _permissions_check(bot, guilds) -> dict[str, str]:
+    """Permission-dependent feature status: core posting perms per guild."""
+    missing: list[str] = []
+    for guild in guilds:
+        gid = getattr(guild, "id", None)
+        me = getattr(guild, "me", None) or getattr(bot, "user", None)
+        perms = getattr(me, "guild_permissions", None) if me is not None else None
+        if perms is None:
+            continue
+        lacks = [p for p in ("send_messages", "view_channel") if getattr(perms, p, True) is False]
+        if lacks:
+            missing.append(f"{getattr(guild, 'name', gid)}: missing {', '.join(lacks)}")
+    if missing:
+        return {"name": "permissions", "status": "degraded", "detail": "; ".join(missing)}
+    if not guilds:
+        return {"name": "permissions", "status": "ok", "detail": "no guilds to check"}
+    return {
+        "name": "permissions",
+        "status": "ok",
+        "detail": "can send messages and view channels in all guilds",
+    }
+
+
+async def build_runtime_diagnostics_async(bot) -> dict:
+    """``build_runtime_diagnostics`` plus the checks that need I/O.
+
+    Appends the database read+write probe, announcement-schedule state, and
+    media-engine ping to ``runtime.checks``. The sync function stays sync so
+    existing tests and embeddings keep working.
+    """
+    report = build_runtime_diagnostics(bot)
+    checks = report["runtime"].get("checks")
+    if bot is None or not isinstance(checks, list):
+        return report
+    for check in await _async_checks(bot):
+        checks.append(check)
+    return report
+
+
+async def _async_checks(bot) -> list[dict[str, str]]:
+    results: list[dict[str, str]] = []
+    for name, coro in (
+        ("database", _db_check()),
+        ("scheduler", _scheduler_check(bot)),
+        ("media_engine", _media_engine_check()),
+    ):
+        try:
+            results.append(await coro)
+        except Exception as exc:
+            results.append(
+                {
+                    "name": name,
+                    "status": "unavailable",
+                    "detail": f"check failed: {type(exc).__name__}: {exc}",
+                }
+            )
+    return results
+
+
+async def _db_check() -> dict[str, str]:
+    """Read+write probe against the real database, leaving no residue.
+
+    The probe has to hit the real file to prove the real file is writable, but
+    it must not leave an unmodeled table behind in every install's database:
+    create the scratch table, write, read back, then drop it in the same
+    transaction.
+    """
+    from sqlalchemy import text
+
+    from database.engine import session_scope
+
+    try:
+        async with session_scope() as session:
+            await session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS _diagnostics_probe "
+                    "(id INTEGER PRIMARY KEY, ts TEXT NOT NULL)"
+                )
+            )
+            await session.execute(
+                text("INSERT INTO _diagnostics_probe (ts) VALUES (:ts)"),
+                {"ts": datetime.now(timezone.utc).isoformat()},
+            )
+            rows = (
+                (await session.execute(text("SELECT ts FROM _diagnostics_probe"))).scalars().all()
+            )
+            await session.execute(text("DROP TABLE IF EXISTS _diagnostics_probe"))
+        if rows:
+            return {"name": "database", "status": "ok", "detail": "read+write probe succeeded"}
+        return {"name": "database", "status": "degraded", "detail": "write probe returned no rows"}
+    except Exception as exc:
+        return {
+            "name": "database",
+            "status": "unavailable",
+            "detail": f"probe failed: {type(exc).__name__}: {exc}",
+        }
+
+
+async def _scheduler_check(bot) -> dict[str, str]:
+    """Announcement schedule loop state + queued/failed schedule counts."""
+    mgr = getattr(bot, "modules", None)
+    if mgr is None:
+        return {"name": "scheduler", "status": "unavailable", "detail": "no bot runtime"}
+    from sqlalchemy import func, select
+
+    from database.engine import session_scope
+    from database.models.announcements import AnnouncementSchedule
+
+    try:
+        module = mgr.get_module("announcements") if hasattr(mgr, "get_module") else None
+        task = getattr(module, "_schedule_task", None) if module is not None else None
+        loop_alive = task is not None and not task.done()
+        queued = failed = 0
+        db_ok = True
+        try:
+            async with session_scope() as session:
+                rows = (
+                    await session.execute(
+                        select(AnnouncementSchedule.status, func.count()).group_by(
+                            AnnouncementSchedule.status
+                        )
+                    )
+                ).all()
+            for status, count in rows:
+                if status == "queued":
+                    queued = int(count)
+                elif status == "failed":
+                    failed = int(count)
+        except Exception:
+            db_ok = False
+        counts = f"{queued} queued, {failed} failed schedule(s)"
+        if loop_alive and db_ok:
+            return {
+                "name": "scheduler",
+                "status": "ok",
+                "detail": f"announcement loop running; {counts}",
+            }
+        if loop_alive:
+            return {
+                "name": "scheduler",
+                "status": "degraded",
+                "detail": f"loop running but schedule table unreadable ({counts})",
+            }
+        if db_ok:
+            return {
+                "name": "scheduler",
+                "status": "degraded",
+                "detail": f"announcement schedule loop NOT running; {counts}",
+            }
+        return {
+            "name": "scheduler",
+            "status": "degraded",
+            "detail": "announcement schedule loop NOT running; schedule table unreadable",
+        }
+    except Exception as exc:
+        return {
+            "name": "scheduler",
+            "status": "unavailable",
+            "detail": f"check failed: {type(exc).__name__}: {exc}",
+        }
+
+
+async def _media_engine_check(client=None) -> dict[str, str]:
+    """Reachability of the local media-engine service (open /health)."""
+    try:
+        from services.media_engine.client import MediaEngineClient
+
+        engine = client or MediaEngineClient()
+        ok = await engine.health()
+        if ok:
+            return {
+                "name": "media_engine",
+                "status": "ok",
+                "detail": f"reachable at {engine.base_url}",
+            }
+        return {
+            "name": "media_engine",
+            "status": "unavailable",
+            "detail": f"unreachable at {engine.base_url}",
+        }
+    except Exception as exc:
+        return {
+            "name": "media_engine",
+            "status": "unavailable",
+            "detail": f"check failed: {type(exc).__name__}: {exc}",
+        }
 
 
 def _safe_bool(fn) -> bool | None:
@@ -670,6 +1032,15 @@ def render_report(report: dict) -> str:
                 "  ⚠ BOT IS NOT CONNECTED — no events are being processed; "
                 "modules cannot post or score. Check the token/intents on Discord."
             )
+        checks = runtime.get("checks")
+        if isinstance(checks, list) and checks:
+            lines.append("")
+            lines.append("[Capability checks]")
+            for check in checks:
+                name = check.get("name", "?")
+                status = check.get("status", "?")
+                detail = check.get("detail", "")
+                lines.append(f"  [{status:^11}] {name}: {detail}")
         lines.append("")
         lines.append("[Modules]")
         mods = runtime.get("modules", {})

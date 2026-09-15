@@ -35,6 +35,8 @@ _pending_messages: dict[tuple[str, str], list] = defaultdict(lambda: [0, ""])
 # (guild_id, emoji_key) -> count
 _pending_emoji: dict[tuple[str, str], int] = defaultdict(int)
 _flush_task: asyncio.Task | None = None
+# UTC timestamp of the last successful flush — diagnostics reads it for freshness.
+last_flush_at: datetime | None = None
 
 
 def _today_aware() -> date:
@@ -101,6 +103,8 @@ async def _flush_pending() -> None:
                     )
                 else:
                     emoji_row.count += count
+        global last_flush_at
+        last_flush_at = datetime.now(timezone.utc)
     except Exception:
         # Put the counters back so the next flush retries them rather than
         # silently dropping up to FLUSH_SECONDS of activity.
