@@ -56,6 +56,17 @@ settings UI disables the Stable option.
 Run all commands on the dev checkout (`cody@10.0.0.227:~/Projects/bark-dev`)
 unless noted.
 
+### 0. Release gate (mandatory — promotion is forbidden while it is red)
+
+```sh
+cd ~/Projects/bark && .venv/bin/python scripts/release_check.py
+```
+
+It must print `✓ all gates green — safe to promote`. The script runs pytest,
+ruff lint, ruff format, mypy, bandit, pip-audit, the generated-frontend-asset
+check (`npm run check`) and refuses on a dirty working tree. Do not promote on
+"most tests passed" — a red gate means stop, not proceed with judgement.
+
 ### 1. Pre-flight
 
 ```sh
@@ -98,13 +109,23 @@ would move a build backwards, so a stale mirror can never downgrade a box.
 
 ### 4. Deploy stable to the prod instance
 
+The prod checkout tracks the **GitHub mirror**, not Forgejo:
+
 ```sh
 # as cody on 10.0.0.227
 cd ~/Projects/bark
-git fetch origin master
-git reset --hard origin/master     # prod tracks stable
+git fetch github main
+git reset --hard github/main       # prod tracks the GitHub mirror's main
 # as root (via pct exec on pve-geminar, CT 1109):
 pct exec 1109 -- systemctl restart bark.service
+```
+
+**Never `reset --hard github/master`** — that branch is stale and would move
+prod backwards; the no-downgrade guard only protects the UI updater, not a
+manual reset. Confirm the commit before restarting:
+
+```sh
+git log --oneline -1               # must match the promoted dev HEAD
 ```
 
 `git reset --hard` is safe here: the prod checkout has no tracked
@@ -143,6 +164,34 @@ curl -s http://127.0.0.1:8090/ | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1
 Functional spot checks: Discord slash commands respond (`/bark help`),
 dashboard login works on both instances, and any feature touched by
 the release is exercised on dev first.
+
+Browser smoke (catches what the CSS/template contract tests cannot — console
+errors, missing workspace chrome, horizontal overflow):
+
+```sh
+BARK_URL=https://bark.warx.org BARK_COOKIE_FILE=/tmp/prod_cookie.txt \
+  BARK_GUILD=<guild-id> node scripts/browser_smoke.mjs     # expect N/N passed
+```
+
+Restore drill (periodic, not per release — proves a backup actually restores):
+
+```sh
+.venv/bin/python scripts/restore_drill.py            # newest backup
+.venv/bin/python scripts/restore_drill.py --backup <file>
+```
+
+It works on a copy only: integrity_check, foreign_key_check, required tables,
+then bootstraps the copy through the app's own `create_all` + migrations, and
+lists the non-database state a backup does not cover (plugins, uploads,
+secrets, proxy/service config).
+
+Instance capability checks (per-deployment, beyond "HTTP 200"):
+
+```sh
+curl -s --cookie "session=<cookie>" https://bark.warx.org/api/v1/instance/diagnostics
+# expect a "[Capability checks]" block: process, discord, collectors, modules,
+# permissions, database, scheduler, media_engine — each ok/degraded/unavailable
+```
 
 ## Rollback
 
