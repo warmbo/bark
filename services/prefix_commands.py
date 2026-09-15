@@ -208,7 +208,9 @@ def build_prefix_command(
     )
     # Expose the original slash-command parameters (name/type/required) so
     # callers (e.g. the smoke test) can generate realistic argument tokens.
-    prefix_cmd._bark_params = list(getattr(slash_cmd, "parameters", []))
+    # These are dynamic attrs on a third-party Command (the smoke test reads
+    # them via getattr/direct access) — setattr keeps that contract explicit.
+    setattr(prefix_cmd, "_bark_params", list(getattr(slash_cmd, "parameters", [])))
     # Test/observation hook: invoke the handler with explicit typed kwargs
     # through the shim + enablement gate, bypassing token->type conversion
     # (which needs a live guild). Used by the command smoke test.
@@ -230,7 +232,7 @@ def build_prefix_command(
             await callback(interaction, **kwargs)
         return True
 
-    prefix_cmd._bark_invoke = _bark_invoke
+    setattr(prefix_cmd, "_bark_invoke", _bark_invoke)
     return prefix_cmd
 
 

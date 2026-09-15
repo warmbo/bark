@@ -5,6 +5,7 @@ Uses httpx AsyncClient against the FastAPI app with a mock bot.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -2296,19 +2297,23 @@ async def test_plugin_catalog_route_not_shadowed_by_guilds(client, monkeypatch):
     Regression: the manifest router was registered AFTER the guilds router, so
     FastAPI matched 'plugin-catalog' against the int-typed guild_id and returned
     422, breaking the plugin catalog page."""
+    from unittest.mock import AsyncMock
+
     from dashboard.routes.api import manifest
 
-    monkeypatch.setattr(manifest, "_repo_plugin_entries", lambda: [{"name": "fun"}])
+    monkeypatch.setattr(
+        manifest, "_repo_plugin_entries", AsyncMock(return_value=[{"name": "fun"}])
+    )
     resp = await client.get("/api/v1/guilds/plugin-catalog")
     assert resp.status_code == 200
     assert resp.json()["data"]["plugins"] == [{"name": "fun"}]
 
 
-def test_repo_plugin_catalog_only_lists_installable_plugins(monkeypatch):
-    """The plugin catalog parses the bark-plugins README and must surface
-    ONLY rows whose File cell links to a real plugins/*.py file — planned
-    (not-yet-built) entries and header rows are skipped, and the file path is
-    extracted from the markdown link so download/install works.
+def test_repo_plugin_catalog_only_lists_installable_plugins():
+    """The plugin catalog parser handles the bark-plugins README and must
+    surface ONLY rows whose File cell links to a real plugins/*.py file —
+    planned (not-yet-built) entries and header rows are skipped, and the file
+    path is extracted from the markdown link so download/install works.
     """
     from dashboard.routes.api import manifest
 
@@ -2329,19 +2334,7 @@ def test_repo_plugin_catalog_only_lists_installable_plugins(monkeypatch):
 | Wordle | `plugins/wordle.py` | daily word | none |
 """
 
-    class FakeResp:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def read(self):
-            return readme.encode()
-
-    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: FakeResp())
-
-    rows = manifest._repo_plugin_entries()
+    rows = manifest._parse_plugin_readme(readme)
     names = [r["name"] for r in rows]
     # Real plugins only, in order; no planned/idea rows.
     assert names == ["Fun", "Trivia", "Minimal Example"]
@@ -2352,6 +2345,62 @@ def test_repo_plugin_catalog_only_lists_installable_plugins(monkeypatch):
         assert file.startswith("plugins/") and file.endswith(".py")
         assert "[" not in file and "]" not in file
         assert str(r["url"]).endswith(file)
+
+
+@pytest.mark.asyncio
+async def test_plugin_catalog_fetch_failure_returns_empty(monkeypatch):
+    """A network failure while fetching the catalog must yield an empty list,
+    never a 500 to the dashboard."""
+    from dashboard.routes.api import manifest
+
+    class _Exploding:
+        async def __aenter__(self):
+            raise RuntimeError("catalog unreachable")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(manifest.httpx, "AsyncClient", lambda **kwargs: _Exploding())
+    assert await manifest._repo_plugin_entries() == []
+
+
+@pytest.mark.asyncio
+async def test_plugin_catalog_fetch_does_not_block_event_loop(client, monkeypatch):
+    """The catalog fetch must run off the event loop: while a slow catalog
+    source is in flight, other pending coroutines must still get to run.
+
+    Regression: the endpoint called the synchronous urllib fetch inline, so a
+    slow catalog source froze the whole event loop (heartbeat only fired after
+    the request finished) — and because the fetch was sync, an async catalog
+    function wasn't even supported.
+    """
+    from dashboard.routes.api import manifest
+
+    async def slow_catalog():
+        await asyncio.sleep(0.3)
+        return [{"name": "slow"}]
+
+    monkeypatch.setattr(manifest, "_repo_plugin_entries", slow_catalog)
+
+    order: list[str] = []
+
+    async def heartbeat():
+        await asyncio.sleep(0.05)
+        order.append("heartbeat")
+
+    async def request_catalog():
+        resp = await client.get("/api/v1/guilds/plugin-catalog")
+        order.append("request")
+        return resp
+
+    resp_task = asyncio.create_task(request_catalog())
+    hb_task = asyncio.create_task(heartbeat())
+    resp = await resp_task
+    await hb_task
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["plugins"] == [{"name": "slow"}]
+    assert order == ["heartbeat", "request"], "catalog fetch blocked the event loop"
 
 
 # ── Stats ─────────────────────────────────────────────

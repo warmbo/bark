@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 import time
 from collections import OrderedDict, defaultdict
@@ -473,6 +474,45 @@ class ReputationModule(BarkModule):
         card = await self.coop.call("reputation.leaderboard", guild_id)
         return [card] if card else []
 
+    @staticmethod
+    def _parse_tier_field(
+        value: Any, *, field: str, integer: bool = False
+    ) -> tuple[Any, str | None]:
+        """Validate a numeric tier field. Returns (parsed, None) or (None, error).
+
+        Rejects bools, non-numeric types, and non-finite floats (NaN/inf) that
+        ``int()``/``float()`` would otherwise silently accept; the dashboard
+        must get a 400 instead of a corrupt row or a 500.
+        """
+        if isinstance(value, bool):
+            return None, f"{field} must be a number"
+        if integer:
+            # int() on inf/nan raises OverflowError (not ValueError), and
+            # math.isfinite() on a huge int overflows too — handle floats
+            # explicitly and range-check the result against sqlite's bound.
+            if isinstance(value, float):
+                if not math.isfinite(value):
+                    return None, f"{field} must be finite"
+                if not value.is_integer():
+                    return None, f"{field} must be a whole number"
+                parsed = int(value)
+            else:
+                try:
+                    parsed = int(value)
+                except (TypeError, ValueError, OverflowError):
+                    return None, f"{field} must be a number"
+            # SQLite INTEGER is signed 64-bit; larger values fail at bind time.
+            if not -(2**63) <= parsed < 2**63:
+                return None, f"{field} is out of range"
+            return parsed, None
+        try:
+            parsed_float = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None, f"{field} must be a number"
+        if not math.isfinite(parsed_float):
+            return None, f"{field} must be finite"
+        return parsed_float, None
+
     def get_api_routes(self):
         """API endpoints for reputation dashboard data."""
         from fastapi import APIRouter
@@ -732,6 +772,31 @@ class ReputationModule(BarkModule):
             elif "role_id" in payload:
                 role_id = None
 
+            # Validate numeric fields before any ORM write: a 400 must not
+            # commit sibling edits (symbol/color/purpose) already applied to
+            # the tier object inside session_scope.
+            min_level = None
+            min_score = None
+            sort_order = None
+            if "min_level" in payload:
+                min_level, err = self._parse_tier_field(
+                    payload["min_level"], field="min_level", integer=True
+                )
+                if err:
+                    return api_error(err, status_code=400)
+            if "min_score" in payload:
+                min_score, err = self._parse_tier_field(
+                    payload["min_score"], field="min_score"
+                )
+                if err:
+                    return api_error(err, status_code=400)
+            if "sort_order" in payload:
+                sort_order, err = self._parse_tier_field(
+                    payload["sort_order"], field="sort_order", integer=True
+                )
+                if err:
+                    return api_error(err, status_code=400)
+
             async with session_scope() as session:
                 from sqlalchemy import select, update
 
@@ -765,13 +830,16 @@ class ReputationModule(BarkModule):
                     tier.color_hex = str(payload["color_hex"])[:7]
                 if "purpose" in payload:
                     tier.purpose = str(payload["purpose"])[:300]
-                if "min_level" in payload:
-                    tier.min_level = max(0, int(payload["min_level"]))
-                if "min_score" in payload:
-                    tier.min_score = max(0.0, float(payload["min_score"]))
-                if "sort_order" in payload:
-                    tier.sort_order = max(0, int(payload["sort_order"]))
-                tier.role_id = role_id
+                if min_level is not None:
+                    tier.min_level = max(0, min_level)
+                if min_score is not None:
+                    tier.min_score = max(0.0, min_score)
+                if sort_order is not None:
+                    tier.sort_order = max(0, sort_order)
+                # Only touch role_id when the client actually sent it: an
+                # omitted field on a partial update must not clear a linked role.
+                if "role_id" in payload:
+                    tier.role_id = role_id
                 if "assign_role" in payload:
                     tier.assign_role = bool(payload["assign_role"])
                 tier.name = new_name
@@ -837,6 +905,24 @@ class ReputationModule(BarkModule):
             elif "role_id" in payload:
                 role_id = None
 
+            # Numeric fields: omitted/empty keep the 0 default; anything that
+            # is not a real finite number (bool, NaN/inf, wrong type) is a 400.
+            raw_min_level = payload.get("min_level")
+            min_level, err = self._parse_tier_field(
+                0 if raw_min_level in (None, "") else raw_min_level,
+                field="min_level",
+                integer=True,
+            )
+            if err:
+                return api_error(err, status_code=400)
+            raw_min_score = payload.get("min_score")
+            min_score, err = self._parse_tier_field(
+                0 if raw_min_score in (None, "") else raw_min_score,
+                field="min_score",
+            )
+            if err:
+                return api_error(err, status_code=400)
+
             async with session_scope() as session:
                 from sqlalchemy import func, select
 
@@ -861,8 +947,8 @@ class ReputationModule(BarkModule):
                     guild_id=str(gid),
                     name=name,
                     symbol=str(payload.get("symbol") or "⭐")[:16],
-                    min_level=max(0, int(payload.get("min_level") or 0)),
-                    min_score=max(0.0, float(payload.get("min_score") or 0)),
+                    min_level=max(0, min_level),
+                    min_score=max(0.0, min_score),
                     color_hex=str(payload.get("color_hex") or "#99aab5")[:7],
                     purpose=str(payload.get("purpose") or "")[:300],
                     role_id=role_id,
@@ -2138,6 +2224,25 @@ class ReputationModule(BarkModule):
 
     # ── Event Handlers ───────────────────────────────────
 
+    def _member_is_ignored(
+        self, guild, user_id: int, config: dict, member=None
+    ) -> bool:
+        """True if the member holds an ignored role (earns no reputation).
+
+        Fail-safe: an ``ignored_roles``-configured guild where the member
+        cannot be resolved (not in the guild cache) is treated as ignored, so
+        points are withheld rather than granted on incomplete information.
+        """
+        raw = config.get("ignored_roles") or ""
+        ignored_ids = {r.strip() for r in str(raw).split(",") if r.strip()}
+        if not ignored_ids:
+            return False
+        if member is None and guild is not None:
+            member = guild.get_member(user_id)
+        if member is None:
+            return True  # fail safe: unresolved member earns nothing
+        return any(str(getattr(r, "id", r)) in ignored_ids for r in getattr(member, "roles", []))
+
     async def _on_message(self, event_type: str, **data) -> None:
         message = data.get("message")
         if not message or not message.guild or message.author.bot:
@@ -2155,6 +2260,12 @@ class ReputationModule(BarkModule):
         if ignored and str(message.channel.id) in [
             c.strip() for c in ignored.split(",") if c.strip()
         ]:
+            return
+
+        # Check ignored roles (blocks the message and emoji awards below)
+        if self._member_is_ignored(
+            message.guild, user_id, config, member=message.author
+        ):
             return
 
         # Dedup
@@ -2227,8 +2338,16 @@ class ReputationModule(BarkModule):
         actor_id = int(payload.user_id)
         emoji = str(payload.emoji) if getattr(payload, "emoji", None) is not None else None
 
-        # Reaction giver gets small points too
-        if config.get("enabled_sources", {}).get("reactions", True):
+        # Self-reactions earn nothing on either side.
+        if actor_id == target_id:
+            return
+
+        guild = self.ctx.get_guild(guild_id)
+
+        # Reaction giver gets small points too (skipped if ignored/unresolvable)
+        if config.get("enabled_sources", {}).get("reactions", True) and not self._member_is_ignored(
+            guild, actor_id, config
+        ):
             given_points = compute_reaction_given_points(config)
             await self._add_points(
                 guild_id,
@@ -2243,20 +2362,21 @@ class ReputationModule(BarkModule):
                 config=config,
             )
 
-        # Message author gets received points
-        received_points = compute_reaction_received_points(config)
-        await self._add_points(
-            guild_id,
-            target_id,
-            received_points,
-            "reaction",
-            actor_id=actor_id,
-            target_id=target_id,
-            message_id=int(payload.message_id),
-            channel_id=int(payload.channel_id),
-            emoji=emoji,
-            config=config,
-        )
+        # Message author gets received points (skipped if ignored/unresolvable)
+        if not self._member_is_ignored(guild, target_id, config):
+            received_points = compute_reaction_received_points(config)
+            await self._add_points(
+                guild_id,
+                target_id,
+                received_points,
+                "reaction",
+                actor_id=actor_id,
+                target_id=target_id,
+                message_id=int(payload.message_id),
+                channel_id=int(payload.channel_id),
+                emoji=emoji,
+                config=config,
+            )
 
     async def _on_voice_state(self, event_type: str, **data) -> None:
         member = data.get("member")
@@ -2272,12 +2392,17 @@ class ReputationModule(BarkModule):
         user_id = int(member.id)
 
         if after_channel is not None:
-            # Joined or moved to a channel
-            self._voice_activity[guild_id][user_id] = time.time()
+            # Joined or moved to a channel — don't track ignored members
+            if not self._member_is_ignored(
+                member.guild, user_id, config, member=member
+            ):
+                self._voice_activity[guild_id][user_id] = time.time()
         else:
             # Left voice entirely — award points for time spent
             join_ts = self._voice_activity.get(guild_id, {}).pop(user_id, None)
-            if join_ts is not None:
+            if join_ts is not None and not self._member_is_ignored(
+                member.guild, user_id, config, member=member
+            ):
                 minutes = (time.time() - join_ts) / 60.0
                 if minutes >= 0.5:  # At least 30 seconds to count
                     points = compute_voice_points(minutes, config)
@@ -2331,7 +2456,9 @@ class ReputationModule(BarkModule):
                     continue
                 activity[user_id] = now
                 try:
-                    if points > 0:
+                    # Fail safe: an unresolved member (left the guild / not in
+                    # cache) is treated as ignored and earns nothing.
+                    if points > 0 and not self._member_is_ignored(guild, user_id, config):
                         await self._add_points(
                             guild_id,
                             user_id,
@@ -2580,31 +2707,37 @@ class ReputationModule(BarkModule):
             self._thanks_cooldowns[pair_key] = now
             self._thanks_self_cooldowns[actor_id] = now
             try:
-                # Points for giver
-                given_points = compute_thanks_given_points(config)
-                await self._add_points(
-                    guild_id,
-                    actor_id,
-                    given_points,
-                    "thanks_given",
-                    actor_id=actor_id,
-                    target_id=target_id,
-                    metadata={"reason": reason, "target": str(target_id)},
-                    config=config,
-                )
+                # Points for giver (skipped if the giver holds an ignored role)
+                if not self._member_is_ignored(
+                    interaction.guild, actor_id, config, member=interaction.user
+                ):
+                    given_points = compute_thanks_given_points(config)
+                    await self._add_points(
+                        guild_id,
+                        actor_id,
+                        given_points,
+                        "thanks_given",
+                        actor_id=actor_id,
+                        target_id=target_id,
+                        metadata={"reason": reason, "target": str(target_id)},
+                        config=config,
+                    )
 
-                # Points for receiver
-                received_points = compute_thanks_received_points(config)
-                await self._add_points(
-                    guild_id,
-                    target_id,
-                    received_points,
-                    "thanks",
-                    actor_id=actor_id,
-                    target_id=target_id,
-                    metadata={"reason": reason, "giver": str(actor_id)},
-                    config=config,
-                )
+                # Points for receiver (skipped if the receiver holds an ignored role)
+                if not self._member_is_ignored(
+                    interaction.guild, target_id, config, member=member
+                ):
+                    received_points = compute_thanks_received_points(config)
+                    await self._add_points(
+                        guild_id,
+                        target_id,
+                        received_points,
+                        "thanks",
+                        actor_id=actor_id,
+                        target_id=target_id,
+                        metadata={"reason": reason, "giver": str(actor_id)},
+                        config=config,
+                    )
             except Exception:
                 self._thanks_cooldowns[pair_key] = prev_pair
                 self._thanks_self_cooldowns[actor_id] = prev_self

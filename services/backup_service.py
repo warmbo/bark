@@ -242,8 +242,8 @@ def apply_pending_restore_sync() -> dict | None:
         return None
     live.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
-    rollback: Path | None = _backup_dir() / f"bark-backup-{timestamp}.db"
     if live.is_file():
+        rollback = _backup_dir() / f"bark-backup-{timestamp}.db"
         try:
             _snapshot_sync(live, rollback)
         except sqlite3.DatabaseError:

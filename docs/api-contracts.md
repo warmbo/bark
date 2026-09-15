@@ -129,7 +129,7 @@ Each action also checks:
 
 | Method | Path | Auth | Description | Source file |
 |---|---|---|---|---|
-| GET | `/api/v1/guilds/{guild_id}/events` | Session | SSE stream — pushes `new_moderation_case`, `member_joined`, `automod_triggered` events. Heartbeat every 30s, disconnect after 60s idle. | `dashboard/routes/api/realtime.py` |
+| GET | `/api/v1/guilds/{guild_id}/events` | Session | SSE stream — pushes `new_moderation_case`, `member_joined`, `automod_triggered` events. Requires `moderation.view` at connect and revalidates it against current DB state every 30s; when the grant is revoked mid-stream it emits `access_revoked` and closes. Heartbeat comment every 30s while open. | `dashboard/routes/api/realtime.py` |
 
 ## Auth
 

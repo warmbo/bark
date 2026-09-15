@@ -1672,5 +1672,5 @@ async def list_guild_emojis(request: Request, guild_id: int):
                 )
     except Exception:
         emojis = []
-    emojis.sort(key=lambda e: e["name"].lower())
+    emojis.sort(key=lambda e: str(e["name"]).lower())
     return api_success({"emojis": emojis})

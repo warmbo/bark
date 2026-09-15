@@ -170,13 +170,13 @@ async def import_settings(request: Request, guild_id: int):
             # Module not loaded (e.g. plugin not installed) — still persist
             # the config row so it takes effect when the module is installed.
             async with session_scope() as session:
-                result = await session.execute(
+                mod_result = await session.execute(
                     select(ModuleConfig).where(
                         ModuleConfig.guild_id == str(guild_id),
                         ModuleConfig.module_name == name,
                     )
                 )
-                dbc = result.scalar_one_or_none()
+                dbc: ModuleConfig | None = mod_result.scalar_one_or_none()
                 if dbc is None:
                     dbc = ModuleConfig(
                         guild_id=str(guild_id), module_name=name, enabled=enabled

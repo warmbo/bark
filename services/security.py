@@ -43,7 +43,9 @@ def _allowed_origins(config) -> set[str]:
         origins.add(f"{public.scheme}://{public.netloc}".lower())
     host = config.dashboard.host
     port = config.dashboard.port
-    if host and host not in {"0.0.0.0", "::", "[::]"}:
+    # A wildcard bind host (0.0.0.0/::/[::]) is not an actual origin hostname;
+    # excluding it below is deliberate, not an accidental IP literal.
+    if host and host not in {"0.0.0.0", "::", "[::]"}:  # nosec B104
         for scheme in ("http", "https"):
             origins.add(f"{scheme}://{host}:{port}".lower())
     for loopback in _LOOPBACK_HOSTS:
@@ -71,7 +73,9 @@ def trusted_origin_hosts(config) -> set[str]:
     if public.hostname:
         hosts.add(public.hostname.lower())
     host = config.dashboard.host
-    if host and host not in {"0.0.0.0", "::", "[::]"}:
+    # A wildcard bind host (0.0.0.0/::/[::]) is not a real dashboard hostname;
+    # excluding it below is deliberate, not an accidental IP literal.
+    if host and host not in {"0.0.0.0", "::", "[::]"}:  # nosec B104
         hosts.add(host.lower())
     hosts |= {h for h in _LOOPBACK_HOSTS if h not in {"[::1]"}}
     for extra in config.dashboard.trusted_origins:

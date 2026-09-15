@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from services.plugin_manager import (
     MAX_PLUGIN_BYTES,
@@ -44,8 +44,8 @@ class PluginOperations:
         registry: ModuleRegistry,
         guild_state: GuildModuleState,
         plugin_files: dict[str, Path],
-        enable_module: Callable[[str], object],
-        disable_module: Callable[[str], object],
+        enable_module: Callable[[str], Awaitable[bool]],
+        disable_module: Callable[[str], Awaitable[bool]],
         register_module: Callable[[BarkModule], None],
         register_module_api_routes: Callable[[str], None],
         registered_api_modules: set[str],

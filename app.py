@@ -121,7 +121,7 @@ async def main() -> None:
 
     for sig, signame in ((signal.SIGINT, "SIGINT"), (signal.SIGTERM, "SIGTERM")):
         try:
-            loop.add_signal_handler(sig, lambda s=signame: _request_shutdown(s))
+            loop.add_signal_handler(sig, lambda: _request_shutdown(signame))
         except (NotImplementedError, RuntimeError):
             # Non-POSIX platform (loop.add_signal_handler unavailable) — fall
             # back to asyncio.run's default KeyboardInterrupt handling.

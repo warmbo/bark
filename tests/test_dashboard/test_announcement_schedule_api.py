@@ -2,7 +2,7 @@
 
 import base64
 import json
-from types import SimpleNamespace
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -69,7 +69,7 @@ async def test_schedule_api_queues_without_sending_and_lists_job(db, monkeypatch
                 "message": "Daily update",
                 "as_embed": True,
                 "delivery_mode": "schedule",
-                "scheduled_for": "2026-09-01T15:30:00Z",
+                "scheduled_for": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
                 "timezone_name": "America/Chicago",
                 "recurrence_unit": "day",
                 "recurrence_interval": 1,
@@ -77,6 +77,7 @@ async def test_schedule_api_queues_without_sending_and_lists_job(db, monkeypatch
         )
         listed = await client.get("/api/v1/guilds/1/modules/announcements/schedules")
 
+        assert created.status_code == 200, created.text
         schedule_id = created.json()["data"]["id"]
         paused = await client.patch(
             f"/api/v1/guilds/1/modules/announcements/schedules/{schedule_id}",

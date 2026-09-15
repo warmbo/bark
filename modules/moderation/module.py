@@ -592,6 +592,8 @@ class ModerationModule(BarkModule):
             unit: str = "minutes",
             reason: str = "No reason",
         ):
+            if interaction.guild is None:
+                return
             guild_id = int(interaction.guild.id)
             cfg = await self.load_dashboard_config(guild_id)
             if duration is None or duration <= 0:
@@ -1635,20 +1637,31 @@ class ModerationModule(BarkModule):
                 await asyncio.sleep(300)  # Every 5 minutes
                 now = datetime.now(timezone.utc)
                 cutoff = now - timedelta(minutes=2)
-                # Prune message track — handles both datetime and (datetime, count) tuple entries
+                # Prune message track — handles both datetime and (datetime, count) tuple entries.
+                # Attachment-rate entries (_att_<uid>) are plain lists while
+                # message/mention tracks are deques; pop accordingly.
                 for gid in list(self._message_track.keys()):
                     for uid in list(self._message_track[gid].keys()):
                         track = self._message_track[gid][uid]
+
+                        def _drop() -> None:
+                            # Attachment-rate entries are plain lists; message/
+                            # mention tracks are deques.
+                            if isinstance(track, deque):
+                                track.popleft()
+                            else:
+                                track.pop(0)
+
                         while track:
                             first = track[0]
                             if isinstance(first, datetime):
                                 if first < cutoff:
-                                    track.popleft()
+                                    _drop()
                                 else:
                                     break
                             elif isinstance(first, tuple) and len(first) >= 1:
                                 if first[0] < cutoff:
-                                    track.popleft()
+                                    _drop()
                                 else:
                                     break
                             else:

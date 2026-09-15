@@ -86,6 +86,7 @@ def _with_alpha(rgb: tuple, alpha: int) -> tuple:
 def _vertical_gradient(w: int, h: int, top: tuple, bottom: tuple) -> Image.Image:
     img = Image.new("RGBA", (w, h))
     px = img.load()
+    assert px is not None  # a freshly created image always has pixel access
     for y in range(h):
         t = y / max(h - 1, 1)
         c = tuple(round(top[i] + (bottom[i] - top[i]) * t) for i in range(3))
@@ -251,7 +252,7 @@ def _draw_avatar(img: Image.Image, avatar: Image.Image | None, payload: dict,
 
     if avatar is None:
         avatar = _placeholder_avatar(payload, AVATAR_SIZE, theme)
-    avatar = avatar.resize((AVATAR_SIZE, AVATAR_SIZE), Image.LANCZOS).convert("RGBA")
+    avatar = avatar.resize((AVATAR_SIZE, AVATAR_SIZE), Image.Resampling.LANCZOS).convert("RGBA")
     img.paste(avatar, (cx - AVATAR_R, cy - AVATAR_R), _avatar_mask(AVATAR_SIZE))
 
     presence = (payload.get("user") or {}).get("presence", "offline")
@@ -273,7 +274,7 @@ def _fmt_int(n) -> str:
     return str(n)
 
 
-def _fmt_voice(minutes: int) -> str:
+def _fmt_voice(minutes: int | None) -> str:
     minutes = int(minutes or 0)
     h, m = divmod(minutes, 60)
     return f"{h}h{m:02d}m" if h else f"{m}m"

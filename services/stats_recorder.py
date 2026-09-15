@@ -81,7 +81,7 @@ async def _flush_pending() -> None:
                     row.channel_name = name
             for (guild_id, key), count in emoji.items():
                 guild = str(guild_id)
-                row = (
+                emoji_row = (
                     await session.execute(
                         select(DailyEmojiStat).where(
                             DailyEmojiStat.guild_id == str(guild),
@@ -90,7 +90,7 @@ async def _flush_pending() -> None:
                         )
                     )
                 ).scalar_one_or_none()
-                if row is None:
+                if emoji_row is None:
                     session.add(
                         DailyEmojiStat(
                             guild_id=str(guild_id),
@@ -100,15 +100,15 @@ async def _flush_pending() -> None:
                         )
                     )
                 else:
-                    row.count += count
+                    emoji_row.count += count
     except Exception:
         # Put the counters back so the next flush retries them rather than
         # silently dropping up to FLUSH_SECONDS of activity.
         for key, value in messages.items():
             _pending_messages[key][0] += value[0]
             _pending_messages[key][1] = value[1]
-        for key, count in emoji.items():
-            _pending_emoji[key] += count
+        for emoji_key, count in emoji.items():
+            _pending_emoji[emoji_key] += count
         logger.exception("Failed to flush pending stats (will retry next cycle)")
 
 

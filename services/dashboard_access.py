@@ -7,7 +7,7 @@ import urllib.parse
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.permissions import DashboardGuildAccess
@@ -410,6 +410,36 @@ async def user_shares_guild_with_bot(
         .limit(1)
     )
     return result.scalar_one_or_none() is not None
+
+
+async def refresh_member_roles(
+    session: AsyncSession,
+    discord_user_id: str,
+    guild_id: int | str,
+    role_ids: list[str] | None,
+) -> bool:
+    """Refresh a member's staff-role snapshot after a Discord member update.
+
+    The access row's ``roles`` column is written at login from the bot's
+    member cache; it feeds the owner-configured staff-role gating ("Ready to
+    manage" / per-guild moderation tier). When a member's roles change in
+    Discord (staff role added or removed), the snapshot must follow or the
+    dashboard keeps granting the old tier until the next login.
+
+    ``role_ids`` is the member's CURRENT role IDs. ``None`` means the update
+    could not be resolved — the snapshot is CLEARED (fail closed): an
+    unresolved member state must not retain a stale staff-role grant.
+    Returns True when a row was actually updated.
+    """
+    result = await session.execute(
+        update(DashboardGuildAccess)
+        .where(
+            DashboardGuildAccess.user_discord_id == discord_user_id,
+            DashboardGuildAccess.guild_id == str(guild_id),
+        )
+        .values(roles=",".join(role_ids) if role_ids else "")
+    )
+    return (getattr(result, "rowcount", 0) or 0) > 0
 
 
 async def revoke_user_guild_access(

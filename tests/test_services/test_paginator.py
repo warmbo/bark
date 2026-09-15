@@ -31,7 +31,10 @@ def _send_two_pages():
     msg = _make_msg()
     interaction = MagicMock()
     interaction.user.id = 42
-    interaction.response.send_message = AsyncMock(return_value=msg)
+    interaction.response.send_message = AsyncMock()
+    # discord.py 2.4+ returns an InteractionCallbackResponse placeholder from
+    # response.send_message; the real message comes from original_response().
+    interaction.original_response = AsyncMock(return_value=msg)
     asyncio.run(pag.send(interaction, [discord.Embed(title="p1"), discord.Embed(title="p2")]))
     return pag, msg
 
@@ -47,7 +50,8 @@ def test_send_skips_reactions_for_single_page():
     msg = _make_msg()
     interaction = MagicMock()
     interaction.user.id = 42
-    interaction.response.send_message = AsyncMock(return_value=msg)
+    interaction.response.send_message = AsyncMock()
+    interaction.original_response = AsyncMock(return_value=msg)
     asyncio.run(pag.send(interaction, [discord.Embed(title="p1")]))
     assert msg.add_reaction.await_count == 0
 

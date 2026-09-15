@@ -80,7 +80,7 @@ class ModuleManager:
         # (e.g. /bark trivia start instead of /trivia start).
         self._bark_group: Group | None = None
         # module -> {command name -> owning subgroup (None = direct /bark child)}
-        self._command_owners: dict[str, dict[str, object]] = {}
+        self._command_owners: dict[str, dict[str, Group]] = {}
         # module -> {command name -> registered prefix Command} (text commands)
         self._prefix_commands: dict[str, dict[str, object]] = {}
         # Single /bark dispatcher: one slash command hosting every module command.

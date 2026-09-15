@@ -5,6 +5,9 @@ Returns everything a page needs to render navigation, search,
 quick actions, and cross-module links in a single endpoint.
 """
 
+import re
+
+import httpx
 from fastapi import APIRouter, Request
 
 from database.engine import session_scope
@@ -13,9 +16,11 @@ from services.slug_router import get_guild_slug
 
 router = APIRouter(tags=["api-manifest"])
 
+PLUGIN_README_URL = "https://raw.githubusercontent.com/warmbo/bark-plugins/main/README.md"
 
-def _repo_plugin_entries() -> list[dict[str, object]]:
-    """Best-effort remote catalog from the public bark-plugins README.
+
+def _parse_plugin_readme(text: str) -> list[dict[str, object]]:
+    """Best-effort remote catalog parsed from the public bark-plugins README.
 
     Only rows whose File cell is a markdown link to a real ``plugins/*.py``
     file are surfaced as installable. The README also carries a "Plugin ideas
@@ -23,21 +28,9 @@ def _repo_plugin_entries() -> list[dict[str, object]]:
     so the catalog never lists plugins that can't actually be installed. The
     file path is extracted from the link so download/install works.
     """
-    try:
-        import re
-        import urllib.request
-
-        file_link = re.compile(
-            r"\[`?plugins/([a-z0-9_]+)\.py`?\]\(plugins/\1\.py\)"
-        )
-        with urllib.request.urlopen(
-            "https://raw.githubusercontent.com/warmbo/bark-plugins/main/README.md",
-            timeout=2,
-        ) as resp:
-            text = resp.read().decode("utf-8", errors="ignore")
-    except Exception:
-        return []
-
+    file_link = re.compile(
+        r"\[`?plugins/([a-z0-9_]+)\.py`?\]\(plugins/\1\.py\)"
+    )
     rows: list[dict[str, object]] = []
     for line in text.splitlines():
         if not line.startswith("| "):
@@ -62,9 +55,25 @@ def _repo_plugin_entries() -> list[dict[str, object]]:
     return rows
 
 
+async def _repo_plugin_entries() -> list[dict[str, object]]:
+    """Fetch and parse the plugin catalog with async httpx.
+
+    The previous implementation used blocking ``urllib.request.urlopen``
+    inside an async endpoint, freezing the event loop for the whole fetch
+    (and tripping bandit's urlopen rule). Async httpx keeps the loop free.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=2.0, follow_redirects=True) as client:
+            resp = await client.get(PLUGIN_README_URL)
+            resp.raise_for_status()
+            return _parse_plugin_readme(resp.text)
+    except Exception:
+        return []
+
+
 @router.get("/guilds/plugin-catalog")
 async def get_plugin_catalog(request: Request):
-    return api_success({"plugins": _repo_plugin_entries()})
+    return api_success({"plugins": await _repo_plugin_entries()})
 
 
 CORE_PAGES = [
@@ -142,11 +151,12 @@ async def get_guild_manifest(request: Request, guild_id: int):
     # stripped manifest: the sidebar shows only the Dashboard entry and no
     # module or management surfaces are advertised.
     if getattr(request.state, "guild_viewer", False):
-        dashboard_page = {**CORE_PAGES[0], "route": f"/guild/{guild_id}"}
         # Viewers can see the read-only Dashboard and Statistics pages, but no
         # module or management surfaces.
-        stats_page = {**CORE_PAGES[2], "route": f"/guild/{guild_id}/stats"}
-        viewer_pages = [dashboard_page, stats_page]
+        viewer_pages: list[dict[str, object]] = [
+            {**CORE_PAGES[0], "route": f"/guild/{guild_id}"},
+            {**CORE_PAGES[2], "route": f"/guild/{guild_id}/stats"},
+        ]
         return api_success(
             {
                 "guild": guild_meta,

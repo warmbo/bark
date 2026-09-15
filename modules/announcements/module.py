@@ -406,7 +406,7 @@ class AnnouncementsModule(BarkModule):
             if not embed_color:
                 cfg = await self.load_dashboard_config(int(guild_id))
                 embed_color = str((cfg or {}).get("default_embed_color", "") or "").strip()
-            image_url = str(data.get("image_url", "") or "").strip()
+            image_url: str | None = str(data.get("image_url", "") or "").strip()
             video_url = str(data.get("video_url", "") or "").strip()
 
             # Media picker payload: [{"type": "image"|"video", "url": "..."}]

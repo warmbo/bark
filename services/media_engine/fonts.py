@@ -29,7 +29,9 @@ FALLBACKS: dict[str, list[str]] = {
 
 EMOJI_FONT_NAMES = ["NotoColorEmoji.ttf", "NotoColorEmoji-Regular.ttf"]
 
-_cache: dict[tuple[str, int, str], ImageFont.FreeTypeFont] = {}
+# Keyed on (role, size, display font, mono font) — both theme filenames
+# participate so a theme swap never serves a stale face.
+_cache: dict[tuple[str, int, str, str], ImageFont.FreeTypeFont] = {}
 
 
 def resolve_path(role: str, theme_fonts: dict, size: int = 16) -> str:
@@ -106,7 +108,7 @@ def emoji_glyph(char: str, size: int) -> Image.Image | None:
     if ratio != 1.0:
         glyph = glyph.resize(
             (max(1, int(glyph.width * ratio)), max(1, int(glyph.height * ratio))),
-            Image.LANCZOS,
+            Image.Resampling.LANCZOS,
         )
     return glyph
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import FileSystemLoader
 
 from config import config
 from database.engine import session_scope
@@ -43,7 +44,11 @@ def _resolve_module_template(template: str) -> Path:
 # Mirror the dashboard app loader: module tab templates are colocated under
 # each module's own ``templates/`` directory, so the project root must be a
 # search path for ``{% include %}`` to resolve them.
-templates.env.loader.searchpath.append(str(REPO_ROOT))
+# Jinja2Templates always installs a FileSystemLoader; the isinstance guard
+# only narrows the loader's ``BaseLoader | None`` declared type.
+_loader = templates.env.loader
+if isinstance(_loader, FileSystemLoader):
+    _loader.searchpath.append(str(REPO_ROOT))
 
 
 @router.get("/modules", response_class=HTMLResponse)
@@ -187,14 +192,11 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
     for tab in module.get_extra_tabs():
         tab = dict(tab or {})
         if tab.get("html"):
-            # Plugin-supplied inline html is trusted UI (it is authored by the
-            # plugin author, not the end user) and is rendered by the module
-            # page. Mark it as safe Markup so Jinja does not double-escape it
-            # while still escaping any user-controlled strings the plugin
-            # interpolates.
+            # Plugins are trusted executable code. They must escape any user
+            # values before returning inline HTML; Markup does not sanitize it.
             from markupsafe import Markup
 
-            tab["html"] = Markup(tab["html"])
+            tab["html"] = Markup(tab["html"])  # nosec B704
             extra_tabs.append(tab)
             continue
         template = tab.get("template")

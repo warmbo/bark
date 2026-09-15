@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -80,7 +81,11 @@ def create_app(bot: BarkBot) -> DashboardApp:
     # colocated templates without re-coupling them into the shared tree.
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     repo_root = TEMPLATES_DIR.parent.parent
-    templates.env.loader.searchpath.append(str(repo_root))
+    # Jinja2Templates always installs a FileSystemLoader; the isinstance guard
+    # only narrows the loader's ``BaseLoader | None`` declared type.
+    _loader = templates.env.loader
+    if isinstance(_loader, FileSystemLoader):
+        _loader.searchpath.append(str(repo_root))
     templates.env.globals.setdefault("config", config)
 
     # Every API error goes through the standard envelope. FastAPI's default

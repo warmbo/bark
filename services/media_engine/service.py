@@ -11,6 +11,7 @@ import hashlib
 import io
 import logging
 from pathlib import Path
+from typing import Any
 
 import httpx
 from PIL import Image, UnidentifiedImageError
@@ -61,7 +62,7 @@ async def collect_payload(kind: str, guild_id: str, user_id: str) -> dict:
     The plugin merges these with LIVE Discord facts (user/roles/channel
     names) it supplies itself — the engine never touches Discord.
     """
-    empty = {"reputation": {}, "activity": {}, "badges": [], "favorites": []}
+    empty: dict[str, Any] = {"reputation": {}, "activity": {}, "badges": [], "favorites": []}
     if not get_config().media_db_path:
         return empty
     engine = connect_readonly(get_config().media_db_path)

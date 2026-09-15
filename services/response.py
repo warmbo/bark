@@ -154,6 +154,68 @@ def check_api_permission(request, action: str, guild_id=None) -> bool:
     return result
 
 
+async def recheck_api_permission(request, action: str, guild_id: int | str, user_id: str) -> bool:
+    """Re-verify an action against CURRENT DB state for a long-lived request.
+
+    ``check_api_permission`` reads the session role derived when the request
+    arrived; a request that outlives that moment (an SSE stream) would keep
+    the stale role forever. This re-derives the user's role for the guild
+    from the DB (fresh membership/capability state — access row plus the
+    owner-configured staff roles) and checks ``action`` with the same
+    per-module overrides. Fail closed: any resolution error (missing row, DB
+    failure, unknown user) denies, so a revoked grant stops promptly instead
+    of streaming on with yesterday's role.
+    """
+    from config import config
+
+    if not config.oauth2.enabled:
+        return True  # permissive mode — mirrors check_api_permission
+    from database.engine import session_scope
+    from services.dashboard_access import (
+        get_dashboard_admin_role,
+        get_dashboard_moderator_roles,
+        get_user_guild_access_row,
+        role_from_access_with_staff_roles,
+    )
+
+    try:
+        async with session_scope() as session:
+            access = await get_user_guild_access_row(session, user_id, guild_id)
+            if access is None:
+                return False  # no membership row — not even a member anymore
+            moderator_roles = await get_dashboard_moderator_roles(session, [str(guild_id)])
+            admin_role = await get_dashboard_admin_role(session, [str(guild_id)])
+        # Mirrors AuthMiddleware's per-guild derivation exactly (same function,
+        # same arguments — no implicit instance-owner or Discord-admin grant).
+        role = role_from_access_with_staff_roles(
+            access,
+            moderator_roles.get(str(guild_id), set()),
+            admin_role.get(str(guild_id)),
+        )
+        module_name = _module_name_for_action(request, action, str(guild_id))
+        if module_name is not None:
+            # get_module_min_role opens its own session — keep it inside the
+            # try so a DB failure here also fails closed instead of raising
+            # out of recheck and killing the caller's revalidation loop.
+            override = await get_module_min_role(module_name, guild_id)
+            required = (
+                override
+                if override is not None
+                else _permission_service.get_required_role_for_action(action)
+            )
+        else:
+            required = _permission_service.get_required_role_for_action(action)
+        return _permission_service.role_has_access(role, required)
+    except Exception:
+        logger.warning(
+            "Authorization recheck failed for user %s guild %s — denying",
+            user_id,
+            guild_id,
+            exc_info=True,
+        )
+        return False
+
+
 def get_capabilities(request) -> dict[str, bool]:
     """Expose the same capabilities enforced by mutation middleware."""
     bot = getattr(getattr(request, "state", None), "bot", None)

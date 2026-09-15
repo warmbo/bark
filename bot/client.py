@@ -423,6 +423,48 @@ class BarkBot(commands.Bot):
                 member.guild.id,
             )
 
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        """Refresh the dashboard staff-role snapshot when a member's roles change.
+
+        The dashboard authorizes configured staff-role grants from a role
+        snapshot written at login; without this, a member whose staff role
+        was removed keeps their dashboard manage tier until they log in
+        again. Updating on every Discord role change keeps the snapshot
+        tracking live state, so revocations take effect immediately (and the
+        SSE stream's periodic revalidation picks them up). Nickname/avatar
+        updates with unchanged roles skip the write.
+        """
+        try:
+            from database.engine import session_scope
+            from services.dashboard_access import refresh_member_roles
+
+            before_ids = {role.id for role in before.roles}
+            after_ids = {role.id for role in after.roles}
+            if before_ids == after_ids:
+                return
+            async with session_scope() as session:
+                updated = await refresh_member_roles(
+                    session,
+                    str(after.id),
+                    after.guild.id,
+                    [str(role.id) for role in after.roles],
+                )
+                if updated:
+                    logger.info(
+                        "Refreshed dashboard role snapshot for user %s in guild %s "
+                        "(%d roles -> %d)",
+                        after.id,
+                        after.guild.id,
+                        len(before_ids),
+                        len(after_ids),
+                    )
+        except Exception:  # never let membership bookkeeping break the bot
+            logger.exception(
+                "Failed to refresh dashboard role snapshot on member update "
+                "(guild %s)",
+                getattr(getattr(after, "guild", None), "id", "?"),
+            )
+
     async def on_voice_state_update(
         self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState
     ) -> None:

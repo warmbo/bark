@@ -238,7 +238,7 @@ class HelpModule(BarkModule):
                 1 for m in guild.members if getattr(m, "status", None) is not None and m.status != discord.Status.offline
             )
             bots = sum(1 for m in guild.members if m.bot)
-            humans = guild.member_count - bots
+            humans = (guild.member_count or 0) - bots
             # guild.created_at is timezone-aware in discord.py, but guard
             # against naive datetimes (e.g. test fakes) before subtracting.
             now = discord.utils.utcnow()

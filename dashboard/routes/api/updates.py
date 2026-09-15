@@ -111,7 +111,7 @@ async def instance_diagnostics(request: Request):
     # bot connection status / "runtime unavailable" rather than silently
     # omitting the module+guild diagnostics.
     try:
-        runtime = await build_runtime_diagnostics(bot)
+        runtime = build_runtime_diagnostics(bot)
         report.update(runtime)
     except Exception as exc:  # runtime is best-effort; never break the report
         logger.warning("build_runtime_diagnostics failed: %s", exc)

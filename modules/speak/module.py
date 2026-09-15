@@ -197,15 +197,15 @@ class SpeakModule(BarkModule):
 
             await interaction.response.send_message(str(text))
             try:
-                cfg = await self._load_phrases(interaction.guild_id)
+                cfg = await self._load_phrases(guild_id)  # guild_id narrowed non-None above
             except Exception:
                 cfg = {}
             delay = int((cfg or {}).get("delete_delay_seconds") or 0)
             if delay > 0 and interaction.response.is_done():
-                message = await interaction.original_response()
-                if message:
+                sent = await interaction.original_response()
+                if sent:
                     self.ctx.bot.loop.call_later(
-                        delay, lambda m=message: self.ctx.bot.loop.create_task(m.delete())
+                        delay, lambda: self.ctx.bot.loop.create_task(sent.delete())
                     )
 
         return speak_cmd
@@ -247,6 +247,7 @@ class SpeakModule(BarkModule):
             phrases, error = validate_phrases(data.get("phrases"))
             if error is not None:
                 return api_error(error, status_code=400)
+            phrases = phrases or {}
 
             config = await self.load_dashboard_config(int(guild_id))
             config["phrases"] = phrases

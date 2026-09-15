@@ -244,7 +244,7 @@ class BarkArgsModal(discord.ui.Modal):
         for p in leaf.command.parameters:
             label = (p.name or "value")[:45]
             placeholder = ((p.description or "") or p.name or "")[:100]
-            field = discord.ui.TextInput(
+            field: discord.ui.TextInput = discord.ui.TextInput(
                 label=label,
                 placeholder=placeholder,
                 required=bool(getattr(p, "required", False)),

@@ -62,10 +62,16 @@ class ReactionPaginator:
         if view is not None:
             kwargs["view"] = view
         try:
-            msg = await interaction.response.send_message(**kwargs)
+            await interaction.response.send_message(**kwargs)
         except Exception:
             logger.debug("response already used; sending paginated menu as followup")
             msg = await interaction.followup.send(**kwargs)
+        else:
+            # discord.py 2.4+ returns an InteractionCallbackResponse placeholder
+            # (synthetic id, no add_reaction) from response.send_message — fetch
+            # the real message so sessions track its true id and reactions can
+            # be armed (pre-2.4 this returned None and msg.id crashed outright).
+            msg = await interaction.original_response()
         self._prune_expired()
         self._sessions[msg.id] = {
             "pages": pages,

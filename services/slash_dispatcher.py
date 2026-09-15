@@ -176,7 +176,7 @@ class SlashDispatcher:
         ) -> None:
             await self.dispatch(interaction, command, args)
 
-        cmd = app_commands.Command(
+        cmd: app_commands.Command = app_commands.Command(
             name=group_name,
             description="Bark commands — type a command (e.g. help, warn @user) or leave blank for the menu.",
             callback=_callback,
@@ -296,7 +296,7 @@ class SlashDispatcher:
         same parameters and the same module enablement check.
         """
         orig = leaf.command
-        alias_cmd = app_commands.Command(
+        alias_cmd: app_commands.Command = app_commands.Command(
             name=alias,
             description=getattr(orig, "description", "") or "",
             callback=orig.callback,
@@ -793,9 +793,8 @@ async def _resolve_member(interaction, raw: str):
     if guild is None:
         return None
     raw = raw.strip()
-    target_id = _extract_id(raw, "<@", ">")
-    if target_id is None:
-        target_id = raw
+    extracted = _extract_id(raw, "<@", ">")
+    target_id = str(extracted) if extracted is not None else raw
     try:
         member = guild.get_member(int(target_id)) or await guild.fetch_member(int(target_id))
         if member is not None:
