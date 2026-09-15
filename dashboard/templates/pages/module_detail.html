@@ -38,7 +38,11 @@
     <div class="workspace-split">
       <div class="workspace-split-main">
         <div class="operation-grid">
+    {% set ns = namespace(danger_open=false) %}
     {% for action in module_data.actions %}
+      {% if action.destructive and not ns.danger_open %}{% set ns.danger_open = true %}
+      <h2 class="grid-section-label danger-zone-label">{{ icon('alert-triangle', 14) }} Maintenance &amp; destructive actions</h2>
+      {% endif %}
       <article class="content-card action-card {{ 'auto-run' if action.auto_run else '' }}" id="action-{{ action.id }}">
         <div class="card-header"><div><h2 class="card-title">{{ icon('zap', 16) }} {{ action.label }}</h2>{% if action.description %}<p class="card-description">{{ action.description }}</p>{% endif %}</div>{% if action.destructive %}{{ status_badge('Destructive', 'danger') }}{% endif %}</div>
         <div class="config-body">

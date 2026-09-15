@@ -2229,6 +2229,49 @@ async def test_module_action_fields_render_with_browser_valid_types(client, app)
 
 
 @pytest.mark.asyncio
+async def test_destructive_actions_are_grouped_under_a_maintenance_heading(client, app):
+    """Routine tools render first; flagged destructive actions follow a single
+    "Maintenance & destructive actions" heading (sorted danger-last, so the
+    order the module declares them in is irrelevant)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    module = MagicMock()
+    module.version = "1.0.0"
+    module.description = "Moderation maintenance"
+    module.author = "Bark"
+    module.get_settings_schema.return_value = {}
+    module.get_commands.return_value = []
+    module.get_events.return_value = []
+    module.get_dashboard_pages.return_value = []
+    module.get_about.return_value = []
+    # Declared destructive-first on purpose: the route must reorder them.
+    module.get_actions.return_value = [
+        {"id": "purge", "label": "Purge", "endpoint": "purge", "destructive": True, "fields": []},
+        {"id": "warn", "label": "Quick Warn", "endpoint": "warn", "fields": []},
+        {
+            "id": "archive",
+            "label": "Archive",
+            "endpoint": "archive",
+            "destructive": True,
+            "fields": [],
+        },
+    ]
+    module.load_dashboard_config = AsyncMock(return_value={})
+    app.state.bot.modules.get_module.return_value = module
+    app.state.bot.modules.get_all_modules.return_value = {"moderation": module}
+
+    response = await client.get("/guild/1/modules/moderation")
+
+    assert response.status_code == 200
+    html = response.text
+    heading = "Maintenance &amp; destructive actions"
+    assert html.count(heading) == 1, "one heading for the whole danger group"
+    assert html.index("Quick Warn</h2>") < html.index(heading)
+    assert html.index(heading) < html.index("Purge</h2>")
+    assert html.index(heading) < html.index("Archive</h2>")
+
+
+@pytest.mark.asyncio
 async def test_module_without_actions_has_no_operate_tab(client, app):
     """A configuration-only module opens on Configure, not an empty Operate tab."""
     from unittest.mock import AsyncMock, MagicMock

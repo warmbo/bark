@@ -149,8 +149,14 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in oklab, var(--ring) 32%, transparent); outline-offset: -1px; box-shadow: none; }.form-label { color: var(--foreground); font-size: 1rem; font-weight: 550; }.toggle-slider { border-radius: var(--radius-full); background: var(--input); border: 1px solid var(--border); }.toggle-switch input:checked + .toggle-slider { background: var(--primary); }/* Module config forms: numeric inputs don't need full width, and boolean
-   toggles in a grid align to the label row (audit 2026-08-19 module pass). */
-.form-input[type="number"] { max-width: 180px; }
+   toggles in a grid align to the label row (audit 2026-08-19 module pass).
+   Width comes from tokens.css (--field-width-numeric) so the field-width
+   contract has one home. */
+.form-input[type="number"] { max-width: var(--field-width-numeric); }
+/* Inside a module action card the card is already narrow (380px in a 2-up
+   grid), so a 180px cap left dead space beside the field. Fill the card track
+   instead; the cap still applies to settings/config forms. */
+.action-card .form-input[type="number"] { max-width: none; }
 .form-grid .form-group, .form-grid-2 .form-group, .form-grid-3 .form-group { align-self: start; }
 .form-grid .form-group:has(.toggle-switch) .form-label-row { min-height: 28px; align-items: center; }/* Micro-motion (P5, audit 2026-08-19): subtle entrance for dialogs and tab
    panels. The global prefers-reduced-motion block neutralizes both to ~0ms. */

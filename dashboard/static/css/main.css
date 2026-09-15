@@ -65,6 +65,9 @@
     --radius-full: 999px;  /* pills, avatars, scrollbar thumbs — not a control corner */
     --control-height-sm: 34px;
     --control-height: 44px;
+    /* Field widths (see docs/design-contract.md): numeric/threshold fields stay
+       compact; every other control fills its form track. */
+    --field-width-numeric: 180px;
     --font-size-caption: 15px;
     --font-size-body: 16px;
     --font-size-title: clamp(28px, 2.5vw, 36px);
@@ -2045,7 +2048,13 @@ textarea:focus-visible,
 .dialog-overlay { position: fixed; inset: 0; z-index: var(--z-dialog); display: grid; place-items: center; padding: 24px; background: var(--c-scrim-74); backdrop-filter: var(--glass-blur-light); }.app-dialog { width: min(460px, 100%); display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 22px; border: 1px solid var(--border-hover); background: var(--bg-card-solid); box-shadow: var(--shadow-lg); }.app-dialog h2 { margin-bottom: 6px; font-size: 18px; }.app-dialog p { color: var(--text-secondary); }.dialog-icon { color: var(--yellow); }.dialog-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }.dialog-input-wrap { grid-column: 1 / -1; }.dialog-input-wrap .form-input { width: 100%; padding: 10px 12px; font-size: 15px; }.dialog-grid-wrap { grid-column: 1 / -1; }.dialog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 320px; overflow-y: auto; }.dialog-grid-cell { position: relative; padding: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; background: var(--bg-elevated); cursor: pointer; }.dialog-grid-cell:hover { border-color: var(--blue-semantic); }.dialog-grid-cell img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }.dialog-grid-delete { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: var(--c-red-deep90); color: var(--c-white); font-size: 15px; line-height: 1; cursor: pointer; }.dialog-grid-delete:hover { background: var(--c-red-deep); }/* ── Native module workspaces ──────────────────────── */
 .module-workspace { container-type: inline-size; }.module-workspace-header { margin-bottom: 22px; }.workspace-tabs { position: sticky; top: 42px; z-index: 20; margin-bottom: 16px; overflow-x: auto; overscroll-behavior-inline: contain; background: var(--c-scrim-96); }.workspace-form-card { max-width: none; }.form-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0 16px; }.operation-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; align-items: start; }/* A lone action card (e.g. Announcements "Post announcement") should span the
    full workspace instead of being stranded in one grid column. */
-.operation-grid:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }.definition-list > div { display: grid; grid-template-columns: 90px 1fr; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); }.definition-list dt { color: var(--text-tertiary); }.guild-icon-small, .guild-bar-icon, .guild-card-icon img { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
+.operation-grid:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+/* Maintenance/destructive group heading, rendered by module_detail.html where
+   the first destructive action starts (actions are sorted danger-last in
+   dashboard/routes/web/modules.py). Spans the grid so it reads as a section
+   break rather than a card. */
+.grid-section-label { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); }
+.danger-zone-label { color: var(--red); }.definition-list > div { display: grid; grid-template-columns: 90px 1fr; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); }.definition-list dt { color: var(--text-tertiary); }.guild-icon-small, .guild-bar-icon, .guild-card-icon img { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
 /* Five desktop workspace tiers: compact, standard, large, wide, ultrawide. */
 @media (max-width: 1024px) { .operation-grid, .detail-grid { grid-template-columns: 1fr; }
 .context-palette-button kbd { display: none; }}@media (min-width: 1025px) and (max-width: 1279px) { .operation-grid { grid-template-columns: 1fr; }}@media (min-width: 1280px) and (max-width: 1919px) {
@@ -2562,8 +2571,14 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus { border-color: var(--ring); outline: 2px solid color-mix(in oklab, var(--ring) 32%, transparent); outline-offset: -1px; box-shadow: none; }.form-label { color: var(--foreground); font-size: 1rem; font-weight: 550; }.toggle-slider { border-radius: var(--radius-full); background: var(--input); border: 1px solid var(--border); }.toggle-switch input:checked + .toggle-slider { background: var(--primary); }/* Module config forms: numeric inputs don't need full width, and boolean
-   toggles in a grid align to the label row (audit 2026-08-19 module pass). */
-.form-input[type="number"] { max-width: 180px; }
+   toggles in a grid align to the label row (audit 2026-08-19 module pass).
+   Width comes from tokens.css (--field-width-numeric) so the field-width
+   contract has one home. */
+.form-input[type="number"] { max-width: var(--field-width-numeric); }
+/* Inside a module action card the card is already narrow (380px in a 2-up
+   grid), so a 180px cap left dead space beside the field. Fill the card track
+   instead; the cap still applies to settings/config forms. */
+.action-card .form-input[type="number"] { max-width: none; }
 .form-grid .form-group, .form-grid-2 .form-group, .form-grid-3 .form-group { align-self: start; }
 .form-grid .form-group:has(.toggle-switch) .form-label-row { min-height: 28px; align-items: center; }/* Micro-motion (P5, audit 2026-08-19): subtle entrance for dialogs and tab
    panels. The global prefers-reduced-motion block neutralizes both to ~0ms. */

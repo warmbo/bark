@@ -62,6 +62,9 @@
     --radius-full: 999px;  /* pills, avatars, scrollbar thumbs — not a control corner */
     --control-height-sm: 34px;
     --control-height: 44px;
+    /* Field widths (see docs/design-contract.md): numeric/threshold fields stay
+       compact; every other control fills its form track. */
+    --field-width-numeric: 180px;
     --font-size-caption: 15px;
     --font-size-body: 16px;
     --font-size-title: clamp(28px, 2.5vw, 36px);

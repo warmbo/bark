@@ -224,7 +224,10 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
         "dashboard_pages": [
             {"route": p.route, "label": p.label} for p in module.get_dashboard_pages()
         ],
-        "actions": module.get_actions(),
+        # Routine operator tools first, destructive maintenance last: the
+        # workspace renders a labelled divider where the danger group starts.
+        # ponytail: stable sort on the flag modules already set — no new schema.
+        "actions": sorted(module.get_actions(), key=lambda action: bool(action.get("destructive"))),
         "about": module.get_about(),
         "extra_tabs": extra_tabs,
         "show_configure_tab": module.show_configure_tab,
