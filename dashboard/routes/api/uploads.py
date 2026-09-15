@@ -131,7 +131,9 @@ async def upload_image(request: Request, guild_id: str, file: UploadFile = File(
 
     sniffed = sniff_image(payload)
     if sniffed is None:
-        return api_error("File contents are not a valid PNG, JPEG, GIF, or WebP image", status_code=400)
+        return api_error(
+            "File contents are not a valid PNG, JPEG, GIF, or WebP image", status_code=400
+        )
 
     directory = _guild_uploads_dir(guild_id)
     try:

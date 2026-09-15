@@ -27,9 +27,7 @@ async def test_create_backup_makes_valid_snapshot(db):
     assert path.is_file()
     con = sqlite3.connect(path)
     try:
-        tables = con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        tables = con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     finally:
         con.close()
     assert any("guilds" in t for t in [r[0] for r in tables])
@@ -55,9 +53,7 @@ def test_backup_filename_regex():
 def test_source_db_path_parses_sqlite_url(monkeypatch, tmp_path):
     import config
 
-    monkeypatch.setattr(
-        config.config.database, "url", f"sqlite+aiosqlite:///{tmp_path}/x.db"
-    )
+    monkeypatch.setattr(config.config.database, "url", f"sqlite+aiosqlite:///{tmp_path}/x.db")
     from services.backup_service import _source_db_path
 
     assert _source_db_path() == tmp_path / "x.db"
@@ -224,9 +220,7 @@ def test_failed_migration_can_roll_back_applied_restore(monkeypatch, tmp_path):
     assert status["rollback_reason"] == "migration failed"
 
 
-def test_incomplete_pending_restore_is_quarantined_without_blocking_startup(
-    monkeypatch, tmp_path
-):
+def test_incomplete_pending_restore_is_quarantined_without_blocking_startup(monkeypatch, tmp_path):
     import config
     from services.backup_service import apply_pending_restore_sync
 
@@ -276,9 +270,7 @@ def test_concurrent_restore_staging_keeps_database_and_marker_matched(monkeypatc
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(
             executor.map(
-                lambda item: stage_database_restore_sync(
-                    item, source_name=f"{item.stem}.db"
-                ),
+                lambda item: stage_database_restore_sync(item, source_name=f"{item.stem}.db"),
                 sources,
             )
         )

@@ -82,10 +82,7 @@ async def get_dashboard_moderator_roles(
             GuildSetting.key == MODERATOR_ROLES_SETTING,
         )
     )
-    return {
-        row.guild_id: parse_moderator_role_ids(row.value)
-        for row in result.scalars().all()
-    }
+    return {row.guild_id: parse_moderator_role_ids(row.value) for row in result.scalars().all()}
 
 
 async def get_dashboard_admin_role(
@@ -110,10 +107,7 @@ async def get_dashboard_admin_role(
             GuildSetting.key == ADMIN_ROLE_SETTING,
         )
     )
-    return {
-        row.guild_id: parse_admin_role_id(row.value)
-        for row in result.scalars().all()
-    }
+    return {row.guild_id: parse_admin_role_id(row.value) for row in result.scalars().all()}
 
 
 def user_ready_to_manage(

@@ -70,7 +70,10 @@ async def test_reputation_read_routes_enforce_module_view_permission(db, monkeyp
     assert response.status_code == 403
     # A member with no manage grant is blocked at the middleware before the
     # module's permission check can run.
-    assert "permission to manage" in response.json()["error"] or "isn't installed" in response.json()["error"]
+    assert (
+        "permission to manage" in response.json()["error"]
+        or "isn't installed" in response.json()["error"]
+    )
 
 
 def _manager_bot():
@@ -144,9 +147,7 @@ async def _seeded_tiers(db):
 
 
 @pytest.mark.asyncio
-async def test_tiers_list_returns_ladder_sorted_by_sort_order(
-    db, _seeded_tiers, monkeypatch
-):
+async def test_tiers_list_returns_ladder_sorted_by_sort_order(db, _seeded_tiers, monkeypatch):
     import config
     from dashboard import create_app
 
@@ -302,9 +303,7 @@ async def test_tier_create_rejects_duplicate_name(db, _seeded_tiers, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_tier_delete_removes_and_re_tiers_profiles(
-    db, _seeded_tiers, monkeypatch
-):
+async def test_tier_delete_removes_and_re_tiers_profiles(db, _seeded_tiers, monkeypatch):
     import config
     from dashboard import create_app
 
@@ -339,9 +338,7 @@ async def test_tier_delete_removes_and_re_tiers_profiles(
         base_url="http://test",
         cookies=dict(session=_session_cookie("admin")),
     ) as client:
-        response = await client.delete(
-            "/api/v1/guilds/1/modules/reputation/tiers/Scout"
-        )
+        response = await client.delete("/api/v1/guilds/1/modules/reputation/tiers/Scout")
 
     assert response.status_code == 200
 
@@ -379,22 +376,16 @@ async def test_tier_delete_rejects_last_tier(db, _seeded_tiers, monkeypatch):
         base_url="http://test",
         cookies=dict(session=_session_cookie("admin")),
     ) as client:
-        first = await client.delete(
-            "/api/v1/guilds/1/modules/reputation/tiers/Scout"
-        )
+        first = await client.delete("/api/v1/guilds/1/modules/reputation/tiers/Scout")
         assert first.status_code == 200
-        last = await client.delete(
-            "/api/v1/guilds/1/modules/reputation/tiers/Recruit"
-        )
+        last = await client.delete("/api/v1/guilds/1/modules/reputation/tiers/Recruit")
 
     assert last.status_code == 400
     assert "last tier" in last.json()["error"]
 
 
 @pytest.mark.asyncio
-async def test_generate_roles_creates_and_links_missing_roles(
-    db, _seeded_tiers, monkeypatch
-):
+async def test_generate_roles_creates_and_links_missing_roles(db, _seeded_tiers, monkeypatch):
     import config
     from dashboard import create_app
 
@@ -443,9 +434,7 @@ async def test_generate_roles_creates_and_links_missing_roles(
         base_url="http://test",
         cookies=dict(session=_session_cookie("admin")),
     ) as client:
-        response = await client.post(
-            "/api/v1/guilds/1/modules/reputation/tiers/generate-roles"
-        )
+        response = await client.post("/api/v1/guilds/1/modules/reputation/tiers/generate-roles")
 
     assert response.status_code == 200
     data = response.json()["data"]
@@ -471,9 +460,7 @@ async def test_generate_roles_creates_and_links_missing_roles(
 
 
 @pytest.mark.asyncio
-async def test_generate_roles_reports_missing_permission(
-    db, _seeded_tiers, monkeypatch
-):
+async def test_generate_roles_reports_missing_permission(db, _seeded_tiers, monkeypatch):
     import config
     from dashboard import create_app
 
@@ -489,9 +476,7 @@ async def test_generate_roles_reports_missing_permission(
         id = 1
 
         async def create_role(self, **kwargs):
-            raise discord.Forbidden(
-                response=MagicMock(status=403), message="no perms"
-            )
+            raise discord.Forbidden(response=MagicMock(status=403), message="no perms")
 
         def get_role(self, rid):
             return None
@@ -507,18 +492,14 @@ async def test_generate_roles_reports_missing_permission(
         base_url="http://test",
         cookies=dict(session=_session_cookie("admin")),
     ) as client:
-        response = await client.post(
-            "/api/v1/guilds/1/modules/reputation/tiers/generate-roles"
-        )
+        response = await client.post("/api/v1/guilds/1/modules/reputation/tiers/generate-roles")
 
     assert response.status_code == 403
     assert "Manage Roles" in response.json()["error"]
 
 
 @pytest.mark.asyncio
-async def test_leaderboard_admin_set_score_updates_profile(
-    db, _seeded_tiers, monkeypatch
-):
+async def test_leaderboard_admin_set_score_updates_profile(db, _seeded_tiers, monkeypatch):
     from datetime import date, timedelta
 
     from sqlalchemy import select

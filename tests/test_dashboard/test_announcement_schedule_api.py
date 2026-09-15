@@ -83,9 +83,7 @@ async def test_schedule_api_queues_without_sending_and_lists_job(db, monkeypatch
             f"/api/v1/guilds/1/modules/announcements/schedules/{schedule_id}",
             json={"paused": True},
         )
-        paused_list = await client.get(
-            "/api/v1/guilds/1/modules/announcements/schedules"
-        )
+        paused_list = await client.get("/api/v1/guilds/1/modules/announcements/schedules")
         deleted = await client.delete(
             f"/api/v1/guilds/1/modules/announcements/schedules/{schedule_id}"
         )

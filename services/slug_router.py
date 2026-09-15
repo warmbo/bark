@@ -66,13 +66,17 @@ async def resolve_slug(slug: str) -> int | None:
 
     async with session_scope() as session:
         row = (
-            await session.execute(
-                select(GuildSetting).where(
-                    GuildSetting.key == "slug",
-                    GuildSetting.value == key,
+            (
+                await session.execute(
+                    select(GuildSetting).where(
+                        GuildSetting.key == "slug",
+                        GuildSetting.value == key,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
     guild_id = int(row.guild_id) if row is not None else None
     _slug_to_id[key] = (now, guild_id) if guild_id is not None else (now, -1)
     return guild_id
@@ -95,13 +99,17 @@ async def get_guild_slug(guild_id: int) -> str | None:
 
     async with session_scope() as session:
         row = (
-            await session.execute(
-                select(GuildSetting).where(
-                    GuildSetting.key == "slug",
-                    GuildSetting.guild_id == str(guild_id),
+            (
+                await session.execute(
+                    select(GuildSetting).where(
+                        GuildSetting.key == "slug",
+                        GuildSetting.guild_id == str(guild_id),
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
     slug = (row.value or None) if row is not None else None
     _id_to_slug[key] = (now, slug)
     return slug

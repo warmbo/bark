@@ -141,7 +141,6 @@ def test_config_warnings_flags_http_oauth_redirect(monkeypatch):
     """A report must flag an http:// OAuth redirect so login failures on a
     Termux box (http config behind an https site) are obvious."""
     import config as config_module
-
     import services.diagnostics as d
 
     monkeypatch.setattr(config_module.config.oauth2, "client_id", "123")
@@ -149,9 +148,7 @@ def test_config_warnings_flags_http_oauth_redirect(monkeypatch):
     monkeypatch.setattr(
         config_module.config.oauth2, "redirect_uri", "http://bark.richard.works/auth/callback"
     )
-    monkeypatch.setattr(
-        config_module.config.dashboard, "public_url", "http://bark.richard.works"
-    )
+    monkeypatch.setattr(config_module.config.dashboard, "public_url", "http://bark.richard.works")
     monkeypatch.setattr(config_module.config.oauth2, "owner_discord_ids", {"1"})
 
     warnings = d._config_warnings()
@@ -160,10 +157,16 @@ def test_config_warnings_flags_http_oauth_redirect(monkeypatch):
     report = {
         "bark": {"version": "0.2.1", "commit": "abc", "branch": "main", "update_channel": "stable"},
         "environment": {
-            "platform": "Linux", "machine": "x86_64", "python_version": "3.13",
-            "hostname": "host", "install_dir": "/x", "install_method": "manual",
-            "systemd_active": False, "tmp_writable": True,
-            "disk_free_bytes": 1024, "disk_total_bytes": 2048,
+            "platform": "Linux",
+            "machine": "x86_64",
+            "python_version": "3.13",
+            "hostname": "host",
+            "install_dir": "/x",
+            "install_method": "manual",
+            "systemd_active": False,
+            "tmp_writable": True,
+            "disk_free_bytes": 1024,
+            "disk_total_bytes": 2048,
         },
         "config": {"dashboard_host": "127.0.0.1", "oauth_enabled": "True"},
         "config_warnings": warnings,
@@ -175,5 +178,3 @@ def test_config_warnings_flags_http_oauth_redirect(monkeypatch):
     text = d.render_report(report)
     assert "[Config warnings]" in text
     assert "⚠" in text
-
-

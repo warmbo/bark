@@ -211,7 +211,14 @@ def test_apply_update_creates_pre_update_backup(repo, monkeypatch):
     monkeypatch.setattr(
         update_service,
         "_pre_update_backup",
-        lambda: calls.append(1) or {"filename": "bark-backup-20260810-000000-000000.db", "size": 42, "created_at": "now"},
+        lambda: (
+            calls.append(1)
+            or {
+                "filename": "bark-backup-20260810-000000-000000.db",
+                "size": 42,
+                "created_at": "now",
+            }
+        ),
     )
 
     (work / "version.txt").write_text("two")
@@ -230,7 +237,9 @@ def test_apply_update_blocks_when_pre_update_backup_fails(repo, monkeypatch):
     """A failed pre-update backup aborts the update — no partial state."""
     work, _ = repo
     monkeypatch.setattr(
-        update_service, "_pre_update_backup", lambda: (_ for _ in ()).throw(RuntimeError("disk full"))
+        update_service,
+        "_pre_update_backup",
+        lambda: (_ for _ in ()).throw(RuntimeError("disk full")),
     )
     head_before = _git(work, "rev-parse", "HEAD").stdout.strip()
 

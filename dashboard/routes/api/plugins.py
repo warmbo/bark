@@ -44,9 +44,7 @@ async def install_plugin(request: Request, file: UploadFile = File(...)):
         return api_error("Owner access required", status_code=403)
     payload = await read_upload_limited(file, MAX_PLUGIN_BYTES)
     try:
-        metadata = await request.state.bot.modules.install_plugin(
-            payload, file.filename or ""
-        )
+        metadata = await request.state.bot.modules.install_plugin(payload, file.filename or "")
     except PluginValidationError as exc:
         return api_error(str(exc), status_code=400)
     except Exception:

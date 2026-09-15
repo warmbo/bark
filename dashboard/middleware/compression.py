@@ -64,14 +64,9 @@ class _ConditionalGzipSend:
     async def __call__(self, message: Message) -> None:
         if message["type"] == "http.response.start":
             # Decide whether to bypass before sending anything.
-            headers = dict(
-                (k.lower(), v) for k, v in message.get("headers", [])
-            )
+            headers = dict((k.lower(), v) for k, v in message.get("headers", []))
             content_type = (
-                headers.get(b"content-type", b"")
-                .decode("latin-1", "replace")
-                .split(";")[0]
-                .strip()
+                headers.get(b"content-type", b"").decode("latin-1", "replace").split(";")[0].strip()
             )
             already_encoded = b"content-encoding" in headers
             if content_type in self.middleware.skip or already_encoded:
@@ -175,6 +170,4 @@ class _ConditionalGzipSend:
         data = self._gz_buf.getvalue()
         self._gz_buf.seek(0)
         self._gz_buf.truncate()
-        await self.send(
-            {"type": "http.response.body", "body": data, "more_body": not final}
-        )
+        await self.send({"type": "http.response.body", "body": data, "more_body": not final})

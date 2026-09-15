@@ -28,9 +28,7 @@ def _parse_plugin_readme(text: str) -> list[dict[str, object]]:
     so the catalog never lists plugins that can't actually be installed. The
     file path is extracted from the link so download/install works.
     """
-    file_link = re.compile(
-        r"\[`?plugins/([a-z0-9_]+)\.py`?\]\(plugins/\1\.py\)"
-    )
+    file_link = re.compile(r"\[`?plugins/([a-z0-9_]+)\.py`?\]\(plugins/\1\.py\)")
     rows: list[dict[str, object]] = []
     for line in text.splitlines():
         if not line.startswith("| "):
@@ -338,9 +336,7 @@ def _module_actions(
 def _build_navigation(pages_list: list[dict[str, object]]) -> dict[str, dict[str, object]]:
     """Group manifest pages into navigation categories by page metadata."""
     core_pages = [
-        page
-        for page in pages_list
-        if not page.get("category") and not page.get("is_plugin")
+        page for page in pages_list if not page.get("category") and not page.get("is_plugin")
     ]
     community_pages = [
         page

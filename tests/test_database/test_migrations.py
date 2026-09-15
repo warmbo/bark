@@ -420,9 +420,7 @@ async def test_dashboard_guild_access_dedupes_and_enforces_unique(tmp_path):
         indexes = {
             row[1]
             for row in (
-                await connection.exec_driver_sql(
-                    'PRAGMA index_list("dashboard_guild_access")'
-                )
+                await connection.exec_driver_sql('PRAGMA index_list("dashboard_guild_access")')
             ).fetchall()
         }
         assert "uq_dashboard_user_guild" in indexes
@@ -516,9 +514,7 @@ async def test_add_reputation_tier_purpose(tmp_path):
         columns = {
             row[1]
             for row in (
-                await connection.exec_driver_sql(
-                    'PRAGMA table_info("reputation_tiers")'
-                )
+                await connection.exec_driver_sql('PRAGMA table_info("reputation_tiers")')
             ).fetchall()
         }
         assert "purpose" in columns, f"purpose column missing; columns={columns}"
@@ -526,4 +522,3 @@ async def test_add_reputation_tier_purpose(tmp_path):
         # Idempotent: running again must not error when the column exists.
         await _add_reputation_tier_purpose(connection)
     await engine.dispose()
-

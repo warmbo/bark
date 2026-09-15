@@ -8,8 +8,9 @@ present (the failure mode where Reputation stops posting a leaderboard/scores).
 
 from __future__ import annotations
 
-import pytest
 from types import SimpleNamespace
+
+import pytest
 
 from services.diagnostics import build_runtime_diagnostics, render_report
 
@@ -69,7 +70,14 @@ def test_runtime_diagnostics_enumerates_modules_and_guilds():
     human = _fake_bot_user(333, "Alice", bot=False)
     guild1 = _fake_guild(1, "Shared Server", 50, "9", [our, impostor, human])
 
-    rep = _fake_module("reputation", diagnose_result={"module": "reputation", "status": "conflict", "other_bark_instances": [{"id": "222", "name": "Bark Backup", "bot": True}]})
+    rep = _fake_module(
+        "reputation",
+        diagnose_result={
+            "module": "reputation",
+            "status": "conflict",
+            "other_bark_instances": [{"id": "222", "name": "Bark Backup", "bot": True}],
+        },
+    )
     mods = {"reputation": rep}
     mgr = _fake_modules_mgr(mods, {(1, "reputation"): True})
 
@@ -92,9 +100,13 @@ def test_runtime_diagnostics_enumerates_modules_and_guilds():
     # Guild section + multi-instance conflict captured.
     assert rt["guilds"]["count"] == 1
     assert rt["guilds"]["items"][0]["enabled_modules"] == ["reputation"]
-    assert rt["guilds"]["items"][0]["other_bark_instances"] == [{"id": "222", "name": "Bark Backup", "bot": True}]
+    assert rt["guilds"]["items"][0]["other_bark_instances"] == [
+        {"id": "222", "name": "Bark Backup", "bot": True}
+    ]
     assert len(rt["multi_instance_conflicts"]) == 1
-    assert rt["multi_instance_conflicts"][0]["bots"] == [{"id": "222", "name": "Bark Backup", "bot": True}]
+    assert rt["multi_instance_conflicts"][0]["bots"] == [
+        {"id": "222", "name": "Bark Backup", "bot": True}
+    ]
 
 
 def test_runtime_diagnostics_clean_when_no_conflict():
@@ -111,7 +123,14 @@ def test_render_report_includes_runtime_section():
     our = _fake_bot_user(111, "Bark", bot=True)
     impostor = _fake_bot_user(222, "Bark Backup", bot=True)
     guild = _fake_guild(1, "Shared Server", 50, "9", [our, impostor])
-    rep = _fake_module("reputation", diagnose_result={"module": "reputation", "status": "conflict", "other_bark_instances": [{"id": "222", "name": "Bark Backup", "bot": True}]})
+    rep = _fake_module(
+        "reputation",
+        diagnose_result={
+            "module": "reputation",
+            "status": "conflict",
+            "other_bark_instances": [{"id": "222", "name": "Bark Backup", "bot": True}],
+        },
+    )
     mgr = _fake_modules_mgr({"reputation": rep}, {(1, "reputation"): True})
     bot = SimpleNamespace(user=our, guilds=[guild], modules=mgr)
     runtime = build_runtime_diagnostics(bot)
@@ -119,10 +138,16 @@ def test_render_report_includes_runtime_section():
     report = {
         "bark": {"version": "0.2.1", "commit": "abc", "branch": "main", "update_channel": "stable"},
         "environment": {
-            "platform": "Linux", "machine": "x86_64", "python_version": "3.13",
-            "hostname": "host", "install_dir": "/x", "install_method": "manual",
-            "systemd_active": False, "tmp_writable": True,
-            "disk_free_bytes": 1024, "disk_total_bytes": 2048,
+            "platform": "Linux",
+            "machine": "x86_64",
+            "python_version": "3.13",
+            "hostname": "host",
+            "install_dir": "/x",
+            "install_method": "manual",
+            "systemd_active": False,
+            "tmp_writable": True,
+            "disk_free_bytes": 1024,
+            "disk_total_bytes": 2048,
         },
         "config": {"dashboard_host": "127.0.0.1", "oauth_enabled": "False"},
         "intents": {"message_content": True},
@@ -159,8 +184,13 @@ def test_reputation_diagnose_flags_multi_instance(monkeypatch):
     # Avoid DB/network in diagnose by stubbing config + score queries.
     module = ReputationModule(ctx)
     monkeypatch.setattr(
-        ctx, "get_module_config",
-        lambda name, gid: {"leaderboard_size": 10, "enabled_sources": {"messages": True}, "showoff_channel_id": ""},
+        ctx,
+        "get_module_config",
+        lambda name, gid: {
+            "leaderboard_size": 10,
+            "enabled_sources": {"messages": True},
+            "showoff_channel_id": "",
+        },
     )
 
     result = asyncio.run(module.diagnose(1))
@@ -173,21 +203,24 @@ def test_reputation_diagnose_flags_multi_instance(monkeypatch):
 @pytest.mark.asyncio
 async def test_guild_diagnostics_endpoint_requires_admin(db, monkeypatch):
     """GET /api/v1/guilds/{id}/diagnostics is gated to owner/admin."""
+    from httpx import ASGITransport, AsyncClient
+
     from dashboard import create_app
     from database.engine import session_scope
     from database.models.guild import Guild
-    from httpx import ASGITransport, AsyncClient
 
     async with session_scope() as session:
         session.add(Guild(discord_id="1", name="Test Guild"))
         await session.commit()
 
-    bot = SimpleNamespace(user=_fake_bot_user(111, "Bark", bot=True), guilds=[], modules=SimpleNamespace(event_bus=SimpleNamespace()))
+    bot = SimpleNamespace(
+        user=_fake_bot_user(111, "Bark", bot=True),
+        guilds=[],
+        modules=SimpleNamespace(event_bus=SimpleNamespace()),
+    )
     app = create_app(bot)
 
-    monkeypatch.setattr(
-        "dashboard.routes.api.guilds.can_manage_instance", lambda request: False
-    )
+    monkeypatch.setattr("dashboard.routes.api.guilds.can_manage_instance", lambda request: False)
     monkeypatch.setattr(
         "dashboard.routes.api.guilds.check_api_permission",
         lambda *a, **k: False,
@@ -201,10 +234,11 @@ async def test_guild_diagnostics_endpoint_requires_admin(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_guild_diagnostics_endpoint_returns_report(db, monkeypatch):
     """Owner can download a guild-scoped diagnostic report."""
+    from httpx import ASGITransport, AsyncClient
+
     from dashboard import create_app
     from database.engine import session_scope
     from database.models.guild import Guild
-    from httpx import ASGITransport, AsyncClient
 
     async with session_scope() as session:
         session.add(Guild(discord_id="1", name="Test Guild"))
@@ -217,7 +251,11 @@ async def test_guild_diagnostics_endpoint_returns_report(db, monkeypatch):
     rep_module = SimpleNamespace(
         name="reputation",
         version="1.0.0",
-        diagnose=lambda gid: {"module": "reputation", "status": "conflict", "other_bark_instances": [{"id": "222", "name": "Bark Backup", "bot": True}]},
+        diagnose=lambda gid: {
+            "module": "reputation",
+            "status": "conflict",
+            "other_bark_instances": [{"id": "222", "name": "Bark Backup", "bot": True}],
+        },
     )
     mgr = SimpleNamespace(
         get_all_modules=lambda: {"reputation": rep_module},
@@ -233,9 +271,7 @@ async def test_guild_diagnostics_endpoint_returns_report(db, monkeypatch):
     )
     app = create_app(bot)
 
-    monkeypatch.setattr(
-        "dashboard.routes.api.guilds.can_manage_instance", lambda request: True
-    )
+    monkeypatch.setattr("dashboard.routes.api.guilds.can_manage_instance", lambda request: True)
     transport = ASGITransport(app=app.app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/api/v1/guilds/1/diagnostics")
@@ -268,7 +304,11 @@ def test_reputation_diagnose_reports_rejection_ledger_and_issues(monkeypatch):
     module = ReputationModule(ctx)
 
     async def _cfg(name, gid):
-        return {"leaderboard_size": 10, "enabled_sources": {"messages": True}, "showoff_channel_id": ""}
+        return {
+            "leaderboard_size": 10,
+            "enabled_sources": {"messages": True},
+            "showoff_channel_id": "",
+        }
 
     monkeypatch.setattr(ctx, "get_module_config", _cfg)
 
@@ -277,7 +317,11 @@ def test_reputation_diagnose_reports_rejection_ledger_and_issues(monkeypatch):
     result = asyncio.run(module.diagnose(1))
     assert result["status"] == "attention"
     assert result["recent_rejections"] == [
-        {"ts": result["recent_rejections"][0]["ts"], "kind": "showoff_forbidden", "detail": "no permission to send to channel 999"}
+        {
+            "ts": result["recent_rejections"][0]["ts"],
+            "kind": "showoff_forbidden",
+            "detail": "no permission to send to channel 999",
+        }
     ]
     assert any("showoff_forbidden" in i for i in result["issues"])
 
@@ -366,10 +410,16 @@ def test_runtime_diagnostics_handles_none_bot():
     full = {
         "bark": {"version": "0.2.1", "commit": "abc", "branch": "main", "update_channel": "stable"},
         "environment": {
-            "platform": "Linux", "machine": "x86_64", "python_version": "3.13",
-            "hostname": "host", "install_dir": "/x", "install_method": "manual",
-            "systemd_active": False, "tmp_writable": True,
-            "disk_free_bytes": 1024, "disk_total_bytes": 2048,
+            "platform": "Linux",
+            "machine": "x86_64",
+            "python_version": "3.13",
+            "hostname": "host",
+            "install_dir": "/x",
+            "install_method": "manual",
+            "systemd_active": False,
+            "tmp_writable": True,
+            "disk_free_bytes": 1024,
+            "disk_total_bytes": 2048,
         },
         "config": {"dashboard_host": "127.0.0.1", "oauth_enabled": "False"},
         "intents": {"message_content": True},
@@ -406,10 +456,11 @@ def test_runtime_diagnostics_reports_bot_connection_status():
 async def test_privacy_and_terms_pages_are_public(db):
     """Privacy/Terms pages (needed for Discord verification) are reachable
     without authentication."""
+    from httpx import ASGITransport, AsyncClient
+
     from dashboard import create_app
     from database.engine import session_scope
     from database.models.guild import Guild
-    from httpx import ASGITransport, AsyncClient
 
     async with session_scope() as session:
         session.add(Guild(discord_id="1", name="Test Guild"))

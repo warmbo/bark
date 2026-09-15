@@ -514,13 +514,21 @@ class ModerationModule(BarkModule):
 
     def get_extra_tabs(self) -> list[dict]:
         return [
-            {"id": "cases", "label": "Cases", "template": "modules/moderation/templates/moderation_cases.html"},
+            {
+                "id": "cases",
+                "label": "Cases",
+                "template": "modules/moderation/templates/moderation_cases.html",
+            },
             {
                 "id": "warnings",
                 "label": "Warnings",
                 "template": "modules/moderation/templates/moderation_warnings.html",
             },
-            {"id": "notes", "label": "Notes", "template": "modules/moderation/templates/moderation_notes.html"},
+            {
+                "id": "notes",
+                "label": "Notes",
+                "template": "modules/moderation/templates/moderation_notes.html",
+            },
             {
                 "id": "rulesets",
                 "label": "Rulesets",
@@ -531,7 +539,11 @@ class ModerationModule(BarkModule):
                 "label": "Word Lists",
                 "template": "modules/moderation/templates/moderation_wordlists.html",
             },
-            {"id": "voice", "label": "Voice", "template": "modules/moderation/templates/moderation_voice.html"},
+            {
+                "id": "voice",
+                "label": "Voice",
+                "template": "modules/moderation/templates/moderation_voice.html",
+            },
         ]
 
     # ── Lifecycle ─────────────────────────────────────
@@ -794,8 +806,7 @@ class ModerationModule(BarkModule):
                 "duration_seconds": func.max(
                     0,
                     func.round(
-                        (func.julianday(now) - func.julianday(VoiceSession.joined_at))
-                        * 86400
+                        (func.julianday(now) - func.julianday(VoiceSession.joined_at)) * 86400
                     ),
                 ),
             }
@@ -835,8 +846,7 @@ class ModerationModule(BarkModule):
                 "duration_seconds": func.max(
                     0,
                     func.round(
-                        (func.julianday(now) - func.julianday(VoiceSession.joined_at))
-                        * 86400
+                        (func.julianday(now) - func.julianday(VoiceSession.joined_at)) * 86400
                     ),
                 ),
             }
@@ -963,9 +973,7 @@ class ModerationModule(BarkModule):
                 return
             suspicious, reason = self._anti_raid.check_webhook_scam(message)
             if suspicious:
-                self._logger.warning(
-                    "Webhook scam in %s: %s", message.guild.id, reason
-                )
+                self._logger.warning("Webhook scam in %s: %s", message.guild.id, reason)
                 try:
                     await message.delete()
                 except discord.Forbidden:
@@ -1135,7 +1143,9 @@ class ModerationModule(BarkModule):
             return
         await self._process_rulesets(after, rulesets_data, edited=True)
 
-    async def _process_rulesets(self, message, rulesets_data: list[dict], *, edited: bool = False) -> None:
+    async def _process_rulesets(
+        self, message, rulesets_data: list[dict], *, edited: bool = False
+    ) -> None:
         """Iterate rulesets and their rules, checking conditions and triggers.
 
         ``edited`` selects which message-generation the ruleset applies to:
@@ -1491,9 +1501,7 @@ class ModerationModule(BarkModule):
         except Exception:
             self._logger.exception("Failed to emit automod_triggered event")
 
-    async def _dm_owner(
-        self, guild, rule: str, action: str, user_tag: str, content: str
-    ) -> None:
+    async def _dm_owner(self, guild, rule: str, action: str, user_tag: str, content: str) -> None:
         """DM the guild owner with an alert embed. Silently no-ops when the
         owner has DMs closed or cannot be resolved."""
         try:
@@ -2222,13 +2230,17 @@ class ModerationModule(BarkModule):
 
             async with session_scope() as session:
                 rows = (
-                    await session.execute(
-                        select(ModerationCase)
-                        .where(ModerationCase.guild_id == str(guild_id))
-                        .order_by(ModerationCase.created_at.desc())
-                        .limit(5)
+                    (
+                        await session.execute(
+                            select(ModerationCase)
+                            .where(ModerationCase.guild_id == str(guild_id))
+                            .order_by(ModerationCase.created_at.desc())
+                            .limit(5)
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
             if not rows:
                 return None
             items = [

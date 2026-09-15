@@ -12,7 +12,9 @@ from services.media_engine.client import (
 
 def _mock(handler) -> MediaEngineClient:
     return MediaEngineClient(
-        base_url="http://engine", token="tok", poll_interval=0.01,
+        base_url="http://engine",
+        token="tok",
+        poll_interval=0.01,
         transport=httpx.MockTransport(handler),
     )
 
@@ -88,8 +90,9 @@ async def test_health_false_when_down():
 async def test_collect_payload():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer tok"
-        return httpx.Response(200, json={"reputation": {"score": 5.0},
-                                         "activity": {}, "badges": [], "favorites": []})
+        return httpx.Response(
+            200, json={"reputation": {"score": 5.0}, "activity": {}, "badges": [], "favorites": []}
+        )
 
     data = await _mock(handler).collect_payload("profile", "g1", "u1")
     assert data["reputation"]["score"] == 5.0

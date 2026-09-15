@@ -233,9 +233,7 @@ class BarkModule(abc.ABC):
             "events": [e.event_name for e in self.get_events()],
             "dashboard_pages": [p.route for p in self.get_dashboard_pages()],
             "permissions": [p.name for p in self.get_permissions()],
-            "schema_keys": list(
-                (self.get_settings_schema() or {}).get("properties", {}).keys()
-            ),
+            "schema_keys": list((self.get_settings_schema() or {}).get("properties", {}).keys()),
         }
         manager = getattr(getattr(self.ctx, "bot", None), "modules", None)
         if manager is not None and hasattr(manager, "should_run_globally"):

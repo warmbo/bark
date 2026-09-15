@@ -31,30 +31,43 @@ async def _seed(guild_id="1"):
         await session.flush()
         session.add(
             DailyChannelStat(
-                guild_id=str(guild_id), stat_date=now.date(), channel_id="c1",
-                channel_name="general", message_count=50,
+                guild_id=str(guild_id),
+                stat_date=now.date(),
+                channel_id="c1",
+                channel_name="general",
+                message_count=50,
             )
         )
-        session.add(
-            VoiceGameStat(guild_id=str(guild_id), game_name="Minecraft", recorded_at=now)
-        )
+        session.add(VoiceGameStat(guild_id=str(guild_id), game_name="Minecraft", recorded_at=now))
         session.add(
             ReputationProfile(
-                guild_id=str(guild_id), user_id="u1", total_score=100.0, level=5,
-                week_start=now.date(), month_start=now.date(),
+                guild_id=str(guild_id),
+                user_id="u1",
+                total_score=100.0,
+                level=5,
+                week_start=now.date(),
+                month_start=now.date(),
             )
         )
         session.add(
             ReputationEvent(
-                guild_id=str(guild_id), actor_id="a1", event_type="thanks", points=40,
+                guild_id=str(guild_id),
+                actor_id="a1",
+                event_type="thanks",
+                points=40,
                 created_at=now,
             )
         )
         session.add(
             VoiceSession(
-                guild_id=str(guild_id), user_id="u1", user_tag="Alice",
-                channel_id="vc1", channel_name="hangout",
-                joined_at=now, left_at=now, duration_seconds=3600,
+                guild_id=str(guild_id),
+                user_id="u1",
+                user_tag="Alice",
+                channel_id="vc1",
+                channel_name="hangout",
+                joined_at=now,
+                left_at=now,
+                duration_seconds=3600,
             )
         )
         await session.commit()
@@ -83,7 +96,6 @@ async def _invoke(cmd, interaction, **kwargs):
 
 @pytest.mark.asyncio
 async def test_stats_command_builds_embed_with_all_fields(db, interaction):
-    from modules.help.module import HelpModule
 
     await _seed()
     cmd = _make_stats_cmd()
@@ -101,7 +113,14 @@ async def test_stats_command_builds_embed_with_all_fields(db, interaction):
     assert all(f.inline for f in fields), "stats fields should be inline (side-by-side)"
     field_names = [f.name for f in fields]
     joined = " ".join(field_names)
-    for name in ("Top Channels", "Top Games", "Highest Rep", "Top Voice", "Voice Sessions", "Rep Source"):
+    for name in (
+        "Top Channels",
+        "Top Games",
+        "Highest Rep",
+        "Top Voice",
+        "Voice Sessions",
+        "Rep Source",
+    ):
         assert name in joined
     # Ranked entries use clean 1./2./3. numbering.
     values = " ".join(f.value for f in fields)

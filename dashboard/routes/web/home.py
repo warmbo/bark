@@ -26,7 +26,8 @@ async def guild_slug_page(request: Request, slug: str):
     friendly not-found page instead of a bare 404.
     """
     return render_not_found(
-        request, templates,
+        request,
+        templates,
         title="Server not found",
         message="That link isn't available through this dashboard.",
         hint="The custom link may have been removed or was never set.",
@@ -50,7 +51,8 @@ async def guild_overview(request: Request, guild_id: int):
                 {"guild_id": guild_id, "bot": bot, "active_page": "overview"},
             )
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",

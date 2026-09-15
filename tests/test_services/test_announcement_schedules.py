@@ -242,9 +242,7 @@ async def test_pause_resume_and_delete_are_guild_scoped(db):
     )
 
     async with session_scope() as session:
-        session.add_all(
-            [Guild(discord_id="1", name="One"), Guild(discord_id="2", name="Two")]
-        )
+        session.add_all([Guild(discord_id="1", name="One"), Guild(discord_id="2", name="Two")])
     created = await create_schedule(
         guild_id="1",
         channel_id="55",

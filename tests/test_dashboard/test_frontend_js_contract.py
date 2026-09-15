@@ -50,12 +50,8 @@ def test_settings_script_invocations_follow_declarations():
         ("loadBackups();", "const backupCreateBtn ="),
     ]
     for call_marker, decl_marker in pairs:
-        call_line = next(
-            (i for i, line in enumerate(lines) if call_marker in line), None
-        )
-        decl_line = next(
-            (i for i, line in enumerate(lines) if decl_marker in line), None
-        )
+        call_line = next((i for i, line in enumerate(lines) if call_marker in line), None)
+        decl_line = next((i for i, line in enumerate(lines) if decl_marker in line), None)
         assert call_line is not None, f"invocation {call_marker} not found in settings script"
         assert decl_line is not None, f"declaration {decl_marker} not found in settings script"
         assert call_line > decl_line, (
@@ -411,7 +407,7 @@ def test_guild_activity_refreshes_from_server_and_ages_visible_timestamps():
     detail = source(TEMPLATES / "pages" / "module_detail.html")
 
     assert "moderation-activity-feed" in detail
-    assert 'api(\'activity\')' in workspace or 'api(\"activity\")' in workspace
+    assert "api('activity')" in workspace or 'api("activity")' in workspace
     assert "data-activity-timestamp" in workspace
     assert "setInterval(refreshActivityTimes" in workspace
     assert 'data-activity-timestamp="${escHtml(a.timestamp).replaceAll(' in workspace
@@ -580,7 +576,7 @@ def test_revoked_access_grant_is_removable_from_list():
     click handler must route it to the hard-delete /remove endpoint."""
     html = source(TEMPLATES / "components" / "settings_scripts.html")
     # Revoked grants render a data-remove-access ✕ button.
-    assert "data-remove-access=\"${escHtml(grant.discord_user_id)}\"" in html
+    assert 'data-remove-access="${escHtml(grant.discord_user_id)}"' in html
     # The click handler listens for it.
     assert "data-remove-access" in html
     assert "button.dataset.removeAccess" in html
@@ -647,7 +643,5 @@ def test_dashboard_server_search_ctrl_k_focus():
     # The dashboard search input must be targetable by the shortcut.
     assert "server-search" in dashboard_html
     # shortcuts.js must route Ctrl+K to the server search when it exists.
-    assert "server-search" in shortcuts_js, (
-        "Ctrl+K should focus #server-search on the dashboard"
-    )
+    assert "server-search" in shortcuts_js, "Ctrl+K should focus #server-search on the dashboard"
     assert "focus" in shortcuts_js

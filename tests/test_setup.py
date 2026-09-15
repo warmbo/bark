@@ -39,7 +39,7 @@ def test_write_env_creates_dotenv(fresh_env):
     assert "BARK_BOT_TOKEN=MTEz.abc.def" in content
     assert "BARK_OAUTH2_CLIENT_ID=123" in content
     assert "BARK_OAUTH2_CLIENT_SECRET=s3cret" in content
-    assert 'BARK_OAUTH2_REDIRECT_URI=https://bark.example.com/auth/callback' in content
+    assert "BARK_OAUTH2_REDIRECT_URI=https://bark.example.com/auth/callback" in content
     assert 'BARK_OWNER_DISCORD_IDS="111, 222"' in content  # quoted (has space)
     assert "BARK_PUBLIC_URL=https://bark.example.com" in content
     # No prefix setting: commands are global slash commands under /bark.
@@ -153,7 +153,9 @@ async def test_setup_post_validation_error(setup_app, tmp_path):
     async with AsyncClient(
         transport=ASGITransport(app=setup_app), base_url="http://test"
     ) as client:
-        response = await client.post("/api/setup", json={"token": "nope", "public_url": "https://x.example"})
+        response = await client.post(
+            "/api/setup", json={"token": "nope", "public_url": "https://x.example"}
+        )
     assert response.status_code == 400
     assert "doesn't look like" in response.json()["error"]
     assert not (tmp_path / ".env").exists()

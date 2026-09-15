@@ -70,7 +70,11 @@ def _required_role(perms: Any) -> str:
         return "Anyone"
     if isinstance(perms, bool):
         return "Anyone"  # degenerate; treat as un-gated
-    p = perms if isinstance(perms, DiscordPermissions) else DiscordPermissions(int(perms) if isinstance(perms, int) else 0)
+    p = (
+        perms
+        if isinstance(perms, DiscordPermissions)
+        else DiscordPermissions(int(perms) if isinstance(perms, int) else 0)
+    )
     if any(getattr(p, bit, False) for bit in _MODERATOR_BITS):
         return "Moderator"
     if getattr(p, "manage_guild", False) or getattr(p, "administrator", False):
@@ -207,7 +211,7 @@ def collect_modules(manager: Any) -> list[dict[str, Any]]:
         all_modules = manager.get_all_modules()
     except Exception:
         return modules
-    for name in (all_modules.keys() if isinstance(all_modules, dict) else []):
+    for name in all_modules.keys() if isinstance(all_modules, dict) else []:
         module = all_modules.get(name) if isinstance(all_modules, dict) else None
         if module is None:
             continue
@@ -232,7 +236,7 @@ def collect_settings(manager: Any) -> list[dict[str, Any]]:
         all_modules = manager.get_all_modules()
     except Exception:
         return out
-    for name in (all_modules.keys() if isinstance(all_modules, dict) else []):
+    for name in all_modules.keys() if isinstance(all_modules, dict) else []:
         module = all_modules.get(name) if isinstance(all_modules, dict) else None
         if module is None:
             continue
@@ -258,8 +262,7 @@ def collect_permissions() -> list[dict[str, str]]:
     except Exception:
         return []
     out = [
-        {"action": action, "role": (role or "admin")}
-        for action, role in (actions or {}).items()
+        {"action": action, "role": (role or "admin")} for action, role in (actions or {}).items()
     ]
     out.sort(key=lambda p: p["action"])
     return out

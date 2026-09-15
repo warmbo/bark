@@ -82,10 +82,14 @@ async def test_collector_skips_fresh_baseline_while_cache_warming(db, monkeypatc
 
     async with session_scope() as session:
         rows = (
-            await session.execute(
-                select(ActivitySnapshot).where(ActivitySnapshot.guild_id == "2")
+            (
+                await session.execute(
+                    select(ActivitySnapshot).where(ActivitySnapshot.guild_id == "2")
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert rows == [], "no baseline while chunked=False"
 
     # Once the cache is complete, the baseline is written (new_members=0).
@@ -93,9 +97,7 @@ async def test_collector_skips_fresh_baseline_while_cache_warming(db, monkeypatc
     await collector._run_loop()
     async with session_scope() as session:
         saved = (
-            await session.execute(
-                select(ActivitySnapshot).where(ActivitySnapshot.guild_id == "2")
-            )
+            await session.execute(select(ActivitySnapshot).where(ActivitySnapshot.guild_id == "2"))
         ).scalar_one()
     assert saved.total_members == 500
     assert saved.new_members == 0

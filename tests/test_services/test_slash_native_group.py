@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import discord
 import pytest
@@ -41,7 +41,9 @@ def _make_leaf(name, params=()):
     async def _real_callback(interaction: discord.Interaction):
         captured["interaction"] = interaction
 
-    cmd = app_commands.Command(name=name, description=f"the {name} command", callback=_real_callback)
+    cmd = app_commands.Command(
+        name=name, description=f"the {name} command", callback=_real_callback
+    )
     leaf = SimpleNamespace(
         name=name,
         command=cmd,
@@ -60,7 +62,7 @@ def _register(d, module_name, leaves):
     regs = [SimpleNamespace(slash=True, name=leaf.name) for leaf, _ in leaves]
     module.get_commands.return_value = regs
     for leaf, _ in leaves:
-        setattr(module, f"_make_{leaf.name}_command", lambda l=leaf: l.command)
+        setattr(module, f"_make_{leaf.name}_command", lambda _leaf=leaf: _leaf.command)
     d.register_module(module_name, module)
 
 

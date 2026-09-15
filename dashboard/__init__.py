@@ -188,8 +188,8 @@ def create_app(bot: BarkBot) -> DashboardApp:
 
     # ── Web Routes ────────────────────────────────────
 
-    from dashboard.routes.web.home import router as home_router
     from dashboard.routes.web.docs import router as docs_router
+    from dashboard.routes.web.home import router as home_router
     from dashboard.routes.web.members import router as members_router
     from dashboard.routes.web.moderation import router as moderation_router
     from dashboard.routes.web.modules import router as modules_router
@@ -276,17 +276,13 @@ def create_app(bot: BarkBot) -> DashboardApp:
     async def privacy(request: Request):
         """Public Privacy Policy — required for Discord app verification."""
         tmpl = request.app.state.templates
-        return tmpl.TemplateResponse(
-            request, "pages/privacy.html", {"config": config}
-        )
+        return tmpl.TemplateResponse(request, "pages/privacy.html", {"config": config})
 
     @app.get("/terms", response_class=HTMLResponse)
     async def terms(request: Request):
         """Public Terms of Service — required for Discord app verification."""
         tmpl = request.app.state.templates
-        return tmpl.TemplateResponse(
-            request, "pages/terms.html", {"config": config}
-        )
+        return tmpl.TemplateResponse(request, "pages/terms.html", {"config": config})
 
     @app.get("/")
     async def root(request: Request):
@@ -348,8 +344,7 @@ def create_app(bot: BarkBot) -> DashboardApp:
                 moderator_roles_by_guild=moderator_roles,
                 admin_roles_by_guild=admin_roles,
                 is_instance_owner=bool(
-                    config.oauth2.owner_discord_ids
-                    and user_id in config.oauth2.owner_discord_ids
+                    config.oauth2.owner_discord_ids and user_id in config.oauth2.owner_discord_ids
                 ),
                 public_url=config.dashboard.public_url,
             )

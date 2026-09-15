@@ -158,9 +158,7 @@ class SpeakModule(BarkModule):
             name="speak",
             description="Say a preset phrase (keys are configured in the dashboard)",
         )
-        @discord.app_commands.describe(
-            key="The phrase key, e.g. word1 or phrase2"
-        )
+        @discord.app_commands.describe(key="The phrase key, e.g. word1 or phrase2")
         async def speak_cmd(interaction: discord.Interaction, key: str):
             guild_id = interaction.guild_id
             if guild_id is None:

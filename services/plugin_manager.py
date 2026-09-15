@@ -115,14 +115,11 @@ def load_plugin_class(path: Path) -> type[BarkModule]:
     classes = [
         obj
         for _, obj in inspect.getmembers(module, inspect.isclass)
-        if issubclass(obj, BarkModule)
-        and obj is not BarkModule
-        and obj.__module__ == module_name
+        if issubclass(obj, BarkModule) and obj is not BarkModule and obj.__module__ == module_name
     ]
     if not classes:
         raise PluginValidationError(
-            "No BarkModule subclass found. Define one class extending "
-            "modules.base.BarkModule."
+            "No BarkModule subclass found. Define one class extending modules.base.BarkModule."
         )
     if len(classes) > 1:
         raise PluginValidationError(

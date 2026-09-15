@@ -18,17 +18,11 @@ class _StubApp:
 
     async def __call__(self, scope, receive, send):
         headers = [(b"content-type", self.content_type.encode())]
-        await send(
-            {"type": "http.response.start", "status": 200, "headers": headers}
-        )
+        await send({"type": "http.response.start", "status": 200, "headers": headers})
         if self.streaming:
             for chunk in [self.body[:3], self.body[3:6], self.body[6:]]:
-                await send(
-                    {"type": "http.response.body", "body": chunk, "more_body": True}
-                )
-            await send(
-                {"type": "http.response.body", "body": b"", "more_body": False}
-            )
+                await send({"type": "http.response.body", "body": chunk, "more_body": True})
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
         else:
             await send(
                 {
@@ -43,9 +37,7 @@ class _StubApp:
 async def test_compresses_large_html_response():
     body = b"<html>" + b"x" * 5000 + b"</html>"
     app = SafeGzipMiddleware(_StubApp(body=body, content_type="text/html"))
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
     assert response.status_code == 200
     assert response.headers["content-encoding"] == "gzip"
@@ -57,9 +49,7 @@ async def test_compresses_large_html_response():
 async def test_leaves_small_response_uncompressed():
     body = b"<p>tiny</p>"
     app = SafeGzipMiddleware(_StubApp(body=body, content_type="text/html"))
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
     assert response.status_code == 200
     assert "content-encoding" not in response.headers
@@ -69,12 +59,8 @@ async def test_leaves_small_response_uncompressed():
 @pytest.mark.asyncio
 async def test_never_compresses_sse_stream():
     body = b"data: ping\n\n" * 20
-    app = SafeGzipMiddleware(
-        _StubApp(body=body, content_type="text/event-stream", streaming=True)
-    )
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    app = SafeGzipMiddleware(_StubApp(body=body, content_type="text/event-stream", streaming=True))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
     assert response.status_code == 200
     assert "content-encoding" not in response.headers
@@ -89,9 +75,7 @@ async def test_compresses_streaming_non_sse_body():
     app = SafeGzipMiddleware(
         _StubApp(body=body, content_type="application/octet-stream", streaming=True)
     )
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
     assert response.status_code == 200
     assert response.headers["content-encoding"] == "gzip"
@@ -115,13 +99,9 @@ async def test_respects_existing_content_encoding():
                     ],
                 }
             )
-            await send(
-                {"type": "http.response.body", "body": body, "more_body": False}
-            )
+            await send({"type": "http.response.body", "body": body, "more_body": False})
 
     wrapped = SafeGzipMiddleware(_PreEncoded(body=body, content_type="text/html"))
-    async with AsyncClient(
-        transport=ASGITransport(app=wrapped), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=wrapped), base_url="http://test") as client:
         response = await client.get("/")
     assert response.headers["content-encoding"] == "br"

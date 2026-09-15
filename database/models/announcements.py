@@ -24,7 +24,9 @@ class AnnouncementSchedule(Base):
     embed_color: Mapped[str] = mapped_column(String(16), nullable=False, default="#5865F2")
     image_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
     video_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    next_run_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     timezone_name: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
     recurrence_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
     recurrence_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

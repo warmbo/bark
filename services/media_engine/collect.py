@@ -23,8 +23,15 @@ _Rep = dict[str, Any]
 
 _SCHEMA_KEYS = {
     "reputation_profiles": [
-        "total_score", "level", "current_tier", "weekly_score", "monthly_score",
-        "thanks_received", "messages_count", "reactions_received", "voice_minutes",
+        "total_score",
+        "level",
+        "current_tier",
+        "weekly_score",
+        "monthly_score",
+        "thanks_received",
+        "messages_count",
+        "reactions_received",
+        "voice_minutes",
         "last_activity",
     ],
 }
@@ -40,6 +47,7 @@ def _safe(default: Any) -> Callable:
             except Exception as exc:  # missing DB/table/column, bad types...
                 logger.warning("collect.%s failed (%s) — using default", fn.__name__, exc)
                 return default
+
         return wrapper
 
     return deco
@@ -51,6 +59,7 @@ def _today_utc() -> date:
 
 # ── Queries ──────────────────────────────────────────────────────────────
 
+
 def get_reputation(engine: sa.Engine, guild_id: str, user_id: str) -> dict | None:
     return fetch_one(
         engine,
@@ -61,7 +70,8 @@ def get_reputation(engine: sa.Engine, guild_id: str, user_id: str) -> dict | Non
         FROM reputation_profiles
         WHERE guild_id = :guild_id AND user_id = :user_id
         """,
-        guild_id=str(guild_id), user_id=str(user_id),
+        guild_id=str(guild_id),
+        user_id=str(user_id),
     )
 
 
@@ -73,7 +83,8 @@ def get_tier(engine: sa.Engine, guild_id: str, tier_name: str | None) -> dict | 
         FROM reputation_tiers
         WHERE guild_id = :guild_id AND name = :name
         """,
-        guild_id=str(guild_id), name=tier_name or "",
+        guild_id=str(guild_id),
+        name=tier_name or "",
     )
     if row:
         return row
@@ -100,12 +111,16 @@ def get_badges(engine: sa.Engine, guild_id: str, user_id: str, limit: int = 12) 
         ORDER BY a.created_at DESC
         LIMIT :limit
         """,
-        guild_id=str(guild_id), user_id=str(user_id), limit=limit,
+        guild_id=str(guild_id),
+        user_id=str(user_id),
+        limit=limit,
     )
     return [{"name": r["name"], "description": r["description"] or "", "icon": ""} for r in rows]
 
 
-def get_favorite_channels(engine: sa.Engine, guild_id: str, user_id: str, limit: int = 3) -> list[dict]:
+def get_favorite_channels(
+    engine: sa.Engine, guild_id: str, user_id: str, limit: int = 3
+) -> list[dict]:
     rows = fetch_all(
         engine,
         """
@@ -116,14 +131,23 @@ def get_favorite_channels(engine: sa.Engine, guild_id: str, user_id: str, limit:
         ORDER BY count DESC, channel_id ASC
         LIMIT :limit
         """,
-        guild_id=str(guild_id), user_id=str(user_id), limit=limit,
+        guild_id=str(guild_id),
+        user_id=str(user_id),
+        limit=limit,
     )
-    return [{"channel_id": str(r["channel_id"]), "name": None, "count": int(r["count"])} for r in rows]
+    return [
+        {"channel_id": str(r["channel_id"]), "name": None, "count": int(r["count"])} for r in rows
+    ]
 
 
 def get_activity_bars(
-    engine: sa.Engine, guild_id: str, user_id: str, *, today: date | None = None,
-    weekly_days: int = 7, monthly_buckets: int = 4,
+    engine: sa.Engine,
+    guild_id: str,
+    user_id: str,
+    *,
+    today: date | None = None,
+    weekly_days: int = 7,
+    monthly_buckets: int = 4,
 ) -> dict:
     today = today or _today_utc()
     # Fetch enough history for the largest window (weekly bars need 7 days,
@@ -140,7 +164,9 @@ def get_activity_bars(
           AND created_at >= :since
         GROUP BY day
         """,
-        guild_id=str(guild_id), user_id=str(user_id), since=since,
+        guild_id=str(guild_id),
+        user_id=str(user_id),
+        since=since,
     )
     by_day = {r["day"]: int(r["count"]) for r in rows}
 
@@ -174,21 +200,25 @@ def get_leaderboard(engine: sa.Engine, guild_id: str, limit: int = 10) -> list[d
         ORDER BY total_score DESC
         LIMIT :limit
         """,
-        guild_id=str(guild_id), limit=limit,
+        guild_id=str(guild_id),
+        limit=limit,
     )
     out = []
     for idx, r in enumerate(rows, start=1):
-        out.append({
-            "rank": idx,
-            "user_id": str(r["user_id"]),
-            "score": float(r["total_score"]),
-            "level": int(r["level"]),
-            "tier": r["current_tier"] or "unranked",
-        })
+        out.append(
+            {
+                "rank": idx,
+                "user_id": str(r["user_id"]),
+                "score": float(r["total_score"]),
+                "level": int(r["level"]),
+                "tier": r["current_tier"] or "unranked",
+            }
+        )
     return out
 
 
 # ── Payload builders ─────────────────────────────────────────────────────
+
 
 @_safe({})
 def collect_reputation_block(engine: sa.Engine, guild_id: str, user_id: str) -> dict:
@@ -251,7 +281,9 @@ def collect_reputation_block(engine: sa.Engine, guild_id: str, user_id: str) -> 
 
 
 @_safe({})
-def collect_activity_block(engine: sa.Engine, guild_id: str, user_id: str, *, today: date | None = None) -> dict:
+def collect_activity_block(
+    engine: sa.Engine, guild_id: str, user_id: str, *, today: date | None = None
+) -> dict:
     return get_activity_bars(engine, guild_id, user_id, today=today)
 
 
@@ -303,5 +335,7 @@ def build_profile_payload(
 
 
 @_safe([])
-def build_leaderboard_payload(engine: sa.Engine, guild_id: str | int, limit: int = 10) -> list[dict]:
+def build_leaderboard_payload(
+    engine: sa.Engine, guild_id: str | int, limit: int = 10
+) -> list[dict]:
     return get_leaderboard(engine, str(guild_id), limit)

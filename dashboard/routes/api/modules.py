@@ -294,7 +294,10 @@ async def toggle_module(request: Request, guild_id: str, module_name: str):
     # the live module state actually changed — persisted and runtime state
     # can never diverge.
     if not await bot.modules.set_guild_enabled(int(guild_id), module_name, enable):
-        return api_error(f"Module '{module_name}' could not be {'enabled' if enable else 'disabled'}", status_code=409)
+        return api_error(
+            f"Module '{module_name}' could not be {'enabled' if enable else 'disabled'}",
+            status_code=409,
+        )
 
     async with session_scope() as session:
         from sqlalchemy import select

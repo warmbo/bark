@@ -58,10 +58,10 @@ async def test_record_message_upserts_today_channel_count(db):
 
     async with session_scope() as s:
         rows = (
-            await s.execute(
-                select(DailyChannelStat).where(DailyChannelStat.guild_id == "11")
-            )
-        ).scalars().all()
+            (await s.execute(select(DailyChannelStat).where(DailyChannelStat.guild_id == "11")))
+            .scalars()
+            .all()
+        )
     by_channel = {r.channel_id: r for r in rows}
     assert by_channel["100"].message_count == 2
     assert by_channel["100"].channel_name == "general"
@@ -82,10 +82,10 @@ async def test_record_reaction_upserts_today_emoji_count(db):
 
     async with session_scope() as s:
         rows = (
-            await s.execute(
-                select(DailyEmojiStat).where(DailyEmojiStat.guild_id == "12")
-            )
-        ).scalars().all()
+            (await s.execute(select(DailyEmojiStat).where(DailyEmojiStat.guild_id == "12")))
+            .scalars()
+            .all()
+        )
     by_emoji = {r.emoji_name: r for r in rows}
     assert by_emoji["laugh"].count == 2
     assert by_emoji["wow"].count == 1
@@ -103,19 +103,19 @@ async def test_coalesced_counters_are_not_written_before_flush(db):
 
     async with session_scope() as s:
         rows = (
-            await s.execute(
-                select(DailyChannelStat).where(DailyChannelStat.guild_id == "14")
-            )
-        ).scalars().all()
+            (await s.execute(select(DailyChannelStat).where(DailyChannelStat.guild_id == "14")))
+            .scalars()
+            .all()
+        )
     assert rows == [], "no DB write should happen before flush_stats()"
     await flush_stats()
 
     async with session_scope() as s:
         rows = (
-            await s.execute(
-                select(DailyChannelStat).where(DailyChannelStat.guild_id == "14")
-            )
-        ).scalars().all()
+            (await s.execute(select(DailyChannelStat).where(DailyChannelStat.guild_id == "14")))
+            .scalars()
+            .all()
+        )
     assert len(rows) == 1 and rows[0].message_count == 1
 
 

@@ -41,6 +41,7 @@ def _resolve_module_template(template: str) -> Path:
     """
     return REPO_ROOT / template
 
+
 # Mirror the dashboard app loader: module tab templates are colocated under
 # each module's own ``templates/`` directory, so the project root must be a
 # search path for ``{% include %}`` to resolve them.
@@ -58,7 +59,8 @@ async def modules_page(request: Request, guild_id: int):
 
     if guild is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",
@@ -74,10 +76,7 @@ async def modules_page(request: Request, guild_id: int):
     # modules default enabled; add-on plugins default disabled). Building the
     # dict here (not in the template) keeps the card exactly in sync with
     # what the bot actually dispatches.
-    module_states = {
-        name: bot.modules.is_enabled_for_guild(guild_id, name)
-        for name in all_modules
-    }
+    module_states = {name: bot.modules.is_enabled_for_guild(guild_id, name) for name in all_modules}
 
     return templates.TemplateResponse(
         request,
@@ -116,7 +115,8 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
 
     if guild is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",
@@ -127,7 +127,8 @@ async def module_detail_page(request: Request, guild_id: int, module_name: str):
     module = bot.modules.get_module(module_name)
     if module is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Module not found",
             message="That module doesn't exist on this server.",
             hint="It may have been removed, renamed, or disabled — check the Modules page for everything available.",
@@ -252,7 +253,8 @@ async def plugin_catalog_page(request: Request, guild_id: int):
 
     if guild is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",

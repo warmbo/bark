@@ -4,6 +4,7 @@ Boots `run_dev_server.py` (mock dashboard, no Discord token), waits for the
 dashboard to come up, sends SIGINT, and asserts the process actually exits
 within a timeout. This is the exact scenario that used to hang.
 """
+
 import signal
 import socket
 import subprocess
@@ -41,9 +42,7 @@ def main():
             return 1
         # Confirm the HTTP endpoint responds (proof it's really serving).
         try:
-            with urllib.request.urlopen(
-                f"http://127.0.0.1:{PORT}/", timeout=5
-            ) as resp:
+            with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/", timeout=5) as resp:
                 print(f"HTTP status: {resp.status}")
         except Exception as e:
             print(f"WARN: health GET failed: {e}")

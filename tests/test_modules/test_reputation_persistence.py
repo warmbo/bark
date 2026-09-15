@@ -167,12 +167,26 @@ async def test_second_emoji_on_same_message_awards_points(db):
     module = ReputationModule(MagicMock())
     config = {"caps": {}, "level_constant": 50}
     await module._add_points(
-        1, 200, 2.0, "reaction", actor_id=100, target_id=200, message_id=999,
-        emoji="👍", config=config,
+        1,
+        200,
+        2.0,
+        "reaction",
+        actor_id=100,
+        target_id=200,
+        message_id=999,
+        emoji="👍",
+        config=config,
     )
     await module._add_points(
-        1, 200, 2.0, "reaction", actor_id=100, target_id=200, message_id=999,
-        emoji="❤️", config=config,
+        1,
+        200,
+        2.0,
+        "reaction",
+        actor_id=100,
+        target_id=200,
+        message_id=999,
+        emoji="❤️",
+        config=config,
     )
 
     async with session_scope() as session:
@@ -214,12 +228,26 @@ async def test_duplicate_reaction_event_is_ignored_not_crash(db):
     module = ReputationModule(MagicMock())
     config = {"caps": {}, "level_constant": 50}
     result1 = await module._add_points(
-        1, 200, 2.0, "reaction", actor_id=100, target_id=200, message_id=999,
-        emoji="👍", config=config,
+        1,
+        200,
+        2.0,
+        "reaction",
+        actor_id=100,
+        target_id=200,
+        message_id=999,
+        emoji="👍",
+        config=config,
     )
     result2 = await module._add_points(
-        1, 200, 2.0, "reaction", actor_id=100, target_id=200, message_id=999,
-        emoji="👍", config=config,
+        1,
+        200,
+        2.0,
+        "reaction",
+        actor_id=100,
+        target_id=200,
+        message_id=999,
+        emoji="👍",
+        config=config,
     )
 
     async with session_scope() as session:
@@ -274,9 +302,7 @@ async def test_thanks_cooldown_claimed_before_award(db):
         # Record whether the cooldown was already claimed when the first
         # award starts. If the fix regresses (claim-after-award), this is
         # 0 and the second invocation would also pass the check.
-        cooldown_claimed_at_call.append(
-            (42, 99) in module._thanks_cooldowns
-        )
+        cooldown_claimed_at_call.append((42, 99) in module._thanks_cooldowns)
         return await original_add_points(*args, **kwargs)
 
     module._add_points = recording_add_points

@@ -52,7 +52,6 @@ def test_check_api_permission_reputation_manage_allows_moderator(monkeypatch):
     from unittest.mock import MagicMock
 
     import config
-
     from services.response import check_api_permission, get_permission_service
 
     svc = get_permission_service()

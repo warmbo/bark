@@ -11,6 +11,7 @@ The fix: register the flat single-command dispatcher (string command/args
 options) — Bark's intended design — which fits trivially and whose autocomplete
 still exposes every module command including `/bark birthday set`.
 """
+
 import importlib
 import json
 
@@ -73,7 +74,9 @@ def _flat_payload_bytes(cmd) -> int:
     options (command + args)."""
     opts = []
     for o in getattr(cmd, "options", []):
-        opts.append({"name": o.name, "description": o.description or "", "type": 3, "required": o.required})
+        opts.append(
+            {"name": o.name, "description": o.description or "", "type": 3, "required": o.required}
+        )
     payload = {"name": cmd.name, "description": cmd.description or "", "type": 1, "options": opts}
     return len(json.dumps(payload, separators=(",", ":")).encode())
 

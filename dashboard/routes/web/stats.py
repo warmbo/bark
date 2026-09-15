@@ -1,6 +1,7 @@
 """
 Statistics web route — server stats / charts page.
 """
+
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -22,7 +23,8 @@ async def stats_page(request: Request, guild_id: int):
 
     if guild is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",

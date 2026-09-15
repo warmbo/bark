@@ -91,9 +91,7 @@ def test_install_stops_old_instance_before_update():
     stop_idx = upd_head.find("stop_old_instance")
     fetch_idx = upd_head.find("fetch --quiet origin")
     assert stop_idx != -1, "stop_old_instance not called in the update path"
-    assert (
-        stop_idx < fetch_idx
-    ), "stop_old_instance must run before git mutates the checkout"
+    assert stop_idx < fetch_idx, "stop_old_instance must run before git mutates the checkout"
 
     # The helper stops the systemd unit if active...
     assert "systemctl --user is-active bark.service" in src
@@ -130,8 +128,8 @@ def test_failed_update_rolls_code_back_and_restarts_previous_service():
     assert 'PRE_UPDATE_COMMIT="$(git -C "$BARK_INSTALL_DIR" rev-parse HEAD)"' in src
     assert "rollback_failed_update()" in src
     assert 'git -C "$BARK_INSTALL_DIR" reset --hard "$PRE_UPDATE_COMMIT"' in src
-    assert 'trap rollback_failed_update ERR' in src
-    assert 'systemctl --user start bark.service' in src
+    assert "trap rollback_failed_update ERR" in src
+    assert "systemctl --user start bark.service" in src
     assert "Database backup retained at:" in src
     assert "recreate_previous_venv" in src
     assert "Rollback failed; Bark was left stopped" in src
@@ -141,7 +139,7 @@ def test_update_waits_for_stable_service_and_http_health():
     """An activating/restarting systemd unit is not a successful update."""
     src = INSTALL_MAIN.read_text()
     assert "wait_for_bark_health()" in src
-    assert 'systemctl --user show bark.service -p ActiveState --value' in src
+    assert "systemctl --user show bark.service -p ActiveState --value" in src
     assert '"http://127.0.0.1:${BARK_INSTALL_PORT}/api/v1/health"' in src
     assert "Bark did not become healthy after the update" in src
 
@@ -175,10 +173,7 @@ def test_install_main_disk_preflight():
     assert "nearest_existing_dir()" in src
     assert "check_writable_with_space()" in src
     # Invoked for the install dir with a ~512 MB requirement.
-    assert (
-        'check_writable_with_space "install directory" "$BARK_INSTALL_DIR" 524288'
-        in src
-    )
+    assert 'check_writable_with_space "install directory" "$BARK_INSTALL_DIR" 524288' in src
     # Clear, human-readable failure messages.
     assert "Not enough free space" in src
     assert "is not writable" in src

@@ -26,20 +26,20 @@ logger = logging.getLogger("bark.dashboard")
 # renders even on pages that do not load main.css (landing standalone page,
 # bare error responses). Keep the data URI escaped exactly as served.
 _OVERLAY_MARKUP = (
-    '<style>\n'
-    '.dev-badge-overlay {\n'
-    '  position: fixed;\n'
-    '  inset: 0;\n'
-    '  z-index: 2147483000;\n'
-    '  pointer-events: none;\n'
+    "<style>\n"
+    ".dev-badge-overlay {\n"
+    "  position: fixed;\n"
+    "  inset: 0;\n"
+    "  z-index: 2147483000;\n"
+    "  pointer-events: none;\n"
     "  background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 "
-    'width=%22320%22 height=%22320%22 viewBox=%220 0 320 320%22><text x=%22160%22 y=%22160%22 '
-    'transform=%22rotate(-30 160 160)%22 fill=%22%23ffffff%22 font-family=%22Inter,Arial,sans-serif%22 '
-    'font-size=%2226%22 font-weight=%22800%22 letter-spacing=%224%22 text-anchor=%22middle%22 '
-    'opacity=%220.04%22>DEV VERSION</text></svg>\');\n'
-    '  background-size: 320px 320px;\n'
-    '}\n'
-    '</style>\n'
+    "width=%22320%22 height=%22320%22 viewBox=%220 0 320 320%22><text x=%22160%22 y=%22160%22 "
+    "transform=%22rotate(-30 160 160)%22 fill=%22%23ffffff%22 font-family=%22Inter,Arial,sans-serif%22 "
+    "font-size=%2226%22 font-weight=%22800%22 letter-spacing=%224%22 text-anchor=%22middle%22 "
+    "opacity=%220.04%22>DEV VERSION</text></svg>');\n"
+    "  background-size: 320px 320px;\n"
+    "}\n"
+    "</style>\n"
     '<div class="dev-badge-overlay" aria-hidden="true"></div>'
 )
 

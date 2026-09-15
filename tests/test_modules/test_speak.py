@@ -75,9 +75,7 @@ async def test_speak_sends_phrase_publicly():
     interaction = _Interaction(guild_id=100)
     cmd = module._make_speak_command()
     await cmd.callback(interaction, key="word1")
-    assert interaction.response.messages == [
-        {"content": "hello there", "ephemeral": None}
-    ]
+    assert interaction.response.messages == [{"content": "hello there", "ephemeral": None}]
 
 
 @pytest.mark.asyncio
@@ -166,9 +164,7 @@ async def test_speak_api_enforces_manage_permission(db, monkeypatch):
     async with session_scope() as session:
         session.add(DashboardUser(discord_id="42", username="Cody", role="viewer"))
         session.add(Guild(discord_id="100", name="Guild"))
-        session.add(
-            GuildSetting(guild_id="100", key="dashboard_moderator_roles", value='["555"]')
-        )
+        session.add(GuildSetting(guild_id="100", key="dashboard_moderator_roles", value='["555"]'))
         await session.flush()
         await replace_user_guild_access(
             session,

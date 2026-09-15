@@ -95,9 +95,7 @@ async def restore_database_backup(request: Request, file: UploadFile):
 
 
 @router.post("/instance/backup/restore/apply")
-async def apply_database_restore(
-    request: Request, background_tasks: BackgroundTasks
-):
+async def apply_database_restore(request: Request, background_tasks: BackgroundTasks):
     """Restart Bark so a staged database is swapped and migrated at startup."""
     if not can_manage_instance(request):
         return api_error("Owner access required", status_code=403)

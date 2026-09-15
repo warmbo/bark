@@ -419,8 +419,7 @@ async def _add_dashboard_guild_access_roles(connection: AsyncConnection) -> None
     }
     if "roles" not in columns:
         await connection.exec_driver_sql(
-            "ALTER TABLE dashboard_guild_access "
-            "ADD COLUMN roles VARCHAR(512) NOT NULL DEFAULT ''"
+            "ALTER TABLE dashboard_guild_access ADD COLUMN roles VARCHAR(512) NOT NULL DEFAULT ''"
         )
 
 
@@ -518,7 +517,9 @@ async def _add_reputation_event_emoji(connection: AsyncConnection) -> None:
             [tuple(row) for row in rows],
         )
     await connection.exec_driver_sql("DROP TABLE reputation_events")
-    await connection.exec_driver_sql("ALTER TABLE reputation_events_new RENAME TO reputation_events")
+    await connection.exec_driver_sql(
+        "ALTER TABLE reputation_events_new RENAME TO reputation_events"
+    )
     for index_sql in (
         "CREATE INDEX IF NOT EXISTS ix_reputation_events_guild_id ON reputation_events (guild_id)",
         "CREATE INDEX IF NOT EXISTS ix_reputation_events_actor_id ON reputation_events (actor_id)",
@@ -571,13 +572,11 @@ async def _add_activity_snapshot_message_breakdown(connection: AsyncConnection) 
     }
     if "channel_messages" not in columns:
         await connection.exec_driver_sql(
-            "ALTER TABLE activity_snapshots "
-            "ADD COLUMN channel_messages TEXT NOT NULL DEFAULT '{}'"
+            "ALTER TABLE activity_snapshots ADD COLUMN channel_messages TEXT NOT NULL DEFAULT '{}'"
         )
     if "emoji_counts" not in columns:
         await connection.exec_driver_sql(
-            "ALTER TABLE activity_snapshots "
-            "ADD COLUMN emoji_counts TEXT NOT NULL DEFAULT '{}'"
+            "ALTER TABLE activity_snapshots ADD COLUMN emoji_counts TEXT NOT NULL DEFAULT '{}'"
         )
 
 

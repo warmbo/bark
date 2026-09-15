@@ -32,8 +32,7 @@ def _author(author_id: int = 100):
 
 def _attachments(sizes=(175646, 79957, 80934, 47283)):
     return [
-        SimpleNamespace(filename=f"{i}.jpg", size=size)
-        for i, size in enumerate(sizes, start=1)
+        SimpleNamespace(filename=f"{i}.jpg", size=size) for i, size in enumerate(sizes, start=1)
     ]
 
 

@@ -39,7 +39,9 @@ _SEND_TIMEOUT_SECONDS = 10.0
 
 async def _send_with_timeout(channel, *, content=None, embed=None) -> None:
     """Send a message with a hard timeout so a stalled Discord call fails fast."""
-    await asyncio.wait_for(channel.send(content=content, embed=embed), timeout=_SEND_TIMEOUT_SECONDS)
+    await asyncio.wait_for(
+        channel.send(content=content, embed=embed), timeout=_SEND_TIMEOUT_SECONDS
+    )
 
 
 def _full_width_spacer_url(ctx) -> str:
@@ -452,9 +454,7 @@ class AnnouncementsModule(BarkModule):
                 timezone_name = str(data.get("timezone_name", "UTC") or "UTC").strip()
                 recurrence_unit = str(data.get("recurrence_unit", "") or "").strip() or None
                 try:
-                    scheduled_for = datetime.fromisoformat(
-                        raw_scheduled_for.replace("Z", "+00:00")
-                    )
+                    scheduled_for = datetime.fromisoformat(raw_scheduled_for.replace("Z", "+00:00"))
                     if scheduled_for.tzinfo is None:
                         scheduled_for = scheduled_for.replace(tzinfo=ZoneInfo(timezone_name))
                     scheduled_for = scheduled_for.astimezone(timezone.utc)
@@ -568,9 +568,7 @@ class AnnouncementsModule(BarkModule):
             )
 
         @router.patch("/guilds/{guild_id}/modules/announcements/schedules/{schedule_id}")
-        async def pause_announcement_schedule(
-            request: Request, guild_id: str, schedule_id: int
-        ):
+        async def pause_announcement_schedule(request: Request, guild_id: str, schedule_id: int):
             from services.announcement_schedules import set_schedule_paused
             from services.response import (
                 api_forbidden,
@@ -593,9 +591,7 @@ class AnnouncementsModule(BarkModule):
             return api_success({"updated": True})
 
         @router.delete("/guilds/{guild_id}/modules/announcements/schedules/{schedule_id}")
-        async def delete_announcement_schedule(
-            request: Request, guild_id: str, schedule_id: int
-        ):
+        async def delete_announcement_schedule(request: Request, guild_id: str, schedule_id: int):
             from services.announcement_schedules import delete_schedule
             from services.response import (
                 api_forbidden,

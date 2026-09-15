@@ -10,6 +10,7 @@ until an admin manually added a ModuleRoleAccess override row (which the UI
 offered no way to do). The fix: an unset module action falls back to its
 declared role instead of admin.
 """
+
 import importlib
 
 from modules.base import BarkModule
@@ -55,7 +56,6 @@ def test_check_api_permission_module_action_defaults_to_declared_role(monkeypatc
     from unittest.mock import MagicMock
 
     import config
-
     from services.response import check_api_permission, get_permission_service
 
     # Discover so _module_actions carries the module-declared roles.

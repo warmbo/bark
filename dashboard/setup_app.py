@@ -73,7 +73,9 @@ async def run_setup() -> None:
 
     app = create_setup_app()
     host = resolve_setup_host(config.dashboard.host, config.dashboard.setup_token)
-    logger.info("Setup mode: open http://%s:%s/setup to configure Bark", host, config.dashboard.port)
+    logger.info(
+        "Setup mode: open http://%s:%s/setup to configure Bark", host, config.dashboard.port
+    )
     server = Server(
         Config(
             app,

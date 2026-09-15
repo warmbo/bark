@@ -13,13 +13,25 @@ TOKEN = "test-token"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 PAYLOAD = {
-    "user": {"id": "1", "display_name": "Cody", "username": "cody",
-             "presence": "online", "joined_at": "2024-01-05T00:00:00Z"},
+    "user": {
+        "id": "1",
+        "display_name": "Cody",
+        "username": "cody",
+        "presence": "online",
+        "joined_at": "2024-01-05T00:00:00Z",
+    },
     "roles": [],
-    "reputation": {"score": 1240.5, "level": 12, "tier": "Legend",
-                   "tier_color": "#3b82f6", "tier_progress": 0.62,
-                   "messages": 4210, "reactions": 930, "thanks": 84,
-                   "voice_minutes": 1820},
+    "reputation": {
+        "score": 1240.5,
+        "level": 12,
+        "tier": "Legend",
+        "tier_color": "#3b82f6",
+        "tier_progress": 0.62,
+        "messages": 4210,
+        "reactions": 930,
+        "thanks": 84,
+        "voice_minutes": 1820,
+    },
     "activity": {"bars_weekly": [3, 5, 2, 8, 6, 4, 7]},
     "badges": [{"name": "Early", "description": "", "icon": ""}],
     "favorites": [{"channel_id": "1", "name": "general", "count": 320}],
@@ -55,9 +67,16 @@ async def test_unknown_job_404(client):
 
 @pytest.mark.asyncio
 async def test_full_render_lifecycle(client):
-    r = await client.post("/v1/render", json={
-        "kind": "profile", "guild_id": "g1", "user_id": "u1", "payload": PAYLOAD,
-    }, headers=AUTH)
+    r = await client.post(
+        "/v1/render",
+        json={
+            "kind": "profile",
+            "guild_id": "g1",
+            "user_id": "u1",
+            "payload": PAYLOAD,
+        },
+        headers=AUTH,
+    )
     assert r.status_code == 200
     job_id = r.json()["job_id"]
 
@@ -78,9 +97,16 @@ async def test_full_render_lifecycle(client):
 @pytest.mark.asyncio
 async def test_cache_hit_returns_same_file(client):
     def post():
-        return client.post("/v1/render", json={
-            "kind": "profile", "guild_id": "g1", "user_id": "u1", "payload": PAYLOAD,
-        }, headers=AUTH)
+        return client.post(
+            "/v1/render",
+            json={
+                "kind": "profile",
+                "guild_id": "g1",
+                "user_id": "u1",
+                "payload": PAYLOAD,
+            },
+            headers=AUTH,
+        )
 
     async def poll(job_id):
         for _ in range(100):
@@ -154,9 +180,15 @@ async def test_payload_endpoint_collects_from_db(client, tmp_path, monkeypatch):
     db = tmp_path / "bark.db"
     _seed_db(db)
     monkeypatch.setenv("BARK_MEDIA_DB_PATH", str(db))
-    r = await client.post("/v1/payload", json={
-        "kind": "profile", "guild_id": "g1", "user_id": "u1",
-    }, headers=AUTH)
+    r = await client.post(
+        "/v1/payload",
+        json={
+            "kind": "profile",
+            "guild_id": "g1",
+            "user_id": "u1",
+        },
+        headers=AUTH,
+    )
     assert r.status_code == 200
     data = r.json()
     assert data["reputation"]["score"] == 500.0
@@ -171,10 +203,16 @@ async def test_render_enriches_missing_blocks_from_db(client, tmp_path, monkeypa
     _seed_db(db)
     monkeypatch.setenv("BARK_MEDIA_DB_PATH", str(db))
     # plugin-style partial payload: live Discord facts only
-    r = await client.post("/v1/render", json={
-        "kind": "profile", "guild_id": "g1", "user_id": "u1",
-        "payload": {"user": {"id": "u1", "display_name": "Cody", "username": "cody"}},
-    }, headers=AUTH)
+    r = await client.post(
+        "/v1/render",
+        json={
+            "kind": "profile",
+            "guild_id": "g1",
+            "user_id": "u1",
+            "payload": {"user": {"id": "u1", "display_name": "Cody", "username": "cody"}},
+        },
+        headers=AUTH,
+    )
     assert r.status_code == 200
     job_id = r.json()["job_id"]
     for _ in range(100):

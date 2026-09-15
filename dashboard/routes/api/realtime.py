@@ -97,17 +97,14 @@ async def _event_stream(guild_id: str, request: Request, user_id: str):
                 try:
                     from services.response import recheck_api_permission
 
-                    ok = await recheck_api_permission(
-                        request, "moderation.view", guild_id, user_id
-                    )
+                    ok = await recheck_api_permission(request, "moderation.view", guild_id, user_id)
                 except Exception:
                     # recheck_api_permission is itself fail-closed, but a
                     # residual error (import/config/cache lookup) must not
                     # kill this task silently — that would leave the stream
                     # open with no revalidation at all. Fail closed: revoke.
                     logger.exception(
-                        "Authorization recheck raised for user %s guild %s — "
-                        "closing stream",
+                        "Authorization recheck raised for user %s guild %s — closing stream",
                         user_id,
                         guild_id,
                     )

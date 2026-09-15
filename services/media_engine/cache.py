@@ -15,8 +15,7 @@ from pathlib import Path
 from .config import get_config
 
 
-def cache_key(kind: str, guild_id, user_id, theme: str, art_mode: str,
-              payload: dict | None) -> str:
+def cache_key(kind: str, guild_id, user_id, theme: str, art_mode: str, payload: dict | None) -> str:
     h = hashlib.sha256()
     parts = [
         kind,

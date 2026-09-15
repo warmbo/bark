@@ -33,6 +33,7 @@ def _owner_or_forbidden(request: Request):
         return api_forbidden("Owner access required")
     return None
 
+
 # Activity type mapping for Discord
 ACTIVITY_TYPES = {
     "playing": 0,

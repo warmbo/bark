@@ -95,7 +95,9 @@ async def list_members(
     elif sort == "account_age":
         candidates.sort(key=lambda m: m[1], reverse=rev)
     elif sort == "role":
-        candidates.sort(key=lambda m: (m[0].top_role.name.lower() if m[0].top_role else "None"), reverse=rev)
+        candidates.sort(
+            key=lambda m: m[0].top_role.name.lower() if m[0].top_role else "None", reverse=rev
+        )
 
     total = len(candidates)
     start = page * limit
@@ -111,7 +113,11 @@ async def list_members(
             "created_at": member.created_at.isoformat() if member.created_at else None,
             "account_age_days": account_age_days,
             "roles": [
-                {"id": str(r.id), "name": r.name, "color": str(r.color) if r.color and r.color.value else None}
+                {
+                    "id": str(r.id),
+                    "name": r.name,
+                    "color": str(r.color) if r.color and r.color.value else None,
+                }
                 for r in member.roles[1:]
             ],
             "top_role": member.top_role.name if member.top_role else "None",
@@ -198,7 +204,11 @@ async def get_member_detail(request: Request, guild_id: str, user_id: str):
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "created_at": member.created_at.isoformat() if member.created_at else None,
             "roles": [
-                {"id": str(r.id), "name": r.name, "color": str(r.color) if r.color and r.color.value else None}
+                {
+                    "id": str(r.id),
+                    "name": r.name,
+                    "color": str(r.color) if r.color and r.color.value else None,
+                }
                 for r in member.roles[1:]
             ],
             "top_role": member.top_role.name if member.top_role else "None",
@@ -370,7 +380,11 @@ async def _mod_action(request: Request, guild_id: str, action: str, executor):
     if action == "timeout":
         if duration is None:
             return api_error("duration is required for timeout")
-        if isinstance(duration, bool) or not isinstance(duration, int) or not 1 <= duration <= 40320:
+        if (
+            isinstance(duration, bool)
+            or not isinstance(duration, int)
+            or not 1 <= duration <= 40320
+        ):
             return api_error("duration must be an integer between 1 and 40320 minutes (28 days)")
 
     try:
@@ -401,12 +415,8 @@ async def _mod_action(request: Request, guild_id: str, action: str, executor):
             # the bot couldn't observe it). Fail closed: never moderate on a
             # stale DashboardGuildAccess snapshot alone.
             return api_forbidden("Could not verify your membership in this server")
-        if required_perm and not getattr(
-            actor_member.guild_permissions, required_perm, False
-        ):
-            return api_forbidden(
-                f"You lack '{required_perm}' Discord permission for {action}"
-            )
+        if required_perm and not getattr(actor_member.guild_permissions, required_perm, False):
+            return api_forbidden(f"You lack '{required_perm}' Discord permission for {action}")
         # Role hierarchy check: actor's top role must be above target's top role
         if action in ("kick", "ban", "timeout"):
             actor_top = actor_member.top_role.position

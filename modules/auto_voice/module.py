@@ -190,9 +190,7 @@ class AutoVoiceModule(BarkModule):
 
     def get_permissions(self) -> list[PermissionDefinition]:
         return [
-            PermissionDefinition(
-                name="auto_voice.manage", label="Manage Auto Voice Channels"
-            ),
+            PermissionDefinition(name="auto_voice.manage", label="Manage Auto Voice Channels"),
             PermissionDefinition(
                 name="auto_voice.configure",
                 label="Configure Auto Voice Settings",
@@ -607,10 +605,7 @@ class AutoVoiceModule(BarkModule):
         # stale cache left empty temp channels alive forever (and their DB rows
         # behind). _delete_if_empty re-verifies after the delay and refuses to
         # touch a channel that genuinely still has members.
-        if (
-            before_channel is not None
-            and int(before_channel.id) in self._managed_channels
-        ):
+        if before_channel is not None and int(before_channel.id) in self._managed_channels:
             await self._schedule_deletion(before_channel, config)
 
         refreshed: set[int] = set()
@@ -790,7 +785,8 @@ class AutoVoiceModule(BarkModule):
             await self.ctx.delete_auto_voice_channel(channel_id)
         except Exception:
             self._logger.warning(
-                "Could not clear persisted state for temp channel %s", channel_id,
+                "Could not clear persisted state for temp channel %s",
+                channel_id,
                 exc_info=True,
             )
 
@@ -868,7 +864,10 @@ class AutoVoiceModule(BarkModule):
         channel_id = int(channel.id)
         # Rate-limit-aware guard: never hammer Discord's channel-edit endpoint.
         # See _RENAME_COOLDOWN_SECONDS for why.
-        if time.monotonic() - self._last_rename_at.get(channel_id, 0.0) < self._RENAME_COOLDOWN_SECONDS:
+        if (
+            time.monotonic() - self._last_rename_at.get(channel_id, 0.0)
+            < self._RENAME_COOLDOWN_SECONDS
+        ):
             return
         lock = self._rename_locks.setdefault(channel_id, asyncio.Lock())
         async with lock:

@@ -275,8 +275,10 @@ class ReputationModule(BarkModule):
         cfg: dict = {}
         try:
             cfg = await self.ctx.get_module_config(self.name, guild_id)
-            info["config"] = {k: cfg.get(k) for k in ("leaderboard_size", "enabled_sources", "weights")}
-            info["scoring_sources"] = (cfg.get("enabled_sources") or {})
+            info["config"] = {
+                k: cfg.get(k) for k in ("leaderboard_size", "enabled_sources", "weights")
+            }
+            info["scoring_sources"] = cfg.get("enabled_sources") or {}
         except Exception as exc:  # config load failure is itself diagnostic
             info["config"] = f"(failed to load: {exc!r})"
             info["status"] = "error"
@@ -326,12 +328,8 @@ class ReputationModule(BarkModule):
                     if perms is not None and our_member is not None:
                         try:
                             chan_perms = perms(our_member)
-                            entry["bot_can_view"] = bool(
-                                getattr(chan_perms, "view_channel", True)
-                            )
-                            entry["bot_can_send"] = bool(
-                                getattr(chan_perms, "send_messages", True)
-                            )
+                            entry["bot_can_view"] = bool(getattr(chan_perms, "view_channel", True))
+                            entry["bot_can_send"] = bool(getattr(chan_perms, "send_messages", True))
                             if not entry["bot_can_view"]:
                                 issues.append("bot cannot view the showoff channel")
                             if not entry["bot_can_send"]:
@@ -346,19 +344,22 @@ class ReputationModule(BarkModule):
         # breakdown over the last 24h, so "scores aren't being recorded" shows up
         # as zero events rather than as a mystery.
         try:
-            from datetime import timedelta, timezone as _tz
+            from datetime import timedelta
+            from datetime import timezone as _tz
 
             from sqlalchemy import func, select
 
             since = datetime.now(_tz.utc) - timedelta(hours=24)
             async with session_scope() as session:
                 total = await session.scalar(
-                    select(func.count()).select_from(ReputationProfile).where(
-                        ReputationProfile.guild_id == str(guild_id)
-                    )
+                    select(func.count())
+                    .select_from(ReputationProfile)
+                    .where(ReputationProfile.guild_id == str(guild_id))
                 )
                 recent = await session.scalar(
-                    select(func.count()).select_from(ReputationEvent).where(
+                    select(func.count())
+                    .select_from(ReputationEvent)
+                    .where(
                         ReputationEvent.guild_id == str(guild_id),
                         ReputationEvent.created_at >= since,
                     )
@@ -376,9 +377,7 @@ class ReputationModule(BarkModule):
                 info["recent_score_activity"] = {
                     "profiles_total": int(total or 0),
                     "events_last_24h": int(recent or 0),
-                    "events_last_24h_by_type": {
-                        str(et): int(c) for et, c in event_types
-                    },
+                    "events_last_24h_by_type": {str(et): int(c) for et, c in event_types},
                 }
                 if int(recent or 0) == 0 and int(total or 0) > 0:
                     issues.append("no reputation events recorded in the last 24h")
@@ -417,7 +416,6 @@ class ReputationModule(BarkModule):
         return info
 
     async def _coop_leaderboard(self, guild_id: int) -> dict | None:
-
         """Optional data provider: a 'Top Members' leaderboard card (or None)."""
         try:
             from sqlalchemy import desc, select
@@ -427,13 +425,17 @@ class ReputationModule(BarkModule):
 
             async with session_scope() as session:
                 rows = (
-                    await session.execute(
-                        select(ReputationProfile)
-                        .where(ReputationProfile.guild_id == str(guild_id))
-                        .order_by(desc(ReputationProfile.total_score))
-                        .limit(5)
+                    (
+                        await session.execute(
+                            select(ReputationProfile)
+                            .where(ReputationProfile.guild_id == str(guild_id))
+                            .order_by(desc(ReputationProfile.total_score))
+                            .limit(5)
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
             if not rows:
                 return None
 
@@ -785,9 +787,7 @@ class ReputationModule(BarkModule):
                 if err:
                     return api_error(err, status_code=400)
             if "min_score" in payload:
-                min_score, err = self._parse_tier_field(
-                    payload["min_score"], field="min_score"
-                )
+                min_score, err = self._parse_tier_field(payload["min_score"], field="min_score")
                 if err:
                     return api_error(err, status_code=400)
             if "sort_order" in payload:
@@ -933,9 +933,7 @@ class ReputationModule(BarkModule):
                     )
                 )
                 if existing.scalar_one_or_none() is not None:
-                    return api_error(
-                        f"A tier named '{name}' already exists", status_code=400
-                    )
+                    return api_error(f"A tier named '{name}' already exists", status_code=400)
                 max_order = (
                     await session.execute(
                         select(func.max(ReputationTier.sort_order)).where(
@@ -1003,9 +1001,7 @@ class ReputationModule(BarkModule):
                     )
                 ).scalar_one()
                 if remaining <= 1:
-                    return api_error(
-                        "Cannot delete the last tier", status_code=400
-                    )
+                    return api_error("Cannot delete the last tier", status_code=400)
 
                 # Re-tier profiles that referenced this tier using the ladder
                 # that will remain (so nobody is stranded on a stale name).
@@ -1041,9 +1037,7 @@ class ReputationModule(BarkModule):
                 )
                 for prof in profiles_result.scalars().all():
                     prof.level = level_from_score(prof.total_score, level_const)
-                    resolved = resolve_tier(
-                        tier_dicts, prof.level, prof.total_score
-                    )
+                    resolved = resolve_tier(tier_dicts, prof.level, prof.total_score)
                     prof.current_tier = resolved["name"]
 
                 # Rewards gated on the removed tier can never fire — clear them.
@@ -1080,11 +1074,11 @@ class ReputationModule(BarkModule):
                         await session.execute(
                             select(ReputationTier)
                             .where(ReputationTier.guild_id == str(gid))
-                            .order_by(
-                                ReputationTier.sort_order, ReputationTier.min_level
-                            )
+                            .order_by(ReputationTier.sort_order, ReputationTier.min_level)
                         )
-                    ).scalars().all()
+                    )
+                    .scalars()
+                    .all()
                 )
 
             created: list[dict] = []
@@ -1110,9 +1104,7 @@ class ReputationModule(BarkModule):
                         status_code=403,
                     )
                 except discord.HTTPException as exc:
-                    return api_error(
-                        f"Discord refused role creation: {exc}", status_code=400
-                    )
+                    return api_error(f"Discord refused role creation: {exc}", status_code=400)
 
                 async with session_scope() as session:
                     from sqlalchemy import select
@@ -1296,12 +1288,40 @@ class ReputationModule(BarkModule):
     # you'd want it ("purpose"). Existing deployments get newly-added defaults on
     # next boot because _ensure_default_tiers inserts any that are missing.
     _DEFAULT_TIERS: tuple[tuple, ...] = (
-        ("Recruit", "⬜", 0, "#99aab5", 0, "Everyone starts here — the more you take part, the faster you rise."),
-        ("Scout", "🥉", 10, "#cd7f32", 1, "You're getting noticed. Keep contributing to climb the ladder."),
-        ("Warrior", "🥈", 20, "#c0c0c0", 2, "A reliable regular. Eligible for early channel perks."),
+        (
+            "Recruit",
+            "⬜",
+            0,
+            "#99aab5",
+            0,
+            "Everyone starts here — the more you take part, the faster you rise.",
+        ),
+        (
+            "Scout",
+            "🥉",
+            10,
+            "#cd7f32",
+            1,
+            "You're getting noticed. Keep contributing to climb the ladder.",
+        ),
+        (
+            "Warrior",
+            "🥈",
+            20,
+            "#c0c0c0",
+            2,
+            "A reliable regular. Eligible for early channel perks.",
+        ),
         ("Elite", "🥇", 30, "#ffd700", 3, "A respected voice in the community."),
         ("Champion", "💎", 40, "#e5e4e2", 4, "A standout contributor. Unlocks VIP channels."),
-        ("Sentinel", "🛡️", 45, "#7fb3ff", 5, "Trusted pillar of the server — a natural fit for the moderator track."),
+        (
+            "Sentinel",
+            "🛡️",
+            45,
+            "#7fb3ff",
+            5,
+            "Trusted pillar of the server — a natural fit for the moderator track.",
+        ),
         ("Guardian", "🌟", 50, "#b9f2ff", 6, "The community depends on you. Elevated access."),
         ("Legend", "👑", 60, "#ff6b6b", 7, "A legendary regular. Highest honors."),
         ("Mythic", "🌀", 70, "#ca9ee6", 8, "Barely a myth — nearly untouchable."),
@@ -1377,9 +1397,7 @@ class ReputationModule(BarkModule):
             await asyncio.sleep(3)
             await self._sync_tier_roles(guild_id)
         except Exception:
-            self._logger.exception(
-                "Tier role sync failed for guild %s", guild_id
-            )
+            self._logger.exception("Tier role sync failed for guild %s", guild_id)
 
     async def _sync_tier_roles(self, guild_id: int) -> int:
         """Assign missing tier roles to eligible members. Returns count assigned.
@@ -1570,9 +1588,7 @@ class ReputationModule(BarkModule):
 
         async with session_scope() as session:
             result = await session.execute(
-                select(ReputationProfile).where(
-                    ReputationProfile.guild_id == str(guild_id)
-                )
+                select(ReputationProfile).where(ReputationProfile.guild_id == str(guild_id))
             )
             profiles = []
             for p in result.scalars().all():
@@ -1588,9 +1604,7 @@ class ReputationModule(BarkModule):
                         "messages_count": p.messages_count,
                         "reactions_received": p.reactions_received,
                         "voice_minutes": p.voice_minutes,
-                        "last_activity": (
-                            p.last_activity.isoformat() if p.last_activity else None
-                        ),
+                        "last_activity": (p.last_activity.isoformat() if p.last_activity else None),
                         "week_start": p.week_start.isoformat(),
                         "month_start": p.month_start.isoformat(),
                     }
@@ -1708,9 +1722,17 @@ class ReputationModule(BarkModule):
         # voice events for the same user must not lose score updates.
         async with self._score_lock(guild_id, user_id):
             return await self._add_points_locked(
-                guild_id, user_id, points, event_type,
-                actor_id=actor_id, target_id=target_id, message_id=message_id,
-                channel_id=channel_id, emoji=emoji, metadata=metadata, config=config,
+                guild_id,
+                user_id,
+                points,
+                event_type,
+                actor_id=actor_id,
+                target_id=target_id,
+                message_id=message_id,
+                channel_id=channel_id,
+                emoji=emoji,
+                metadata=metadata,
+                config=config,
             )
 
     async def _add_points_locked(
@@ -2224,9 +2246,7 @@ class ReputationModule(BarkModule):
 
     # ── Event Handlers ───────────────────────────────────
 
-    def _member_is_ignored(
-        self, guild, user_id: int, config: dict, member=None
-    ) -> bool:
+    def _member_is_ignored(self, guild, user_id: int, config: dict, member=None) -> bool:
         """True if the member holds an ignored role (earns no reputation).
 
         Fail-safe: an ``ignored_roles``-configured guild where the member
@@ -2263,9 +2283,7 @@ class ReputationModule(BarkModule):
             return
 
         # Check ignored roles (blocks the message and emoji awards below)
-        if self._member_is_ignored(
-            message.guild, user_id, config, member=message.author
-        ):
+        if self._member_is_ignored(message.guild, user_id, config, member=message.author):
             return
 
         # Dedup
@@ -2393,9 +2411,7 @@ class ReputationModule(BarkModule):
 
         if after_channel is not None:
             # Joined or moved to a channel — don't track ignored members
-            if not self._member_is_ignored(
-                member.guild, user_id, config, member=member
-            ):
+            if not self._member_is_ignored(member.guild, user_id, config, member=member):
                 self._voice_activity[guild_id][user_id] = time.time()
         else:
             # Left voice entirely — award points for time spent
@@ -2488,7 +2504,9 @@ class ReputationModule(BarkModule):
             public="Post in the channel for everyone. Add `private` to keep it to yourself.",
         )
         async def reputation_cmd(
-            interaction: discord.Interaction, member: discord.Member | None = None, public: bool = True
+            interaction: discord.Interaction,
+            member: discord.Member | None = None,
+            public: bool = True,
         ):
             if not interaction.guild:
                 return
@@ -2531,9 +2549,7 @@ class ReputationModule(BarkModule):
 
             # The next tier is the one whose ladder position is strictly above
             # the member's current tier (fall back to "highest reached").
-            current_idx = next(
-                (i for i, t in enumerate(ladder) if t.name == tier_name), -1
-            )
+            current_idx = next((i for i, t in enumerate(ladder) if t.name == tier_name), -1)
             next_tier = ladder[current_idx + 1] if 0 <= current_idx < len(ladder) - 1 else None
 
             progress = next_level_progress(
@@ -2724,9 +2740,7 @@ class ReputationModule(BarkModule):
                     )
 
                 # Points for receiver (skipped if the receiver holds an ignored role)
-                if not self._member_is_ignored(
-                    interaction.guild, target_id, config, member=member
-                ):
+                if not self._member_is_ignored(interaction.guild, target_id, config, member=member):
                     received_points = compute_thanks_received_points(config)
                     await self._add_points(
                         guild_id,

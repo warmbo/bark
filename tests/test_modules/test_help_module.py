@@ -86,9 +86,7 @@ async def test_help_dms_every_command_and_dashboard_info(monkeypatch):
 
     # Guide message carries the how-to instructions
     assert guide.title == "🐺 How to use Bark"
-    guide_text = guide.title + " " + " ".join(
-        f"{f.name} {f.value}" for f in guide.fields
-    )
+    guide_text = guide.title + " " + " ".join(f"{f.name} {f.value}" for f in guide.fields)
     assert "Enable the modules you want" in guide_text
     assert "add-on plugins are off until you turn them on" in guide_text
     assert "/bark help" in guide_text
@@ -116,13 +114,14 @@ async def test_help_falls_back_when_dms_disabled(monkeypatch):
     import config as cfg
 
     monkeypatch.setattr(cfg.config.bot, "command_prefix", "bark!")
-    captured = _CaptureSend(
-        exc=discord.Forbidden(response=MagicMock(status=403), message="no")
-    )
+    captured = _CaptureSend(exc=discord.Forbidden(response=MagicMock(status=403), message="no"))
     bot = SimpleNamespace(commands=_build_prefix_table())
     module = _make_module(bot)
     interaction = _Interaction(captured.send)
 
     await module._make_help_command().callback(interaction)
 
-    assert interaction.response.messages and "couldn't dm you" in interaction.response.messages[0].lower()
+    assert (
+        interaction.response.messages
+        and "couldn't dm you" in interaction.response.messages[0].lower()
+    )

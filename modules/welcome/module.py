@@ -101,7 +101,7 @@ class WelcomeModule(BarkModule):
                     "format": "textarea",
                     "format_toolbar": True,
                     "title": "Welcome Message",
-                    "description": "Message or embed description posted when someone joins. Supports {user}, {user.mention}, {server}, {member_count}, and {invite} (the invite code they joined through, or \"unknown\"). `**bold**`, *italic*, `code`, ||spoiler||, ---",
+                    "description": 'Message or embed description posted when someone joins. Supports {user}, {user.mention}, {server}, {member_count}, and {invite} (the invite code they joined through, or "unknown"). `**bold**`, *italic*, `code`, ||spoiler||, ---',
                     "placeholder": "Welcome {user.mention} to {server}! We now have {member_count} members.",
                     "default": "Welcome {user.mention} to {server}!",
                     "rows": 10,

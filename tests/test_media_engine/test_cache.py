@@ -12,8 +12,9 @@ def test_key_deterministic_and_sensitive():
     b = cache_key("profile", "g1", "u1", "bark", "procedural", payload)
     assert a == b
     assert a != cache_key("profile", "g1", "u2", "bark", "procedural", payload)
-    assert a != cache_key("profile", "g1", "u1", "bark", "procedural",
-                          {**payload, "reputation": {"score": 9.9}})
+    assert a != cache_key(
+        "profile", "g1", "u1", "bark", "procedural", {**payload, "reputation": {"score": 9.9}}
+    )
 
 
 def test_put_get_roundtrip(tmp_path, monkeypatch):

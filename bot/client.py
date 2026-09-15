@@ -177,9 +177,7 @@ class BarkBot(commands.Bot):
                     # sync instantly to the configured test guild. Guild
                     # commands bypass Discord's global-command cache entirely.
                     await self.tree.sync()
-                    await self.tree.sync(
-                        guild=discord.Object(id=config.bot.sync_guild_id)
-                    )
+                    await self.tree.sync(guild=discord.Object(id=config.bot.sync_guild_id))
                     logger.info(
                         "Slash commands synced to guild %s",
                         config.bot.sync_guild_id,
@@ -279,18 +277,12 @@ class BarkBot(commands.Bot):
         # restart. Fresh guilds default to enabled via is_enabled_for_guild.
         for name in list(self.modules.get_all_modules().keys()):
             module = self.modules.get_module(name)
-            if (
-                module is not None
-                and not module.enabled
-                and self.modules.should_run_globally(name)
-            ):
+            if module is not None and not module.enabled and self.modules.should_run_globally(name):
                 await self.modules.enable_module(name)
         if config.bot.sync_commands:
             try:
                 if config.bot.sync_guild_id:
-                    await self.tree.sync(
-                        guild=discord.Object(id=config.bot.sync_guild_id)
-                    )
+                    await self.tree.sync(guild=discord.Object(id=config.bot.sync_guild_id))
                 else:
                     await self.tree.sync()
             except Exception:
@@ -408,9 +400,7 @@ class BarkBot(commands.Bot):
             from services.dashboard_access import revoke_user_guild_access
 
             async with session_scope() as session:
-                revoked = await revoke_user_guild_access(
-                    session, str(member.id), member.guild.id
-                )
+                revoked = await revoke_user_guild_access(session, str(member.id), member.guild.id)
                 if revoked:
                     logger.info(
                         "Revoked dashboard access for user %s in guild %s (member removed)",
@@ -460,8 +450,7 @@ class BarkBot(commands.Bot):
                     )
         except Exception:  # never let membership bookkeeping break the bot
             logger.exception(
-                "Failed to refresh dashboard role snapshot on member update "
-                "(guild %s)",
+                "Failed to refresh dashboard role snapshot on member update (guild %s)",
                 getattr(getattr(after, "guild", None), "id", "?"),
             )
 

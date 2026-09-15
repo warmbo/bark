@@ -50,9 +50,7 @@ def _source_db_path() -> Path:
     url = config.database.url
     prefix = "sqlite+aiosqlite:///"
     if not url.startswith(prefix):
-        raise ValueError(
-            f"Database backups require a sqlite database (got: {url.split('://')[0]})"
-        )
+        raise ValueError(f"Database backups require a sqlite database (got: {url.split('://')[0]})")
     rel = url[len(prefix) :]
     path = Path(rel)
     if path.is_absolute():
@@ -133,9 +131,7 @@ def validate_live_database_foreign_keys() -> None:
         violations = connection.execute("PRAGMA foreign_key_check").fetchmany(10)
         if violations:
             sample = ", ".join(f"{row[0]}:{row[1]}" for row in violations[:3])
-            raise InvalidBackupError(
-                f"Restored database failed foreign-key validation ({sample})"
-            )
+            raise InvalidBackupError(f"Restored database failed foreign-key validation ({sample})")
     finally:
         connection.close()
 
@@ -178,16 +174,12 @@ def stage_database_restore_sync(source: Path, *, source_name: str) -> dict:
 
 
 async def stage_database_restore(source: Path, *, source_name: str) -> dict:
-    return await asyncio.to_thread(
-        stage_database_restore_sync, source, source_name=source_name
-    )
+    return await asyncio.to_thread(stage_database_restore_sync, source, source_name=source_name)
 
 
 def has_pending_database_restore() -> bool:
     directory = _restore_dir()
-    return (directory / RESTORE_DB_NAME).is_file() and (
-        directory / RESTORE_MARKER_NAME
-    ).is_file()
+    return (directory / RESTORE_DB_NAME).is_file() and (directory / RESTORE_MARKER_NAME).is_file()
 
 
 def _quarantine_pending_restore(*paths: Path, reason: str) -> None:

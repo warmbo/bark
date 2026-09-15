@@ -279,9 +279,7 @@ def _config_warnings() -> list[str]:
 
     if config.oauth2.enabled:
         if redirect and not redirect.endswith("/auth/callback"):
-            warnings.append(
-                f"OAuth redirect_uri does not end in /auth/callback ({redirect})"
-            )
+            warnings.append(f"OAuth redirect_uri does not end in /auth/callback ({redirect})")
         for label, url in (("public_url", pub), ("redirect_uri", redirect)):
             if url and url.startswith("http://"):
                 warnings.append(
@@ -295,9 +293,7 @@ def _config_warnings() -> list[str]:
         warnings.append("OAuth is disabled — the dashboard runs public (no login)")
 
     if pub and redirect and pub != redirect.rsplit("/auth/callback", 1)[0].rstrip("/"):
-        warnings.append(
-            f"public_url ({pub}) does not match the host of redirect_uri ({redirect})"
-        )
+        warnings.append(f"public_url ({pub}) does not match the host of redirect_uri ({redirect})")
     return warnings
 
 
@@ -487,7 +483,9 @@ def build_runtime_diagnostics(bot) -> dict:
         me = getattr(guild, "me", None) or getattr(bot, "user", None)
         perms = getattr(me, "guild_permissions", None) if me is not None else None
         if perms is not None:
-            item["our_permissions"] = [p for p in dir(perms) if not p.startswith("_") and getattr(perms, p) is True]
+            item["our_permissions"] = [
+                p for p in dir(perms) if not p.startswith("_") and getattr(perms, p) is True
+            ]
         # Enabled modules for this guild.
         if modules_mgr is not None and hasattr(modules_mgr, "is_enabled_for_guild"):
             try:
@@ -653,10 +651,14 @@ def render_report(report: dict) -> str:
         if runtime.get("available") is False:
             lines.append("  ⚠ bot runtime unavailable — no bot is wired to this dashboard")
             lines.append("    (modules/guilds not enumerated; bot may not be running)")
-        lines.append(f"  bot user      : {runtime.get('bot_user', '(unknown)')} (id {runtime.get('bot_id', '')})")
+        lines.append(
+            f"  bot user      : {runtime.get('bot_user', '(unknown)')} (id {runtime.get('bot_id', '')})"
+        )
         ready = runtime.get("is_ready")
         connected = runtime.get("is_connected")
-        lines.append(f"  connected     : {('yes' if ready else 'no') if ready is not None else '(unknown)'}")
+        lines.append(
+            f"  connected     : {('yes' if ready else 'no') if ready is not None else '(unknown)'}"
+        )
         if connected is not None:
             lines.append(f"  gateway       : {'connected' if connected else 'DISCONNECTED'}")
         latency = runtime.get("latency_ms")
@@ -664,8 +666,10 @@ def render_report(report: dict) -> str:
             lines.append(f"  latency       : {latency} ms")
         lines.append(f"  guild count   : {runtime.get('guild_count', 0)}")
         if ready is False or connected is False:
-            lines.append("  ⚠ BOT IS NOT CONNECTED — no events are being processed; "
-                         "modules cannot post or score. Check the token/intents on Discord.")
+            lines.append(
+                "  ⚠ BOT IS NOT CONNECTED — no events are being processed; "
+                "modules cannot post or score. Check the token/intents on Discord."
+            )
         lines.append("")
         lines.append("[Modules]")
         mods = runtime.get("modules", {})
@@ -676,7 +680,9 @@ def render_report(report: dict) -> str:
             lines.append(f"      enabled_globally: {eg}")
             lines.append(f"      commands: {', '.join(entry.get('commands', [])) or '(none)'}")
             lines.append(f"      events:    {', '.join(entry.get('events', [])) or '(none)'}")
-            lines.append(f"      pages:     {', '.join(entry.get('dashboard_pages', [])) or '(none)'}")
+            lines.append(
+                f"      pages:     {', '.join(entry.get('dashboard_pages', [])) or '(none)'}"
+            )
             lines.append(f"      perms:     {', '.join(entry.get('permissions', [])) or '(none)'}")
             for pg in entry.get("per_guild", []):
                 gid = pg.get("guild_id")
@@ -713,7 +719,9 @@ def render_report(report: dict) -> str:
         for g in gsec.get("items", []):
             lines.append(f"  - {g.get('name')} ({g.get('id')}) members={g.get('member_count')}")
             lines.append(f"      owner_id: {g.get('owner_id')}")
-            lines.append(f"      enabled_modules: {', '.join(g.get('enabled_modules', [])) or '(none)'}")
+            lines.append(
+                f"      enabled_modules: {', '.join(g.get('enabled_modules', [])) or '(none)'}"
+            )
             perms = g.get("our_permissions")
             if perms:
                 lines.append(f"      our_perms: {', '.join(perms)}")

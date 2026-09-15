@@ -113,9 +113,7 @@ def test_rendered_page_literal_ids_are_unique_and_aria_references_resolve():
         html = base + "\n" + page_source
         # Resolve {% include "components/x.html" %} so ids/for-references that
         # live in partials (e.g. bot customization) are checked with the page.
-        for included in re.findall(
-            r'{%\s*include\s+["\']([^"\']+)["\']\s*%}', page_source
-        ):
+        for included in re.findall(r'{%\s*include\s+["\']([^"\']+)["\']\s*%}', page_source):
             partial = TEMPLATES / included
             if partial.is_file():
                 html += "\n" + source(partial)
@@ -137,7 +135,9 @@ def test_rendered_page_literal_ids_are_unique_and_aria_references_resolve():
         # page (e.g. bot customization lives on the Instance settings page).
         html_no_scripts = re.sub(r"<script\b.*?</script>", "", html, flags=re.S)
         for attr in ("for", "aria-controls", "aria-labelledby", "aria-describedby"):
-            references = re.findall(rf'\b{attr}\s*=\s*["\']([A-Za-z][\w:.-]*)["\']', html_no_scripts)
+            references = re.findall(
+                rf'\b{attr}\s*=\s*["\']([A-Za-z][\w:.-]*)["\']', html_no_scripts
+            )
             dangling = sorted(set(reference for reference in references if reference not in ids))
             assert dangling == [], f"{page.relative_to(ROOT)} dangling {attr}: {dangling}"
 
@@ -438,9 +438,7 @@ def test_mobile_drawer_contract():
     js = source(STATIC / "js" / "main.js")
 
     # Hamburger toggle: labelled, controls the sidebar, reflects state
-    toggle = re.search(
-        r"<button[^>]*data-toggle-sidebar[^>]*>", base, re.I | re.S
-    )
+    toggle = re.search(r"<button[^>]*data-toggle-sidebar[^>]*>", base, re.I | re.S)
     assert toggle, "base.html must have a data-toggle-sidebar button"
     tag = toggle.group(0)
     assert 'type="button"' in tag
@@ -449,11 +447,11 @@ def test_mobile_drawer_contract():
     assert 'aria-label="Open navigation menu"' in tag
 
     # Scrim + close control exist and are wired the same way
-    assert 'id="nav-scrim"' in base and 'data-close-sidebar' in base
-    assert re.search(
-        r'<button[^>]*class="sidebar-close"[^>]*>', base, re.I
-    ), "sidebar needs a visible close button for the open drawer"
-    assert 'data-close-sidebar' in base
+    assert 'id="nav-scrim"' in base and "data-close-sidebar" in base
+    assert re.search(r'<button[^>]*class="sidebar-close"[^>]*>', base, re.I), (
+        "sidebar needs a visible close button for the open drawer"
+    )
+    assert "data-close-sidebar" in base
 
     # JS: drawer init + gesture handlers + focus/inert management
     for key in (

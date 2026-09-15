@@ -9,10 +9,8 @@ member via a visibility toggle.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import discord
 import pytest
 
 
@@ -89,7 +87,11 @@ async def test_cases_always_ephemeral_even_when_hide_false(db, interaction):
     assert "hide" not in names, "cases must not expose a public-broadcast toggle"
     await _invoke(cmd, interaction, limit=10)
 
-    defer_kwargs = interaction.response.defer.await_args.kwargs if interaction.response.defer.await_args else {}
+    defer_kwargs = (
+        interaction.response.defer.await_args.kwargs
+        if interaction.response.defer.await_args
+        else {}
+    )
     assert defer_kwargs.get("ephemeral", False) is True, "cases defer must stay ephemeral"
     for call in interaction.followup.send.await_args_list:
         assert call.kwargs.get("ephemeral", False) is True, "cases send must stay ephemeral"
@@ -107,7 +109,11 @@ async def test_warnings_always_ephemeral_even_when_hide_false(db, interaction):
     assert "hide" not in names, "warnings must not expose a public-broadcast toggle"
     await _invoke(cmd, interaction, member=_FakeMember(11, "Alice"))
 
-    defer_kwargs = interaction.response.defer.await_args.kwargs if interaction.response.defer.await_args else {}
+    defer_kwargs = (
+        interaction.response.defer.await_args.kwargs
+        if interaction.response.defer.await_args
+        else {}
+    )
     assert defer_kwargs.get("ephemeral", False) is True, "warnings defer must stay ephemeral"
     for call in interaction.followup.send.await_args_list:
         assert call.kwargs.get("ephemeral", False) is True, "warnings send must stay ephemeral"

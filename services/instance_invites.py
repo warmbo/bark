@@ -131,9 +131,7 @@ async def delete_instance_invite(session: AsyncSession, invite_id: int) -> bool:
     expired, or redeemed. The token is hashed-only, so deleting the row also
     destroys the digest; nothing can be re-derived from it.
     """
-    result = await session.execute(
-        delete(InstanceInvite).where(InstanceInvite.id == invite_id)
-    )
+    result = await session.execute(delete(InstanceInvite).where(InstanceInvite.id == invite_id))
     await session.flush()
     return _affected_rows(result) == 1
 

@@ -219,7 +219,7 @@ def channel_to_branch(channel: str) -> str:
         ref = result.stdout.strip()
         for prefix in ("origin/", "refs/remotes/"):
             if ref.startswith(prefix):
-                return ref[len(prefix):]
+                return ref[len(prefix) :]
         return ref
     return "main"
 
@@ -369,8 +369,8 @@ def check_update(channel: str | None = None) -> dict:
     update_available = False
     if available_version and _version_key(available_version) > _version_key(current_version):
         update_available = True
-    elif available and available != current and not (
-        available and _is_ancestor(available, current)
+    elif (
+        available and available != current and not (available and _is_ancestor(available, current))
     ):
         # Remote branch has no reachable commits yet (empty/stale mirror) —
         # fall back to commit comparison so it still offers nothing wrong.

@@ -511,7 +511,9 @@ class LoggingModule(BarkModule):
                 False,
             ),
         ]
-        await self._send(ch, "👍 Reaction added", f"in <#{payload.channel_id}>", discord.Color.gold(), fields)
+        await self._send(
+            ch, "👍 Reaction added", f"in <#{payload.channel_id}>", discord.Color.gold(), fields
+        )
 
     async def _on_member_join(self, event_type: str, **data):
         member = data.get("member")
@@ -775,7 +777,9 @@ class LoggingModule(BarkModule):
             return api_success({"entries": entries, "total": len(entries)})
 
         @router.get("/guilds/{guild_id}/modules/logging/logs/export")
-        async def export_logs(request: Request, guild_id: str, limit: int = Query(1000, ge=1, le=5000)):
+        async def export_logs(
+            request: Request, guild_id: str, limit: int = Query(1000, ge=1, le=5000)
+        ):
             """Download audit-log entries for this guild as CSV.
 
             Same permission gate as list_logs; the download button on the
@@ -819,7 +823,19 @@ class LoggingModule(BarkModule):
 
             buffer = io.StringIO()
             writer = csv.writer(buffer)
-            writer.writerow(["id", "action", "actor_id", "actor", "target_id", "target", "channel", "details", "created_at"])
+            writer.writerow(
+                [
+                    "id",
+                    "action",
+                    "actor_id",
+                    "actor",
+                    "target_id",
+                    "target",
+                    "channel",
+                    "details",
+                    "created_at",
+                ]
+            )
             for row in rows:
                 details: dict[str, Any] = {}
                 try:

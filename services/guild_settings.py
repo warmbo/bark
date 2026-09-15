@@ -25,13 +25,17 @@ async def get_settings(guild_id: int | str, *keys: str) -> dict[str, str]:
     """Return the given settings for a guild in one query."""
     async with session_scope() as session:
         rows = (
-            await session.execute(
-                select(GuildSetting).where(
-                    GuildSetting.guild_id == str(guild_id),
-                    GuildSetting.key.in_(keys),
+            (
+                await session.execute(
+                    select(GuildSetting).where(
+                        GuildSetting.guild_id == str(guild_id),
+                        GuildSetting.key.in_(keys),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return {row.key: row.value for row in rows}
 
 
@@ -40,13 +44,17 @@ async def set_setting(guild_id: int | str, key: str, value: Any) -> None:
     value_str = "" if value is None else str(value)
     async with session_scope() as session:
         row = (
-            await session.execute(
-                select(GuildSetting).where(
-                    GuildSetting.guild_id == str(guild_id),
-                    GuildSetting.key == key,
+            (
+                await session.execute(
+                    select(GuildSetting).where(
+                        GuildSetting.guild_id == str(guild_id),
+                        GuildSetting.key == key,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if value_str:
             if row:
                 row.value = value_str

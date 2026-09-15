@@ -76,9 +76,16 @@ async def collect_payload(kind: str, guild_id: str, user_id: str) -> dict:
     }
 
 
-async def render_job(kind: str, guild_id: str, user_id: str, theme_name: str | None,
-                     art_mode: str, payload: dict | None, output: str,
-                     cache_ttl_s: int) -> tuple[str, int]:
+async def render_job(
+    kind: str,
+    guild_id: str,
+    user_id: str,
+    theme_name: str | None,
+    art_mode: str,
+    payload: dict | None,
+    output: str,
+    cache_ttl_s: int,
+) -> tuple[str, int]:
     """Run one render job: cache-first, collect-if-needed, render, persist.
 
     Returns (absolute file path, size in bytes).

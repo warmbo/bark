@@ -130,7 +130,7 @@ def test_advanced_themes_are_local_labeled_and_motion_safe():
     assert THREE.stat().st_size > 100_000
     three_module = THREE.read_text()
     assert 'from"./three.core.min.js"' not in three_module
-    assert three_module.count('three.core.0.185.1-bark2.min.js') == 2
+    assert three_module.count("three.core.0.185.1-bark2.min.js") == 2
     assert 'src="/static/js/advanced-theme-loader.js?v=' in base
     loader = (ROOT / "dashboard/static/js/advanced-theme-loader.js").read_text()
     assert "import('/static/js/advanced-themes.js?v=8')" in loader
@@ -139,10 +139,20 @@ def test_advanced_themes_are_local_labeled_and_motion_safe():
     assert "https://" not in runtime and "http://" not in runtime
     assert "Advanced themes" in settings
     for theme in (
-        "hud", "aurora", "neon", "ocean", "sunset", "forest",
-        "candy", "slate", "crimson", "honey", "deepspace", "graffiti",
+        "hud",
+        "aurora",
+        "neon",
+        "ocean",
+        "sunset",
+        "forest",
+        "candy",
+        "slate",
+        "crimson",
+        "honey",
+        "deepspace",
+        "graffiti",
     ):
-        assert f'(\"{theme}\"' in settings
+        assert f'("{theme}"' in settings
         assert theme in runtime or theme == "hud"
     assert "prefers-reduced-motion" in runtime
     assert "@media (prefers-reduced-motion: reduce)" in V3_SOURCE.read_text()

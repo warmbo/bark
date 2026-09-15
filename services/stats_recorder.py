@@ -187,4 +187,3 @@ async def record_game(guild_id: int, game_name: str) -> None:
             )
     except Exception:
         logger.exception("Failed to persist game stat for guild %s", guild_id)
-

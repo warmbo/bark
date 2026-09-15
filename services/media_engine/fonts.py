@@ -98,8 +98,9 @@ def emoji_glyph(char: str, size: int) -> Image.Image | None:
     if fnt is None:
         return None
     canvas = Image.new("RGBA", (strike * 2, strike * 2), (0, 0, 0, 0))
-    ImageDraw.Draw(canvas).text((strike, strike), char, font=fnt,
-                                fill=(255, 255, 255, 255), anchor="mm")
+    ImageDraw.Draw(canvas).text(
+        (strike, strike), char, font=fnt, fill=(255, 255, 255, 255), anchor="mm"
+    )
     bbox = canvas.getbbox()
     if not bbox:
         return None

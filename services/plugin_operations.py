@@ -115,9 +115,7 @@ class PluginOperations:
             self._plugin_files[name] = destination
             self._register_module_api_routes(name)
             if not await self._enable_module(name):
-                raise PluginValidationError(
-                    "Plugin failed to enable; check its enable() method."
-                )
+                raise PluginValidationError("Plugin failed to enable; check its enable() method.")
         except Exception:
             # Roll back the registries so the failed plugin is fully inert.
             self._registry.drop(name)
@@ -172,9 +170,7 @@ class PluginOperations:
         from database.models.permissions import ModuleRoleAccess
 
         async with session_scope() as session:
-            await session.execute(
-                delete(ModuleConfig).where(ModuleConfig.module_name == name)
-            )
+            await session.execute(delete(ModuleConfig).where(ModuleConfig.module_name == name))
             await session.execute(
                 delete(ModuleRoleAccess).where(ModuleRoleAccess.module_name == name)
             )

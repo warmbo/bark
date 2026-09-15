@@ -11,16 +11,30 @@ from services.media_engine.themes import get_theme
 
 PAYLOAD = {
     "user": {
-        "id": "1", "display_name": "Cody Warmbo", "username": "cody",
-        "avatar_url": None, "joined_at": "2024-01-05T18:30:00Z", "presence": "online",
+        "id": "1",
+        "display_name": "Cody Warmbo",
+        "username": "cody",
+        "avatar_url": None,
+        "joined_at": "2024-01-05T18:30:00Z",
+        "presence": "online",
     },
     "roles": [{"name": "Moderator", "color": 0x5865F2, "hoist": True}],
     "reputation": {
-        "score": 1240.5, "level": 12, "tier": "Legend", "tier_symbol": "👑",
-        "tier_color": "#ffb020", "tier_min_score": 1000.0, "next_tier": None,
-        "next_tier_min_score": None, "tier_progress": 0.62,
-        "weekly": 40.2, "monthly": 210.0, "thanks": 84, "messages": 4210,
-        "reactions": 930, "voice_minutes": 1820,
+        "score": 1240.5,
+        "level": 12,
+        "tier": "Legend",
+        "tier_symbol": "👑",
+        "tier_color": "#ffb020",
+        "tier_min_score": 1000.0,
+        "next_tier": None,
+        "next_tier_min_score": None,
+        "tier_progress": 0.62,
+        "weekly": 40.2,
+        "monthly": 210.0,
+        "thanks": 84,
+        "messages": 4210,
+        "reactions": 930,
+        "voice_minutes": 1820,
     },
     "activity": {"bars_weekly": [3, 5, 2, 8, 6, 4, 7], "bars_monthly": [12, 18, 9, 40]},
     "badges": [{"name": "Early Member", "description": "", "icon": ""}],
@@ -29,7 +43,11 @@ PAYLOAD = {
 
 EMPTY_PAYLOAD = {
     "user": {"id": "2", "display_name": "", "username": "ghost"},
-    "roles": [], "reputation": {}, "activity": {}, "badges": [], "favorites": [],
+    "roles": [],
+    "reputation": {},
+    "activity": {},
+    "badges": [],
+    "favorites": [],
 }
 
 

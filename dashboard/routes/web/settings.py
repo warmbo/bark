@@ -34,7 +34,8 @@ async def _settings_page(request: Request, guild_id: int, template: str):
 
     if guild is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",

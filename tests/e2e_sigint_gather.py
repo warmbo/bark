@@ -5,12 +5,13 @@ connected Discord gateway) + the real DashboardApp. Sends SIGINT and asserts
 the process exits. Without the fix, uvicorn's own handler would stop only the
 dashboard and the bot task would keep the process alive (the reported hang).
 """
+
 import signal
 import subprocess
 import sys
 import time
 
-HARNESS = r'''
+HARNESS = r"""
 import asyncio, signal, sys, os
 sys.path.insert(0, ".")
 import app as app_module
@@ -78,7 +79,8 @@ async def _main():
 
 asyncio.run(_main())
 print("PROCESS EXITED CLEANLY", flush=True)
-'''
+"""
+
 
 def main():
     proc = subprocess.Popen(

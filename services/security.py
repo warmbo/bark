@@ -282,10 +282,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # invite is needed for server members. Owner identity is config-backed;
         # an active hosted-instance grant remains a fallback admission path so
         # access revocation still takes effect on the next request.
-        if (
-            config.oauth2.owner_discord_ids
-            and str(user.get("id")) not in {str(oid) for oid in config.oauth2.owner_discord_ids}
-        ):
+        if config.oauth2.owner_discord_ids and str(user.get("id")) not in {
+            str(oid) for oid in config.oauth2.owner_discord_ids
+        }:
             from database.engine import session_scope
             from services.dashboard_access import user_shares_guild_with_bot
             from services.instance_invites import is_instance_user_authorized
@@ -474,9 +473,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         origin = request.headers.get("origin")
         referer = request.headers.get("referer")
         if (
-            (request.url.path.startswith("/api/") or request.url.path == "/auth/logout")
-            and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
-        ):
+            request.url.path.startswith("/api/") or request.url.path == "/auth/logout"
+        ) and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
             # CSRF gate. An Origin header must be trusted when present. When it
             # is absent, fall back to Referer and reject if that is present but
             # untrusted. (Both-absent requests — curl/scripts — carry no victim
@@ -500,10 +498,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Rate-limit /api/ AND the unauthenticated auth entry points (login
         # hammering, callback/share probing) — the only paths reachable without
         # a session.
-        is_auth_entry = (
-            path in {"/auth/login", "/auth/callback", "/auth/logout"}
-            or path.startswith("/auth/share/")
-        )
+        is_auth_entry = path in {
+            "/auth/login",
+            "/auth/callback",
+            "/auth/logout",
+        } or path.startswith("/auth/share/")
         if path.startswith("/api/") or is_auth_entry:
             identity = rate_limit_identity(request)
             read_lim, write_lim = _get_limiters()

@@ -268,9 +268,7 @@ class BarkArgsModal(discord.ui.Modal):
                     "That command failed to run.", ephemeral=True
                 )
             except Exception:
-                await interaction.followup.send(
-                    "That command failed to run.", ephemeral=True
-                )
+                await interaction.followup.send("That command failed to run.", ephemeral=True)
 
 
 # ── Command select (one module) ─────────────────────
@@ -339,9 +337,7 @@ class BarkCommandSelect(discord.ui.Select):
                     "That command failed to run.", ephemeral=True
                 )
             except Exception:
-                await interaction.followup.send(
-                    "That command failed to run.", ephemeral=True
-                )
+                await interaction.followup.send("That command failed to run.", ephemeral=True)
 
 
 class BackToModulesButton(discord.ui.Button):
@@ -395,7 +391,8 @@ class BarkModuleSelect(discord.ui.Select):
         module_name = self.values[0]
         paths = self._modules.get(module_name, [])
         leaves = [
-            self._dispatcher._registry[p] for p in paths  # noqa: SLF001
+            self._dispatcher._registry[p]
+            for p in paths  # noqa: SLF001
             if self._dispatcher._path_enabled(self._guild_id, self._dispatcher._registry[p])  # noqa: SLF001
         ]
         pages = self._dispatcher._build_menu_pages(  # noqa: SLF001
@@ -412,7 +409,8 @@ def module_menu_view(dispatcher, guild_id) -> discord.ui.View:
     modules: list[tuple[str, list]] = []
     for module_name, paths in sorted(dispatcher._module_paths.items()):  # noqa: SLF001
         enabled = [
-            p for p in paths
+            p
+            for p in paths
             if dispatcher._path_enabled(guild_id, dispatcher._registry[p])  # noqa: SLF001
         ]
         if enabled:
@@ -450,9 +448,7 @@ class BarkLegacySelect(discord.ui.Select):
                     "That command failed to run.", ephemeral=True
                 )
             except Exception:
-                await interaction.followup.send(
-                    "That command failed to run.", ephemeral=True
-                )
+                await interaction.followup.send("That command failed to run.", ephemeral=True)
 
 
 class BarkActionView(discord.ui.View):

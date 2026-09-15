@@ -24,7 +24,10 @@ async def test_get_module_config_caches_within_ttl(ctx):
         session.add(Guild(discord_id="1", name="Test"))
         session.add(
             ModuleConfig(
-                guild_id="1", module_name="moderation", enabled=True, config='{"spam": {"enabled": true}}'
+                guild_id="1",
+                module_name="moderation",
+                enabled=True,
+                config='{"spam": {"enabled": true}}',
             )
         )
         await session.commit()
@@ -36,9 +39,9 @@ async def test_get_module_config_caches_within_ttl(ctx):
     async with session_scope() as session:
         row = (
             await session.execute(
-                __import__("sqlalchemy").select(ModuleConfig).where(
-                    ModuleConfig.guild_id == "1", ModuleConfig.module_name == "moderation"
-                )
+                __import__("sqlalchemy")
+                .select(ModuleConfig)
+                .where(ModuleConfig.guild_id == "1", ModuleConfig.module_name == "moderation")
             )
         ).scalar_one()
         row.config = '{"spam": {"enabled": false}}'
@@ -59,7 +62,10 @@ async def test_get_module_config_returns_copy_not_cache_handle(ctx):
         session.add(Guild(discord_id="2", name="Test2"))
         session.add(
             ModuleConfig(
-                guild_id="2", module_name="reputation", enabled=True, config='{"level_constant": 50}'
+                guild_id="2",
+                module_name="reputation",
+                enabled=True,
+                config='{"level_constant": 50}',
             )
         )
         await session.commit()

@@ -134,9 +134,7 @@ async def import_settings(request: Request, guild_id: int):
             )
             setting = result.scalar_one_or_none()
             if setting is None:
-                setting = GuildSetting(
-                    guild_id=str(guild_id), key=key, value=str(value)
-                )
+                setting = GuildSetting(guild_id=str(guild_id), key=key, value=str(value))
                 session.add(setting)
             else:
                 setting.value = str(value)
@@ -162,7 +160,11 @@ async def import_settings(request: Request, guild_id: int):
             except Exception:
                 report.append(f"{name}: config failed to apply")
             try:
-                if manager is not None and enabled and not manager.is_enabled_for_guild(guild_id, name):
+                if (
+                    manager is not None
+                    and enabled
+                    and not manager.is_enabled_for_guild(guild_id, name)
+                ):
                     await manager.set_guild_enabled(guild_id, name, True)
             except Exception:
                 pass
@@ -178,9 +180,7 @@ async def import_settings(request: Request, guild_id: int):
                 )
                 dbc: ModuleConfig | None = mod_result.scalar_one_or_none()
                 if dbc is None:
-                    dbc = ModuleConfig(
-                        guild_id=str(guild_id), module_name=name, enabled=enabled
-                    )
+                    dbc = ModuleConfig(guild_id=str(guild_id), module_name=name, enabled=enabled)
                     session.add(dbc)
                 dbc.enabled = enabled
                 dbc.config = json.dumps(config)
@@ -242,9 +242,7 @@ async def settings_health(request: Request, guild_id: int):
                 normalize_fn = getattr(type(module), "normalize_config", None)
                 if normalize_fn is not None and normalize_fn is not BarkModule.normalize_config:
                     normalized = module.normalize_config(parsed)
-                validation_errors = _validate_config(
-                    normalized, schema.get("properties", {})
-                )
+                validation_errors = _validate_config(normalized, schema.get("properties", {}))
                 issues.extend(validation_errors)
             enabled = cfg.enabled if cfg else False
             results.append(

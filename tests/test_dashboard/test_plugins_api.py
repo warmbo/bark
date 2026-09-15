@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 
-VALID_PLUGIN = '''
+VALID_PLUGIN = """
 from modules.base import BarkModule, CommandRegistration
 
 class PingPlugin(BarkModule):
@@ -25,9 +25,9 @@ class PingPlugin(BarkModule):
 
     async def disable(self):
         pass
-'''
+"""
 
-ROUTED_PLUGIN = '''
+ROUTED_PLUGIN = """
 from modules.base import BarkModule
 from fastapi import APIRouter
 
@@ -50,7 +50,7 @@ class RoutedPlugin(BarkModule):
 
     async def disable(self):
         pass
-'''
+"""
 
 
 class FakeBot:

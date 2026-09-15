@@ -31,35 +31,50 @@ async def _seed_analytics(guild_id="1"):
         await _seed_guild(session, "2")
         session.add(
             DailyChannelStat(
-                guild_id=str(guild_id), stat_date=now.date(), channel_id="c1",
-                channel_name="general", message_count=50,
+                guild_id=str(guild_id),
+                stat_date=now.date(),
+                channel_id="c1",
+                channel_name="general",
+                message_count=50,
             )
         )
         session.add(
             DailyChannelStat(
-                guild_id=str(guild_id), stat_date=now.date(), channel_id="c2",
-                channel_name="memes", message_count=30,
+                guild_id=str(guild_id),
+                stat_date=now.date(),
+                channel_id="c2",
+                channel_name="memes",
+                message_count=30,
             )
         )
         session.add(
             DailyChannelStat(
-                guild_id="2", stat_date=now.date(), channel_id="x1",
-                channel_name="other", message_count=9999,
+                guild_id="2",
+                stat_date=now.date(),
+                channel_id="x1",
+                channel_name="other",
+                message_count=9999,
             )
         )
         session.add(
             VoiceGameStat(
-                guild_id=str(guild_id), game_name="Minecraft", recorded_at=now,
+                guild_id=str(guild_id),
+                game_name="Minecraft",
+                recorded_at=now,
             )
         )
         session.add(
             VoiceGameStat(
-                guild_id=str(guild_id), game_name="Minecraft", recorded_at=now,
+                guild_id=str(guild_id),
+                game_name="Minecraft",
+                recorded_at=now,
             )
         )
         session.add(
             VoiceGameStat(
-                guild_id=str(guild_id), game_name="Valorant", recorded_at=now,
+                guild_id=str(guild_id),
+                game_name="Valorant",
+                recorded_at=now,
             )
         )
         await session.commit()
@@ -73,26 +88,40 @@ async def _seed_reputation(guild_id="1"):
         await _seed_guild(session, guild_id)
         session.add(
             ReputationProfile(
-                guild_id=str(guild_id), user_id="u1", total_score=100.0, level=5,
-                week_start=now.date(), month_start=now.date(),
+                guild_id=str(guild_id),
+                user_id="u1",
+                total_score=100.0,
+                level=5,
+                week_start=now.date(),
+                month_start=now.date(),
             )
         )
         session.add(
             ReputationProfile(
-                guild_id=str(guild_id), user_id="u2", total_score=75.0, level=3,
-                week_start=now.date(), month_start=now.date(),
+                guild_id=str(guild_id),
+                user_id="u2",
+                total_score=75.0,
+                level=3,
+                week_start=now.date(),
+                month_start=now.date(),
             )
         )
         # Rep source: thanks dominates in the window.
         session.add(
             ReputationEvent(
-                guild_id=str(guild_id), actor_id="a1", event_type="message", points=10,
+                guild_id=str(guild_id),
+                actor_id="a1",
+                event_type="message",
+                points=10,
                 created_at=now,
             )
         )
         session.add(
             ReputationEvent(
-                guild_id=str(guild_id), actor_id="a1", event_type="thanks", points=40,
+                guild_id=str(guild_id),
+                actor_id="a1",
+                event_type="thanks",
+                points=40,
                 created_at=now,
             )
         )
@@ -108,8 +137,11 @@ async def _seed_voice(guild_id="1"):
         await _seed_guild(session, guild_id)
         session.add(
             VoiceSession(
-                guild_id=str(guild_id), user_id="u1", user_tag="Alice",
-                channel_id="vc1", channel_name="hangout",
+                guild_id=str(guild_id),
+                user_id="u1",
+                user_tag="Alice",
+                channel_id="vc1",
+                channel_name="hangout",
                 joined_at=now - timedelta(days=1, hours=1),
                 left_at=now - timedelta(days=1),
                 duration_seconds=3600,
@@ -117,17 +149,24 @@ async def _seed_voice(guild_id="1"):
         )
         session.add(
             VoiceSession(
-                guild_id=str(guild_id), user_id="u2", user_tag="Bob",
-                channel_id="vc1", channel_name="hangout",
-                joined_at=now, left_at=now,
+                guild_id=str(guild_id),
+                user_id="u2",
+                user_tag="Bob",
+                channel_id="vc1",
+                channel_name="hangout",
+                joined_at=now,
+                left_at=now,
                 duration_seconds=600,
             )
         )
         # Two sessions on one day (for avg/max-per-day).
         session.add(
             VoiceSession(
-                guild_id=str(guild_id), user_id="u1", user_tag="Alice",
-                channel_id="vc2", channel_name="afk",
+                guild_id=str(guild_id),
+                user_id="u1",
+                user_tag="Alice",
+                channel_id="vc2",
+                channel_name="afk",
                 joined_at=now - timedelta(days=1, hours=2),
                 left_at=now - timedelta(days=1, hours=1),
                 duration_seconds=300,
@@ -177,7 +216,7 @@ async def test_top_voice_30d_by_duration(db):
 
 @pytest.mark.asyncio
 async def test_voice_session_summary_avg_and_max(db):
-    day = await _seed_voice()
+    await _seed_voice()
     result = await server_stats.voice_session_summary(1)
     assert result["max_per_day"] == 2  # Alice had 2 sessions on day-1
     assert result["avg_per_day"] > 0

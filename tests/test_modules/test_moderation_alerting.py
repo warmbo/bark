@@ -207,9 +207,7 @@ async def test_automod_kick_creates_moderation_case(db):
         rows = (
             (
                 await session.execute(
-                    select(ModerationCase).where(
-                        ModerationCase.guild_id == str(guild_id)
-                    )
+                    select(ModerationCase).where(ModerationCase.guild_id == str(guild_id))
                 )
             )
             .scalars()

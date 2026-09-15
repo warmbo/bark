@@ -171,6 +171,7 @@ class SlashDispatcher:
         autocomplete option kept the typed text pending). Discovery is served
         by the interactive module/command menus instead.
         """
+
         async def _callback(
             interaction: discord.Interaction, command: str = "", args: str = ""
         ) -> None:
@@ -246,9 +247,7 @@ class SlashDispatcher:
                         try:
                             sub.add_command(self._alias_leaf(leaf, alias))
                         except Exception:
-                            logger.exception(
-                                "Failed to add alias %s for %s", alias, leaf.path
-                            )
+                            logger.exception("Failed to add alias %s for %s", alias, leaf.path)
                 except Exception:
                     logger.exception("Failed to add %s to group %s", leaf.path, module_name)
             try:
@@ -358,7 +357,9 @@ class SlashDispatcher:
 
     # ── Dispatch ──────────────────────────────────────
 
-    async def dispatch(self, interaction: discord.Interaction, command: str, args: str = "") -> None:
+    async def dispatch(
+        self, interaction: discord.Interaction, command: str, args: str = ""
+    ) -> None:
         path = (command or "").strip().lower()
         guild_id = getattr(interaction, "guild_id", None)
 
@@ -473,7 +474,9 @@ class SlashDispatcher:
         for p in leaf.command.parameters:
             req = "required" if getattr(p, "required", False) else "optional"
             desc = getattr(p, "description", "") or ""
-            lines.append(f"`<{p.name}>` — {desc} *({req})*".rstrip() if desc else f"`<{p.name}>` *({req})*")
+            lines.append(
+                f"`<{p.name}>` — {desc} *({req})*".rstrip() if desc else f"`<{p.name}>` *({req})*"
+            )
         return lines
 
     async def _show_usage(self, interaction: discord.Interaction, leaf: Leaf) -> None:
@@ -502,7 +505,9 @@ class SlashDispatcher:
         if leaf is None:
             # Maybe a module/group -> point at its menu.
             if target in self._module_paths:
-                await self._show_module_menu(interaction, target, getattr(interaction, "guild_id", None))
+                await self._show_module_menu(
+                    interaction, target, getattr(interaction, "guild_id", None)
+                )
                 return
             matches = [p for p in self._registry if p.startswith(target)]
             if len(matches) == 1:
@@ -560,8 +565,7 @@ class SlashDispatcher:
 
     def _enabled_leaves(self, guild_id) -> list[Leaf]:
         return [
-            leaf for _, leaf in sorted(self._registry.items())
-            if self._path_enabled(guild_id, leaf)
+            leaf for _, leaf in sorted(self._registry.items()) if self._path_enabled(guild_id, leaf)
         ]
 
     def _chunk_by_module(
@@ -625,7 +629,9 @@ class SlashDispatcher:
     def _build_overview_pages(self, guild_id) -> list[discord.Embed]:
         enabled = self._enabled_leaves(guild_id)
         if not enabled:
-            return [discord.Embed(title="🐺 Bark", description="No commands are available here yet.")]
+            return [
+                discord.Embed(title="🐺 Bark", description="No commands are available here yet.")
+            ]
         return [
             discord.Embed(
                 title="🐺 Bark Commands",
@@ -679,9 +685,12 @@ class SlashDispatcher:
             return
         await paginator.send(interaction, pages, view=view)
 
-    async def _show_module_menu(self, interaction: discord.Interaction, module_name: str, guild_id) -> None:
+    async def _show_module_menu(
+        self, interaction: discord.Interaction, module_name: str, guild_id
+    ) -> None:
         leaves = [
-            self._registry[p] for p in self._module_paths.get(module_name, [])
+            self._registry[p]
+            for p in self._module_paths.get(module_name, [])
             if self._path_enabled(guild_id, self._registry[p])
         ]
         detail = "Choose a command below. If it needs details, Bark opens a short form."
@@ -690,9 +699,17 @@ class SlashDispatcher:
         view = command_menu_view(self, leaves, guild_id)
         await self._send_paginated(interaction, pages, view=view)
 
-    async def _show_menu(self, interaction: discord.Interaction, title: str, paths: list[str],
-                         guild_id, detail: str = "") -> None:
-        leaves = [self._registry[p] for p in paths if self._path_enabled(guild_id, self._registry[p])]
+    async def _show_menu(
+        self,
+        interaction: discord.Interaction,
+        title: str,
+        paths: list[str],
+        guild_id,
+        detail: str = "",
+    ) -> None:
+        leaves = [
+            self._registry[p] for p in paths if self._path_enabled(guild_id, self._registry[p])
+        ]
         pages = self._build_menu_pages(leaves, title=title, detail=detail)
         view = command_menu_view(self, leaves, guild_id)
         await self._send_paginated(interaction, pages, view=view)
@@ -764,7 +781,13 @@ async def parse_args_to_kwargs(
         elif t is discord.AppCommandOptionType.boolean:
             raw = tokens.pop(0)
             kwargs[param.name] = raw.strip().lower() in (
-                "true", "1", "yes", "on", "y", "enabled", "public",
+                "true",
+                "1",
+                "yes",
+                "on",
+                "y",
+                "enabled",
+                "public",
             )
         elif t in (discord.AppCommandOptionType.user, discord.AppCommandOptionType.mentionable):
             kwargs[param.name] = await _resolve_member(interaction, tokens.pop(0))
@@ -849,10 +872,7 @@ def _missing_required_arg(command, args: str) -> bool:
     Used to show usage guidance instead of running a command against defaults
     (e.g. warning the invoker because no target member was given).
     """
-    required = [
-        p for p in getattr(command, "parameters", [])
-        if getattr(p, "required", False)
-    ]
+    required = [p for p in getattr(command, "parameters", []) if getattr(p, "required", False)]
     if not required:
         return False
     supplied = len((args or "").split())

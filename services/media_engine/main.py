@@ -36,9 +36,9 @@ class RenderRequest(BaseModel):
     guild_id: str = ""
     user_id: str = ""
     theme: Optional[str] = None
-    art_mode: str = "procedural"          # procedural | auto | ai
-    payload: Optional[dict] = None        # plugin-supplied data (payload-first)
-    output: str = "png"                   # png | gif
+    art_mode: str = "procedural"  # procedural | auto | ai
+    payload: Optional[dict] = None  # plugin-supplied data (payload-first)
+    output: str = "png"  # png | gif
     cache_ttl: int = 900
 
 
@@ -75,8 +75,14 @@ async def create_render_job(req: RenderRequest, _: None = Depends(require_token)
     job = queue.submit(
         req.kind,
         lambda: render_job(
-            req.kind, req.guild_id, req.user_id, req.theme,
-            req.art_mode, req.payload, req.output, req.cache_ttl,
+            req.kind,
+            req.guild_id,
+            req.user_id,
+            req.theme,
+            req.art_mode,
+            req.payload,
+            req.output,
+            req.cache_ttl,
         ),
     )
     return {"job_id": job.job_id, "status": job.status}

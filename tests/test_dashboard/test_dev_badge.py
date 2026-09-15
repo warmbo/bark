@@ -96,9 +96,7 @@ async def test_landing_page_hides_dev_badge_when_disabled(app, monkeypatch, clie
 
 
 @pytest.mark.asyncio
-async def test_middleware_injects_badge_into_every_html_response(
-    app, monkeypatch, client, db
-):
+async def test_middleware_injects_badge_into_every_html_response(app, monkeypatch, client, db):
     """Every HTML response on the subdomain carries the overlay — including
     module detail pages rendered WITHOUT `config` in context (the bug that
     motivated the middleware: web/modules.py uses its own Jinja env) and
@@ -108,13 +106,13 @@ async def test_middleware_injects_badge_into_every_html_response(
     monkeypatch.setattr(config.config.instance, "dev_badge", True)
 
     routes = [
-        "/",                                # landing (standalone page)
-        "/dashboard",                       # dashboard home
-        "/guild/123456789/settings",        # settings page
-        "/guild/123456789/modules/roles",   # module detail via web/modules.py (no config ctx)
-        "/guild/123456789/members",         # members page
-        "/guild/123456789",                 # guild overview
-        "/guild/999999/settings",           # error page (HTMLResponse 404)
+        "/",  # landing (standalone page)
+        "/dashboard",  # dashboard home
+        "/guild/123456789/settings",  # settings page
+        "/guild/123456789/modules/roles",  # module detail via web/modules.py (no config ctx)
+        "/guild/123456789/members",  # members page
+        "/guild/123456789",  # guild overview
+        "/guild/999999/settings",  # error page (HTMLResponse 404)
     ]
     async with client:
         for route in routes:

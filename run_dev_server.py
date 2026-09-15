@@ -72,9 +72,7 @@ def _boot_mock() -> None:
             # (e.g. /bot/appearance serializes user.discriminator).
             self.user.discriminator = "0000"
             self.user.display_avatar = MagicMock()
-            self.user.display_avatar.url = (
-                "https://cdn.discordapp.com/avatars/123/hash.png"
-            )
+            self.user.display_avatar.url = "https://cdn.discordapp.com/avatars/123/hash.png"
             self.user.banner = None
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)

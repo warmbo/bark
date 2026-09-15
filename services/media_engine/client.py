@@ -34,11 +34,18 @@ class MediaEngineUnavailableError(MediaEngineError):
 
 
 class MediaEngineClient:
-    def __init__(self, base_url: str | None = None, token: str | None = None,
-                 timeout: float = 15.0, poll_interval: float = 0.3,
-                 poll_max: int = 60,
-                 transport: httpx.AsyncBaseTransport | None = None) -> None:
-        self.base_url = (base_url or os.environ.get("BARK_MEDIA_ENGINE_URL", DEFAULT_URL)).rstrip("/")
+    def __init__(
+        self,
+        base_url: str | None = None,
+        token: str | None = None,
+        timeout: float = 15.0,
+        poll_interval: float = 0.3,
+        poll_max: int = 60,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.base_url = (base_url or os.environ.get("BARK_MEDIA_ENGINE_URL", DEFAULT_URL)).rstrip(
+            "/"
+        )
         self.token = token or os.environ.get("BARK_MEDIA_ENGINE_TOKEN", "")
         self.timeout = timeout
         self.poll_interval = poll_interval
@@ -74,9 +81,18 @@ class MediaEngineClient:
         except httpx.HTTPError as exc:
             raise MediaEngineUnavailableError(f"media engine unreachable: {exc}") from exc
 
-    async def render(self, kind: str, guild_id, user_id, payload: dict | None = None, *,
-                     theme: str = "bark", art_mode: str = "procedural",
-                     output: str = "png", cache_ttl: int = 900) -> str:
+    async def render(
+        self,
+        kind: str,
+        guild_id,
+        user_id,
+        payload: dict | None = None,
+        *,
+        theme: str = "bark",
+        art_mode: str = "procedural",
+        output: str = "png",
+        cache_ttl: int = 900,
+    ) -> str:
         """Submit a render job, poll to completion, return the local file path."""
         body = {
             "kind": kind,
@@ -98,9 +114,11 @@ class MediaEngineClient:
 
                 for _ in range(self.poll_max):
                     await asyncio.sleep(self.poll_interval)
-                    job = (await client.get(
-                        f"{self.base_url}/v1/jobs/{job_id}", headers=self._headers()
-                    )).json()
+                    job = (
+                        await client.get(
+                            f"{self.base_url}/v1/jobs/{job_id}", headers=self._headers()
+                        )
+                    ).json()
                     if job["status"] == "done":
                         return job["file"]
                     if job["status"] == "error":

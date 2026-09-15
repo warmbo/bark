@@ -103,12 +103,22 @@ def test_schema_groups_cover_all_flat_keys_in_sections():
 
     # Every previously-flat key survives, now inside a named section.
     all_keys = [
-        "primary_channel_id", "channel_name_template", "fallback_name",
-        "name_uppercase", "name_lowercase", "name_titlecase",
-        "user_limit", "bitrate_kbps", "max_channels_per_user",
-        "inherit_permissions", "private_by_default", "required_role_id",
+        "primary_channel_id",
+        "channel_name_template",
+        "fallback_name",
+        "name_uppercase",
+        "name_lowercase",
+        "name_titlecase",
+        "user_limit",
+        "bitrate_kbps",
+        "max_channels_per_user",
+        "inherit_permissions",
+        "private_by_default",
+        "required_role_id",
         "auto_join_role_id",
-        "owner_can_rename", "owner_can_limit", "owner_can_lock",
+        "owner_can_rename",
+        "owner_can_limit",
+        "owner_can_lock",
         "empty_delete_delay_seconds",
     ]
     for key in all_keys:
@@ -548,15 +558,10 @@ def test_name_acronym_collapses_to_initials():
     module = AutoVoiceModule(ctx)
     base = {"channel_name_template": "## [@@game_name@@]", "index_hint": None}
 
-    assert (
-        module._render_name(member, {**base, "name_acronym": True}, index=1)
-        == "#1 [CS2]"
-    )
+    assert module._render_name(member, {**base, "name_acronym": True}, index=1) == "#1 [CS2]"
     # Case toggles style the acronym.
     assert (
-        module._render_name(
-            member, {**base, "name_acronym": True, "name_lowercase": True}, index=1
-        )
+        module._render_name(member, {**base, "name_acronym": True, "name_lowercase": True}, index=1)
         == "#1 [cs2]"
     )
 

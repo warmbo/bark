@@ -57,9 +57,7 @@ def test_send_resolves_real_message_from_original_response():
     interaction.response.send_message = AsyncMock(return_value=placeholder)
     interaction.original_response = AsyncMock(return_value=real)
 
-    asyncio.run(
-        pag.send(interaction, [discord.Embed(title="p1"), discord.Embed(title="p2")])
-    )
+    asyncio.run(pag.send(interaction, [discord.Embed(title="p1"), discord.Embed(title="p2")]))
 
     # The real message is fetched and used for reactions…
     interaction.original_response.assert_awaited_once()
@@ -79,9 +77,7 @@ def test_send_tracks_real_id_so_navigation_matches():
     interaction.response.send_message = AsyncMock(return_value=_placeholder())
     interaction.original_response = AsyncMock(return_value=real)
 
-    asyncio.run(
-        pag.send(interaction, [discord.Embed(title="p1"), discord.Embed(title="p2")])
-    )
+    asyncio.run(pag.send(interaction, [discord.Embed(title="p1"), discord.Embed(title="p2")]))
 
     reaction = MagicMock()
     reaction.message = real
@@ -102,9 +98,7 @@ def test_send_falls_back_to_followup_when_response_already_used():
     interaction.response.send_message = AsyncMock(side_effect=RuntimeError("already used"))
     interaction.followup.send = AsyncMock(return_value=real)
 
-    asyncio.run(
-        pag.send(interaction, [discord.Embed(title="p1"), discord.Embed(title="p2")])
-    )
+    asyncio.run(pag.send(interaction, [discord.Embed(title="p1"), discord.Embed(title="p2")]))
 
     interaction.followup.send.assert_awaited_once()
     real.add_reaction.assert_awaited()

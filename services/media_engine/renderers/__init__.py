@@ -15,6 +15,7 @@ def register(kind: str) -> Callable:
     def deco(fn: Callable[[dict, Theme], Image.Image]) -> Callable:
         RENDERERS[kind] = fn
         return fn
+
     return deco
 
 

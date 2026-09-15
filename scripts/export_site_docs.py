@@ -71,7 +71,9 @@ def _render_all(out_dir: Path, ctx: dict) -> None:
     templates_dir = Path(__file__).resolve().parents[1] / "dashboard" / "templates"
     env = Environment(loader=FileSystemLoader(str(templates_dir)))
     env.globals["url_for"] = lambda *a, **k: "#"  # not used by docs pages
-    env.globals["config"] = SimpleNamespace(dashboard=SimpleNamespace(public_url=ctx.get("public_url", "")))
+    env.globals["config"] = SimpleNamespace(
+        dashboard=SimpleNamespace(public_url=ctx.get("public_url", ""))
+    )
     env.globals["base"] = ""  # per-page override below (subpages need ../)
 
     pages = {
@@ -93,7 +95,9 @@ def _render_all(out_dir: Path, ctx: dict) -> None:
         mctx["module"] = m
         mctx["active"] = "modules"
         html = env.get_template("docs/module.html").render({**mctx, "base": "../"})
-        (module_dir / f"{m['name']}.html").write_text(_rewrite_links(html, depth=1), encoding="utf-8")
+        (module_dir / f"{m['name']}.html").write_text(
+            _rewrite_links(html, depth=1), encoding="utf-8"
+        )
 
     # Per-command pages (URL-safe path).
     command_dir = out_dir / "command"
@@ -115,11 +119,15 @@ def _render_all(out_dir: Path, ctx: dict) -> None:
         sctx["setting_group"] = s
         sctx["active"] = "settings"
         html = env.get_template("docs/settings_module.html").render({**sctx, "base": "../"})
-        (settings_dir / f"{s['module']}.html").write_text(_rewrite_links(html, depth=1), encoding="utf-8")
+        (settings_dir / f"{s['module']}.html").write_text(
+            _rewrite_links(html, depth=1), encoding="utf-8"
+        )
 
     # Not-found page.
     (out_dir / "not_found.html").write_text(
-        _rewrite_links(env.get_template("docs/not_found.html").render({**ctx, "base": ""}), depth=0),
+        _rewrite_links(
+            env.get_template("docs/not_found.html").render({**ctx, "base": ""}), depth=0
+        ),
         encoding="utf-8",
     )
 
@@ -147,11 +155,11 @@ def _rewrite_links(html: str, depth: int) -> str:
         if path == "/permissions":
             return f'href="{prefix}permissions.html"'
         if path.startswith("/modules/"):
-            return f'href="{prefix}module/{path[len("/modules/"):]}.html"'
+            return f'href="{prefix}module/{path[len("/modules/") :]}.html"'
         if path.startswith("/commands/"):
-            return f'href="{prefix}command/{path[len("/commands/"):].replace(" ", "_")}.html"'
+            return f'href="{prefix}command/{path[len("/commands/") :].replace(" ", "_")}.html"'
         if path.startswith("/settings/"):
-            return f'href="{prefix}settings/{path[len("/settings/"):]}.html"'
+            return f'href="{prefix}settings/{path[len("/settings/") :]}.html"'
         return m.group(0)  # leave unknown links untouched
 
     return re.sub(r'href="/docs([^"]*)"', _repl, html)
@@ -159,7 +167,9 @@ def _rewrite_links(html: str, depth: int) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("out_dir", help="Directory to write static docs into (e.g. ../bark-site/docs)")
+    parser.add_argument(
+        "out_dir", help="Directory to write static docs into (e.g. ../bark-site/docs)"
+    )
     parser.add_argument("--write-css", action="store_true", help="Write docs.css into out_dir")
     args = parser.parse_args()
 
@@ -175,7 +185,9 @@ def main() -> int:
         css = _DOCS_CSS
         (out_dir / "docs.css").write_text(css, encoding="utf-8")
         # Self-contain the brand avatar so the docs dir needs no site assets.
-        avatar_src = Path(__file__).resolve().parents[1] / "dashboard" / "static" / "img" / "bark-avatar.png"
+        avatar_src = (
+            Path(__file__).resolve().parents[1] / "dashboard" / "static" / "img" / "bark-avatar.png"
+        )
         if avatar_src.exists():
             shutil.copy(avatar_src, out_dir / "bark-avatar.png")
         # Wallpaper backdrop (matches the site).
@@ -189,8 +201,10 @@ def main() -> int:
             fonts_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy(font_src, fonts_dir / "inter-latin.woff2")
 
-    print(f"Exported {len(ctx['modules'])} modules, {len(ctx['commands'])} commands, "
-          f"{len(ctx['settings'])} setting groups, {len(ctx['permissions'])} permissions → {out_dir}")
+    print(
+        f"Exported {len(ctx['modules'])} modules, {len(ctx['commands'])} commands, "
+        f"{len(ctx['settings'])} setting groups, {len(ctx['permissions'])} permissions → {out_dir}"
+    )
     return 0
 
 

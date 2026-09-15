@@ -28,7 +28,9 @@ def _ctx_with_config(config: dict, channel):
     ctx.save_module_config = save_module_config
 
     if channel is not None:
-        guild = SimpleNamespace(get_channel=lambda cid: channel if str(cid) == str(channel.id) else None)
+        guild = SimpleNamespace(
+            get_channel=lambda cid: channel if str(cid) == str(channel.id) else None
+        )
         ctx.get_guild = lambda gid: guild
     return ctx
 

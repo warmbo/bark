@@ -1,4 +1,5 @@
 """Tests for the prefix-command adapter (services/prefix_commands.py)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -33,6 +34,7 @@ _captured: dict[str, Any] = {}
 
 def _make_greet_command():
     """A real app_commands Command with two options, like a module factory."""
+
     @discord.app_commands.command(name="greet", description="Greet someone")
     @discord.app_commands.describe(name="who to greet", times="how many")
     async def greet_cmd(
@@ -43,6 +45,7 @@ def _make_greet_command():
         _captured["name"] = name
         _captured["times"] = times
         await interaction.response.send_message(f"hi {name}")
+
     return greet_cmd
 
 
@@ -81,11 +84,13 @@ def test_prefix_command_dispatches_handler_with_converted_args():
 
 def _make_public_flag_command():
     """An informational command with a trailing `public: bool = False` (private default)."""
+
     @discord.app_commands.command(name="leaderboard", description="Show the top ranked members")
     @discord.app_commands.describe(public="Post in the channel for everyone (default private)")
     async def lb_cmd(interaction: discord.Interaction, public: bool = False) -> None:
         _captured["public"] = public
         await interaction.response.send_message(f"ephemeral={not public}")
+
     return lb_cmd
 
 
@@ -123,10 +128,12 @@ def test_prefix_command_explicit_private_keeps_response_private():
 
 def _make_restricted_command():
     """A real app_commands Command with a ban_members default_permissions."""
+
     @discord.app_commands.command(name="ban", description="Ban a member")
     @discord.app_commands.default_permissions(ban_members=True)
     async def ban_cmd(interaction: discord.Interaction, member: discord.Member) -> None:
         _captured["banned"] = True
+
     return ban_cmd
 
 
@@ -262,4 +269,3 @@ def test_enable_module_registers_prefix_commands(db, tmp_path):
     # Disable removes it.
     asyncio.run(bot.modules.disable_module("sample"))
     assert "greet" not in registered
-

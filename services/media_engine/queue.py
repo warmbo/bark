@@ -20,7 +20,7 @@ JOB_MAX_AGE_S = 600
 class Job:
     job_id: str
     kind: str
-    status: str = "queued"        # queued | rendering | done | error
+    status: str = "queued"  # queued | rendering | done | error
     file: str | None = None
     size: int = 0
     error: str | None = None
@@ -59,7 +59,8 @@ class RenderQueue:
     def prune(self, max_age_s: int = JOB_MAX_AGE_S) -> None:
         cutoff = time.time() - max_age_s
         stale = [
-            jid for jid, job in self._jobs.items()
+            jid
+            for jid, job in self._jobs.items()
             if job.status in ("done", "error") and job.created_at < cutoff
         ]
         for jid in stale:

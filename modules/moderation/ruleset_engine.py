@@ -561,7 +561,9 @@ async def _effect_kick_purge(message, cfg, reason, module):
     try:
         await message.author.kick(reason=f"[AutoMod] {reason}")
     except Exception:
-        logger.exception("AutoMod kick+purge effect failed to kick %s in %s", message.author, message.guild)
+        logger.exception(
+            "AutoMod kick+purge effect failed to kick %s in %s", message.author, message.guild
+        )
     max_age = cfg.get("max_age_seconds", 120)
     await _purge_user_messages(message, max_age)
 
@@ -581,6 +583,7 @@ async def _purge_user_messages(message, max_age: int) -> int:
         if channel is None or purged >= max_purged:
             continue
         try:
+
             def _check(m):
                 return m.author.id == user_id and m.created_at > cutoff
 

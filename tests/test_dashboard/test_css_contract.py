@@ -26,11 +26,7 @@ def test_css_references_only_defined_custom_properties():
     # Tailwind v4 intentionally emits internal --tw-* and --default-* references
     # with standards-based fallbacks. Bark-owned semantic variables must still
     # be declared in the committed bundle.
-    bark_references = {
-        name
-        for name in referenced
-        if not name.startswith(("--tw-", "--default-"))
-    }
+    bark_references = {name for name in referenced if not name.startswith(("--tw-", "--default-"))}
     assert bark_references - defined == set()
 
 
@@ -108,7 +104,10 @@ def test_button_size_ladder_is_monotonic():
     v3 REMAKER values so the regression can't return."""
     css = css_source()
     assert ".btn-sm { min-height: 32px; padding: 4px 12px; font-size: 15px; }" in css
-    assert ".btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 15px; line-height: 1.6; }" in css
+    assert (
+        ".btn-xs { min-height: 28px; min-width: 28px; padding: 2px 8px; font-size: 15px; line-height: 1.6; }"
+        in css
+    )
     # .btn-icon must follow the sharp-corner token, not a hardcoded radius.
     btn_icon = re.search(r"\.btn-icon\s*\{[^}]*\}", css, re.S)
     assert btn_icon, "missing .btn-icon rule"
@@ -136,7 +135,20 @@ def test_font_size_ladder_has_no_fractional_or_odd_stragglers():
     """Audit P3-14 (2026-08-19): the type ladder must not contain fractional
     (12.5/13.5px) or odd (8/9/19/21px) sizes — they read as unplanned values.
     Allowed sizes are the deliberate ladder steps."""
-    allowed = {"10px", "11px", "12px", "13px", "14px", "15px", "16px",
-               "17px", "18px", "20px", "22px", "24px", "30px"}
+    allowed = {
+        "10px",
+        "11px",
+        "12px",
+        "13px",
+        "14px",
+        "15px",
+        "16px",
+        "17px",
+        "18px",
+        "20px",
+        "22px",
+        "24px",
+        "30px",
+    }
     sizes = set(re.findall(r"font-size:\s*(\d+(?:\.\d+)?px)", css_source()))
     assert sizes - allowed == set(), f"off-ladder font sizes: {sorted(sizes - allowed)}"

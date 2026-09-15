@@ -54,9 +54,7 @@ async def test_auth_error_lands_on_public_landing_not_dashboard(oauth_app):
         transport=ASGITransport(app=oauth_app), base_url="http://test"
     ) as client:
         # state mismatch (no oauth_state in session)
-        response = await client.get(
-            "/auth/callback?code=x&state=wrong", follow_redirects=False
-        )
+        response = await client.get("/auth/callback?code=x&state=wrong", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/?auth_error=invalid_state"
 
@@ -108,9 +106,7 @@ async def test_callback_denied_redirects_to_landing(oauth_app):
     async with AsyncClient(
         transport=ASGITransport(app=oauth_app), base_url="http://test"
     ) as client:
-        response = await client.get(
-            "/auth/callback?error=access_denied", follow_redirects=False
-        )
+        response = await client.get("/auth/callback?error=access_denied", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/?auth_error=denied"
 

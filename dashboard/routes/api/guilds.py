@@ -148,7 +148,9 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
     try:
         from services.guild_settings import get_settings
 
-        settings = await get_settings(guild_id, "motd", "banner_url", "slug", "theme", "wallpaper_invert")
+        settings = await get_settings(
+            guild_id, "motd", "banner_url", "slug", "theme", "wallpaper_invert"
+        )
         motd = settings.get("motd", "")
         custom_banner_url = settings.get("banner_url", "")
         slug = settings.get("slug", "")
@@ -226,7 +228,6 @@ async def _serialize_guild(guild, guild_id: int) -> dict:
     }
 
 
-
 @router.put("/guilds/{guild_id}/banner")
 async def set_guild_banner(request: Request, guild_id: int):
     """Set a custom banner image (URL) shown on the dashboard profile.
@@ -261,8 +262,7 @@ async def guild_diagnostics(request: Request, guild_id: int):
     (``guild.manage``) — the same bar as other sensitive guild settings.
     """
     if not (
-        can_manage_instance(request)
-        or check_api_permission(request, "guild.manage", guild_id)
+        can_manage_instance(request) or check_api_permission(request, "guild.manage", guild_id)
     ):
         return api_forbidden("Owner or guild admin access required")
 
@@ -289,7 +289,9 @@ async def guild_diagnostics(request: Request, guild_id: int):
     if perms is not None:
         lines.append(
             "Our perms    : "
-            + ", ".join(p for p in dir(perms) if not p.startswith("_") and getattr(perms, p) is True)
+            + ", ".join(
+                p for p in dir(perms) if not p.startswith("_") and getattr(perms, p) is True
+            )
         )
     # Other Bark-like bots sharing this server.
     self_id = getattr(getattr(bot, "user", None), "id", None)
@@ -330,12 +332,41 @@ async def guild_diagnostics(request: Request, guild_id: int):
             try:
                 rep = await module.diagnose(int(guild_id))
                 # Render the structured report compactly.
-                text = render_report({"runtime": {"modules": {"items": [{"name": name, "version": getattr(module, "version", None), "enabled_globally": None, "commands": [], "events": [], "dashboard_pages": [], "permissions": [], "per_guild": [{"guild_id": str(guild_id), "report": rep}]}]}, "guilds": {"count": 0, "items": []}, "multi_instance_conflicts": []}})
+                text = render_report(
+                    {
+                        "runtime": {
+                            "modules": {
+                                "items": [
+                                    {
+                                        "name": name,
+                                        "version": getattr(module, "version", None),
+                                        "enabled_globally": None,
+                                        "commands": [],
+                                        "events": [],
+                                        "dashboard_pages": [],
+                                        "permissions": [],
+                                        "per_guild": [{"guild_id": str(guild_id), "report": rep}],
+                                    }
+                                ]
+                            },
+                            "guilds": {"count": 0, "items": []},
+                            "multi_instance_conflicts": [],
+                        }
+                    }
+                )
                 # The render puts the module block under [Modules]; trim to just
                 # the per-guild lines for readability.
                 for line in text.splitlines():
                     stripped = line.strip()
-                    if stripped.startswith("guild ") or "OTHER BARK" in stripped or stripped.startswith("⚠") or stripped.startswith("config:") or stripped.startswith("showoff") or stripped.startswith("score_activity") or stripped.startswith("status="):
+                    if (
+                        stripped.startswith("guild ")
+                        or "OTHER BARK" in stripped
+                        or stripped.startswith("⚠")
+                        or stripped.startswith("config:")
+                        or stripped.startswith("showoff")
+                        or stripped.startswith("score_activity")
+                        or stripped.startswith("status=")
+                    ):
                         lines.append(f"    {stripped}")
                     elif "double-count" in stripped:
                         lines.append(f"    {stripped}")
@@ -379,14 +410,18 @@ async def set_guild_slug(request: Request, guild_id: int):
         # Slug must be unique across guilds.
         async with session_scope() as session:
             clash = (
-                await session.execute(
-                    select(GuildSetting).where(
-                        GuildSetting.key == "slug",
-                        GuildSetting.value == slug,
-                        GuildSetting.guild_id != str(guild_id),
+                (
+                    await session.execute(
+                        select(GuildSetting).where(
+                            GuildSetting.key == "slug",
+                            GuildSetting.value == slug,
+                            GuildSetting.guild_id != str(guild_id),
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
         if clash is not None:
             return api_error("That slug is already in use by another server.", status_code=409)
 
@@ -401,9 +436,31 @@ async def set_guild_slug(request: Request, guild_id: int):
 
 # Valid accent themes for the per-guild theme picker.
 VALID_THEMES = {
-    "steel", "emerald", "violet", "amber", "rose", "cyan", "teal", "orange",
-    "synth", "acid", "rottweiler", "dracula", "gold", "hud",
-    "aurora", "neon", "ocean", "sunset", "forest", "candy", "slate", "crimson", "honey", "deepspace", "graffiti",
+    "steel",
+    "emerald",
+    "violet",
+    "amber",
+    "rose",
+    "cyan",
+    "teal",
+    "orange",
+    "synth",
+    "acid",
+    "rottweiler",
+    "dracula",
+    "gold",
+    "hud",
+    "aurora",
+    "neon",
+    "ocean",
+    "sunset",
+    "forest",
+    "candy",
+    "slate",
+    "crimson",
+    "honey",
+    "deepspace",
+    "graffiti",
 }
 
 
@@ -493,15 +550,9 @@ async def get_guild_stats(request: Request, guild_id: int):
         reputation_series = _zero_fill_series(
             await _reputation_daily_counts(session, guild_id, 30), 30
         )
-        audit_series = _zero_fill_series(
-            await _audit_daily_counts(session, guild_id, 30), 30
-        )
-        voice_series = _zero_fill_series(
-            await _voice_daily_counts(session, guild_id, 30), 30
-        )
-        new_members_series = _zero_fill_series(
-            await _new_members_daily(session, guild_id, 30), 30
-        )
+        audit_series = _zero_fill_series(await _audit_daily_counts(session, guild_id, 30), 30)
+        voice_series = _zero_fill_series(await _voice_daily_counts(session, guild_id, 30), 30)
+        new_members_series = _zero_fill_series(await _new_members_daily(session, guild_id, 30), 30)
         popular_games = await _popular_games(session, guild_id, days=30)
         top_voice_users = await _top_voice_users(session, guild, days=30)
         reputation_by_type = await _reputation_by_type(session, guild_id)
@@ -636,7 +687,9 @@ async def _snapshot_channel_emoji_totals(
     for row in ch_result.scalars().all():
         if row.message_count <= 0:
             continue
-        agg = channels.setdefault(row.channel_id, {"channel_id": row.channel_id, "name": "", "count": 0})
+        agg = channels.setdefault(
+            row.channel_id, {"channel_id": row.channel_id, "name": "", "count": 0}
+        )
         agg["count"] += row.message_count
         agg["name"] = row.channel_name or agg["name"]
 
@@ -668,7 +721,11 @@ async def _daily_channel_for_day(session, guild_id: int, day) -> dict[str, dict]
     channels: dict[str, dict] = {}
     for row in result.scalars().all():
         if row.message_count > 0:
-            channels[row.channel_id] = {"channel_id": row.channel_id, "name": row.channel_name, "count": row.message_count}
+            channels[row.channel_id] = {
+                "channel_id": row.channel_id,
+                "name": row.channel_name,
+                "count": row.message_count,
+            }
     return channels
 
 
@@ -687,9 +744,7 @@ async def _daily_emoji_for_day(session, guild_id: int, day) -> dict[str, int]:
     return {row.emoji_name: row.count for row in result.scalars().all() if row.count > 0}
 
 
-def _zero_fill_series(
-    counts: dict[str, int], days: int
-) -> list[dict]:
+def _zero_fill_series(counts: dict[str, int], days: int) -> list[dict]:
     """Expand a {date_iso: count} map into a continuous N-day series with zeros
     so charts always draw a full axis instead of sparse points."""
     from datetime import date, timedelta
@@ -875,7 +930,15 @@ async def _top_voice_users(session, guild, days: int = 30, limit: int = 8) -> li
             avatar = None
             if member is not None and getattr(member, "display_avatar", None):
                 avatar = member.display_avatar.url
-            out.append({"name": display, "id": str(uid), "avatar_url": avatar, "count": minutes, "sessions": int(sessions or 0)})
+            out.append(
+                {
+                    "name": display,
+                    "id": str(uid),
+                    "avatar_url": avatar,
+                    "count": minutes,
+                    "sessions": int(sessions or 0),
+                }
+            )
     return out
 
 
@@ -909,10 +972,10 @@ async def _top_reputation(session, guild, limit: int = 8) -> list[dict]:
         avatar = None
         if member is not None and getattr(member, "display_avatar", None):
             avatar = member.display_avatar.url
-        out.append({"name": display, "id": str(uid), "avatar_url": avatar, "count": int(score or 0)})
+        out.append(
+            {"name": display, "id": str(uid), "avatar_url": avatar, "count": int(score or 0)}
+        )
     return out
-
-
 
 
 @router.get("/guilds/{guild_id}/dashboard")
@@ -986,6 +1049,7 @@ def _member_brief(member) -> dict:
     the whole overview page (hit live on the test server: `Object of type
     MagicMock is not JSON serializable`).
     """
+
     def _safe_str(value, fallback: str) -> str:
         try:
             v = str(value).strip()
@@ -1145,9 +1209,7 @@ async def get_guild_roles(request: Request, guild_id: int):
                     # dashboard admin access regardless of the configured
                     # moderator role. ``permissions`` is a discord.Permissions
                     # object (``.value`` bitfield); tests mock it as an int.
-                    "administrator": bool(
-                        getattr(r.permissions, "value", r.permissions) & 0x8
-                    ),
+                    "administrator": bool(getattr(r.permissions, "value", r.permissions) & 0x8),
                 }
                 for r in guild.roles[1:]
             ]

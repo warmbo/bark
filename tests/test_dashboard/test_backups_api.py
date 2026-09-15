@@ -112,16 +112,12 @@ async def test_download_rejects_invalid_filenames(app):
         response = await client.get("/api/v1/instance/backup/passwd")
         assert response.status_code == 400
 
-        traversal = await client.get(
-            "/api/v1/instance/backup/..%2F..%2Fetc%2Fpasswd"
-        )
+        traversal = await client.get("/api/v1/instance/backup/..%2F..%2Fetc%2Fpasswd")
         # Encoded slashes are normalized by the router before the handler — a
         # 404 there is still a safe rejection (never a 200).
         assert traversal.status_code in (400, 404)
 
-        missing = await client.get(
-            "/api/v1/instance/backup/bark-backup-20200101-000000-000000.db"
-        )
+        missing = await client.get("/api/v1/instance/backup/bark-backup-20200101-000000-000000.db")
         assert missing.status_code == 404
 
 
@@ -148,13 +144,12 @@ async def test_owner_can_apply_staged_restore_and_request_restart(app, tmp_path,
     assert response.json()["data"]["restarting"] is True
     restart.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_owner_can_stage_legacy_database_restore(app, tmp_path):
     legacy = tmp_path / "bark-v0.2.db"
     connection = sqlite3.connect(legacy)
-    connection.execute(
-        "CREATE TABLE guilds (id INTEGER PRIMARY KEY, discord_id TEXT, name TEXT)"
-    )
+    connection.execute("CREATE TABLE guilds (id INTEGER PRIMARY KEY, discord_id TEXT, name TEXT)")
     connection.execute("INSERT INTO guilds VALUES (1, '123', 'Legacy')")
     connection.commit()
     connection.close()

@@ -85,7 +85,9 @@ def test_check_update_offers_by_version_not_commit(monkeypatch):
         if name == "git merge-base --is-ancestor github/main abc123":
             return type("R", (), {"returncode": 1, "stdout": ""})()
         if name.startswith("git remote get-url"):
-            return type("R", (), {"returncode": 0, "stdout": "https://github.com/warmbo/bark.git"})()
+            return type(
+                "R", (), {"returncode": 0, "stdout": "https://github.com/warmbo/bark.git"}
+            )()
         if name == "git branch --show-current":
             return type("R", (), {"returncode": 0, "stdout": "main"})()
         if name == "git config --get bark.update.channel":
@@ -104,6 +106,7 @@ def test_check_update_offers_by_version_not_commit(monkeypatch):
 
 def test_check_update_no_downgrade_by_version(monkeypatch):
     """A remote with an OLDER derived version never offers an update."""
+
     def fake_run(cmd, **kwargs):
         name = " ".join(cmd)
         if name == "git rev-parse HEAD":
@@ -119,7 +122,9 @@ def test_check_update_no_downgrade_by_version(monkeypatch):
         if name == "git merge-base --is-ancestor old789 def456":
             return type("R", (), {"returncode": 0, "stdout": ""})()
         if name.startswith("git remote get-url"):
-            return type("R", (), {"returncode": 0, "stdout": "https://github.com/warmbo/bark.git"})()
+            return type(
+                "R", (), {"returncode": 0, "stdout": "https://github.com/warmbo/bark.git"}
+            )()
         if name == "git branch --show-current":
             return type("R", (), {"returncode": 0, "stdout": "main"})()
         if name == "git config --get bark.update.channel":

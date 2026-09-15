@@ -302,9 +302,13 @@ def render_not_found(
 ):
     """Designed in-shell 404 page. Replaces raw `HTMLResponse("...", 404)` returns."""
     ctx: dict = {
-        "title": title, "message": message, "hint": hint,
-        "back_href": back_href, "back_label": back_label,
-        "icon_name": icon_name, "guild_id": guild_id,
+        "title": title,
+        "message": message,
+        "hint": hint,
+        "back_href": back_href,
+        "back_label": back_label,
+        "icon_name": icon_name,
+        "guild_id": guild_id,
     }
     return templates.TemplateResponse(request, "pages/not_found.html", ctx, status_code=404)
 
@@ -326,12 +330,17 @@ async def render_not_found_standalone(
 
     instance_domain = ""
     try:
-        instance_domain = (config.dashboard.public_url or "").replace(
-            "https://", ""
-        ).replace("http://", "").rstrip("/")
+        instance_domain = (
+            (config.dashboard.public_url or "")
+            .replace("https://", "")
+            .replace("http://", "")
+            .rstrip("/")
+        )
     except Exception:
         instance_domain = ""
-    message = "The page you're looking for doesn't exist, was moved, or you don't have access to it."
+    message = (
+        "The page you're looking for doesn't exist, was moved, or you don't have access to it."
+    )
     if detail and detail.lower() not in ("not found", "not found."):
         message = detail
     return templates.TemplateResponse(

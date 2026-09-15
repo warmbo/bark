@@ -194,7 +194,9 @@ def test_catalog_includes_every_oauth_guild_and_marks_bot_installation():
         },
     )()
 
-    catalog = build_guild_catalog(oauth_guilds, [bot_guild], client_id="123", public_url="http://test.local")
+    catalog = build_guild_catalog(
+        oauth_guilds, [bot_guild], client_id="123", public_url="http://test.local"
+    )
 
     assert [guild["id"] for guild in catalog] == ["100", "200", "300"]
     assert [guild["access_tier"] for guild in catalog] == ["connected", "manageable", "other"]
@@ -733,12 +735,8 @@ async def test_user_in_two_bark_servers_does_not_500_admission(db, monkeypatch):
         # Configured moderator role in BOTH servers — under the explicit-roles
         # model this is what grants dashboard moderation (permissions alone
         # never do).
-        session.add(
-            GuildSetting(guild_id="100", key="dashboard_moderator_roles", value='["555"]')
-        )
-        session.add(
-            GuildSetting(guild_id="200", key="dashboard_moderator_roles", value='["555"]')
-        )
+        session.add(GuildSetting(guild_id="100", key="dashboard_moderator_roles", value='["555"]'))
+        session.add(GuildSetting(guild_id="200", key="dashboard_moderator_roles", value='["555"]'))
         await session.flush()
         await replace_user_guild_access(
             session,
@@ -828,7 +826,9 @@ def test_user_ready_to_manage_owner_or_configured_staff_roles_only():
     # share a server without blocking each other.
     assert user_ready_to_manage(access(), mod_roles, admin_role, is_instance_owner=True)
     assert user_ready_to_manage(access(roles=""), mod_roles, None, is_instance_owner=True)
-    assert user_ready_to_manage(access(roles="111,666"), mod_roles, admin_role, is_instance_owner=True)
+    assert user_ready_to_manage(
+        access(roles="111,666"), mod_roles, admin_role, is_instance_owner=True
+    )
 
 
 def test_parse_admin_role_id_accepts_json_and_plain():
@@ -848,9 +848,7 @@ async def test_get_dashboard_admin_role_loads_per_guild_setting(db):
     async with session_scope() as session:
         session.add(Guild(discord_id="100", name="Alpha"))
         session.add(Guild(discord_id="200", name="Beta"))
-        session.add(
-            GuildSetting(guild_id="100", key="dashboard_admin_role", value='"777"')
-        )
+        session.add(GuildSetting(guild_id="100", key="dashboard_admin_role", value='"777"'))
         await session.flush()
 
     async with session_scope() as session:
@@ -882,16 +880,20 @@ def test_role_from_access_tiers_from_discord_authority_and_configured_roles():
     assert role_from_access_with_staff_roles(access(roles="111,666"), {"555"}, "777") == "viewer"
     # Discord permissions map to roles too (consistent with derive_dashboard_role).
     assert role_from_access_with_staff_roles(access(permissions=0x8), {"555"}, "777") == "admin"
-    assert role_from_access_with_staff_roles(access(permissions=0x20), {"555"}, "777") == "moderator"
+    assert (
+        role_from_access_with_staff_roles(access(permissions=0x20), {"555"}, "777") == "moderator"
+    )
     assert role_from_access_with_staff_roles(access(permissions=0x8), set(), None) == "admin"
     # The Bark instance owner is admin for every server their bot is in, even
     # without server ownership or a configured staff role.
-    assert role_from_access_with_staff_roles(
-        access(), {"555"}, "777", is_instance_owner=True
-    ) == "admin"
-    assert role_from_access_with_staff_roles(
-        access(roles=""), set(), None, is_instance_owner=True
-    ) == "admin"
+    assert (
+        role_from_access_with_staff_roles(access(), {"555"}, "777", is_instance_owner=True)
+        == "admin"
+    )
+    assert (
+        role_from_access_with_staff_roles(access(roles=""), set(), None, is_instance_owner=True)
+        == "admin"
+    )
 
 
 @pytest.mark.asyncio
@@ -957,9 +959,9 @@ def test_catalog_marks_ready_to_manage_per_server_from_configured_roles():
         )()
 
     oauth_guilds = [
-        access("100", roles="555"),   # holds configured moderator role
-        access("200"),                # plain member of a connected server
-        access("300"),                # uninstalled server, can manage
+        access("100", roles="555"),  # holds configured moderator role
+        access("200"),  # plain member of a connected server
+        access("300"),  # uninstalled server, can manage
     ]
     bot_guilds = []
     for guild_id in (100, 200):
@@ -1009,14 +1011,14 @@ def test_catalog_instance_owner_does_not_grant_blanket_manage():
         )()
 
     bot_guilds = [
-        type(
-            "Guild", (), {"id": 100, "name": "Server 100", "member_count": 5, "icon": None}
-        )()
+        type("Guild", (), {"id": 100, "name": "Server 100", "member_count": 5, "icon": None})()
     ]
 
     # A plain member of a connected server is NOT manageable — even when they
     # are the Bark instance owner.
-    catalog = build_guild_catalog([access("100")], bot_guilds, client_id="123", is_instance_owner=True)
+    catalog = build_guild_catalog(
+        [access("100")], bot_guilds, client_id="123", is_instance_owner=True
+    )
     assert catalog[0]["access_tier"] == "connected"
     assert catalog[0]["ready_to_manage"] is False
     assert catalog[0]["manage_reason"] is None
@@ -1042,9 +1044,7 @@ def test_catalog_manage_reason_explains_the_grant():
         )()
 
     bot_guilds = [
-        type(
-            "Guild", (), {"id": gid, "name": f"Server {gid}", "member_count": 5, "icon": None}
-        )()
+        type("Guild", (), {"id": gid, "name": f"Server {gid}", "member_count": 5, "icon": None})()
         for gid in (100, 200, 300, 400)
     ]
     catalog = build_guild_catalog(
@@ -1293,9 +1293,7 @@ async def test_update_general_settings_rejects_unknown_keys(monkeypatch):
 
     monkeypatch.setattr(settings_mod, "check_api_permission", lambda *_a, **_k: True)
     request = SimpleNamespace(
-        json=AsyncMock(
-            return_value={"slug": "hacked", "dashboard_admin_role": "777"}
-        ),
+        json=AsyncMock(return_value={"slug": "hacked", "dashboard_admin_role": "777"}),
     )
     resp = await settings_mod.update_general_settings(request, 1)
     assert resp.status_code == 400
@@ -1357,9 +1355,7 @@ async def test_csrf_rejects_untrusted_origin_and_allows_trusted(db, monkeypatch)
     monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
     # The LAN origin is trusted only when the operator lists it (BARK_TRUSTED_ORIGINS).
-    monkeypatch.setattr(
-        config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"]
-    )
+    monkeypatch.setattr(config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"])
     bot = MagicMock()
     bot.modules = MagicMock()
     bot.modules.event_bus.get_subscribers.return_value = {}

@@ -23,7 +23,8 @@ async def member_browser(request: Request, guild_id: int):
 
     if guild is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",
@@ -49,7 +50,8 @@ async def member_detail(request: Request, guild_id: int, user_id: str):
 
     if guild is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Server not found",
             message="That server isn't available through this dashboard.",
             hint="It may have been removed or Bark may have lost access to it.",
@@ -61,7 +63,8 @@ async def member_detail(request: Request, guild_id: int, user_id: str):
         member_id = int(user_id)
     except (TypeError, ValueError):
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Member not found",
             message="That member doesn't exist on this server.",
             back_href=f"/guild/{guild_id}/members",
@@ -72,7 +75,8 @@ async def member_detail(request: Request, guild_id: int, user_id: str):
     member = guild.get_member(member_id)
     if member is None:
         return render_not_found(
-            request, templates,
+            request,
+            templates,
             title="Member not found",
             message="That member doesn't exist on this server.",
             back_href=f"/guild/{guild_id}/members",

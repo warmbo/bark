@@ -11,6 +11,7 @@ The shim translates the small ``Interaction`` surface the handlers use
 (``response``, ``followup``, ``guild``, ``user``, ``guild_id``) onto the real
 ``commands.Context``/``Message``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -94,7 +95,11 @@ class PrefixInteraction:
         self.id = ctx.message.id
         self.command = None
         self.command_failed = False
-        self.data = {"name": ctx.command.name if ctx.command else "", "id": str(ctx.message.id), "type": 1}
+        self.data = {
+            "name": ctx.command.name if ctx.command else "",
+            "id": str(ctx.message.id),
+            "type": 1,
+        }
 
     async def original_response(self) -> discord.Message:
         return self._ctx.message
@@ -154,13 +159,17 @@ def _make_dispatch(slash_leaf, check=None):
                 break
             t = param.type
             if t in (AppCommandOptionType.string, AppCommandOptionType.number):
-                kwargs[param.name] = tokens.pop(0) if tokens else (None if not param.required else "")
+                kwargs[param.name] = (
+                    tokens.pop(0) if tokens else (None if not param.required else "")
+                )
             elif t is AppCommandOptionType.integer:
                 kwargs[param.name] = _to_int(tokens.pop(0)) if tokens else 0
             elif t is AppCommandOptionType.boolean:
                 kwargs[param.name] = _to_bool(tokens.pop(0)) if tokens else False
             elif t in (AppCommandOptionType.user, AppCommandOptionType.mentionable):
-                kwargs[param.name] = await _to_member_or_user(ctx, tokens.pop(0)) if tokens else ctx.author
+                kwargs[param.name] = (
+                    await _to_member_or_user(ctx, tokens.pop(0)) if tokens else ctx.author
+                )
             elif t is AppCommandOptionType.role:
                 kwargs[param.name] = await _to_role(ctx, tokens.pop(0)) if tokens else None
             elif t is AppCommandOptionType.channel:
@@ -185,6 +194,7 @@ def build_prefix_command(
     """
     children = getattr(slash_cmd, "commands", None)
     if children:  # it's a Group -> build a text-command group with subcommands
+
         async def _group_bare(ctx: commands.Context) -> None:  # pragma: no cover
             names = ", ".join(getattr(c, "name", "") for c in children)
             await ctx.send(f"Subcommands: {names}")
@@ -234,7 +244,6 @@ def build_prefix_command(
 
     setattr(prefix_cmd, "_bark_invoke", _bark_invoke)
     return prefix_cmd
-
 
 
 def _to_int(raw: str) -> int:

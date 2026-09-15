@@ -6,6 +6,7 @@ field hit exactly 1025 chars once every moderation subcommand line was joined.
 The chunker counted FIELDS per page, not characters, so one huge module could
 still blow the limit.
 """
+
 from types import SimpleNamespace
 
 import pytest
@@ -100,6 +101,5 @@ def test_real_moderation_module_fits():
     for embed in d._build_overview_pages(guild_id=None):
         for field in embed.fields:
             assert len(field.value) <= LIMIT, (
-                f"overview embed field '{field.name}' is {len(field.value)} chars"
-                f" (> {LIMIT})"
+                f"overview embed field '{field.name}' is {len(field.value)} chars (> {LIMIT})"
             )

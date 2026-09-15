@@ -5,6 +5,7 @@ commands must render the configured ``BARK_COMMAND_PREFIX`` (e.g. ``bark!``)
 followed by the command name, not a hardcoded ``/bark``. This applies to core
 modules AND add-on plugins (they share the same routes/templates).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -95,9 +96,7 @@ def test_speak_phrases_tab_uses_prefix():
 
 
 def test_module_routes_pass_command_prefix():
-    src = (ROOT / "dashboard" / "routes" / "web" / "modules.py").read_text(
-        encoding="utf-8"
-    )
+    src = (ROOT / "dashboard" / "routes" / "web" / "modules.py").read_text(encoding="utf-8")
     # Both the list page and the detail page feed the slash invocation prefix
     # (e.g. "/bark ") to the template so command badges read "/bark warn".
     assert "bot.modules.command_group_name()" in src

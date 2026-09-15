@@ -135,7 +135,9 @@ async def test_sync_does_not_demote_when_score_drops(db):
     bot, member, role_scout, role_elite, calls = _fake_bot_with_guild()
     await _seed("1", scout_role=role_scout, elite_role=role_elite)
     async with session_scope() as session:
-        session.add(_profile(total_score=100.0))  # level 1 → Recruit, but member already holds Elite
+        session.add(
+            _profile(total_score=100.0)
+        )  # level 1 → Recruit, but member already holds Elite
         await session.commit()
 
     member.roles.append(role_elite)
@@ -213,9 +215,7 @@ async def test_import_recomputes_level_and_tier(db):
         await session.commit()
 
     module = ReputationModule(BarkContext(bot, bot.modules.event_bus))
-    result = await module.import_stats(
-        1, {"profiles": [{"user_id": "98", "total_score": 60000.0}]}
-    )
+    result = await module.import_stats(1, {"profiles": [{"user_id": "98", "total_score": 60000.0}]})
 
     assert "restored 1 profile(s)" in result[0]
     async with session_scope() as session:

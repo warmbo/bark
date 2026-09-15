@@ -113,9 +113,7 @@ async def test_check_edited_messages_true_fires_on_edit(db):
     try:
         before = _msg("hello", guild)
         after = _msg("free nitro at discord-nitro.xyz", guild)
-        await manager.event_bus.emit(
-            "discord_message_edit", before=before, after=after
-        )
+        await manager.event_bus.emit("discord_message_edit", before=before, after=after)
         after.delete.assert_awaited_once()
     finally:
         await manager.disable_all()

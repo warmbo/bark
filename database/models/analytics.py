@@ -142,5 +142,3 @@ class VoiceGameStat(Base):
 
     def __repr__(self) -> str:
         return f"<VoiceGameStat guild={self.guild_id} game={self.game_name!r}>"
-
-

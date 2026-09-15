@@ -44,9 +44,7 @@ async def top_channel_30d(guild_id: int, limit: int = 3) -> list[dict[str, Any]]
                     .limit(limit)
                 )
             ).all()
-        return [
-            {"name": r.channel_name or "unknown", "count": int(r.total or 0)} for r in rows
-        ]
+        return [{"name": r.channel_name or "unknown", "count": int(r.total or 0)} for r in rows]
     except Exception:
         return []
 

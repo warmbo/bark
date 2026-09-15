@@ -593,9 +593,7 @@ async def test_moderation_export_returns_json_archive(app, monkeypatch):
         state=SimpleNamespace(bot=app.state.bot),
         url=SimpleNamespace(path="/api/v1/guilds/1/modules/moderation/export"),
     )
-    export_route = next(
-        r for r in module.get_api_routes().routes if r.path.endswith("/export")
-    )
+    export_route = next(r for r in module.get_api_routes().routes if r.path.endswith("/export"))
     resp = await export_route.endpoint(request, "1")
     import json as _json
 
@@ -647,11 +645,20 @@ async def test_list_members_includes_role_colors_and_join_date(app, monkeypatch)
     )
 
     resp = await actions.list_members(
-        request, "1", search="", page=0, limit=10, role_id="",
-        sort="name", order="asc", min_age_days=0, max_age_days=0,
+        request,
+        "1",
+        search="",
+        page=0,
+        limit=10,
+        role_id="",
+        sort="name",
+        order="asc",
+        min_age_days=0,
+        max_age_days=0,
     )
     assert resp.status_code == 200
     import json
+
     data = json.loads(resp.body)
     m = data["data"]["members"][0]
     assert m["roles"][0]["name"] == "Admin"
@@ -679,24 +686,50 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     async with session_scope() as s:
         from sqlalchemy import select
 
-        if not (await s.execute(select(Guild).where(Guild.discord_id == "123456"))).scalars().first():
+        if (
+            not (await s.execute(select(Guild).where(Guild.discord_id == "123456")))
+            .scalars()
+            .first()
+        ):
             s.add(Guild(discord_id="123456", name="Profile Guild"))
         s.add(GuildSetting(guild_id="123456", key="motd", value="Welcome everyone!"))
         await s.commit()
 
     ev = SimpleNamespace(
-        id=1, name="Movie Night", description="Watch a movie",
-        start_time=None, end_time=None, status=SimpleNamespace(name="scheduled"),
-        entity_type=SimpleNamespace(name="external"), url="https://discord.gg/x",
-        user_count=12, channel=None,
+        id=1,
+        name="Movie Night",
+        description="Watch a movie",
+        start_time=None,
+        end_time=None,
+        status=SimpleNamespace(name="scheduled"),
+        entity_type=SimpleNamespace(name="external"),
+        url="https://discord.gg/x",
+        user_count=12,
+        channel=None,
     )
     guild = SimpleNamespace(
-        id=123456, name="Profile Guild", member_count=42, owner_id=1,
-        owner=None, banner=None, icon=None, description="A nice server",
-        premium_tier=1, premium_subscription_count=3, premium_subscriber_count=3, max_members=100,
-        channels=[], roles=[], emojis=[], created_at=None,
-        verification_level=SimpleNamespace(name="moderate"), features=["ANIMATED_ICON"],
-        scheduled_events=[ev], members=[], text_channels=[], voice_channels=[],
+        id=123456,
+        name="Profile Guild",
+        member_count=42,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description="A nice server",
+        premium_tier=1,
+        premium_subscription_count=3,
+        premium_subscriber_count=3,
+        max_members=100,
+        channels=[],
+        roles=[],
+        emojis=[],
+        created_at=None,
+        verification_level=SimpleNamespace(name="moderate"),
+        features=["ANIMATED_ICON"],
+        scheduled_events=[ev],
+        members=[],
+        text_channels=[],
+        voice_channels=[],
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
@@ -707,18 +740,53 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     from database.models.analytics import DailyChannelStat, DailyEmojiStat
 
     async with session_scope() as s:
-        s.add(DailyChannelStat(guild_id="123456", stat_date=date.today(), channel_id="100", channel_name="general", message_count=3))
-        s.add(DailyChannelStat(guild_id="123456", stat_date=date.today(), channel_id="200", channel_name="memes", message_count=2))
-        s.add(DailyChannelStat(guild_id="123456", stat_date=date.today() - timedelta(days=1), channel_id="100", channel_name="general", message_count=8))
-        s.add(DailyEmojiStat(guild_id="123456", stat_date=date.today(), emoji_name="laugh", count=4))
-        s.add(DailyEmojiStat(guild_id="123456", stat_date=date.today() - timedelta(days=1), emoji_name="laugh", count=40))
+        s.add(
+            DailyChannelStat(
+                guild_id="123456",
+                stat_date=date.today(),
+                channel_id="100",
+                channel_name="general",
+                message_count=3,
+            )
+        )
+        s.add(
+            DailyChannelStat(
+                guild_id="123456",
+                stat_date=date.today(),
+                channel_id="200",
+                channel_name="memes",
+                message_count=2,
+            )
+        )
+        s.add(
+            DailyChannelStat(
+                guild_id="123456",
+                stat_date=date.today() - timedelta(days=1),
+                channel_id="100",
+                channel_name="general",
+                message_count=8,
+            )
+        )
+        s.add(
+            DailyEmojiStat(guild_id="123456", stat_date=date.today(), emoji_name="laugh", count=4)
+        )
+        s.add(
+            DailyEmojiStat(
+                guild_id="123456",
+                stat_date=date.today() - timedelta(days=1),
+                emoji_name="laugh",
+                count=40,
+            )
+        )
         await s.commit()
     request = SimpleNamespace(
-        state=SimpleNamespace(bot=bot), session={"role": "admin"},
+        state=SimpleNamespace(bot=bot),
+        session={"role": "admin"},
         url=SimpleNamespace(path="/api/v1/guilds/123456"),
     )
 
     import json
+
     profile = await guilds.get_guild(request, 123456)
     assert profile.status_code == 200
     data = json.loads(profile.body)["data"]
@@ -816,19 +884,76 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
             s.add(Guild(discord_id="999", name="Persist Guild"))
             await s.flush()
         # Today + yesterday member snapshots (for growth).
-        s.add(ActivitySnapshot(guild_id="999", snapshot_date=date.today() - timedelta(days=1), total_members=10))
+        s.add(
+            ActivitySnapshot(
+                guild_id="999", snapshot_date=date.today() - timedelta(days=1), total_members=10
+            )
+        )
         s.add(ActivitySnapshot(guild_id="999", snapshot_date=date.today(), total_members=11))
         # Per-day channel/emoji stats — the source of truth the page reads.
-        s.add(DailyChannelStat(guild_id="999", stat_date=date.today() - timedelta(days=1), channel_id="100", channel_name="general", message_count=5))
-        s.add(DailyChannelStat(guild_id="999", stat_date=date.today() - timedelta(days=1), channel_id="200", channel_name="memes", message_count=2))
-        s.add(DailyChannelStat(guild_id="999", stat_date=date.today(), channel_id="100", channel_name="general", message_count=5))
-        s.add(DailyChannelStat(guild_id="999", stat_date=date.today(), channel_id="200", channel_name="memes", message_count=2))
-        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today() - timedelta(days=1), emoji_name="laugh", count=4))
-        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today() - timedelta(days=1), emoji_name="wow", count=1))
+        s.add(
+            DailyChannelStat(
+                guild_id="999",
+                stat_date=date.today() - timedelta(days=1),
+                channel_id="100",
+                channel_name="general",
+                message_count=5,
+            )
+        )
+        s.add(
+            DailyChannelStat(
+                guild_id="999",
+                stat_date=date.today() - timedelta(days=1),
+                channel_id="200",
+                channel_name="memes",
+                message_count=2,
+            )
+        )
+        s.add(
+            DailyChannelStat(
+                guild_id="999",
+                stat_date=date.today(),
+                channel_id="100",
+                channel_name="general",
+                message_count=5,
+            )
+        )
+        s.add(
+            DailyChannelStat(
+                guild_id="999",
+                stat_date=date.today(),
+                channel_id="200",
+                channel_name="memes",
+                message_count=2,
+            )
+        )
+        s.add(
+            DailyEmojiStat(
+                guild_id="999",
+                stat_date=date.today() - timedelta(days=1),
+                emoji_name="laugh",
+                count=4,
+            )
+        )
+        s.add(
+            DailyEmojiStat(
+                guild_id="999",
+                stat_date=date.today() - timedelta(days=1),
+                emoji_name="wow",
+                count=1,
+            )
+        )
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="laugh", count=4))
         s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="wow", count=1))
         # Custom guild emoji stored as <:name:id> — resolves to its CDN image URL.
-        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="<:game:123456789012345678>", count=3))
+        s.add(
+            DailyEmojiStat(
+                guild_id="999",
+                stat_date=date.today(),
+                emoji_name="<:game:123456789012345678>",
+                count=3,
+            )
+        )
         # Reputation / voice / game data backing the newer charts.
         from datetime import datetime, timezone
 
@@ -836,58 +961,110 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         from database.models.reputation import ReputationEvent
         from database.models.voice import VoiceSession
 
-        s.add(ReputationEvent(
-            guild_id="999", actor_id="42", target_id="90001", event_type="message", points=1,
-            created_at=datetime.now(timezone.utc) - timedelta(days=1),
-        ))
-        s.add(ReputationEvent(
-            guild_id="999", actor_id="42", target_id="90001", event_type="thanks", points=3,
-            created_at=datetime.now(timezone.utc),
-        ))
-        s.add(VoiceSession(
-            guild_id="999", user_id="90001", user_tag="User0#0000", channel_id="1000",
-            channel_name="Gaming", joined_at=datetime.now(timezone.utc) - timedelta(days=1),
-            left_at=datetime.now(timezone.utc), duration_seconds=3600,
-        ))
-        s.add(VoiceGameStat(
-            guild_id="999", game_name="Valorant",
-            recorded_at=datetime.now(timezone.utc) - timedelta(days=1),
-        ))
+        s.add(
+            ReputationEvent(
+                guild_id="999",
+                actor_id="42",
+                target_id="90001",
+                event_type="message",
+                points=1,
+                created_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+        )
+        s.add(
+            ReputationEvent(
+                guild_id="999",
+                actor_id="42",
+                target_id="90001",
+                event_type="thanks",
+                points=3,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        s.add(
+            VoiceSession(
+                guild_id="999",
+                user_id="90001",
+                user_tag="User0#0000",
+                channel_id="1000",
+                channel_name="Gaming",
+                joined_at=datetime.now(timezone.utc) - timedelta(days=1),
+                left_at=datetime.now(timezone.utc),
+                duration_seconds=3600,
+            )
+        )
+        s.add(
+            VoiceGameStat(
+                guild_id="999",
+                game_name="Valorant",
+                recorded_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+        )
         from database.models.reputation import ReputationProfile
 
-        s.add(ReputationProfile(
-            guild_id="999", user_id="90001", total_score=42.0, level=5,
-            week_start=date.today(), month_start=date.today(),
-        ))
+        s.add(
+            ReputationProfile(
+                guild_id="999",
+                user_id="90001",
+                total_score=42.0,
+                level=5,
+                week_start=date.today(),
+                month_start=date.today(),
+            )
+        )
         await s.commit()
 
     guild = SimpleNamespace(
-        id=999, name="Persist Guild", member_count=11, owner_id=1, owner=None,
-        banner=None, icon=None, description=None, premium_tier=0,
-        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
-        channels=[], roles=[], emojis=[], created_at=None, verification_level=None,
-        features=[], scheduled_events=[], members=[], text_channels=[], voice_channels=[],
+        id=999,
+        name="Persist Guild",
+        member_count=11,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description=None,
+        premium_tier=0,
+        premium_subscription_count=0,
+        premium_subscriber_count=0,
+        max_members=100,
+        channels=[],
+        roles=[],
+        emojis=[],
+        created_at=None,
+        verification_level=None,
+        features=[],
+        scheduled_events=[],
+        members=[],
+        text_channels=[],
+        voice_channels=[],
     )
     # A member with a display name + avatar for Top Reputation resolution.
     member = SimpleNamespace(
-        id=90001, display_name="CoolUser", name="cooluser",
+        id=90001,
+        display_name="CoolUser",
+        name="cooluser",
         display_avatar=SimpleNamespace(url="https://cdn.discordapp.com/avatars/90001/hash.png"),
     )
     guild.get_member = lambda uid: member if uid == 90001 else None
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
     request = SimpleNamespace(
-        state=SimpleNamespace(bot=bot), session={"role": "admin"},
+        state=SimpleNamespace(bot=bot),
+        session={"role": "admin"},
         url=SimpleNamespace(path="/api/v1/guilds/999"),
     )
 
     import json
+
     stats = await guilds.get_guild_stats(request, 999)
     assert stats.status_code == 200
     data = json.loads(stats.body)["data"]
     # The page reads from the DB, so top channels / emojis always show.
     assert data["messages_today"] == 7
-    assert data["top_channels_today"] == [{"name": "general", "count": 5}, {"name": "memes", "count": 2}]
+    assert data["top_channels_today"] == [
+        {"name": "general", "count": 5},
+        {"name": "memes", "count": 2},
+    ]
     assert data["top_channels_7d"][0]["name"] == "general"
     assert data["top_channels_7d"][0]["count"] == 10
     assert data["top_channels_30d"][0]["name"] == "general"
@@ -903,7 +1080,10 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     # Newer charts backed by accumulating data.
     assert len(data["reputation_series"]) == 30
     assert sum(p["count"] for p in data["reputation_series"]) == 2
-    assert data["reputation_by_type"] and {"name": "Messages", "count": 1} in data["reputation_by_type"]
+    assert (
+        data["reputation_by_type"]
+        and {"name": "Messages", "count": 1} in data["reputation_by_type"]
+    )
     assert data["voice_series"] and sum(p["count"] for p in data["voice_series"]) == 1
     assert data["top_voice_users"][0]["name"] == "CoolUser"
     assert data["top_voice_users"][0]["count"] == 60  # 3600s = 60 min
@@ -911,11 +1091,14 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     assert len(data["new_members_series"]) == 30
     assert len(data["audit_series"]) == 30
     # Top Reputation resolves the display name + avatar from the live guild.
-    assert data["top_reputation"] == [{
-        "name": "CoolUser", "id": "90001",
-        "avatar_url": "https://cdn.discordapp.com/avatars/90001/hash.png",
-        "count": 42,
-    }]
+    assert data["top_reputation"] == [
+        {
+            "name": "CoolUser",
+            "id": "90001",
+            "avatar_url": "https://cdn.discordapp.com/avatars/90001/hash.png",
+            "count": 42,
+        }
+    ]
     # Top Voice Users resolves the display name + avatar too (covered above).
 
 
@@ -937,22 +1120,43 @@ async def test_set_guild_banner_persists_and_clears(app, monkeypatch):
     async with session_scope() as s:
         from sqlalchemy import select
 
-        if not (await s.execute(select(Guild).where(Guild.discord_id == "222222"))).scalars().first():
+        if (
+            not (await s.execute(select(Guild).where(Guild.discord_id == "222222")))
+            .scalars()
+            .first()
+        ):
             s.add(Guild(discord_id="222222", name="Banner Guild"))
             await s.commit()
 
     guild = SimpleNamespace(
-        id=222222, name="Banner Guild", member_count=10, owner_id=1, owner=None,
-        banner=None, icon=None, description=None, premium_tier=0,
-        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
-        channels=[], roles=[], emojis=[], created_at=None,
-        verification_level=None, features=[], scheduled_events=[], members=[],
-        text_channels=[], voice_channels=[],
+        id=222222,
+        name="Banner Guild",
+        member_count=10,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description=None,
+        premium_tier=0,
+        premium_subscription_count=0,
+        premium_subscriber_count=0,
+        max_members=100,
+        channels=[],
+        roles=[],
+        emojis=[],
+        created_at=None,
+        verification_level=None,
+        features=[],
+        scheduled_events=[],
+        members=[],
+        text_channels=[],
+        voice_channels=[],
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
     request = SimpleNamespace(
-        state=SimpleNamespace(bot=bot), session={"role": "admin"},
+        state=SimpleNamespace(bot=bot),
+        session={"role": "admin"},
         url=SimpleNamespace(path="/api/v1/guilds/222222/banner"),
     )
 
@@ -965,7 +1169,9 @@ async def test_set_guild_banner_persists_and_clears(app, monkeypatch):
             return self._body
 
     # Set a custom banner.
-    set_req = _Req(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    set_req = _Req(
+        state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x")
+    )
     set_req._body = {"banner_url": "https://example.com/banner.png"}
     set_req.state.guild_viewer = False
     resp = await guilds.set_guild_banner(set_req, 222222)
@@ -976,7 +1182,9 @@ async def test_set_guild_banner_persists_and_clears(app, monkeypatch):
     assert data["custom_banner_url"] == "https://example.com/banner.png"
 
     # Clear it.
-    req = _Req(state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    req = _Req(
+        state=SimpleNamespace(bot=bot), session={"role": "admin"}, url=SimpleNamespace(path="/x")
+    )
     req._body = {"banner_url": ""}
     req.state.guild_viewer = False
     await guilds.set_guild_banner(req, 222222)
@@ -1001,12 +1209,17 @@ async def test_set_guild_banner_is_admin_only(app, monkeypatch):
     monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
 
-    from database.engine import session_scope
-    from database.models.guild import Guild
     from sqlalchemy import select
 
+    from database.engine import session_scope
+    from database.models.guild import Guild
+
     async with session_scope() as s:
-        if not (await s.execute(select(Guild).where(Guild.discord_id == "222222"))).scalars().first():
+        if (
+            not (await s.execute(select(Guild).where(Guild.discord_id == "222222")))
+            .scalars()
+            .first()
+        ):
             s.add(Guild(discord_id="222222", name="Banner Guild"))
             await s.commit()
 
@@ -1056,30 +1269,65 @@ async def test_guild_dashboard_cards_collect_module_widgets(app, monkeypatch):
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
 
     guild = SimpleNamespace(
-        id=333333, name="Cards Guild", member_count=42, owner_id=1, owner=None,
-        banner=None, icon=None, description=None, premium_tier=0,
-        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
-        channels=[], roles=[], emojis=[], created_at=None,
-        verification_level=None, features=[], scheduled_events=[], members=[],
-        text_channels=[], voice_channels=[],
+        id=333333,
+        name="Cards Guild",
+        member_count=42,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description=None,
+        premium_tier=0,
+        premium_subscription_count=0,
+        premium_subscriber_count=0,
+        max_members=100,
+        channels=[],
+        roles=[],
+        emojis=[],
+        created_at=None,
+        verification_level=None,
+        features=[],
+        scheduled_events=[],
+        members=[],
+        text_channels=[],
+        voice_channels=[],
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
 
     async def fake_cards(_gid):
-        return [{"id": "reputation_top", "module": "reputation", "title": "Top Members", "type": "list", "items": [], "link": "/guild/333333/modules/reputation"}]
+        return [
+            {
+                "id": "reputation_top",
+                "module": "reputation",
+                "title": "Top Members",
+                "type": "list",
+                "items": [],
+                "link": "/guild/333333/modules/reputation",
+            }
+        ]
 
     bot.modules.get_dashboard_cards = fake_cards
     bot.modules.get_all_modules = lambda: {
         "reputation": SimpleNamespace(
-            name="reputation", title="Reputation", description="Levels", link="",
-            get_commands=lambda: [SimpleNamespace(name="rank", description="Check rank", slash=True)],
+            name="reputation",
+            title="Reputation",
+            description="Levels",
+            link="",
+            get_commands=lambda: [
+                SimpleNamespace(name="rank", description="Check rank", slash=True)
+            ],
         ),
     }
     bot.modules.is_enabled_for_guild = lambda _gid, mname: mname == "reputation"
-    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
 
     import json
+
     resp = await guilds.get_guild_dashboard(request, 333333)
     assert resp.status_code == 200
     data = json.loads(resp.body)["data"]
@@ -1143,23 +1391,42 @@ async def test_dashboard_live_data_breaks_down_presence_voice_emojis(app, monkey
         return r
 
     guild = SimpleNamespace(
-        id=444444, name="Live Guild", member_count=4, owner_id=1, owner=None,
-        banner=None, icon=None, description=None, premium_tier=1,
-        premium_subscription_count=3, premium_subscriber_count=3, max_members=100,
-        channels=[vc], roles=[_role(100, "Admins", 16711680, True, [online])],
+        id=444444,
+        name="Live Guild",
+        member_count=4,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description=None,
+        premium_tier=1,
+        premium_subscription_count=3,
+        premium_subscriber_count=3,
+        max_members=100,
+        channels=[vc],
+        roles=[_role(100, "Admins", 16711680, True, [online])],
         emojis=[SimpleNamespace(id=7, name="bark", url="https://cdn/e.png", animated=False)],
-        created_at=None, verification_level=None, features=[], scheduled_events=[],
+        created_at=None,
+        verification_level=None,
+        features=[],
+        scheduled_events=[],
         members=[online, idle, dnd, offline],
-        text_channels=[], voice_channels=[vc],
+        text_channels=[],
+        voice_channels=[vc],
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
     bot.modules.get_dashboard_cards = lambda _gid: []
     bot.modules.get_all_modules = lambda: {}
     bot.modules.is_enabled_for_guild = lambda _gid, mname: False
-    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
 
     import json
+
     resp = await guilds.get_guild_dashboard(request, 444444)
     assert resp.status_code == 200
     data = json.loads(resp.body)["data"]
@@ -1205,21 +1472,45 @@ async def test_set_guild_slug_validates_persists_and_clears(app, monkeypatch):
     async with session_scope() as s:
         from sqlalchemy import select
 
-        if not (await s.execute(select(Guild).where(Guild.discord_id == "555555"))).scalars().first():
+        if (
+            not (await s.execute(select(Guild).where(Guild.discord_id == "555555")))
+            .scalars()
+            .first()
+        ):
             s.add(Guild(discord_id="555555", name="Slug Guild"))
             await s.commit()
 
     guild = SimpleNamespace(
-        id=555555, name="Slug Guild", member_count=10, owner_id=1, owner=None,
-        banner=None, icon=None, description=None, premium_tier=0,
-        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
-        channels=[], roles=[], emojis=[], created_at=None,
-        verification_level=None, features=[], scheduled_events=[], members=[],
-        text_channels=[], voice_channels=[],
+        id=555555,
+        name="Slug Guild",
+        member_count=10,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description=None,
+        premium_tier=0,
+        premium_subscription_count=0,
+        premium_subscriber_count=0,
+        max_members=100,
+        channels=[],
+        roles=[],
+        emojis=[],
+        created_at=None,
+        verification_level=None,
+        features=[],
+        scheduled_events=[],
+        members=[],
+        text_channels=[],
+        voice_channels=[],
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
-    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
 
     import json
 
@@ -1230,7 +1521,11 @@ async def test_set_guild_slug_validates_persists_and_clears(app, monkeypatch):
             return self._body
 
     # Valid slug.
-    r = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
     r._body = {"slug": "my-server"}
     resp = await guilds.set_guild_slug(r, 555555)
     assert resp.status_code == 200
@@ -1240,13 +1535,21 @@ async def test_set_guild_slug_validates_persists_and_clears(app, monkeypatch):
     assert json.loads(profile.body)["data"]["slug"] == "my-server"
 
     # Invalid slug -> 400.
-    bad = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    bad = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
     bad._body = {"slug": "bad slug!!"}
     resp_bad = await guilds.set_guild_slug(bad, 555555)
     assert resp_bad.status_code == 400
 
     # Empty clears it.
-    clear = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    clear = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
     clear._body = {"slug": ""}
     await guilds.set_guild_slug(clear, 555555)
     profile2 = await guilds.get_guild(request, 555555)
@@ -1271,31 +1574,60 @@ async def test_set_guild_theme_validates_and_persists(app, monkeypatch):
     async with session_scope() as s:
         from sqlalchemy import select
 
-        if not (await s.execute(select(Guild).where(Guild.discord_id == "666666"))).scalars().first():
+        if (
+            not (await s.execute(select(Guild).where(Guild.discord_id == "666666")))
+            .scalars()
+            .first()
+        ):
             s.add(Guild(discord_id="666666", name="Theme Guild"))
             await s.commit()
 
     guild = SimpleNamespace(
-        id=666666, name="Theme Guild", member_count=5, owner_id=1, owner=None,
-        banner=None, icon=None, description=None, premium_tier=0,
-        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
-        channels=[], roles=[], emojis=[], created_at=None,
-        verification_level=None, features=[], scheduled_events=[], members=[],
-        text_channels=[], voice_channels=[],
+        id=666666,
+        name="Theme Guild",
+        member_count=5,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description=None,
+        premium_tier=0,
+        premium_subscription_count=0,
+        premium_subscriber_count=0,
+        max_members=100,
+        channels=[],
+        roles=[],
+        emojis=[],
+        created_at=None,
+        verification_level=None,
+        features=[],
+        scheduled_events=[],
+        members=[],
+        text_channels=[],
+        voice_channels=[],
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
-    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
 
     class _Req(SimpleNamespace):
         _body = {}
+
         async def json(self):
             return self._body
 
     import json
 
     # Valid theme persists and shows in the profile.
-    r = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
     r._body = {"theme": "emerald"}
     resp = await guilds.set_guild_theme(r, 666666)
     assert resp.status_code == 200
@@ -1304,14 +1636,22 @@ async def test_set_guild_theme_validates_and_persists(app, monkeypatch):
     assert json.loads(profile.body)["data"]["theme"] == "emerald"
 
     # Invalid theme -> 400.
-    bad = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    bad = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
     bad._body = {"theme": "hotpink"}
     resp_bad = await guilds.set_guild_theme(bad, 666666)
     assert resp_bad.status_code == 400
 
     # The extended palette (cyan / teal / orange) is accepted too.
     for name in ("cyan", "teal", "orange", "synth", "acid", "rottweiler", "dracula", "gold", "hud"):
-        r2 = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+        r2 = _Req(
+            state=SimpleNamespace(bot=bot, guild_viewer=False),
+            session={"role": "admin"},
+            url=SimpleNamespace(path="/x"),
+        )
         r2._body = {"theme": name}
         assert (await guilds.set_guild_theme(r2, 666666)).status_code == 200
 
@@ -1334,36 +1674,69 @@ async def test_set_guild_wallpaper_invert_persists(app, monkeypatch):
     async with session_scope() as s:
         from sqlalchemy import select
 
-        if not (await s.execute(select(Guild).where(Guild.discord_id == "666666"))).scalars().first():
+        if (
+            not (await s.execute(select(Guild).where(Guild.discord_id == "666666")))
+            .scalars()
+            .first()
+        ):
             s.add(Guild(discord_id="666666", name="Theme Guild"))
             await s.commit()
 
     guild = SimpleNamespace(
-        id=666666, name="Theme Guild", member_count=5, owner_id=1, owner=None,
-        banner=None, icon=None, description=None, premium_tier=0,
-        premium_subscription_count=0, premium_subscriber_count=0, max_members=100,
-        channels=[], roles=[], emojis=[], created_at=None,
-        verification_level=None, features=[], scheduled_events=[], members=[],
-        text_channels=[], voice_channels=[],
+        id=666666,
+        name="Theme Guild",
+        member_count=5,
+        owner_id=1,
+        owner=None,
+        banner=None,
+        icon=None,
+        description=None,
+        premium_tier=0,
+        premium_subscription_count=0,
+        premium_subscriber_count=0,
+        max_members=100,
+        channels=[],
+        roles=[],
+        emojis=[],
+        created_at=None,
+        verification_level=None,
+        features=[],
+        scheduled_events=[],
+        members=[],
+        text_channels=[],
+        voice_channels=[],
     )
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
-    request = SimpleNamespace(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    request = SimpleNamespace(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
 
     class _Req(SimpleNamespace):
         _body = {}
+
         async def json(self):
             return self._body
 
     import json as _json
 
     # Viewer is denied.
-    viewer = _Req(state=SimpleNamespace(bot=bot, guild_viewer=True), session={"role": "viewer"}, url=SimpleNamespace(path="/x"))
+    viewer = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=True),
+        session={"role": "viewer"},
+        url=SimpleNamespace(path="/x"),
+    )
     viewer._body = {"invert": True}
     assert (await guilds.set_guild_wallpaper_invert(viewer, 666666)).status_code == 403
 
     # Invert on -> reflected in the profile.
-    r = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
     r._body = {"invert": True}
     resp = await guilds.set_guild_wallpaper_invert(r, 666666)
     assert resp.status_code == 200
@@ -1372,7 +1745,11 @@ async def test_set_guild_wallpaper_invert_persists(app, monkeypatch):
     assert _json.loads(profile.body)["data"]["wallpaper_invert"] is True
 
     # Invert off -> default.
-    r2 = _Req(state=SimpleNamespace(bot=bot, guild_viewer=False), session={"role": "admin"}, url=SimpleNamespace(path="/x"))
+    r2 = _Req(
+        state=SimpleNamespace(bot=bot, guild_viewer=False),
+        session={"role": "admin"},
+        url=SimpleNamespace(path="/x"),
+    )
     r2._body = {"invert": False}
     resp2 = await guilds.set_guild_wallpaper_invert(r2, 666666)
     assert resp2.status_code == 200
@@ -1507,15 +1884,21 @@ def test_auto_voice_flat_config_validates_against_grouped_schema():
         {"channel": {"primary_channel_id": "222", "name_uppercase": True}},
         properties,
     )
-    assert grouped_errors == [], f"grouped auto_voice config must validate clean, got {grouped_errors}"
+    assert grouped_errors == [], (
+        f"grouped auto_voice config must validate clean, got {grouped_errors}"
+    )
 
     # A legacy config still carrying the pre-consolidation "naming" group must
     # normalize into the "channel" group and validate clean (no orphan key).
-    legacy = normalize_config({"channel": {"primary_channel_id": "222"}, "naming": {"name_uppercase": True}})
+    legacy = normalize_config(
+        {"channel": {"primary_channel_id": "222"}, "naming": {"name_uppercase": True}}
+    )
     assert "naming" not in legacy
     assert legacy["channel"]["name_uppercase"] is True
     legacy_errors = _validate_config(legacy, properties)
-    assert legacy_errors == [], f"legacy 'naming' auto_voice config must validate clean, got {legacy_errors}"
+    assert legacy_errors == [], (
+        f"legacy 'naming' auto_voice config must validate clean, got {legacy_errors}"
+    )
 
 
 def test_speak_config_with_module_managed_phrases_validates_clean():
@@ -1542,10 +1925,16 @@ def test_speak_config_with_module_managed_phrases_validates_clean():
 
     # The generic form renderer must not try to draw a control for the
     # free-form ``phrases`` object (it has no renderable sub-fields).
-    module_detail = (Path(__file__).resolve().parents[2] / "dashboard" / "templates" / "pages" / "module_detail.html").read_text()
-    assert (
-        "prop.type != 'object' or prop.properties" in module_detail
-    ), "form renderer must skip free-form object props (module-managed data)"
+    module_detail = (
+        Path(__file__).resolve().parents[2]
+        / "dashboard"
+        / "templates"
+        / "pages"
+        / "module_detail.html"
+    ).read_text()
+    assert "prop.type != 'object' or prop.properties" in module_detail, (
+        "form renderer must skip free-form object props (module-managed data)"
+    )
 
 
 @pytest.mark.asyncio
@@ -1655,8 +2044,8 @@ async def test_modules_grid_addons_default_off(client, app):
     }
     app.state.bot.modules.plugin_names.return_value = {"dice_roller", "fun_facts"}
     # No persisted rows: core modules default enabled, plugins default disabled.
-    app.state.bot.modules.is_enabled_for_guild.side_effect = (
-        lambda gid, name: name not in {"dice_roller", "fun_facts"}
+    app.state.bot.modules.is_enabled_for_guild.side_effect = lambda gid, name: (
+        name not in {"dice_roller", "fun_facts"}
     )
 
     response = await client.get("/guild/1/modules")
@@ -2090,8 +2479,8 @@ async def test_list_modules_reports_true_guild_state(client, app):
     }
     app.state.bot.modules.plugin_names.return_value = {"fun_facts"}
     # No persisted rows: core defaults enabled, plugin defaults disabled.
-    app.state.bot.modules.is_enabled_for_guild.side_effect = (
-        lambda gid, name: name not in {"fun_facts"}
+    app.state.bot.modules.is_enabled_for_guild.side_effect = lambda gid, name: (
+        name not in {"fun_facts"}
     )
 
     resp = await client.get("/api/v1/guilds/1/modules")
@@ -2176,9 +2565,7 @@ async def test_manifest_groups_plugins_under_addon_modules(client, app):
     assert all(p["is_plugin"] is False for p in core_pages)
 
     # The unlabeled core section must never duplicate plugin entries.
-    assert "beta" not in [
-        p.get("module") for p in categories.get("_core", {}).get("pages", [])
-    ]
+    assert "beta" not in [p.get("module") for p in categories.get("_core", {}).get("pages", [])]
 
     assert categories["_plugins"]["label"] == "Add-on Modules"
     plugin_pages = categories["_plugins"]["pages"]
@@ -2266,9 +2653,7 @@ async def test_manifest_hides_disabled_addons_from_sidebar(client, app):
     }
     bot.modules.is_plugin.side_effect = lambda name: name == "beta"
     # alpha is enabled for the guild; the beta add-on is disabled.
-    bot.modules.is_enabled_for_guild.side_effect = (
-        lambda guild_id, name: name != "beta"
-    )
+    bot.modules.is_enabled_for_guild.side_effect = lambda guild_id, name: name != "beta"
 
     resp = await client.get("/api/v1/guilds/1/manifest")
     assert resp.status_code == 200
@@ -2301,9 +2686,7 @@ async def test_plugin_catalog_route_not_shadowed_by_guilds(client, monkeypatch):
 
     from dashboard.routes.api import manifest
 
-    monkeypatch.setattr(
-        manifest, "_repo_plugin_entries", AsyncMock(return_value=[{"name": "fun"}])
-    )
+    monkeypatch.setattr(manifest, "_repo_plugin_entries", AsyncMock(return_value=[{"name": "fun"}]))
     resp = await client.get("/api/v1/guilds/plugin-catalog")
     assert resp.status_code == 200
     assert resp.json()["data"]["plugins"] == [{"name": "fun"}]
@@ -3499,9 +3882,7 @@ async def test_settings_export_returns_backup_with_settings_and_modules(client, 
     assert backup["settings"] == {"prefix": "!"}
     assert backup["modules"]["trivia"]["enabled"] is True
     assert backup["modules"]["trivia"]["config"] == {"difficulty": "medium"}
-    assert backup["modules"]["trivia"]["stats"] == {
-        "scores": [{"user_id": "9", "points": 5}]
-    }
+    assert backup["modules"]["trivia"]["stats"] == {"scores": [{"user_id": "9", "points": 5}]}
 
 
 @pytest.mark.asyncio
@@ -3535,9 +3916,7 @@ async def test_settings_import_applies_settings_configs_and_stats(client, app, d
             }
         },
     }
-    response = await client.post(
-        "/api/v1/guilds/1/settings/import", json={"backup": backup}
-    )
+    response = await client.post("/api/v1/guilds/1/settings/import", json={"backup": backup})
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["imported"] is True
@@ -3547,10 +3926,10 @@ async def test_settings_import_applies_settings_configs_and_stats(client, app, d
 
     async with session_scope() as session:
         settings = (
-            await session.execute(
-                select(GuildSetting).where(GuildSetting.guild_id == "1")
-            )
-        ).scalars().all()
+            (await session.execute(select(GuildSetting).where(GuildSetting.guild_id == "1")))
+            .scalars()
+            .all()
+        )
         assert {s.key: s.value for s in settings} == {"prefix": "?", "language": "en"}
 
 
@@ -3594,9 +3973,7 @@ async def test_settings_import_persists_config_for_missing_module(client, app, d
             }
         },
     }
-    response = await client.post(
-        "/api/v1/guilds/1/settings/import", json={"backup": backup}
-    )
+    response = await client.post("/api/v1/guilds/1/settings/import", json={"backup": backup})
     assert response.status_code == 200
 
     async with session_scope() as session:

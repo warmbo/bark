@@ -19,9 +19,7 @@ def require_token(
 ) -> None:
     cfg = get_config()
     if not cfg.engine_token:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "engine token not configured"
-        )
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "engine token not configured")
     if (
         credentials is None
         or credentials.scheme.lower() != "bearer"

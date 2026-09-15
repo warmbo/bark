@@ -19,14 +19,10 @@ def test_render_requires_token(monkeypatch):
     # no credentials -> 401
     assert client.post("/v1/render", json={}).status_code == 401
     # wrong credentials -> 401
-    r = client.post(
-        "/v1/render", json={}, headers={"Authorization": "Bearer wrong"}
-    )
+    r = client.post("/v1/render", json={}, headers={"Authorization": "Bearer wrong"})
     assert r.status_code == 401
     # correct credentials -> 200 (job accepted)
-    r = client.post(
-        "/v1/render", json={}, headers={"Authorization": "Bearer test-token"}
-    )
+    r = client.post("/v1/render", json={}, headers={"Authorization": "Bearer test-token"})
     assert r.status_code == 200
     assert r.json()["job_id"]
 
@@ -46,7 +42,5 @@ def test_theme_requires_token(monkeypatch):
 
 def test_unknown_job_404(monkeypatch):
     monkeypatch.setenv("BARK_MEDIA_ENGINE_TOKEN", "test-token")
-    r = client.get(
-        "/v1/jobs/nope", headers={"Authorization": "Bearer test-token"}
-    )
+    r = client.get("/v1/jobs/nope", headers={"Authorization": "Bearer test-token"})
     assert r.status_code == 404

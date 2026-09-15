@@ -69,9 +69,7 @@ async def test_lan_origin_api_write_is_allowed(monkeypatch):
     as cross-origin — when the operator lists it in BARK_TRUSTED_ORIGINS."""
     import config
 
-    monkeypatch.setattr(
-        config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"]
-    )
+    monkeypatch.setattr(config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"])
 
     app = FastAPI()
     app.add_middleware(SecurityMiddleware)
@@ -83,9 +81,7 @@ async def test_lan_origin_api_write_is_allowed(monkeypatch):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://10.0.0.227:8091"
     ) as client:
-        response = await client.post(
-            "/api/v1/save", headers={"Origin": "http://10.0.0.227:8091"}
-        )
+        response = await client.post("/api/v1/save", headers={"Origin": "http://10.0.0.227:8091"})
 
     assert response.status_code == 200
     assert response.json() == {"saved": True}
@@ -98,9 +94,7 @@ async def test_same_host_different_port_origin_is_rejected(monkeypatch):
     check is the only remaining defense."""
     import config
 
-    monkeypatch.setattr(
-        config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"]
-    )
+    monkeypatch.setattr(config.config.dashboard, "trusted_origins", ["http://10.0.0.227:8091"])
 
     app = FastAPI()
     app.add_middleware(SecurityMiddleware)
@@ -112,9 +106,7 @@ async def test_same_host_different_port_origin_is_rejected(monkeypatch):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://10.0.0.227:8091"
     ) as client:
-        response = await client.post(
-            "/api/v1/save", headers={"Origin": "http://10.0.0.227:8080"}
-        )
+        response = await client.post("/api/v1/save", headers={"Origin": "http://10.0.0.227:8080"})
 
     assert response.status_code == 403
     assert response.json()["error"] == "Cross-origin write rejected"
@@ -155,15 +147,11 @@ def test_mutation_capabilities_cover_every_route_family_and_gets_remain_readable
         == "announcements.post"
     )
     assert (
-        mutation_capability(
-            "PATCH", "/api/v1/guilds/1/modules/announcements/schedules/42"
-        )
+        mutation_capability("PATCH", "/api/v1/guilds/1/modules/announcements/schedules/42")
         == "announcements.post"
     )
     assert (
-        mutation_capability(
-            "DELETE", "/api/v1/guilds/1/modules/announcements/schedules/42"
-        )
+        mutation_capability("DELETE", "/api/v1/guilds/1/modules/announcements/schedules/42")
         == "announcements.post"
     )
     assert mutation_capability("POST", "/api/v1/guilds/1/notes") == "moderation.notes.create"
@@ -307,9 +295,7 @@ async def test_authenticated_request_renews_sliding_session(monkeypatch):
     cookie = TimestampSigner("test-secret").sign(payload).decode()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get(
-            "/api/v1/private", headers={"cookie": f"session={cookie}"}
-        )
+        response = await client.get("/api/v1/private", headers={"cookie": f"session={cookie}"})
 
     assert response.status_code == 200
     # The middleware must have written _renewed back into the session, which
@@ -349,4 +335,3 @@ def test_csp_allows_no_unused_external_cdns():
     # Related hardening headers.
     assert resp.headers["X-Content-Type-Options"] == "nosniff"
     assert resp.headers["X-Frame-Options"] == "DENY"
-

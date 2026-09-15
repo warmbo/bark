@@ -120,7 +120,5 @@ async def instance_diagnostics(request: Request):
     return Response(
         content=text,
         media_type="text/plain",
-        headers={
-            "Content-Disposition": f'attachment; filename="bark-diagnostics-{version}.txt"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="bark-diagnostics-{version}.txt"'},
     )

@@ -8,9 +8,9 @@ ASGI routes, signed session cookie, OAuth state, callback, and database.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import base64
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 from urllib.parse import parse_qs, urlsplit
 
@@ -117,9 +117,7 @@ async def test_named_invite_is_consumed_even_when_login_already_has_shared_guild
         await session.flush()
         invite_id = invite.id
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 1. Recipient opens the exact named share URL.
         share = await client.get(f"/auth/share/{token}", follow_redirects=False)
         assert share.status_code == 302, dict(share.headers)
@@ -226,9 +224,7 @@ async def test_revoked_access_grant_can_be_removed_by_owner(db, monkeypatch):
 
         row = (
             await session.execute(
-                select(InstanceAccess).where(
-                    InstanceAccess.discord_user_id == "210812020075790337"
-                )
+                select(InstanceAccess).where(InstanceAccess.discord_user_id == "210812020075790337")
             )
         ).scalar_one_or_none()
     assert row is None, "revoked access grant was hard-deleted"

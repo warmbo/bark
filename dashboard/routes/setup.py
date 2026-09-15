@@ -88,7 +88,11 @@ async def submit_setup(request: Request):
     except SetupError as exc:
         return api_error(str(exc), status_code=400)
     restarting = _schedule_restart()
-    logger.info("Setup complete: %s written (%s)", path, "restarting" if restarting else "manual restart needed")
+    logger.info(
+        "Setup complete: %s written (%s)",
+        path,
+        "restarting" if restarting else "manual restart needed",
+    )
     return api_success(
         {
             "env_file": str(path),

@@ -235,7 +235,9 @@ class HelpModule(BarkModule):
             await interaction.response.defer(ephemeral=not public)
             bot = self.ctx.bot
             online = sum(
-                1 for m in guild.members if getattr(m, "status", None) is not None and m.status != discord.Status.offline
+                1
+                for m in guild.members
+                if getattr(m, "status", None) is not None and m.status != discord.Status.offline
             )
             bots = sum(1 for m in guild.members if m.bot)
             humans = (guild.member_count or 0) - bots
@@ -258,7 +260,11 @@ class HelpModule(BarkModule):
             )
             if icon_url:
                 embed.set_thumbnail(url=icon_url)
-            embed.add_field(name="Members", value=f"{guild.member_count:,}\n{humans:,} human · {bots:,} bot", inline=True)
+            embed.add_field(
+                name="Members",
+                value=f"{guild.member_count:,}\n{humans:,} human · {bots:,} bot",
+                inline=True,
+            )
             embed.add_field(name="Online", value=f"{online:,} right now", inline=True)
             embed.add_field(
                 name="Channels",
@@ -329,12 +335,14 @@ class HelpModule(BarkModule):
             embed.add_field(
                 name="🗨️ Top Channels",
                 value=_ranked(channels, lambda c: f"**#{c['name']}** · {c['count']:,} msgs")
-                if channels else "No message data yet.",
+                if channels
+                else "No message data yet.",
                 inline=True,
             )
             embed.add_field(
                 name="🎮 Top Games",
-                value=_ranked(games, lambda g: f"**{g['name']}** · {g['count']}×") if games
+                value=_ranked(games, lambda g: f"**{g['name']}** · {g['count']}×")
+                if games
                 else "No game data yet.",
                 inline=True,
             )
@@ -345,7 +353,9 @@ class HelpModule(BarkModule):
                 value=_ranked(
                     rep,
                     lambda r: f"<@{r['user_id']}> · {r['score']:,.0f} pts",
-                ) if rep else "No reputation data yet.",
+                )
+                if rep
+                else "No reputation data yet.",
                 inline=True,
             )
             embed.add_field(
@@ -353,7 +363,9 @@ class HelpModule(BarkModule):
                 value=_ranked(
                     voice,
                     lambda v: f"<@{v['user_id']}> · {v['minutes']:,.0f} min",
-                ) if voice else "No voice data yet.",
+                )
+                if voice
+                else "No voice data yet.",
                 inline=True,
             )
 
@@ -371,7 +383,8 @@ class HelpModule(BarkModule):
                 name="⭐ Top Rep Source",
                 value=(
                     f"**{rep_source['source'].title()}** · {rep_source['points']:,.0f} pts"
-                    if rep_source["source"] != "none" else "No rep data yet."
+                    if rep_source["source"] != "none"
+                    else "No rep data yet."
                 ),
                 inline=True,
             )

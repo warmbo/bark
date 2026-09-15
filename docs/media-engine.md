@@ -30,7 +30,7 @@ identical requests return the same file. Output files land in
 ```python
 from services.media_engine.client import MediaEngineClient
 
-client = MediaEngineClient()          # env: BARK_MEDIA_ENGINE_URL / BARK_MEDIA_ENGINE_TOKEN
+client = MediaEngineClient()  # env: BARK_MEDIA_ENGINE_URL / BARK_MEDIA_ENGINE_TOKEN
 data = await client.collect_payload("profile", guild_id, user_id)
 path = await client.render("profile", guild_id, user_id, payload=data)
 # path → local PNG; post it, attach it, whatever you need

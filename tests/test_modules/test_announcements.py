@@ -120,7 +120,10 @@ async def test_announce_slash_command_appends_watch_video_link_in_embed():
     channel.send.assert_awaited_once()
     sent_embed = channel.send.await_args.kwargs["embed"]
     assert isinstance(sent_embed, discord.Embed)
-    assert sent_embed.description == "New trailer.\n\n[Watch Video](https://www.youtube.com/watch?v=demo)"
+    assert (
+        sent_embed.description
+        == "New trailer.\n\n[Watch Video](https://www.youtube.com/watch?v=demo)"
+    )
 
 
 @pytest.mark.asyncio
@@ -227,7 +230,9 @@ def test_full_width_spacer_has_large_intrinsic_width():
     import struct
     from pathlib import Path
 
-    spacer = Path(__file__).resolve().parents[2] / "dashboard" / "static" / "img" / "spacer-wide.png"
+    spacer = (
+        Path(__file__).resolve().parents[2] / "dashboard" / "static" / "img" / "spacer-wide.png"
+    )
     data = spacer.read_bytes()
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     width, height = struct.unpack(">II", data[16:24])

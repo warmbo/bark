@@ -99,6 +99,7 @@ def _load_theme(name: str) -> Theme | None:
 
 def _data_themes_dir() -> Path:
     from .config import get_config
+
     return Path(get_config().data_dir) / "themes"
 
 
@@ -117,12 +118,20 @@ def resolve_theme(name: str | None = None) -> Theme:
     fallback = get_theme(DEFAULT_THEME)
     if fallback is None:  # belt and braces: bare default so the renderer never crashes
         return Theme(
-            name=DEFAULT_THEME, label="Bark",
-            palette={"bg": "#14141a", "bg2": "#1b1b23", "fg": "#ffffff",
-                     "muted": "#a8a8b3", "accent": "#3b82f6", "accent2": "#60a5fa"},
+            name=DEFAULT_THEME,
+            label="Bark",
+            palette={
+                "bg": "#14141a",
+                "bg2": "#1b1b23",
+                "fg": "#ffffff",
+                "muted": "#a8a8b3",
+                "accent": "#3b82f6",
+                "accent2": "#60a5fa",
+            },
             background={"style": "gradient", "noise": 0.03, "shapes": True, "scanlines": True},
             avatar={"frame": "round", "border_color": "accent"},
-            fonts={}, motion={"style": "none", "duration_frames": 1},
+            fonts={},
+            motion={"style": "none", "duration_frames": 1},
         )
     return fallback
 

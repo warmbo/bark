@@ -96,9 +96,7 @@ async def test_perform_update_requires_owner(app):
         base_url="http://test",
         cookies=dict(session=_session_cookie("43")),
     ) as client:
-        response = await client.post(
-            "/api/v1/instance/update", json={"branch": "main"}
-        )
+        response = await client.post("/api/v1/instance/update", json={"branch": "main"})
     assert response.status_code == 403
 
 
@@ -109,9 +107,7 @@ async def test_perform_update_rejects_unknown_branch(app):
         base_url="http://test",
         cookies=dict(session=_session_cookie("42")),
     ) as client:
-        response = await client.post(
-            "/api/v1/instance/update", json={"branch": "hack/branch"}
-        )
+        response = await client.post("/api/v1/instance/update", json={"branch": "hack/branch"})
     assert response.status_code == 400
 
 
@@ -128,9 +124,7 @@ async def test_perform_update_accepts_and_reports_restart(app, monkeypatch):
         base_url="http://test",
         cookies=dict(session=_session_cookie("42")),
     ) as client:
-        response = await client.post(
-            "/api/v1/instance/update", json={"branch": "dev"}
-        )
+        response = await client.post("/api/v1/instance/update", json={"branch": "dev"})
     assert response.status_code == 200
     assert "restart" in response.json()["data"]["message"].lower()
     assert started == ["dev"]
@@ -146,9 +140,7 @@ async def test_perform_update_rejects_stable_when_on_dev_channel(app, monkeypatc
         base_url="http://test",
         cookies=dict(session=_session_cookie("42")),
     ) as client:
-        response = await client.post(
-            "/api/v1/instance/update", json={"branch": "main"}
-        )
+        response = await client.post("/api/v1/instance/update", json={"branch": "main"})
     assert response.status_code == 403
     assert "switching back to Stable" in response.json()["error"]
 
@@ -166,9 +158,7 @@ async def test_perform_update_allows_stable_when_on_stable_channel(app, monkeypa
         base_url="http://test",
         cookies=dict(session=_session_cookie("42")),
     ) as client:
-        response = await client.post(
-            "/api/v1/instance/update", json={"branch": "main"}
-        )
+        response = await client.post("/api/v1/instance/update", json={"branch": "main"})
     assert response.status_code == 200
     assert started == ["main"]
 
@@ -187,9 +177,7 @@ async def test_perform_update_allows_dev_when_on_dev_channel(app, monkeypatch):
         base_url="http://test",
         cookies=dict(session=_session_cookie("42")),
     ) as client:
-        response = await client.post(
-            "/api/v1/instance/update", json={"branch": "dev"}
-        )
+        response = await client.post("/api/v1/instance/update", json={"branch": "dev"})
     assert response.status_code == 200
     assert started == ["dev"]
 
@@ -309,8 +297,6 @@ async def test_instance_owner_with_non_admin_session_can_update(app, monkeypatch
         base_url="http://test",
         cookies=dict(session=_session_cookie_with_role("42", "viewer")),
     ) as client:
-        response = await client.post(
-            "/api/v1/instance/update", json={"branch": "main"}
-        )
+        response = await client.post("/api/v1/instance/update", json={"branch": "main"})
     assert response.status_code == 200, response.text
     assert started == ["main"]

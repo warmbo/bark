@@ -44,9 +44,7 @@ class _FakeGuild:
         self.id = id_
         self.name = "War Lab"
         self.members = [_FakeMember(11, "Alice"), _FakeMember(12, "Bob")]
-        self.get_member = lambda uid: next(
-            (m for m in self.members if m.id == uid), None
-        )
+        self.get_member = lambda uid: next((m for m in self.members if m.id == uid), None)
         self.get_channel = lambda cid: _FakeChannel(100, "general")
 
 
@@ -77,10 +75,9 @@ def _build_bot(manager):
 @pytest.fixture
 def wiki_app(db):
     """A real ModuleManager (core modules enabled) behind a create_app dashboard."""
-    from services.module_manager import ModuleManager
-
     from database.engine import session_scope
     from database.models.guild import Guild
+    from services.module_manager import ModuleManager
 
     async def _seed():
         async with session_scope() as session:
@@ -105,9 +102,7 @@ def wiki_app(db):
 
 @pytest.fixture
 async def client(wiki_app):
-    async with AsyncClient(
-        transport=ASGITransport(app=wiki_app), base_url="http://test"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=wiki_app), base_url="http://test") as c:
         yield c
 
 

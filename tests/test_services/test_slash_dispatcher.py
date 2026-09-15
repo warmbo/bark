@@ -94,8 +94,12 @@ async def test_dispatch_invokes_leaf_callback_with_kwargs():
     leaf, callback = _make_leaf(
         "warn",
         params=[
-            SimpleNamespace(name="member", type=discord.AppCommandOptionType.mentionable, required=True),
-            SimpleNamespace(name="reason", type=discord.AppCommandOptionType.string, required=False),
+            SimpleNamespace(
+                name="member", type=discord.AppCommandOptionType.mentionable, required=True
+            ),
+            SimpleNamespace(
+                name="reason", type=discord.AppCommandOptionType.string, required=False
+            ),
         ],
     )
     _register_fake_module(d, "moderation", "warn", leaf)
@@ -123,8 +127,12 @@ async def test_dispatch_unresolved_member_shows_not_found_not_self_target():
     leaf, callback = _make_leaf(
         "warn",
         params=[
-            SimpleNamespace(name="member", type=discord.AppCommandOptionType.mentionable, required=True),
-            SimpleNamespace(name="reason", type=discord.AppCommandOptionType.string, required=False),
+            SimpleNamespace(
+                name="member", type=discord.AppCommandOptionType.mentionable, required=True
+            ),
+            SimpleNamespace(
+                name="reason", type=discord.AppCommandOptionType.string, required=False
+            ),
         ],
     )
     _register_fake_module(d, "moderation", "warn", leaf)
@@ -149,7 +157,11 @@ async def test_dispatch_missing_required_arg_shows_usage_not_dispatch():
     d.build_command("bark")
     leaf, callback = _make_leaf(
         "warn",
-        params=[SimpleNamespace(name="member", type=discord.AppCommandOptionType.mentionable, required=True)],
+        params=[
+            SimpleNamespace(
+                name="member", type=discord.AppCommandOptionType.mentionable, required=True
+            )
+        ],
     )
     _register_fake_module(d, "moderation", "warn", leaf)
     interaction = MagicMock()
@@ -224,6 +236,7 @@ async def test_overview_keeps_addons_in_the_single_module_picker_page():
     d = SlashDispatcher(_make_bot(), _make_manager())
     d.build_command("bark")
     _register_fake_module(d, "moderation", "warn", _make_leaf("warn")[0])
+
     # Treat "birthday" as an installed add-on plugin.
     def _is_plugin(name):
         return name == "birthday"
@@ -244,10 +257,18 @@ async def test_dispatch_help_with_command_shows_detailed_help():
     leaf, _ = _make_leaf(
         "warn",
         params=[
-            SimpleNamespace(name="member", type=discord.AppCommandOptionType.mentionable,
-                            required=True, description="The member to warn"),
-            SimpleNamespace(name="reason", type=discord.AppCommandOptionType.string,
-                            required=False, description="Why they're being warned"),
+            SimpleNamespace(
+                name="member",
+                type=discord.AppCommandOptionType.mentionable,
+                required=True,
+                description="The member to warn",
+            ),
+            SimpleNamespace(
+                name="reason",
+                type=discord.AppCommandOptionType.string,
+                required=False,
+                description="Why they're being warned",
+            ),
         ],
     )
     _register_fake_module(d, "moderation", "warn", leaf)

@@ -81,8 +81,12 @@ async def test_owner_sections_hidden_when_unauthenticated(monkeypatch):
 def test_settings_route_passes_is_owner():
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parent.parent.parent / "dashboard" / "routes" / "web" / "settings.py").read_text(
-        encoding="utf-8"
-    )
+    src = (
+        Path(__file__).resolve().parent.parent.parent
+        / "dashboard"
+        / "routes"
+        / "web"
+        / "settings.py"
+    ).read_text(encoding="utf-8")
     assert '"is_owner"' in src
     assert "can_manage_instance(request)" in src

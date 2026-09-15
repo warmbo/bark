@@ -8,7 +8,6 @@ self-reactions.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import time
@@ -27,7 +26,6 @@ from database.models.reputation import ReputationEvent, ReputationProfile, Reput
 from modules.reputation.module import ReputationModule
 from services.bark_context import BarkContext
 from services.dashboard_access import replace_user_guild_access
-
 
 # ── API-level helpers (tier endpoints) ──────────────────────────────────
 
@@ -207,9 +205,7 @@ async def _events_for(user_id: int, event_type: str | None = None) -> list:
 
 
 @pytest.mark.asyncio
-async def test_tier_update_without_role_id_preserves_linked_role(
-    db, monkeypatch
-):
+async def test_tier_update_without_role_id_preserves_linked_role(db, monkeypatch):
     await _seed_guild_and_tiers()
     async with session_scope() as session:
         tier = (
@@ -491,12 +487,13 @@ async def test_tier_update_honors_explicit_sort_order(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_message_from_ignored_role_earns_no_points(db):
     guild = _FakeGuild(members=[_member(99, roles=[_role(888)])])
-    module = ReputationModule(
-        _FakeCtx(_config(ignored_roles="888"), guild)
-    )
+    module = ReputationModule(_FakeCtx(_config(ignored_roles="888"), guild))
     msg = SimpleNamespace(
-        id=1001, guild=guild, author=_member(99, roles=[_role(888)]),
-        channel=SimpleNamespace(id=10), content="hello there",
+        id=1001,
+        guild=guild,
+        author=_member(99, roles=[_role(888)]),
+        channel=SimpleNamespace(id=10),
+        content="hello there",
     )
 
     await module._on_message("discord_message", message=msg)
@@ -507,12 +504,13 @@ async def test_message_from_ignored_role_earns_no_points(db):
 @pytest.mark.asyncio
 async def test_message_from_non_ignored_member_still_earns(db):
     guild = _FakeGuild(members=[_member(99, roles=[_role(999)])])
-    module = ReputationModule(
-        _FakeCtx(_config(ignored_roles="888"), guild)
-    )
+    module = ReputationModule(_FakeCtx(_config(ignored_roles="888"), guild))
     msg = SimpleNamespace(
-        id=1002, guild=guild, author=_member(99, roles=[_role(999)]),
-        channel=SimpleNamespace(id=10), content="hello there",
+        id=1002,
+        guild=guild,
+        author=_member(99, roles=[_role(999)]),
+        channel=SimpleNamespace(id=10),
+        content="hello there",
     )
 
     await module._on_message("discord_message", message=msg)
@@ -528,9 +526,7 @@ async def test_reaction_ignored_actor_skips_giver_points_only(db):
     module = ReputationModule(_FakeCtx(_config(ignored_roles="888"), guild))
     channel = _reaction_channel(SimpleNamespace(author=author))
     guild._channels[10] = channel
-    payload = SimpleNamespace(
-        guild_id=1, channel_id=10, message_id=2001, user_id=98, emoji="⭐"
-    )
+    payload = SimpleNamespace(guild_id=1, channel_id=10, message_id=2001, user_id=98, emoji="⭐")
 
     await module._on_reaction_add("raw_reaction_add", payload=payload)
 
@@ -545,9 +541,7 @@ async def test_reaction_unresolved_actor_skips_giver_points_only(db):
     module = ReputationModule(_FakeCtx(_config(ignored_roles="888"), guild))
     channel = _reaction_channel(SimpleNamespace(author=author))
     guild._channels[10] = channel
-    payload = SimpleNamespace(
-        guild_id=1, channel_id=10, message_id=2002, user_id=98, emoji="⭐"
-    )
+    payload = SimpleNamespace(guild_id=1, channel_id=10, message_id=2002, user_id=98, emoji="⭐")
 
     await module._on_reaction_add("raw_reaction_add", payload=payload)
 
@@ -563,9 +557,7 @@ async def test_reaction_unresolved_author_awards_nothing_to_author(db):
     author = _member(99)
     channel = _reaction_channel(SimpleNamespace(author=author))
     guild._channels[10] = channel
-    payload = SimpleNamespace(
-        guild_id=1, channel_id=10, message_id=2003, user_id=98, emoji="⭐"
-    )
+    payload = SimpleNamespace(guild_id=1, channel_id=10, message_id=2003, user_id=98, emoji="⭐")
 
     await module._on_reaction_add("raw_reaction_add", payload=payload)
 
@@ -580,9 +572,7 @@ async def test_voice_leave_from_ignored_member_earns_nothing(db):
     module = ReputationModule(_FakeCtx(_config(ignored_roles="888"), guild))
     module._voice_activity[1][99] = time.time() - 600  # 10 minutes in voice
 
-    await module._on_voice_state(
-        "discord_voice_state", member=member, after_channel=None
-    )
+    await module._on_voice_state("discord_voice_state", member=member, after_channel=None)
 
     assert await _events_for(99) == []
 
@@ -594,9 +584,7 @@ async def test_voice_leave_from_non_ignored_member_earns(db):
     module = ReputationModule(_FakeCtx(_config(ignored_roles="888"), guild))
     module._voice_activity[1][99] = time.time() - 600
 
-    await module._on_voice_state(
-        "discord_voice_state", member=member, after_channel=None
-    )
+    await module._on_voice_state("discord_voice_state", member=member, after_channel=None)
 
     assert len(await _events_for(99, "voice_minute")) == 1
 
@@ -623,9 +611,7 @@ async def test_thanks_ignored_receiver_earns_nothing_but_giver_does(db):
     interaction = SimpleNamespace(
         guild=guild,
         user=giver,
-        response=SimpleNamespace(
-            send_message=AsyncMock(), defer=AsyncMock()
-        ),
+        response=SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock()),
         followup=SimpleNamespace(send=AsyncMock()),
     )
 
@@ -645,9 +631,7 @@ async def test_self_reaction_earns_no_points(db):
     module = ReputationModule(_FakeCtx(_config(), guild))
     channel = _reaction_channel(SimpleNamespace(author=author))
     guild._channels[10] = channel
-    payload = SimpleNamespace(
-        guild_id=1, channel_id=10, message_id=3001, user_id=99, emoji="⭐"
-    )
+    payload = SimpleNamespace(guild_id=1, channel_id=10, message_id=3001, user_id=99, emoji="⭐")
 
     await module._on_reaction_add("raw_reaction_add", payload=payload)
 

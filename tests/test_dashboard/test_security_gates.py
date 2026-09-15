@@ -175,7 +175,8 @@ async def test_sse_events_route_serves_event_stream_not_json(app, monkeypatch):
     from dashboard.routes.api import guilds, realtime
 
     sse_routes = [
-        r for r in realtime.router.routes
+        r
+        for r in realtime.router.routes
         if getattr(r, "path", "") == "/guilds/{guild_id}/events"
         and "GET" in getattr(r, "methods", set())
     ]
@@ -187,8 +188,7 @@ async def test_sse_events_route_serves_event_stream_not_json(app, monkeypatch):
     # The guilds router must NOT also declare the same path — that duplicate
     # is what shadowed the SSE handler and made EventSource abort.
     guild_events = [
-        r for r in guilds.router.routes
-        if getattr(r, "path", "") == "/guilds/{guild_id}/events"
+        r for r in guilds.router.routes if getattr(r, "path", "") == "/guilds/{guild_id}/events"
     ]
     assert guild_events == [], (
         "duplicate /guilds/{guild_id}/events route on the guilds router "
