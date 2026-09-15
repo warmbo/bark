@@ -638,6 +638,13 @@ def _collectors_check(bot) -> dict[str, str]:
 
     flush_task = getattr(stats_recorder, "_flush_task", None)
     flush_alive = flush_task is not None and not flush_task.done()
+    # The flusher is started lazily by the first tracked event, so "no task
+    # yet" is only a problem when counters are actually waiting. Treating it as
+    # a fault made every idle instance report degraded, which is how a
+    # diagnostics panel trains people to ignore it.
+    pending = len(getattr(stats_recorder, "_pending_messages", None) or {}) + len(
+        getattr(stats_recorder, "_pending_emoji", None) or {}
+    )
     last_flush = getattr(stats_recorder, "last_flush_at", None)
 
     parts = []
@@ -645,7 +652,12 @@ def _collectors_check(bot) -> dict[str, str]:
         parts.append(f"collector last run {age_min} min ago" + (" (STALE)" if stale else ""))
     else:
         parts.append("collector has not run yet")
-    parts.append("stats flush task " + ("running" if flush_alive else "NOT running"))
+    if flush_alive:
+        parts.append("stats flush task running")
+    elif pending:
+        parts.append(f"stats flush task NOT running with {pending} pending counter(s)")
+    else:
+        parts.append("stats flush idle (no pending counters)")
     if last_flush is not None:
         try:
             flush_age_min = max(
@@ -654,7 +666,7 @@ def _collectors_check(bot) -> dict[str, str]:
             parts.append(f"last flush {flush_age_min} min ago")
         except TypeError:
             pass
-    ok = collector_alive and flush_alive and not stale
+    ok = collector_alive and (flush_alive or not pending) and not stale
     return {"name": "collectors", "status": "ok" if ok else "degraded", "detail": "; ".join(parts)}
 
 

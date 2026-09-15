@@ -319,6 +319,31 @@ def test_runtime_checks_collectors_degraded_when_worker_stalled(monkeypatch):
     assert _check_map(checks)["collectors"]["status"] == "degraded"
 
 
+def test_collectors_idle_is_ok_but_pending_counters_without_a_task_degrade(monkeypatch):
+    """The stats flusher starts lazily on the first tracked event, so an idle
+    instance is healthy — only counters waiting with no live task are a fault.
+    (Live check on a freshly booted instance reported degraded here.)"""
+    import services.diagnostics as d
+    import services.stats_recorder as stats_recorder
+
+    bot = _healthy_bot()
+    bot._data_collector = SimpleNamespace(
+        _task=SimpleNamespace(done=lambda: False),
+        last_run_at=datetime.now(timezone.utc),
+    )
+    monkeypatch.setattr(stats_recorder, "_flush_task", None)
+    monkeypatch.setattr(stats_recorder, "_pending_messages", {})
+    monkeypatch.setattr(stats_recorder, "_pending_emoji", {})
+    checks = d.build_runtime_diagnostics(bot)["runtime"]["checks"]
+    assert _check_map(checks)["collectors"]["status"] == "ok"
+
+    monkeypatch.setattr(stats_recorder, "_pending_messages", {("1", "2"): [3, "general"]})
+    checks = d.build_runtime_diagnostics(bot)["runtime"]["checks"]
+    check = _check_map(checks)["collectors"]
+    assert check["status"] == "degraded"
+    assert "pending counter" in check["detail"]
+
+
 def test_runtime_checks_modules_degraded_on_load_failure(monkeypatch):
     import services.diagnostics as d
 
