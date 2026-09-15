@@ -930,16 +930,16 @@ class AutoVoiceModule(BarkModule):
         sequence = int(getattr(state, "sequence", 1))
         game = self._majority_game(members)
         if game is None:
-            detected = {g for member in members if (g := self._member_game(member))}
+            playing_games = {g for member in members if (g := self._member_game(member))}
             current = str(channel.name)
             # A majority that merely LAPSED must not rename the channel: live in
             # ZENHAWX a second, non-playing member joining flipped a correct
             # '〢wardogs' back to '〢hangout' 20-40 seconds after it was earned.
             # The name is kept while anyone still plays it; a channel that never
             # earned a game name is unaffected (the 3-member rule above).
-            if detected and any(
+            if playing_games and any(
                 self._render_name(owner, config, game=g, index=sequence) == current
-                for g in detected
+                for g in playing_games
             ):
                 return
             game = str(self._cfg(config, "fallback_name") or "General")
