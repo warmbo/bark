@@ -278,11 +278,17 @@ def test_command_select_runs_directly_when_no_required_args():
 def test_args_modal_builds_ordered_args_string():
     d = _dispatcher()
     leaf = d._registry["birthday set"]
+    # The plugin owns its option names (birthdays is now a single month/day
+    # `date` string). Derive them so this core test keeps testing modal
+    # ordering instead of pinning one plugin revision's parameter names.
+    names = [p.name for p in leaf.command.parameters]
 
     modal = interactions.BarkArgsModal(d, leaf)
-    assert set(modal._inputs) == {"day", "month"}
-    modal._inputs["day"]._value = "10"  # noqa: SLF001
-    modal._inputs["month"]._value = "3"  # noqa: SLF001
+    assert list(modal._inputs) == names
+    expected = []
+    for index, name in enumerate(names, start=1):
+        modal._inputs[name]._value = str(index * 10)  # noqa: SLF001
+        expected.append(str(index * 10))
 
     async def run():
         captured = _stub_dispatch(d)
@@ -292,7 +298,7 @@ def test_args_modal_builds_ordered_args_string():
 
     captured = asyncio.run(run())
     assert captured["command"] == "birthday set"
-    assert captured["args"] == "10 3"
+    assert captured["args"] == " ".join(expected)
 
 
 # ── Reply capture (privacy-preserving arg collection) ──
