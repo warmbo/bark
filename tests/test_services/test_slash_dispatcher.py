@@ -121,6 +121,29 @@ async def test_dispatch_invokes_leaf_callback_with_kwargs():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_single_required_string_reaches_callback_whole():
+    """The birthdays `set` shape: one required string option gets the whole
+    multi-word argument (`September 16`), not just the first token."""
+    d = SlashDispatcher(_make_bot(), _make_manager())
+    leaf, callback = _make_leaf(
+        "set",
+        params=[
+            SimpleNamespace(name="date", type=discord.AppCommandOptionType.string, required=True)
+        ],
+    )
+    _register_fake_module(d, "birthdays", "set", leaf)
+
+    interaction = MagicMock()
+    interaction.user = SimpleNamespace(name="invoker", id=1)
+    interaction.guild = MagicMock()
+    interaction.response = MagicMock()
+
+    await d.dispatch(interaction, "set", "September 16")
+    assert callback.await_count == 1
+    assert callback.await_args.kwargs["date"] == "September 16"
+
+
+@pytest.mark.asyncio
 async def test_dispatch_unresolved_member_shows_not_found_not_self_target():
     """A mistyped mention must not self-moderate — show a not-found error."""
     d = SlashDispatcher(_make_bot(), _make_manager())

@@ -82,6 +82,151 @@ def test_prefix_command_dispatches_handler_with_converted_args():
     assert _captured["times"] == 3  # int converted
 
 
+def _make_two_string_command():
+    """Two string options, like a command with a label plus free-form text."""
+
+    @discord.app_commands.command(name="note", description="Leave a note")
+    @discord.app_commands.describe(label="short label", text="free-form text")
+    async def note_cmd(interaction: discord.Interaction, label: str, text: str) -> None:
+        _captured["label"] = label
+        _captured["text"] = text
+
+    return note_cmd
+
+
+def test_prefix_command_final_string_consumes_remaining_tokens():
+    """The final string option is a free-form sink, exactly like the slash
+    dispatcher — so `bark!birthday set September 16` passes 'September 16'."""
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "note", _make_two_string_command())
+    ctx = _make_ctx()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "bob", "hello", "world"))
+    assert _captured["label"] == "bob"  # non-final string still takes one token
+    assert _captured["text"] == "hello world"
+
+
+def _make_set_date_command():
+    """A single required string option, like the birthdays `set` command."""
+
+    @discord.app_commands.command(name="set", description="Set your birthday")
+    @discord.app_commands.describe(date="month/day, e.g. 09/16 or September 16")
+    async def set_cmd(interaction: discord.Interaction, date: str) -> None:
+        _captured["date"] = date
+
+    return set_cmd
+
+
+def test_prefix_command_single_string_keeps_words_joined():
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "set", _make_set_date_command())
+    ctx = _make_ctx()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "September", "16"))
+    assert _captured["date"] == "September 16"
+
+
+def _make_channel_command():
+    """A required channel option, like `birthday channel`."""
+
+    @discord.app_commands.command(name="channel", description="Pick a channel")
+    @discord.app_commands.describe(channel="announcement channel")
+    async def channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+        _captured["channel"] = channel
+
+    return channel_cmd
+
+
+def test_prefix_command_unresolved_required_channel_fails_before_callback():
+    """A mistyped channel must not reach the handler with channel=None — that is
+    how an implicit destructive default (e.g. announcing "off") happens."""
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "channel", _make_channel_command())
+    ctx = _make_ctx()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "genral-typo"))
+    assert "channel" not in _captured  # handler never ran
+    ctx.send.assert_awaited_once()
+    msg = ctx.send.await_args.args[0]
+    # Same wording as the slash dispatcher's not-found guard.
+    assert "find that channel" in msg
+
+
+def test_prefix_command_resolved_required_channel_invokes_callback(monkeypatch):
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "channel", _make_channel_command())
+    ctx = _make_ctx()
+    sentinel = object()
+
+    async def _fake_channel(_ctx, _raw):
+        return sentinel
+
+    monkeypatch.setattr("services.prefix_commands._to_channel", _fake_channel)
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "celebrations"))
+    assert _captured["channel"] is sentinel
+
+
+def test_prefix_command_missing_required_arg_shows_usage_not_traceback():
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "ban", _make_restricted_command())
+    ctx = _make_ctx()
+    ctx.author.guild_permissions = discord.Permissions(ban_members=True)
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx))  # no target member supplied
+    assert "banned" not in _captured  # handler never ran on a default target
+    ctx.send.assert_awaited_once()
+    msg = ctx.send.await_args.args[0]
+    assert "member" in msg  # names the missing option
+
+
+def test_prefix_command_moderation_shape_target_and_trailing_reason(monkeypatch):
+    """`bark!warn <member> <reason...>` keeps its target and free-text reason."""
+
+    @discord.app_commands.command(name="warn", description="Warn a member")
+    async def warn_cmd(
+        interaction: discord.Interaction,
+        member: discord.Member,
+        reason: str = "No reason",
+    ) -> None:
+        _captured["member"] = member
+        _captured["reason"] = reason
+
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "warn", warn_cmd)
+    ctx = _make_ctx()
+    target = object()
+
+    async def _fake_member(_ctx, _raw):
+        return target
+
+    monkeypatch.setattr("services.prefix_commands._to_member_or_user", _fake_member)
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "@target-user", "spamming", "in", "general"))
+    assert _captured["member"] is target
+    assert _captured["reason"] == "spamming in general"
+
+
+def test_prefix_command_disabled_module_refuses_without_dispatch():
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(
+        module, "greet", _make_greet_command(), check=AsyncMock(return_value=False)
+    )
+    ctx = _make_ctx()
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "bob", "3"))
+    assert _captured == {}  # handler never ran while the module is off
+    ctx.send.assert_awaited_once()
+    assert "isn't enabled" in ctx.send.await_args.args[0]
+
+
 def _make_public_flag_command():
     """An informational command with a trailing `public: bool = False` (private default)."""
 

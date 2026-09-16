@@ -150,7 +150,14 @@ def _make_dispatch(slash_leaf, check=None):
                 return
         kwargs: dict[str, Any] = {}
         tokens = list(raw_args)
-        for param in params:
+        # Mirror the slash dispatcher: show usage instead of calling a handler
+        # with required arguments missing (which would raise TypeError or run
+        # against an implicit default target).
+        missing = _missing_required(params, tokens)
+        if missing:
+            await ctx.send(_usage_message(ctx, missing))
+            return
+        for i, param in enumerate(params):
             # Mirror the slash dispatcher: when the user omits a trailing
             # argument (e.g. a boolean visibility flag), leave it unset so the
             # handler's default applies, instead of coercing it to False and
@@ -158,10 +165,16 @@ def _make_dispatch(slash_leaf, check=None):
             if not tokens:
                 break
             t = param.type
+            is_last = i == len(params) - 1
             if t in (AppCommandOptionType.string, AppCommandOptionType.number):
-                kwargs[param.name] = (
-                    tokens.pop(0) if tokens else (None if not param.required else "")
-                )
+                # The final string option is a free-form sink: it consumes all
+                # remaining tokens so multi-word input ("September 16") survives,
+                # exactly as parse_args_to_kwargs does for slash.
+                if t is AppCommandOptionType.string and is_last:
+                    kwargs[param.name] = " ".join(tokens)
+                    tokens = []
+                else:
+                    kwargs[param.name] = tokens.pop(0)
             elif t is AppCommandOptionType.integer:
                 kwargs[param.name] = _to_int(tokens.pop(0)) if tokens else 0
             elif t is AppCommandOptionType.boolean:
@@ -174,6 +187,15 @@ def _make_dispatch(slash_leaf, check=None):
                 kwargs[param.name] = await _to_role(ctx, tokens.pop(0)) if tokens else None
             elif t is AppCommandOptionType.channel:
                 kwargs[param.name] = await _to_channel(ctx, tokens.pop(0)) if tokens else None
+        # A required member/role/channel that didn't resolve must not reach the
+        # handler as None — that is how a mistyped channel silently turns into
+        # an implicit destructive default (e.g. announcements "off").
+        unresolved = _unresolved_required_target(params, kwargs)
+        if unresolved is not None:
+            await ctx.send(
+                f"❌ Couldn't find that {unresolved} — check the mention or ID and try again."
+            )
+            return
         await callback(interaction, **kwargs)
 
     return dispatch
@@ -244,6 +266,27 @@ def build_prefix_command(
 
     setattr(prefix_cmd, "_bark_invoke", _bark_invoke)
     return prefix_cmd
+
+
+def _missing_required(params, tokens: list[str]) -> list:
+    """Required options that got no token at all (mirrors slash `_missing_required_arg`)."""
+    required = [p for p in params if getattr(p, "required", False)]
+    return required if len(tokens) < len(required) else []
+
+
+def _usage_message(ctx: commands.Context, params: list) -> str:
+    """A plain-text usage line for a prefix reply (no embed, no ephemeral claim)."""
+    command = getattr(getattr(ctx, "command", None), "name", None)
+    label = f"{command} " if isinstance(command, str) else ""
+    return "❌ Usage: " + label + " ".join(f"<{getattr(p, 'name', '?')}>" for p in params)
+
+
+def _unresolved_required_target(params, kwargs: dict[str, Any]) -> str | None:
+    """Name of a required option that resolved to ``None`` (mirrors the slash guard)."""
+    for p in params:
+        if getattr(p, "required", False) and kwargs.get(p.name) is None:
+            return p.name
+    return None
 
 
 def _to_int(raw: str) -> int:
