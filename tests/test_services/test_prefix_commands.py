@@ -53,6 +53,14 @@ def _make_ctx():
     ctx = MagicMock()
     guild = MagicMock()
     guild.id = 1
+    # Real discord.py reads these as plain containers (list / dict views).
+    # A bare MagicMock advertises `__aiter__`, so discord.utils.get/find takes
+    # its async branch and returns a coroutine nobody awaits
+    # (RuntimeWarning: coroutine '_aget'/'_afind' was never awaited).
+    guild.text_channels = []
+    guild.voice_channels = []
+    ctx._state = MagicMock()
+    ctx._state._users = {}
     ctx.guild = guild
     ctx.author = MagicMock()
     ctx.channel = MagicMock()
@@ -153,6 +161,22 @@ def test_prefix_command_unresolved_required_channel_fails_before_callback():
     msg = ctx.send.await_args.args[0]
     # Same wording as the slash dispatcher's not-found guard.
     assert "find that channel" in msg
+
+
+def test_prefix_command_unresolvable_required_member_fails_before_callback():
+    """A mistyped mention must not self-target — same rule as the slash
+    dispatcher: show a not-found reply instead of `ctx.author` reaching the
+    handler as the target member."""
+    module = _ConcreteModule(MagicMock())
+    prefix_cmd = build_prefix_command(module, "ban", _make_restricted_command())
+    ctx = _make_ctx()
+    ctx.author.guild_permissions = discord.Permissions(ban_members=True)
+
+    _captured.clear()
+    asyncio.run(prefix_cmd.callback(ctx, "@nobody"))
+    assert "banned" not in _captured  # handler never ran
+    ctx.send.assert_awaited_once()
+    assert "member" in ctx.send.await_args.args[0]
 
 
 def test_prefix_command_resolved_required_channel_invokes_callback(monkeypatch):
@@ -295,11 +319,16 @@ def test_prefix_command_denies_invoker_without_required_permission():
     assert "permission" in ctx.send.await_args.args[0]
 
 
-def test_prefix_command_allows_invoker_with_required_permission():
+def test_prefix_command_allows_invoker_with_required_permission(monkeypatch):
     module = _ConcreteModule(MagicMock())
     prefix_cmd = build_prefix_command(module, "ban", _make_restricted_command())
     ctx = _make_ctx()
     ctx.author.guild_permissions = discord.Permissions(ban_members=True)
+
+    async def _fake_member(_ctx, _raw):
+        return object()  # a resolvable target; this test only checks the gate
+
+    monkeypatch.setattr("services.prefix_commands._to_member_or_user", _fake_member)
 
     _captured.clear()
     asyncio.run(prefix_cmd.callback(ctx, "@someone"))

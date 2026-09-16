@@ -301,12 +301,16 @@ def _to_bool(raw: str) -> bool:
 
 
 async def _to_member_or_user(ctx: commands.Context, raw: str):
+    # Mirror the slash dispatcher's _resolve_member: an unresolvable mention
+    # returns None so the caller's required-target guard replies "not found".
+    # Never fall back to ctx.author — that turns a typo into self-targeting
+    # (e.g. `bark!warn @typo` warning the invoker).
     for conv in (commands.MemberConverter(), commands.UserConverter()):
         try:
             return await conv.convert(ctx, raw)
         except Exception:
             continue
-    return ctx.author
+    return None
 
 
 async def _to_role(ctx: commands.Context, raw: str):
