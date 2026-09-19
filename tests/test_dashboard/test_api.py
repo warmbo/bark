@@ -734,16 +734,17 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
     bot = app.state.bot
     bot.get_guild = lambda _gid: guild
     # Seed the daily stats tables — the source of truth the stats endpoint reads.
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from database.engine import session_scope
     from database.models.analytics import DailyChannelStat, DailyEmojiStat
+    from services.stats_recorder import _today_aware
 
     async with session_scope() as s:
         s.add(
             DailyChannelStat(
                 guild_id="123456",
-                stat_date=date.today(),
+                stat_date=_today_aware(),
                 channel_id="100",
                 channel_name="general",
                 message_count=3,
@@ -752,7 +753,7 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
         s.add(
             DailyChannelStat(
                 guild_id="123456",
-                stat_date=date.today(),
+                stat_date=_today_aware(),
                 channel_id="200",
                 channel_name="memes",
                 message_count=2,
@@ -761,19 +762,19 @@ async def test_guild_profile_includes_motd_scheduled_events_and_message_stats(ap
         s.add(
             DailyChannelStat(
                 guild_id="123456",
-                stat_date=date.today() - timedelta(days=1),
+                stat_date=_today_aware() - timedelta(days=1),
                 channel_id="100",
                 channel_name="general",
                 message_count=8,
             )
         )
         s.add(
-            DailyEmojiStat(guild_id="123456", stat_date=date.today(), emoji_name="laugh", count=4)
+            DailyEmojiStat(guild_id="123456", stat_date=_today_aware(), emoji_name="laugh", count=4)
         )
         s.add(
             DailyEmojiStat(
                 guild_id="123456",
-                stat_date=date.today() - timedelta(days=1),
+                stat_date=_today_aware() - timedelta(days=1),
                 emoji_name="laugh",
                 count=40,
             )
@@ -871,11 +872,12 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
     monkeypatch.setattr(config.config.oauth2, "client_secret", "secret")
     monkeypatch.setattr(config.config.oauth2, "redirect_uri", "http://test/auth/callback")
 
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from database.engine import session_scope
     from database.models.analytics import ActivitySnapshot, DailyChannelStat, DailyEmojiStat
     from database.models.guild import Guild
+    from services.stats_recorder import _today_aware
 
     async with session_scope() as s:
         from sqlalchemy import select
@@ -886,15 +888,15 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         # Today + yesterday member snapshots (for growth).
         s.add(
             ActivitySnapshot(
-                guild_id="999", snapshot_date=date.today() - timedelta(days=1), total_members=10
+                guild_id="999", snapshot_date=_today_aware() - timedelta(days=1), total_members=10
             )
         )
-        s.add(ActivitySnapshot(guild_id="999", snapshot_date=date.today(), total_members=11))
+        s.add(ActivitySnapshot(guild_id="999", snapshot_date=_today_aware(), total_members=11))
         # Per-day channel/emoji stats — the source of truth the page reads.
         s.add(
             DailyChannelStat(
                 guild_id="999",
-                stat_date=date.today() - timedelta(days=1),
+                stat_date=_today_aware() - timedelta(days=1),
                 channel_id="100",
                 channel_name="general",
                 message_count=5,
@@ -903,7 +905,7 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         s.add(
             DailyChannelStat(
                 guild_id="999",
-                stat_date=date.today() - timedelta(days=1),
+                stat_date=_today_aware() - timedelta(days=1),
                 channel_id="200",
                 channel_name="memes",
                 message_count=2,
@@ -912,7 +914,7 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         s.add(
             DailyChannelStat(
                 guild_id="999",
-                stat_date=date.today(),
+                stat_date=_today_aware(),
                 channel_id="100",
                 channel_name="general",
                 message_count=5,
@@ -921,7 +923,7 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         s.add(
             DailyChannelStat(
                 guild_id="999",
-                stat_date=date.today(),
+                stat_date=_today_aware(),
                 channel_id="200",
                 channel_name="memes",
                 message_count=2,
@@ -930,7 +932,7 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         s.add(
             DailyEmojiStat(
                 guild_id="999",
-                stat_date=date.today() - timedelta(days=1),
+                stat_date=_today_aware() - timedelta(days=1),
                 emoji_name="laugh",
                 count=4,
             )
@@ -938,18 +940,18 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
         s.add(
             DailyEmojiStat(
                 guild_id="999",
-                stat_date=date.today() - timedelta(days=1),
+                stat_date=_today_aware() - timedelta(days=1),
                 emoji_name="wow",
                 count=1,
             )
         )
-        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="laugh", count=4))
-        s.add(DailyEmojiStat(guild_id="999", stat_date=date.today(), emoji_name="wow", count=1))
+        s.add(DailyEmojiStat(guild_id="999", stat_date=_today_aware(), emoji_name="laugh", count=4))
+        s.add(DailyEmojiStat(guild_id="999", stat_date=_today_aware(), emoji_name="wow", count=1))
         # Custom guild emoji stored as <:name:id> — resolves to its CDN image URL.
         s.add(
             DailyEmojiStat(
                 guild_id="999",
-                stat_date=date.today(),
+                stat_date=_today_aware(),
                 emoji_name="<:game:123456789012345678>",
                 count=3,
             )
@@ -1008,8 +1010,8 @@ async def test_stats_surfaces_persisted_channel_emoji_after_restart(app, monkeyp
                 user_id="90001",
                 total_score=42.0,
                 level=5,
-                week_start=date.today(),
-                month_start=date.today(),
+                week_start=_today_aware(),
+                month_start=_today_aware(),
             )
         )
         await s.commit()

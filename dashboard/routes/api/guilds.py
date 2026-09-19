@@ -17,6 +17,7 @@ from services.response import (
     check_api_permission,
     get_module_min_role,
 )
+from services.stats_recorder import _today_aware
 
 router = APIRouter(tags=["api-guilds"])
 
@@ -530,7 +531,6 @@ async def get_guild_stats(request: Request, guild_id: int):
 
     # Today's date in UTC — the daily stats tables are keyed on it.
     from database.engine import session_scope
-    from services.stats_recorder import _today_aware
 
     today = _today_aware()
     async with session_scope() as session:
@@ -634,13 +634,13 @@ async def get_guild_stats(request: Request, guild_id: int):
 
 async def _guild_growth_series(session, guild_id: int, days: int = 30) -> list[dict]:
     """Return the guild's member count per day (oldest first) from snapshots."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import select
 
     from database.models.analytics import ActivitySnapshot
 
-    since = date.today() - timedelta(days=days)
+    since = _today_aware() - timedelta(days=days)
     result = await session.execute(
         select(ActivitySnapshot)
         .where(
@@ -670,13 +670,13 @@ async def _snapshot_channel_emoji_totals(
     reaction upserts these rows, so the DB always has data (even right after a
     bot restart) and builds knowledge about the server over time.
     """
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import select
 
     from database.models.analytics import DailyChannelStat, DailyEmojiStat
 
-    since = date.today() - timedelta(days=max(1, days))
+    since = _today_aware() - timedelta(days=max(1, days))
     channels: dict[str, dict] = {}
     ch_result = await session.execute(
         select(DailyChannelStat).where(
@@ -747,24 +747,24 @@ async def _daily_emoji_for_day(session, guild_id: int, day) -> dict[str, int]:
 def _zero_fill_series(counts: dict[str, int], days: int) -> list[dict]:
     """Expand a {date_iso: count} map into a continuous N-day series with zeros
     so charts always draw a full axis instead of sparse points."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     out: list[dict] = []
     for i in range(days - 1, -1, -1):
-        d = date.today() - timedelta(days=i)
+        d = _today_aware() - timedelta(days=i)
         out.append({"date": d.isoformat(), "count": counts.get(d.isoformat(), 0)})
     return out
 
 
 async def _reputation_daily_counts(session, guild_id: int, days: int) -> dict[str, int]:
     """Reputation credit events per day over the trailing window."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import func, select
 
     from database.models.reputation import ReputationEvent
 
-    since = date.today() - timedelta(days=days)
+    since = _today_aware() - timedelta(days=days)
     result = await session.execute(
         select(
             func.date(ReputationEvent.created_at).label("day"),
@@ -809,13 +809,13 @@ async def _reputation_by_type(session, guild_id: int) -> list[dict]:
 
 async def _audit_daily_counts(session, guild_id: int, days: int) -> dict[str, int]:
     """Audit-log (moderation/system) events per day over the trailing window."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import func, select
 
     from database.models.moderation import AuditLog
 
-    since = date.today() - timedelta(days=days)
+    since = _today_aware() - timedelta(days=days)
     result = await session.execute(
         select(func.date(AuditLog.created_at).label("day"), func.count(AuditLog.id))
         .where(
@@ -829,13 +829,13 @@ async def _audit_daily_counts(session, guild_id: int, days: int) -> dict[str, in
 
 async def _voice_daily_counts(session, guild_id: int, days: int) -> dict[str, int]:
     """Voice session joins per day over the trailing window."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import func, select
 
     from database.models.voice import VoiceSession
 
-    since = date.today() - timedelta(days=days)
+    since = _today_aware() - timedelta(days=days)
     result = await session.execute(
         select(func.date(VoiceSession.joined_at).label("day"), func.count(VoiceSession.id))
         .where(
@@ -849,13 +849,13 @@ async def _voice_daily_counts(session, guild_id: int, days: int) -> dict[str, in
 
 async def _new_members_daily(session, guild_id: int, days: int) -> dict[str, int]:
     """New members joined per day from member snapshots."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import select
 
     from database.models.analytics import ActivitySnapshot
 
-    since = date.today() - timedelta(days=days)
+    since = _today_aware() - timedelta(days=days)
     result = await session.execute(
         select(ActivitySnapshot.snapshot_date, ActivitySnapshot.new_members).where(
             ActivitySnapshot.guild_id == str(guild_id),
@@ -867,13 +867,13 @@ async def _new_members_daily(session, guild_id: int, days: int) -> dict[str, int
 
 async def _popular_games(session, guild_id: int, days: int = 30, limit: int = 8) -> list[dict]:
     """Most-recorded games on managed voice channels over the trailing window."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import func, select
 
     from database.models.analytics import VoiceGameStat
 
-    since = date.today() - timedelta(days=days)
+    since = _today_aware() - timedelta(days=days)
     result = await session.execute(
         select(
             VoiceGameStat.game_name,
@@ -892,14 +892,14 @@ async def _popular_games(session, guild_id: int, days: int = 30, limit: int = 8)
 
 async def _top_voice_users(session, guild, days: int = 30, limit: int = 8) -> list[dict]:
     """Members with the most voice time (in minutes) over the trailing window."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import func, select
 
     from database.models.voice import VoiceSession
 
     guild_id = int(guild.id)
-    since = date.today() - timedelta(days=days)
+    since = _today_aware() - timedelta(days=days)
     result = await session.execute(
         select(
             VoiceSession.user_id,
@@ -1167,7 +1167,7 @@ def _dashboard_live_data(guild) -> dict:
 
 async def _guild_growth_30d(session, guild_id: int) -> int:
     """Sum new members recorded by activity snapshots over the last 30 days."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import func, select
 
@@ -1177,7 +1177,7 @@ async def _guild_growth_30d(session, guild_id: int) -> int:
         await session.execute(
             select(func.sum(ActivitySnapshot.new_members)).where(
                 ActivitySnapshot.guild_id == str(guild_id),
-                ActivitySnapshot.snapshot_date >= date.today() - timedelta(days=30),
+                ActivitySnapshot.snapshot_date >= _today_aware() - timedelta(days=30),
             )
         )
     ).scalar() or 0
