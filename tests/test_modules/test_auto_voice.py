@@ -338,6 +338,34 @@ async def test_enable_re_evaluates_an_occupied_channel_name(db):
 
 
 @pytest.mark.asyncio
+async def test_name_decision_is_logged_once_per_change(caplog):
+    """ "Why is it called that?" must be answerable from the journal — without a
+    log line per presence tick."""
+    import logging
+
+    ctx, guild, owner, _p, temporary, _d, _j = _voice_fixture()
+    config = {
+        "channel_name_template": "〢{game}",
+        "name_lowercase": True,
+        "fallback_name": "hangout",
+    }
+    module = AutoVoiceModule(ctx)
+    module._managed_channels[temporary.id] = SimpleNamespace(
+        guild_id=guild.id, owner_id=owner.id, sequence=1
+    )
+    owner.activities = [SimpleNamespace(name="WARDOGS", type=None)]
+    temporary.members = [owner]
+
+    with caplog.at_level(logging.INFO):
+        await module._refresh_channel_name_locked(temporary, config)
+        await module._refresh_channel_name_locked(temporary, config)
+
+    decisions = [r.getMessage() for r in caplog.records if "Auto Voice: channel" in r.getMessage()]
+    assert len(decisions) == 1, decisions
+    assert "games=['WARDOGS']" in decisions[0]
+
+
+@pytest.mark.asyncio
 async def test_blank_optional_numeric_settings_use_safe_defaults():
     ctx, guild, member, primary, _temporary, disconnected, joined_primary = _voice_fixture(
         {"primary_channel_id": "100", "user_limit": "", "bitrate_kbps": ""}

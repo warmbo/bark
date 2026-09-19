@@ -129,6 +129,7 @@ class AutoVoiceModule(BarkModule):
         self._rename_locks: dict[int, asyncio.Lock] = {}
         self._last_rename_at: dict[int, float] = {}
         self._retry_tasks: dict[int, asyncio.Task] = {}
+        self._last_logged_decision: dict[int, str] = {}
         self._joins_in_progress: set[int] = set()
         self._channel_sequence: dict[int, int] = {}
 
@@ -971,16 +972,21 @@ class AutoVoiceModule(BarkModule):
             game=game,
             index=int(getattr(state, "sequence", 1)),
         )
-        if desired_name == str(channel.name):
-            # Logged at debug so a "why is it called that?" question is answerable
-            # from the journal: it shows what Bark saw and why nothing changed.
-            self._logger.debug(
-                "Temp channel %s already %r (members=%d, games=%s)",
+        # Log the decision whenever it CHANGES, at info: one line per state change
+        # answers "why is it called that?" from the journal without turning every
+        # presence tick into a log line.
+        decision = f"{desired_name}|{len(members)}|{','.join(sorted(playing_games)) or 'none'}"
+        if self._last_logged_decision.get(int(channel.id)) != decision:
+            self._last_logged_decision[int(channel.id)] = decision
+            self._logger.info(
+                "Auto Voice: channel %s is %r; chose %r (members=%d, games=%s)",
                 int(channel.id),
+                str(channel.name),
                 desired_name,
                 len(members),
                 sorted(playing_games) or "none",
             )
+        if desired_name == str(channel.name):
             return
         try:
             await channel.edit(
