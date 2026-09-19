@@ -299,6 +299,45 @@ async def test_enable_recovers_occupied_temporary_channels_after_restart(db):
 
 
 @pytest.mark.asyncio
+async def test_enable_re_evaluates_an_occupied_channel_name(db):
+    """A game that started while nothing else changed left the creation-time name
+    until the next join/leave, because Discord only sends presence updates on a
+    CHANGE. Startup re-evaluates instead."""
+    from database.engine import session_scope
+    from database.models.auto_voice import AutoVoiceChannel
+    from database.models.guild import Guild
+
+    config = {
+        "channel_name_template": "〢{game}",
+        "name_lowercase": True,
+        "fallback_name": "hangout",
+    }
+    ctx, guild, member, primary, temporary, *_ = _voice_fixture(config)
+    async with session_scope() as session:
+        session.add(Guild(discord_id=str(guild.id), name=guild.name))
+    async with session_scope() as session:
+        session.add(
+            AutoVoiceChannel(
+                channel_id=str(temporary.id),
+                guild_id=str(guild.id),
+                owner_id=str(member.id),
+                primary_channel_id=str(primary.id),
+            )
+        )
+    temporary.name = "〢hangout"  # the name it was created with
+    member.activities = [SimpleNamespace(name="WARDOGS", type=None)]
+    temporary.members = [member]
+    guild.channels.append(temporary)
+    _use_database_state(ctx)
+    ctx.get_guild = MagicMock(return_value=guild)
+    module = AutoVoiceModule(ctx)
+
+    await module.enable()
+
+    assert temporary.edit.await_args.kwargs["name"] == "〢wardogs"
+
+
+@pytest.mark.asyncio
 async def test_blank_optional_numeric_settings_use_safe_defaults():
     ctx, guild, member, primary, _temporary, disconnected, joined_primary = _voice_fixture(
         {"primary_channel_id": "100", "user_limit": "", "bitrate_kbps": ""}

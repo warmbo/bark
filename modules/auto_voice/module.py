@@ -431,6 +431,13 @@ class AutoVoiceModule(BarkModule):
             if not channel.members:
                 config = await self.ctx.get_module_config(self.name, guild_id)
                 await self._schedule_deletion(channel, config)
+            else:
+                # Re-evaluate on startup. Discord only sends a presence update on
+                # a CHANGE, so a game that started while nothing else moved would
+                # otherwise leave the channel showing its creation-time name
+                # until the next join, leave or activity flip.
+                config = await self.ctx.get_module_config(self.name, guild_id)
+                await self._refresh_channel_name(channel, config)
 
         for guild_id, count in recovered_per_guild.items():
             self._channel_sequence[guild_id] = max(self._channel_sequence.get(guild_id, 0), count)
@@ -928,9 +935,9 @@ class AutoVoiceModule(BarkModule):
             owner = get_member(int(state.owner_id))
         owner = owner or members[0]
         sequence = int(getattr(state, "sequence", 1))
+        playing_games = {g for member in members if (g := self._member_game(member))}
         game = self._majority_game(members)
         if game is None:
-            playing_games = {g for member in members if (g := self._member_game(member))}
             current = str(channel.name)
             # A majority that merely LAPSED must not rename the channel: live in
             # ZENHAWX a second, non-playing member joining flipped a correct
@@ -941,6 +948,12 @@ class AutoVoiceModule(BarkModule):
                 self._render_name(owner, config, game=g, index=sequence) == current
                 for g in playing_games
             ):
+                self._logger.debug(
+                    "Temp channel %s keeps %r — majority lapsed but %s still playing",
+                    int(channel.id),
+                    current,
+                    sorted(playing_games),
+                )
                 return
             game = str(self._cfg(config, "fallback_name") or "General")
         # Record the detected game so Statistics can surface popular games.
@@ -959,6 +972,15 @@ class AutoVoiceModule(BarkModule):
             index=int(getattr(state, "sequence", 1)),
         )
         if desired_name == str(channel.name):
+            # Logged at debug so a "why is it called that?" question is answerable
+            # from the journal: it shows what Bark saw and why nothing changed.
+            self._logger.debug(
+                "Temp channel %s already %r (members=%d, games=%s)",
+                int(channel.id),
+                desired_name,
+                len(members),
+                sorted(playing_games) or "none",
+            )
             return
         try:
             await channel.edit(
@@ -967,6 +989,13 @@ class AutoVoiceModule(BarkModule):
             )
             channel.name = desired_name
             self._last_rename_at[int(channel.id)] = time.monotonic()
+            self._logger.info(
+                "Temp channel %s named %r (members=%d, games=%s)",
+                int(channel.id),
+                desired_name,
+                len(members),
+                sorted(playing_games) or "none",
+            )
         except (discord.Forbidden, discord.HTTPException):
             self._logger.exception("Failed to update temporary voice channel %s name", channel.id)
 
